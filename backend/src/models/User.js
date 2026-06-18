@@ -1,0 +1,105 @@
+const { pool } = require('../config/database');
+
+// Mapea fila de BD (snake_case + role name) al shape camelCase del frontend.
+function mapUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    phone: row.phone,
+    role: row.role_name, // nombre del rol, no el id
+    roleId: row.role_id,
+    isActive: !!row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const BASE_SELECT = `
+  SELECT u.id, u.email, u.full_name, u.phone, u.role_id, r.name AS role_name,
+         u.is_active, u.created_at, u.updated_at
+  FROM users u
+  JOIN roles r ON r.id = u.role_id
+`;
+
+const User = {
+  /**
+   * Devuelve el usuario con su hash de contraseña (solo para login).
+   */
+  async findByEmailWithPassword(email) {
+    const [rows] = await pool.query(
+      `SELECT u.id, u.email, u.password_hash, u.full_name, u.phone,
+              u.role_id, r.name AS role_name, u.is_active, u.created_at, u.updated_at
+       FROM users u JOIN roles r ON r.id = u.role_id
+       WHERE u.email = :email`,
+      { email },
+    );
+    if (!rows[0]) return null;
+    return { ...mapUser(rows[0]), passwordHash: rows[0].password_hash };
+  },
+
+  async findById(id) {
+    const [rows] = await pool.query(`${BASE_SELECT} WHERE u.id = :id`, { id });
+    return mapUser(rows[0]);
+  },
+
+  async findAll() {
+    const [rows] = await pool.query(`${BASE_SELECT} ORDER BY u.id`);
+    return rows.map(mapUser);
+  },
+
+  async existsByEmail(email) {
+    const [rows] = await pool.query(
+      'SELECT id FROM users WHERE email = :email',
+      { email },
+    );
+    return rows.length > 0;
+  },
+
+  /**
+   * @returns {number} id del usuario creado
+   */
+  async create({ email, passwordHash, fullName, phone = null, roleId }) {
+    const [result] = await pool.query(
+      `INSERT INTO users (email, password_hash, full_name, phone, role_id)
+       VALUES (:email, :passwordHash, :fullName, :phone, :roleId)`,
+      { email, passwordHash, fullName, phone, roleId },
+    );
+    return result.insertId;
+  },
+
+  async update(id, fields) {
+    const allowed = ['full_name', 'phone', 'role_id', 'is_active'];
+    const map = { fullName: 'full_name', phone: 'phone', roleId: 'role_id', isActive: 'is_active' };
+    const sets = [];
+    const params = { id };
+
+    for (const [key, value] of Object.entries(fields)) {
+      const column = map[key];
+      if (column && allowed.includes(column)) {
+        sets.push(`${column} = :${key}`);
+        params[key] = value;
+      }
+    }
+    if (sets.length === 0) return this.findById(id);
+
+    await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = :id`, params);
+    return this.findById(id);
+  },
+
+  async toggleStatus(id) {
+    await pool.query(
+      'UPDATE users SET is_active = NOT is_active WHERE id = :id',
+      { id },
+    );
+    return this.findById(id);
+  },
+
+  async remove(id) {
+    const [result] = await pool.query('DELETE FROM users WHERE id = :id', { id });
+    return result.affectedRows > 0;
+  },
+};
+
+module.exports = User;

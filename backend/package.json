@@ -1,0 +1,25 @@
+{
+  "name": "estiloyconfort-backend",
+  "version": "1.0.0",
+  "description": "API REST para Mueblería Estilo y Confort (Node.js + Express + MySQL + JWT)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "db:seed": "node src/database/seed.js"
+  },
+  "keywords": ["express", "mysql", "jwt", "muebleria"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}
