@@ -1,0 +1,108 @@
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <img class="hero__bg" [src]="heroImage" alt="" aria-hidden="true" />
+  <div class="hero__overlay"></div>
+  <div class="hero__container">
+    <div class="hero__content">
+      <span class="hero__ornament">✦</span>
+      <h1 class="hero__title">
+        Estilo y Confort<br />
+        <em>para tu Hogar</em>
+      </h1>
+      <p class="hero__subtitle">
+        Descubre una curaduría excepcional de mobiliario que transforma
+        espacios en refugios de serenidad y elegancia.
+      </p>
+      <a routerLink="/catalogo" class="hero__btn">
+        Ver Catálogo
+        <span class="material-symbols-outlined">arrow_forward</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CATEGORÍAS ===== -->
+<section class="categories">
+  <div class="categories__inner">
+    <div class="categories__header">
+      <span class="label-overline">Colecciones</span>
+      <h2 class="section-title">Explora por Estancia</h2>
+    </div>
+  </div>
+  <div class="categories__grid">
+    @for (cat of categories; track cat.label) {
+      <a href="#" class="category-item">
+        <div class="category-item__ring">
+          <div class="category-item__img-wrap">
+            <img [src]="cat.image" [alt]="cat.label" loading="lazy" />
+          </div>
+        </div>
+        <span class="category-item__label">{{ cat.label }}</span>
+      </a>
+    }
+  </div>
+</section>
+
+<!-- ===== NOVEDADES ===== -->
+<section class="arrivals">
+  <div class="arrivals__inner">
+    <div class="arrivals__header">
+      <div>
+        <span class="label-overline">Catálogo</span>
+        <h2 class="section-title">Novedades</h2>
+      </div>
+      <div class="arrivals__controls">
+        <button class="carousel-btn" (click)="scrollLeft()" aria-label="Anterior">
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <button class="carousel-btn" (click)="scrollRight()" aria-label="Siguiente">
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="product-carousel-wrapper">
+    <div class="product-carousel" #carousel>
+      @for (product of products; track product.name) {
+        <div class="product-card">
+          <div class="product-card__img-wrap">
+            <img [src]="product.image" [alt]="product.name" class="product-card__img" loading="lazy" />
+            @if (product.badge) {
+              <span class="product-card__badge">{{ product.badge }}</span>
+            }
+            <div class="product-card__overlay">
+              <span class="product-card__cta">Ver Detalle</span>
+            </div>
+          </div>
+          <div class="product-card__body">
+            <h3 class="product-card__name">{{ product.name }}</h3>
+            <p class="product-card__price">{{ product.price }}</p>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</section>
+
+<!-- ===== NEWSLETTER ===== -->
+<section class="newsletter">
+  <div class="newsletter__inner">
+    <span class="newsletter__ornament">✦</span>
+    <span class="label-overline label-overline--light">Únete a nuestra comunidad</span>
+    <h2 class="newsletter__title">
+      Inspiración y exclusividad<br />
+      <em>directamente en tu correo</em>
+    </h2>
+    <form class="newsletter__form" (submit)="$event.preventDefault()">
+      <input
+        type="email"
+        class="newsletter__input"
+        placeholder="Tu correo electrónico"
+        required
+        aria-label="Correo electrónico"
+      />
+      <button type="submit" class="newsletter__btn">Suscribirme</button>
+    </form>
+    <p class="newsletter__disclaimer">Al suscribirte, aceptas nuestra Política de Privacidad.</p>
+  </div>
+</section>

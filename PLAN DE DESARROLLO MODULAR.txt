@@ -1,0 +1,1031 @@
+# PLAN DE DESARROLLO MODULAR
+## Mueblería Estilo y Confort - Aplicación Web
+
+He analizado tu documentación completa, las imágenes de diseño, los archivos HTML/CSS y los recursos gráficos. Diseño un plan de desarrollo en **5 fases modulares** que permite liberar software funcional al final de cada etapa, asegurar consistencia visual y facilitar ajustes iterativos.
+
+---
+
+## 📋 ESTRUCTURA DE FASES
+
+```
+FASE 1: Infraestructura Base + Autenticación (2-3 semanas)
+    ↓
+FASE 2: Catálogo Público + Carrito Anónimo (2-3 semanas)
+    ↓
+FASE 3: Dashboard Administrador (2 semanas)
+    ↓
+FASE 4: Módulos de Negocio (Vendedor, Repartidor, Fabricante) (2-3 semanas)
+    ↓
+FASE 5: Optimización, Testing y Deployment (1-2 semanas)
+```
+
+---
+
+## 🔧 FASE 1: INFRAESTRUCTURA BASE + AUTENTICACIÓN
+**Duración estimada:** 2-3 semanas  
+**Entrega:** Backend estructurado + Frontend esqueleto + Sistema JWT
+
+### Objetivos:
+- Configurar stack completo (Angular 20, Express, MySQL, JWT)
+- Establecer arquitectura de carpetas y componentes reutilizables
+- Implementar sistema de autenticación con roles
+- Crear componente de navegación principal consistente con diseño
+
+### Tareas:
+
+#### Backend (Node.js + Express):
+```
+src/
+├── config/
+│   ├── database.js         // Conexión MySQL
+│   ├── environment.js      // Variables de entorno
+│   └── cors.js             // Configuración CORS para WhatsApp
+├── middleware/
+│   ├── auth.js             // Validación JWT
+│   ├── roleValidator.js    // Validación de roles
+│   └── errorHandler.js     // Manejo centralizado de errores
+├── controllers/
+│   ├── authController.js   // Login, registro, refresh token
+│   └── userController.js   // Gestión de usuarios
+├── models/
+│   ├── User.js             // Modelo Usuario
+│   └── Role.js             // Modelo Rol
+├── routes/
+│   ├── authRoutes.js       // Rutas de autenticación
+│   └── userRoutes.js       // Rutas de usuarios
+├── utils/
+│   ├── tokenUtils.js       // Generación y validación JWT
+│   └── validators.js       // Validaciones comunes
+└── index.js                // Punto de entrada
+```
+
+#### Frontend (Angular 20):
+```
+src/
+├── assets/
+│   ├── logos/              // Logos en PNG, JPG (de tus archivos)
+│   ├── watermarks/         // Marcas de agua
+│   └── images/             // Imágenes generales
+├── styles/
+│   ├── global.scss         // Variables CSS, colores, tipografía
+│   ├── theme.scss          // Tema Material customizado
+│   └── responsive.scss     // Media queries base
+├── app/
+│   ├── core/
+│   │   ├── auth/
+│   │   │   ├── auth.service.ts
+│   │   │   ├── jwt.interceptor.ts
+│   │   │   └── auth.guard.ts
+│   │   ├── services/
+│   │   │   ├── api.service.ts
+│   │   │   └── notification.service.ts
+│   │   └── models/
+│   │       ├── user.model.ts
+│   │       └── auth.model.ts
+│   ├── shared/
+│   │   ├── components/
+│   │   │   ├── navbar/
+│   │   │   ├── footer/
+│   │   │   └── loader/
+│   │   └── pipes/
+│   ├── modules/
+│   │   ├── auth/           // Módulo de autenticación
+│   │   │   ├── login/
+│   │   │   ├── register/
+│   │   │   └── auth.module.ts
+│   │   └── public/         // Placeholder para Fase 2
+│   └── app.module.ts
+└── environments/
+    ├── environment.ts
+    └── environment.prod.ts
+```
+
+#### Base de Datos (MySQL):
+```sql
+-- Tablas esenciales para Fase 1
+CREATE TABLE roles (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(50) UNIQUE,
+  description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  full_name VARCHAR(255),
+  phone VARCHAR(20),
+  role_id INT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+-- Insertar roles
+INSERT INTO roles (name, description) VALUES
+('visitor', 'Visitante anónimo'),
+('seller', 'Vendedor de tienda'),
+('manufacturer', 'Fabricante/Proveedor'),
+('delivery_person', 'Repartidor'),
+('admin', 'Administrador');
+```
+
+#### Prompts para esta fase:
+
+<details>
+<summary><b>PROMPT BACKEND - FASE 1</b></summary>
+
+```
+Eres un arquitecto backend experimentado. Configura un servidor Node.js + Express 
+con las siguientes características:
+
+REQUISITOS:
+- Stack: Node.js, Express, MySQL, JWT
+- Base de datos: Conexión y modelos para users y roles
+- Autenticación: Sistema JWT con refresh tokens
+- Validación: Middleware para validar roles (visitor, seller, manufacturer, delivery_person, admin)
+- CORS: Habilitado para integración con WhatsApp Business API
+- Seguridad: Almacenamiento seguro de contraseñas (bcrypt), validación de inputs
+- Estructura: Patrón MVC/controladores bien organizado
+- Testing: Endpoints documentados con ejemplos cURL
+
+ENTREGABLES:
+1. Código del servidor con estructura de carpetas
+2. Migraciones SQL para crear tablas base
+3. Archivo .env.example con variables necesarias
+4. Documentación de endpoints de autenticación (GET, POST, PATCH, DELETE)
+5. Script de seeding de roles
+
+ENDPOINTS PRIORITARIOS:
+- POST /api/auth/login - Login usuario
+- POST /api/auth/register - Registro (solo admin puede crear usuarios)
+- POST /api/auth/refresh - Refresh token
+- GET /api/users - Listar usuarios (solo admin)
+- PATCH /api/users/:id - Editar usuario (solo admin)
+
+CONSIDERACIONES:
+- Logs auditables de cambios
+- Manejo robusto de errores
+- Validación de permisos por rol
+```
+</details>
+
+<details>
+<summary><b>PROMPT FRONTEND - FASE 1</b></summary>
+
+```
+Eres un arquitecto frontend especializado en Angular 20. Crea la estructura 
+base de una aplicación Angular con Material Design aplicando la línea gráfica 
+de Mueblería Estilo y Confort.
+
+REQUISITOS:
+- Framework: Angular 20 + Angular Material
+- Autenticación: JWT, interceptores, guardias
+- Estilo: Basado en recursos visuales proporcionados (logos, colores morados/grises)
+- Responsividad: Mobile-first (320px+), tablet, desktop
+- Componentes compartidos: Navbar, footer, loader
+
+IDENTIDAD VISUAL A APLICAR:
+- Colores primarios: Morado oscuro (#3D2B5E aproximadamente)
+- Colores secundarios: Gris neutro (para textos y fondos)
+- Tipografía: Serif elegante (similar a la del logo)
+- Decorativos: Motivos de luna con ornamentación, estrellas de 4 puntas
+- Logo: Disponible en los archivos (LOGOTIPO_POSITIVO, LOGOTIPO_NEGATIVO)
+
+ESTRUCTURA:
+1. App module con rutas principales
+2. Auth module con login/register
+3. Shared module con componentes comunes
+4. Core module con servicios
+5. Public module (skeleton para Fase 2)
+
+ENTREGABLES:
+1. Proyecto Angular compilable y sin errores
+2. Tema Material customizado con colores de marca
+3. Componentes navbar y footer responsivos
+4. Página de login funcional (sin integración real)
+5. Estructura de carpetas escalable
+6. Variables SCSS globales para fácil customización
+
+CONSIDERACIONES:
+- Aplicar consistencia visual en toda la aplicación
+- Lazy loading de módulos para optimizar performance
+- Manejo de estados con NgRx (estructura lista)
+- Accesibilidad WCAG 2.1 nivel AA
+```
+</details>
+
+---
+
+## 🛒 FASE 2: CATÁLOGO PÚBLICO + CARRITO ANÓNIMO
+**Duración estimada:** 2-3 semanas  
+**Entrega:** Sistema de catálogo funcional, búsqueda, filtros y carrito persistente
+
+### Objetivos:
+- CRUD de productos en administración
+- Visualización pública de catálogo con filtros avanzados
+- Galería de imágenes con zoom
+- Carrito anónimo con localStorage (máx 30 días)
+- Estimador de envío por código postal
+
+### Tareas:
+
+#### Backend:
+```
+Nuevas rutas/controladores:
+- GET /api/products              // Listado público (con filtros)
+- GET /api/products/:id          // Detalle producto
+- GET /api/categories            // Listado de categorías
+- GET /api/products/search       // Búsqueda con autocompletado
+- GET /api/shipping/estimate     // Estimador envío (integración Google Maps)
+
+(Admin - requiere rol admin):
+- POST /api/products             // Crear producto
+- PATCH /api/products/:id        // Editar producto
+- DELETE /api/products/:id       // Eliminar producto
+```
+
+#### Frontend:
+```
+Nuevos componentes:
+- pages/home                      // Página inicio
+- pages/catalog                   // Listado de productos
+- pages/product-detail            // Ficha completa
+- pages/cart                      // Carrito
+- components/product-card         // Card de producto
+- components/gallery-zoom         // Galería interactiva
+- components/price-display        // Mostrador de precios (contado + MSI)
+- components/shipping-calculator  // Calculadora envío
+```
+
+#### Base de Datos:
+```sql
+CREATE TABLE categories (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) UNIQUE,
+  description TEXT,
+  image_url VARCHAR(255),
+  order_display INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE products (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  sku VARCHAR(100) UNIQUE,
+  category_id INT,
+  description TEXT,
+  materials VARCHAR(255),
+  dimensions_length DECIMAL(8,2),    // cm
+  dimensions_width DECIMAL(8,2),     // cm
+  dimensions_height DECIMAL(8,2),    // cm
+  weight_volumetric DECIMAL(8,2),    // kg
+  availability_days INT,              // 0 = inmediata
+  base_cost DECIMAL(12,2),
+  margin_percentage DECIMAL(5,2),
+  price_base_no_iva DECIMAL(12,2),
+  price_with_iva DECIMAL(12,2),
+  price_cash_absorbing_fee DECIMAL(12,2),
+  price_6msi_absorbing_fee DECIMAL(12,2),
+  stock_quantity INT DEFAULT 0,
+  stock_alert_level INT DEFAULT 5,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+
+CREATE TABLE product_variants (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  product_id INT,
+  variant_type VARCHAR(100),        // "color", "tamaño", "tapiz"
+  variant_value VARCHAR(100),
+  price_modifier DECIMAL(12,2),     // Suma o resta al precio base
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE TABLE product_images (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  product_id INT,
+  image_url VARCHAR(255),
+  alt_text VARCHAR(255),
+  is_primary BOOLEAN DEFAULT FALSE,
+  order_display INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+```
+
+#### Prompts para esta fase:
+
+<details>
+<summary><b>PROMPT BACKEND - FASE 2</b></summary>
+
+```
+Desarrolla la capa de productos y catálogo para Mueblería Estilo y Confort.
+
+REQUISITOS:
+1. CRUD de Productos:
+   - Crear, leer, actualizar, eliminar productos
+   - Almacenar: costo, márgenes, precios calculados, dimensiones, materiales
+   - Variantes: colores, tamaños, tapices con modificadores de precio
+   - Imágenes: múltiples por producto, ordenables, lazy loading
+
+2. Búsqueda y Filtros:
+   - Búsqueda full-text en nombre y descripción
+   - Filtros: rango precio (contado y MSI), material, color, disponibilidad, medidas
+   - Ordenamiento: precio, relevancia, disponibilidad
+   - Paginación: 12 productos por página
+
+3. Disponibilidad:
+   - Marcar productos como "Inmediata" o "X días de fabricación"
+   - Validación: no vender stock agotado
+
+4. Integración con Precios:
+   - Endpoint que retorna: precio contado + precio 6MSI + desglose
+   - Validación: precio contado ≥ precio con IVA
+
+5. Estimador de Envío:
+   - GET /api/shipping/estimate?postal_code=XXXX
+   - Integración Google Maps API (validar código postal en Puebla)
+   - Retornar: costo estimado + tiempo entrega
+
+ENTREGABLES:
+- Endpoints CRUD funcionales
+- Validaciones de integridad
+- Documentación de API (Swagger recomendado)
+- Script SQL con productos de ejemplo
+```
+</details>
+
+<details>
+<summary><b>PROMPT FRONTEND - FASE 2</b></summary>
+
+```
+Desarrolla la interfaz pública del catálogo de Mueblería Estilo y Confort
+siguiendo FIELMENTE la línea gráfica proporcionada.
+
+REQUISITOS:
+1. PÁGINA HOME:
+   - Banners interactivos con lanzamientos (carrusel)
+   - Colecciones destacadas (Económica, Premium, Exterior)
+   - Grid de productos destacados 3-4 columnas (responsive)
+   - Chat flotante de WhatsApp
+   - Buscador con autocompletado
+   - Suscripción a newsletter (input email)
+
+2. PÁGINA CATÁLOGO:
+   - Grid responsivo: 1 col móvil, 2 tablet, 3-4 desktop
+   - Panel de filtros (lateral en desktop, colapsable en móvil)
+   - Product cards con: foto, nombre, precio contado, precio MSI, badge disponibilidad
+   - Botones "Ver Detalles" y "Agregar al Carrito"
+   - Paginación o infinite scroll
+
+3. PÁGINA PRODUCTO (FICHA DETALLADA):
+   - Galería zoom interactivo (múltiples ángulos)
+   - Información técnica: medidas, materiales, peso, tiempo disponibilidad
+   - Variantes: selectores de color/tamaño/tapiz con preview
+   - Precios claros: contado, 6MSI, desglose de comisiones
+   - Ficha técnica PDF descargable
+   - Botón "Agregar al Carrito"
+   - Sección "Productos relacionados"
+
+4. CARRITO ANÓNIMO:
+   - Visualizar productos con cantidad
+   - Cambiar cantidades, eliminar items
+   - Subtotal, IVA, total
+   - Estimador de envío (input código postal)
+   - Campo cupón/descuento (sin integración)
+   - Botón "Finalizar pedido por WhatsApp" (verde, prominente)
+   - Persistencia localStorage (30 días)
+
+5. DISEÑO VISUAL:
+   - Aplicar colores: morado #3D2B5E, grises, decorativos (luna, estrellas)
+   - Tipografía: serif elegante para títulos, sans-serif para body
+   - Logos en navbar y footer desde archivos proporcionados
+   - Espaciado y alineación consistente
+   - Animaciones suaves (transiciones 300-400ms)
+
+6. RESPONSIVIDAD:
+   - Mobile 320px: stack vertical, botones grandes
+   - Tablet 768px: 2 columnas
+   - Desktop 1024px+: 3-4 columnas
+
+ENTREGABLES:
+- Componentes Angular funcionales sin errores
+- Estilos SCSS con variables globales
+- Integración consumiendo endpoints del backend
+- localStorage implementado
+- Carrito persistente entre sesiones
+```
+</details>
+
+---
+
+## 📊 FASE 3: DASHBOARD ADMINISTRADOR
+**Duración estimada:** 2 semanas  
+**Entrega:** Panel de control completo para admin
+
+### Objetivos:
+- Módulo de gestión de usuarios (crear, editar, eliminar, asignar roles)
+- Dashboard finanzas (flujo de caja, ingresos/egresos)
+- Módulo inventario con alertas
+- Módulo pedidos (creación lista semanal para fabricantes)
+- Módulo catálogo (CRUD productos)
+- Generación de reportes (PDF, Excel)
+
+### Tareas:
+
+#### Backend:
+```
+Nuevas rutas:
+- GET /api/admin/dashboard             // Datos dashboard
+- GET /api/admin/finances/summary      // Resumen finanzas
+- GET /api/admin/inventory/alerts      // Alertas stock bajo
+- GET /api/admin/reports/generate      // Generar reportes (PDF/Excel)
+
+(Ver endpoints completos en sección de prompts)
+```
+
+#### Frontend:
+```
+Nuevos componentes:
+- pages/admin/dashboard
+- pages/admin/users
+- pages/admin/finances
+- pages/admin/inventory
+- pages/admin/orders
+- pages/admin/catalog-management
+- pages/admin/reports
+```
+
+#### Prompts para esta fase:
+
+<details>
+<summary><b>PROMPT BACKEND - FASE 3</b></summary>
+
+```
+Desarrolla los endpoints administrativos para Mueblería Estilo y Confort.
+
+MÓDULO 1: GESTIÓN DE USUARIOS (solo admin)
+- GET /api/admin/users                      // Listar usuarios
+- GET /api/admin/users/:id                  // Detalle usuario
+- POST /api/admin/users                     // Crear usuario
+- PATCH /api/admin/users/:id                // Editar usuario (datos, rol)
+- DELETE /api/admin/users/:id               // Eliminar usuario
+- PATCH /api/admin/users/:id/toggle-status  // Activar/desactivar
+
+MÓDULO 2: FINANZAS
+- GET /api/admin/finances/summary           // Dashboard: ingresos, egresos, saldo
+- GET /api/admin/finances/transactions      // Historial transacciones
+- GET /api/admin/finances/by-payment-type   // Ganancias por tipo pago (efectivo, tarjeta, MSI, crédito)
+- GET /api/admin/finances/margin-analysis   // Análisis márgenes por producto
+
+MÓDULO 3: INVENTARIO
+- GET /api/admin/inventory                  // Stock actual todos productos
+- GET /api/admin/inventory/alerts           // Productos bajo punto de reorden
+- GET /api/admin/inventory/movements        // Historial movimientos stock
+- PATCH /api/admin/inventory/:product_id    // Ajustar stock manual
+
+MÓDULO 4: PEDIDOS Y FABRICANTES
+- GET /api/admin/orders                     // Listar pedidos (filtrar estado)
+- GET /api/admin/orders/:id                 // Detalle pedido
+- POST /api/admin/orders/weekly-list        // Generar lista semanal para fabricantes
+- GET /api/admin/manufacturers              // Gestionar fabricantes (CRUD)
+- PATCH /api/admin/orders/:id/status        // Cambiar estado pedido
+
+MÓDULO 5: REPORTES
+- GET /api/admin/reports/sales              // Reporte ventas (PDF, Excel)
+- GET /api/admin/reports/profits            // Reporte ganancias
+- GET /api/admin/reports/inventory          // Reporte inventario
+- GET /api/admin/reports/custom             // Reportes personalizados (rango fechas)
+
+ENTREGABLES:
+- Todos los endpoints implementados y probados
+- Documentación Swagger completa
+- Validaciones de autorización (solo admin)
+- Logging de cambios administrativos
+```
+</details>
+
+<details>
+<summary><b>PROMPT FRONTEND - FASE 3</b></summary>
+
+```
+Desarrolla el panel administrativo de Mueblería Estilo y Confort.
+
+ESTRUCTURA SIDEBAR (menú izquierdo, colapsable en móvil):
+├── Dashboard
+├── Gestión de Usuarios
+├── Finanzas
+│   ├── Resumen
+│   ├── Transacciones
+│   └── Ganancias por tipo pago
+├── Inventario
+│   ├── Stock actual
+│   └── Alertas
+├── Pedidos & Fabricantes
+│   ├── Gestionar pedidos
+│   ├── Listar fabricantes
+│   └── Generar lista semanal
+├── Catálogo
+│   ├── Productos (CRUD)
+│   ├── Categorías
+│   └── Variantes
+├── Reportes
+│   ├── Ventas
+│   ├── Ganancias
+│   ├── Inventario
+│   └── Personalizado
+└── Configuración
+
+COMPONENTES CLAVE:
+1. Dashboard:
+   - 4 cards principales: ingresos hoy, pedidos en proceso, stock bajo, ganancias mes
+   - Gráfico líneas: ingresos últimos 30 días
+   - Tabla: últimos 5 pedidos
+
+2. Gestión Usuarios:
+   - Tabla con columnas: ID, Nombre, Email, Rol, Estado, Acciones
+   - Botones: Crear, Editar, Eliminar, Cambiar rol, Activar/desactivar
+   - Modal para crear/editar
+
+3. Finanzas:
+   - Tarjetas: ingresos, egresos, ganancia neta, margen %
+   - Gráfico pastel: distribución por tipo pago
+   - Tabla: transacciones detalladas con filtros
+
+4. Inventario:
+   - Tabla: producto, stock actual, punto reorden, estado
+   - Highlighting: rojo si stock < alerta
+   - Botón: ajustar stock manual (modal)
+   - Historial movimientos
+
+5. Pedidos & Fabricantes:
+   - Tabla pedidos: ID, cliente, estado, fecha, monto
+   - Estados: pendiente, en fabricación, listo, entregado, cancelado
+   - Botón: generar lista semanal (PDF)
+   - CRUD fabricantes (tabla simple)
+
+6. Catálogo:
+   - Tabla productos: nombre, SKU, categoría, costo, precio, stock
+   - Botones: crear, editar, eliminar, ver detalle
+   - Form: nombre, descripción, categoría, costo, margen, variantes, imágenes
+   - Drag & drop para subir múltiples imágenes
+
+7. Reportes:
+   - Selectores: tipo reporte, rango fechas
+   - Botones: descargar PDF, descargar Excel
+   - Preview tabla antes de descargar
+
+DISEÑO:
+- Aplicar tema morado/gris de marca
+- Tablas con scroll horizontal en móvil
+- Modales para CRUD (no nuevas páginas)
+- Confirmación antes de eliminar
+- Toast notifications para feedback
+- Loading states en botones/tablas
+
+ENTREGABLES:
+- Todos los módulos funcionales y conectados al backend
+- Validación de permisos (solo admin)
+- Forms con validación
+- Tablas con ordenamiento, filtros, paginación
+```
+</details>
+
+---
+
+## 👥 FASE 4: MÓDULOS DE NEGOCIO
+**Duración estimada:** 2-3 semanas  
+**Entrega:** Interfaces y lógica para Vendedor, Repartidor y Fabricante
+
+### Objetivos:
+- Módulo Vendedor: crear pedidos, procesar pagos, generar tickets
+- Módulo Repartidor: asignación entregas, GPS, firma digital, estado pagos
+- Módulo Fabricante: ver pedidos, marcar como listos, descargar PDF
+
+### Tareas:
+
+#### Backend:
+```
+Nuevas tablas/rutas:
+- orders (pedidos)
+- order_items (items por pedido)
+- deliveries (entregas asignadas)
+- payments (registro pagos)
+- delivery_signatures (firmas digitales)
+```
+
+#### Frontend:
+```
+Nuevos módulos:
+- seller/              // Panel vendedor
+- delivery-person/     // Panel repartidor
+- manufacturer/        // Panel fabricante
+```
+
+#### Prompts para esta fase:
+
+<details>
+<summary><b>PROMPT BACKEND - FASE 4</b></summary>
+
+```
+Implementa la lógica de negocio para vendedores, repartidores y fabricantes.
+
+MÓDULO VENDEDOR (rol: seller):
+- POST /api/seller/orders              // Crear nuevo pedido
+  Campos: cliente (nombre, email, teléfono), dirección (con validación Google Maps)
+  Productos: SKU, cantidad, variantes
+  Envío: tipo (estándar/con instalación), dirección
+  Pago: tipo (efectivo, tarjeta, MSI, crédito)
+  Retorna: ID pedido, número de venta, ticket imprimible
+
+- GET /api/seller/orders               // Mis pedidos
+- GET /api/seller/orders/:id           // Detalle pedido
+- PATCH /api/seller/orders/:id         // Editar pedido (si está pendiente)
+- DELETE /api/seller/orders/:id        // Cancelar pedido
+- POST /api/seller/payments            // Registrar pago
+- GET /api/seller/inventory            // Consultar disponibilidad
+- POST /api/seller/tickets/:order_id   // Generar ticket PDF
+
+MÓDULO REPARTIDOR (rol: delivery_person):
+- GET /api/delivery/assignments        // Entregas asignadas hoy
+- GET /api/delivery/assignments/:id    // Detalle entrega
+- PATCH /api/delivery/assignments/:id/status  // Marcar completada
+- POST /api/delivery/signature         // Guardar firma digital (imagen base64)
+- POST /api/delivery/photo             // Cargar foto entrega
+- PATCH /api/delivery/payment-status   // Registrar cobro en entrega
+- GET /api/delivery/route              // Obtener ruta Google Maps (lat/lng)
+
+MÓDULO FABRICANTE (rol: manufacturer):
+- GET /api/manufacturer/weekly-list    // Lista pedidos semanal
+- GET /api/manufacturer/orders         // Pedidos que involucran mis productos
+- GET /api/manufacturer/orders/:id     // Detalle pedido
+- PATCH /api/manufacturer/orders/:id/ready  // Marcar como listo
+- GET /api/manufacturer/orders/download-pdf // Descargar lista PDF
+
+TABLAS SQL NUEVAS:
+```sql
+CREATE TABLE orders (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  order_number VARCHAR(20) UNIQUE,
+  seller_id INT,
+  customer_name VARCHAR(255),
+  customer_email VARCHAR(255),
+  customer_phone VARCHAR(20),
+  delivery_address TEXT,
+  delivery_address_lat DECIMAL(10,8),
+  delivery_address_lng DECIMAL(11,8),
+  delivery_type ENUM('standard', 'with_installation'),
+  delivery_person_id INT,
+  payment_method ENUM('cash', 'card', 'msi', 'store_credit'),
+  payment_status ENUM('pending', 'partial', 'paid'),
+  payment_amount DECIMAL(12,2),
+  order_status ENUM('pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'),
+  order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expected_delivery_date DATE,
+  total_amount DECIMAL(12,2),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (seller_id) REFERENCES users(id),
+  FOREIGN KEY (delivery_person_id) REFERENCES users(id)
+);
+
+CREATE TABLE order_items (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  order_id INT,
+  product_id INT,
+  quantity INT,
+  variant_selections JSON,  // {"color": "negro", "size": "2 plazas"}
+  unit_price DECIMAL(12,2),
+  subtotal DECIMAL(12,2),
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE TABLE deliveries (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  order_id INT UNIQUE,
+  delivery_person_id INT,
+  assignment_date DATE,
+  delivery_status ENUM('pending', 'in_progress', 'completed', 'failed'),
+  signature_image_url VARCHAR(255),
+  photo_url VARCHAR(255),
+  delivered_at TIMESTAMP,
+  notes TEXT,
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (delivery_person_id) REFERENCES users(id)
+);
+
+CREATE TABLE payments (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  order_id INT,
+  amount DECIMAL(12,2),
+  payment_method ENUM('cash', 'card', 'msi', 'store_credit'),
+  payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  collected_by_id INT,
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (collected_by_id) REFERENCES users(id)
+);
+```
+
+ENTREGABLES:
+- Todos los endpoints implementados
+- Validaciones de negocio (ej: solo repartidor asignado puede completar entrega)
+- Logging de cambios de estado
+- Integración Google Maps para validar direcciones
+```
+</details>
+
+<details>
+<summary><b>PROMPT FRONTEND - FASE 4</b></summary>
+
+```
+Desarrolla los módulos para Vendedor, Repartidor y Fabricante.
+
+MÓDULO VENDEDOR:
+Interfaz principal:
+- Dashboard: resumen pedidos hoy (pendientes, completados), monto vendido
+- Crear Pedido:
+  * Form de cliente: nombre, email, teléfono
+  * Selector de productos (search, agregar múltiples con cantidades)
+  * Selector variantes (color, tamaño, etc)
+  * Campo dirección (autocomplete Google Maps)
+  * Selector tipo envío (estándar / con instalación)
+  * Selector método pago (efectivo, tarjeta, MSI, crédito)
+  * Monto total calculado automáticamente
+  * Botón "Crear Pedido"
+- Mis Pedidos: tabla con estado, monto, cliente, fecha
+- Detalle Pedido: información completa, posibilidad editar (si pendiente), botón generar ticket
+
+MÓDULO REPARTIDOR:
+- Asignaciones Hoy:
+  * Listado entregas asignadas con estado
+  * Card por entrega: cliente, dirección, productos, monto pendiente cobrar
+  * Botón "Iniciar ruta" (abre Google Maps)
+  * Estado pago (Pagado / Pendiente / Parcial)
+- Detalle Entrega:
+  * Información cliente y productos
+  * Botón "Abrir en Google Maps" con geolocalización
+  * Cámara: capturar foto del mueble entregado
+  * Capturador firma: zona para firmar en pantalla táctil (canvas)
+  * Selector: registrar cobro (Efectivo, Pendiente, Parcial)
+  * Botón "Marcar como Entregada" (requiere foto + firma)
+- Estado de Entregas: timeline visual de sus entregas diarias
+
+MÓDULO FABRICANTE:
+- Lista Semanal:
+  * Vista tabla: producto, cantidad, precio unitario, total, estado
+  * Filtra: productos que requiere fabricar (por SKU)
+  * Botón "Descargar PDF" (reporte semanal)
+  * Estados: Pendiente / Listo para envío
+  * Botón "Marcar como Listo" (por producto)
+- Mis Pedidos:
+  * Tabla productos que fabrica, cantidad total pedida semana
+  * Solo lectura, vista informativa
+  * Botón descargar PDF con listado
+
+COMPONENTES UI COMPARTIDOS (para estos 3 módulos):
+- Tabla de productos con search
+- Modal selector productos
+- Calculadora monto automática
+- Toast confirmaciones
+
+DISEÑO:
+- Aplicar identidad visual morado/gris de marca
+- Responsive: móvil (vendedor usa tablet), repartidor usa móvil primario
+- Iconos: Google Maps pin, cámara, firma, cheque, dinero
+- Confirmaciones antes de acciones críticas
+
+ENTREGABLES:
+- Todos los módulos funcionales
+- Integración Google Maps (geolocalización, dirección)
+- Captura foto (desde cámara o galería)
+- Captura firma (canvas con borrador y envío)
+- Tablas con datos reales del backend
+```
+</details>
+
+---
+
+## 🚀 FASE 5: OPTIMIZACIÓN, TESTING Y DEPLOYMENT
+**Duración estimada:** 1-2 semanas  
+**Entrega:** Aplicación en producción estable
+
+### Objetivos:
+- Testing automático (unitarias e integración)
+- Optimización performance (bundle size, caching, CDN)
+- Seguridad (headers, validación inputs, sanitización)
+- Documentación completa
+- Deployment en servidor
+
+### Tareas:
+- Testing backend (Jest, Mocha)
+- Testing frontend (Jasmine, Karma)
+- Optimización Angular (tree shaking, lazy loading, image compression)
+- Setup CI/CD (GitHub Actions)
+- Documentación API (Swagger)
+- Documentación usuario (wikis)
+- Backup y disaster recovery
+
+#### Prompts para esta fase:
+
+<details>
+<summary><b>PROMPT TESTING Y QA</b></summary>
+
+```
+Implementa suite completa de testing para Mueblería Estilo y Confort.
+
+BACKEND (Node.js + Jest):
+1. Tests unitarios:
+   - Funciones de validación
+   - Cálculos de precios (todos los casos especiales)
+   - Lógica de roles y permisos
+   
+2. Tests de integración:
+   - Endpoints autenticación (login, register, refresh)
+   - CRUD productos
+   - Flujo creación pedido
+   - Asignación entregas
+
+3. Cobertura: mínimo 80% de líneas críticas
+
+FRONTEND (Angular + Jasmine):
+1. Component tests:
+   - Product card (datos, variantes, precio)
+   - Carrito (agregar, quitar, persistencia)
+   - Forms (validaciones)
+   
+2. Service tests:
+   - Auth service
+   - API service (mock HTTP)
+   - LocalStorage service
+
+3. E2E tests (Cypress o Playwright):
+   - Flujo completo: buscar producto → agregar carrito → WhatsApp
+   - Login → crear pedido (vendedor)
+   - Completar entrega (repartidor)
+
+ENTREGABLES:
+- Scripts npm para correr tests
+- Reporte de cobertura
+- CI/CD configurado (GitHub Actions)
+- Documentación testing
+```
+</details>
+
+<details>
+<summary><b>PROMPT DEPLOYMENT Y DOCUMENTACIÓN</b></summary>
+
+```
+Prepara la aplicación para producción.
+
+DEPLOYMENT:
+1. Backend:
+   - Variables de entorno en .env (no versionadas)
+   - SSL/HTTPS configurado
+   - Database backups automáticos
+   - Logs centralizados
+   - PM2 o Docker para mantener servicio activo
+
+2. Frontend:
+   - Build optimizado (ng build --prod)
+   - Assets comprimidas (imágenes WebP, minificación)
+   - Cache headers configurado
+   - Servir desde CDN si es posible
+
+3. Infraestructura sugerida:
+   - Backend: Node.js en VPS/AWS/Heroku
+   - BD: MySQL managed (AWS RDS, Digital Ocean)
+   - Frontend: Netlify, Vercel o servidor estático
+   - CDN: Cloudflare o AWS CloudFront
+
+DOCUMENTACIÓN:
+1. API Documentation (Swagger/OpenAPI)
+2. Architecture Document (diagrama componentes, flujos)
+3. Database Schema (ER diagram)
+4. User Manual (guías por rol)
+5. Admin Guide (setup, mantenimiento)
+6. Developer Guide (cómo contribuir, setup local)
+
+ENTREGABLES:
+- Servidor en línea funcional
+- Documentación completa
+- Plan mantenimiento
+- Guía troubleshooting
+```
+</details>
+
+---
+
+## 📌 CHECKLIST DE ENTREGA POR FASE
+
+### FASE 1 Completa cuando:
+- [ ] Backend compilable sin errores
+- [ ] Endpoints auth probados (con cURL)
+- [ ] BD creada y poblada con roles
+- [ ] Frontend Angular sin errores de compilación
+- [ ] Navbar y footer responsivos con estilo correcto
+- [ ] Login funcional (sin integración BD real por ahora)
+- [ ] Guardias de ruta implementadas
+
+### FASE 2 Completa cuando:
+- [ ] CRUD productos en backend
+- [ ] Catálogo público en frontend funcional
+- [ ] Búsqueda y filtros operativos
+- [ ] Galería zoom funcionando
+- [ ] Carrito localStorage persistente
+- [ ] Precio contado + MSI mostrados correctamente
+- [ ] Botón WhatsApp redirige correctamente
+- [ ] Estimador envío integrado con Google Maps
+- [ ] Responsive perfecto (mobile, tablet, desktop)
+- [ ] Sin errores en consola del navegador
+
+### FASE 3 Completa cuando:
+- [ ] Dashboard admin con datos reales
+- [ ] CRUD usuarios funcional
+- [ ] Módulo finanzas con gráficos
+- [ ] Inventario con alertas
+- [ ] Reportes PDF/Excel generables
+- [ ] Permisos validados por rol
+- [ ] Formularios con validaciones
+
+### FASE 4 Completa cuando:
+- [ ] Vendedor puede crear pedidos
+- [ ] Repartidor puede ver entregas y capturar firma
+- [ ] Fabricante ve lista semanal
+- [ ] Todas las integraciones Google Maps activas
+- [ ] Flujos de pago registrados
+- [ ] Estados de pedidos y entregas correctos
+
+### FASE 5 Completa cuando:
+- [ ] Tests con >80% cobertura
+- [ ] CI/CD funcionando
+- [ ] Servidor en producción
+- [ ] Documentación completa
+- [ ] Backups automáticos
+- [ ] Monitoreo y alertas activos
+
+---
+
+## 💡 NOTAS IMPORTANTES
+
+### Consistencia Visual:
+He identificado los siguientes elementos clave de tu marca:
+- **Logo**: Luna ornamentada + texto serif elegante
+- **Colores**: Morado oscuro/plata (positivo), blanco/plata (negativo)
+- **Decorativos**: Estrellas de 4 puntas, ornamentación floral en la luna
+- **Tipografía**: Serif para marca, sans-serif para contenido
+
+Todos los componentes deben mantener esta identidad en las 5 fases.
+
+### Stack Recomendado:
+```
+Backend:
+- Node.js v18+
+- Express 4.18+
+- MySQL 8.0+
+- JWT (jsonwebtoken)
+- Bcrypt para contraseñas
+- Cors, dotenv, multer
+
+Frontend:
+- Angular 20
+- Angular Material 20
+- RxJS 7.8+
+- ngx-infinite-scroll
+- ngx-pagination
+- html2canvas (para firmas)
+- jspdf, xlsx (reportes)
+
+DevOps:
+- Docker (opcional pero recomendado)
+- GitHub Actions (CI/CD)
+- Postman (testing API)
+```
+
+### Próximos Pasos Inmediatos:
+1. Confirmar que tienes Node.js, npm, y Angular CLI instalados
+2. Crear repositorio GitHub para versionado
+3. Preparar servidor/hosting (recomendado Render, Railway o AWS para backend)
+4. Generar credenciales Google Maps API
+5. Comenzar con FASE 1 usando el prompt correspondiente
+
+---
+
+## 📞 RESUMEN PARA EMPEZAR
+
+¿Deseas que comience con la **FASE 1 detallada**? Puedo generar:
+
+✅ **Estructura completa de carpetas**  
+✅ **Código base backend (server.js, rutas, modelos)**  
+✅ **Código base frontend (app.module, auth, navbar)**  
+✅ **Scripts SQL** para crear BD  
+✅ **Variables de entorno** (.env.example)  
+
+Solo confirma si quieres comenzar ahora o si necesitas ajustar algo del plan.

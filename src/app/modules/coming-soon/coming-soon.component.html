@@ -1,0 +1,14 @@
+<div class="coming-soon">
+  <span class="material-symbols-outlined coming-soon__icon">
+    {{ routeData()?.icon ?? 'construction' }}
+  </span>
+  <h2 class="coming-soon__title">{{ routeData()?.moduleTitle ?? 'Módulo' }}</h2>
+  <p class="coming-soon__text">
+    Este módulo estará disponible en la <strong>Fase {{ routeData()?.phase ?? '?' }}</strong> del
+    plan de desarrollo.
+  </p>
+  <a routerLink="/" class="btn-home">
+    <span class="material-symbols-outlined">home</span>
+    Volver al inicio
+  </a>
+</div>

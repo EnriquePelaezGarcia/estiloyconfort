@@ -19,6 +19,12 @@
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
     },
+    "interface-design": {
+      "source": "dammyjay93/interface-design",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/interface-design/SKILL.md",
+      "computedHash": "1c0e76c9ee32578bf362c82db2b8dda76ffe40c0548fe1c7e4113104117d93f3"
+    },
     "mcp-builder": {
       "source": "anthropics/skills",
       "sourceType": "github",

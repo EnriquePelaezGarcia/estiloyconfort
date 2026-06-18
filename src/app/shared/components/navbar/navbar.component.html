@@ -1,0 +1,76 @@
+<nav class="app-navbar">
+  <div class="app-navbar__inner">
+    <a class="app-navbar__brand" routerLink="/" aria-label="Ir al inicio">
+      Estilo y Confort
+    </a>
+
+    <ul class="app-navbar__links">
+      <li><a routerLink="/catalogo" routerLinkActive="is-active">Catálogo</a></li>
+      <li><a routerLink="/nosotros" routerLinkActive="is-active">Nosotros</a></li>
+      <li><a routerLink="/contacto" routerLinkActive="is-active">Contacto</a></li>
+    </ul>
+
+    <div class="app-navbar__actions">
+      <a routerLink="/carrito" class="icon-btn" aria-label="Carrito">
+        <span class="material-symbols-outlined">shopping_cart</span>
+      </a>
+
+      @if (!auth.isAuthenticated()) {
+        <a routerLink="/auth/login" class="btn-login">Iniciar Sesión</a>
+      }
+
+      @if (auth.isAuthenticated()) {
+        <div class="user-menu" (click)="$event.stopPropagation()">
+          <button class="user-menu__trigger icon-btn" (click)="toggleDropdown($event)" [attr.aria-expanded]="dropdownOpen()">
+            <span class="material-symbols-outlined">account_circle</span>
+          </button>
+          @if (dropdownOpen()) {
+            <div class="user-menu__dropdown">
+              <span class="user-menu__name">{{ auth.currentUser()?.fullName }}</span>
+              @if (auth.userRole() === 'admin') {
+                <a class="user-menu__item" routerLink="/admin" (click)="dropdownOpen.set(false)">Panel Admin</a>
+              }
+              @if (auth.userRole() === 'seller') {
+                <a class="user-menu__item" routerLink="/vendedor" (click)="dropdownOpen.set(false)">Panel Vendedor</a>
+              }
+              @if (auth.userRole() === 'delivery_person') {
+                <a class="user-menu__item" routerLink="/repartidor" (click)="dropdownOpen.set(false)">Mis Entregas</a>
+              }
+              @if (auth.userRole() === 'manufacturer') {
+                <a class="user-menu__item" routerLink="/fabricante" (click)="dropdownOpen.set(false)">Lista Semanal</a>
+              }
+              <button class="user-menu__item user-menu__item--danger" (click)="auth.logout()">
+                Cerrar sesión
+              </button>
+            </div>
+          }
+        </div>
+      }
+
+      <button
+        class="icon-btn hamburger"
+        (click)="toggleMobileMenu()"
+        [attr.aria-expanded]="mobileMenuOpen()"
+        aria-label="Menú"
+      >
+        <span class="material-symbols-outlined">{{ mobileMenuOpen() ? 'close' : 'menu' }}</span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+@if (mobileMenuOpen()) {
+  <div class="mobile-nav">
+    <ul>
+      <li><a routerLink="/catalogo" (click)="mobileMenuOpen.set(false)">Catálogo</a></li>
+      <li><a routerLink="/nosotros" (click)="mobileMenuOpen.set(false)">Nosotros</a></li>
+      <li><a routerLink="/contacto" (click)="mobileMenuOpen.set(false)">Contacto</a></li>
+      @if (!auth.isAuthenticated()) {
+        <li><a routerLink="/auth/login" (click)="mobileMenuOpen.set(false)" class="mobile-nav__login">Iniciar Sesión</a></li>
+      }
+      @if (auth.isAuthenticated()) {
+        <li><button (click)="auth.logout()">Cerrar sesión</button></li>
+      }
+    </ul>
+  </div>
+}

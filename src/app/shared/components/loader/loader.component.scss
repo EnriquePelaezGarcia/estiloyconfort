@@ -1,0 +1,23 @@
+.top-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 9999;
+  overflow: hidden;
+  background-color: transparent;
+}
+
+.top-loader__bar {
+  height: 100%;
+  background: #c9b8e8;
+  animation: slide-progress 1.4s infinite ease-in-out;
+  transform-origin: left center;
+}
+
+@keyframes slide-progress {
+  0%   { transform: scaleX(0) translateX(0); }
+  50%  { transform: scaleX(0.6) translateX(50%); }
+  100% { transform: scaleX(0) translateX(200%); }
+}

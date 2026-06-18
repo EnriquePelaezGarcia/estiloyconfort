@@ -1,0 +1,127 @@
+.register-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a1d42 0%, #3d2b5e 50%, #5c4480 100%);
+  padding: 1.5rem;
+  gap: 1.5rem;
+}
+
+.register-brand {
+  text-align: center;
+  color: white;
+
+  &__icon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  &__name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+    color: white;
+  }
+}
+
+.register-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+
+  &__header {
+    padding: 1.75rem 1.75rem 0;
+
+    h2 {
+      font-family: 'Manrope', sans-serif;
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: #1c1b1b;
+      margin: 0 0 0.25rem;
+    }
+
+    p {
+      font-size: 0.875rem;
+      color: #7d747c;
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+    }
+  }
+
+  &__body {
+    padding: 1.5rem 1.75rem;
+  }
+
+  &__footer {
+    padding: 0 1.75rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+}
+
+.register-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+
+  &__icon {
+    font-size: 3rem;
+    height: 3rem;
+    width: 3rem;
+    color: #3d2b5e;
+    opacity: 0.65;
+  }
+
+  p {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    color: #6b6b7b;
+    line-height: 1.7;
+    margin: 0;
+  }
+}
+
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  background-color: #3d2b5e;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background-color 200ms ease;
+
+  &:hover {
+    background-color: #5c4480;
+    color: white;
+  }
+}
+
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  color: #36203b;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
