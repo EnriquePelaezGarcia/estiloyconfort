@@ -1,54 +1,82 @@
 .coming-soon {
-  min-height: 60vh;
+  min-height: 70vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 3rem 1.5rem;
-  gap: 1rem;
+  padding: 5rem 1.5rem;
+  gap: 0;
+  background-color: #fcf9f8;
+
+  &__ornament {
+    display: block;
+    font-size: 0.875rem;
+    color: rgba(92, 68, 128, 0.4);
+    margin-bottom: 1.75rem;
+    letter-spacing: 0.4em;
+  }
 
   &__icon {
-    font-size: 4rem;
-    height: 4rem;
-    width: 4rem;
-    color: #3d2b5e;
-    opacity: 0.4;
+    font-size: 3rem;
+    height: 3rem;
+    width: 3rem;
+    color: #5c4480;
+    opacity: 0.35;
+    margin-bottom: 1.5rem;
+  }
+
+  &__overline {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #5c4480;
+    margin-bottom: 0.75rem;
   }
 
   &__title {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 2rem;
-    color: #3d2b5e;
-    margin: 0;
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 400;
+    color: #1e1521;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin: 0 0 1.25rem;
   }
 
   &__text {
+    font-family: 'Inter', sans-serif;
     font-size: 1rem;
-    color: #6b6b7b;
-    max-width: 400px;
-    line-height: 1.7;
-    margin: 0;
+    color: #625d5a;
+    max-width: 420px;
+    line-height: 1.8;
+    margin: 0 0 2.75rem;
   }
 }
 
 .btn-home {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  background-color: #3d2b5e;
-  color: white;
-  height: 48px;
-  padding: 0 1.5rem;
-  border-radius: 8px;
-  margin-top: 0.5rem;
-  font-size: 1rem;
+  gap: 0.5rem;
+  background-color: #1e1521;
+  color: #fcf9f8;
+  padding: 1rem 2rem;
+  border-radius: 2px;
   font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   text-decoration: none;
-  transition: background-color 200ms ease;
+  transition: background-color 300ms ease, color 300ms ease;
+
+  .material-symbols-outlined { font-size: 1.125rem; }
 
   &:hover {
-    background-color: #5c4480;
-    color: white;
+    background-color: #3d2b5e;
+    color: #fcf9f8;
   }
 }
