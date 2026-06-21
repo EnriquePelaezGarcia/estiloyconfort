@@ -9,6 +9,11 @@ export const routes: Routes = [
     title: 'Inicio - Mueblería Estilo y Confort',
   },
   {
+    path: '',
+    loadChildren: () =>
+      import('./modules/public/public.routes').then((m) => m.publicRoutes),
+  },
+  {
     path: 'auth',
     loadChildren: () => import('./modules/auth/auth.routes').then((m) => m.authRoutes),
   },

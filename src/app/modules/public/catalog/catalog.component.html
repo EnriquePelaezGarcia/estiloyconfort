@@ -1,0 +1,126 @@
+<div class="catalog">
+  <!-- Header -->
+  <section class="catalog__header">
+    <div class="container">
+      <h1 class="catalog__title">Catálogo</h1>
+      <p class="catalog__subtitle">Muebles de calidad para cada espacio</p>
+    </div>
+  </section>
+
+  <div class="container catalog__layout">
+    <!-- Sidebar filtros -->
+    <aside class="catalog__sidebar">
+      <div class="filter-group">
+        <h3 class="filter-group__title">Categorías</h3>
+        <ul class="filter-group__list">
+          <li>
+            <button
+              type="button"
+              class="filter-group__item"
+              [class.filter-group__item--active]="!filters().category"
+              (click)="onCategoryChange('')"
+            >
+              Todas las categorías
+            </button>
+          </li>
+          @for (cat of categories(); track cat.id) {
+            <li>
+              <button
+                type="button"
+                class="filter-group__item"
+                [class.filter-group__item--active]="filters().category === cat.slug"
+                (click)="onCategoryChange(cat.slug)"
+              >
+                {{ cat.name }}
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+
+      <div class="filter-group">
+        <h3 class="filter-group__title">Ordenar por</h3>
+        <select class="filter-group__select" [value]="filters().sort" (change)="onSortChange($any($event.target).value)">
+          <option value="newest">Más reciente</option>
+          <option value="price_asc">Precio: menor a mayor</option>
+          <option value="price_desc">Precio: mayor a menor</option>
+          <option value="name">Nombre A–Z</option>
+        </select>
+      </div>
+    </aside>
+
+    <!-- Contenido principal -->
+    <main class="catalog__main">
+      <!-- Barra de búsqueda y conteo -->
+      <div class="catalog__toolbar">
+        <div class="catalog__search">
+          <span class="material-symbols-outlined">search</span>
+          <input
+            type="search"
+            placeholder="Buscar productos..."
+            class="catalog__search-input"
+            [(ngModel)]="searchValue"
+            (ngModelChange)="onSearch($event)"
+          />
+        </div>
+        @if (!loading()) {
+          <p class="catalog__count">{{ totalItems() }} productos encontrados</p>
+        }
+      </div>
+
+      <!-- Grid de productos -->
+      @if (loading()) {
+        <div class="catalog__loading">
+          <div class="spinner"></div>
+          <p>Cargando productos...</p>
+        </div>
+      } @else if (products().length === 0) {
+        <div class="catalog__empty">
+          <span class="material-symbols-outlined">search_off</span>
+          <p>No se encontraron productos con los filtros seleccionados.</p>
+          <button type="button" class="btn-primary" (click)="applyFilter({ category: undefined, search: undefined, page: 1 })">
+            Limpiar filtros
+          </button>
+        </div>
+      } @else {
+        <div class="catalog__grid">
+          @for (product of products(); track product.id) {
+            <app-product-card [product]="product" (addToCart)="onAddToCart($event)" />
+          }
+        </div>
+
+        <!-- Paginación -->
+        @if (totalPages() > 1) {
+          <nav class="pagination">
+            <button
+              type="button"
+              class="pagination__btn"
+              [disabled]="currentPage() === 1"
+              (click)="goToPage(currentPage() - 1)"
+            >
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            @for (page of pageNumbers(); track page) {
+              <button
+                type="button"
+                class="pagination__btn"
+                [class.pagination__btn--active]="page === currentPage()"
+                (click)="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+            }
+            <button
+              type="button"
+              class="pagination__btn"
+              [disabled]="currentPage() === totalPages()"
+              (click)="goToPage(currentPage() + 1)"
+            >
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+          </nav>
+        }
+      }
+    </main>
+  </div>
+</div>

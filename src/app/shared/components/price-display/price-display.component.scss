@@ -1,0 +1,53 @@
+@use '../../../../styles/variables' as v;
+
+.price-display {
+  display: flex;
+  gap: v.$spacing-md;
+
+  &--card {
+    flex-direction: column;
+    gap: v.$spacing-xs;
+  }
+
+  &--detail {
+    flex-direction: row;
+    gap: v.$spacing-xl;
+    align-items: flex-end;
+  }
+
+  &__cash,
+  &__msi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__label {
+    font-family: v.$font-headline;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: v.$color-text-secondary;
+  }
+
+  &__amount {
+    font-family: v.$font-headline;
+    font-size: 1rem;
+    font-weight: 600;
+    color: v.$color-text;
+
+    &--main {
+      font-size: 1.25rem;
+      color: v.$color-primary;
+    }
+  }
+
+  &--detail &__amount--main {
+    font-size: 1.75rem;
+  }
+
+  &--detail &__amount {
+    font-size: 1.25rem;
+  }
+}

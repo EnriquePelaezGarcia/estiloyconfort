@@ -1,0 +1,112 @@
+<div class="cart-page">
+  <div class="container">
+    <h1 class="cart-page__title">
+      <span class="material-symbols-outlined">shopping_cart</span>
+      Mi carrito
+    </h1>
+
+    @if (cart.items().length === 0) {
+      <div class="cart-empty">
+        <span class="material-symbols-outlined">shopping_cart</span>
+        <h2>Tu carrito está vacío</h2>
+        <p>Agrega productos desde el catálogo para continuar.</p>
+        <a routerLink="/catalogo" class="btn-primary">Ver catálogo</a>
+      </div>
+    } @else {
+      <div class="cart-layout">
+        <!-- Lista de productos -->
+        <section class="cart-items">
+          @for (item of cart.items(); track item.productId) {
+            <article class="cart-item">
+              <div class="cart-item__image">
+                @if (item.primaryImage) {
+                  <img [src]="item.primaryImage" [alt]="item.name" loading="lazy" />
+                } @else {
+                  <span class="material-symbols-outlined">chair</span>
+                }
+              </div>
+
+              <div class="cart-item__info">
+                <a [routerLink]="['/producto', item.slug]" class="cart-item__name">
+                  {{ item.name }}
+                </a>
+                @if (variantLabel(item)) {
+                  <p class="cart-item__variants">{{ variantLabel(item) }}</p>
+                }
+                @if (item.availabilityDays > 0) {
+                  <span class="cart-item__lead">{{ item.availabilityDays }} días de fabricación</span>
+                }
+              </div>
+
+              <div class="cart-item__qty">
+                <button type="button" class="qty-btn" (click)="updateQty(item, item.quantity - 1)">−</button>
+                <span>{{ item.quantity }}</span>
+                <button type="button" class="qty-btn" (click)="updateQty(item, item.quantity + 1)">+</button>
+              </div>
+
+              <div class="cart-item__price">
+                {{ itemPrice(item) | currency:'MXN':'symbol-narrow':'1.0-0' }}
+              </div>
+
+              <button type="button" class="cart-item__remove" (click)="remove(item)" aria-label="Eliminar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </article>
+          }
+
+          <div class="cart-items__footer">
+            <button type="button" class="btn-ghost" (click)="cart.clear()">
+              <span class="material-symbols-outlined">delete_sweep</span>
+              Vaciar carrito
+            </button>
+            <a routerLink="/catalogo" class="btn-ghost">
+              <span class="material-symbols-outlined">arrow_back</span>
+              Seguir comprando
+            </a>
+          </div>
+        </section>
+
+        <!-- Resumen del pedido -->
+        <aside class="cart-summary">
+          <h2 class="cart-summary__title">Resumen del pedido</h2>
+
+          <div class="cart-summary__rows">
+            <div class="cart-summary__row">
+              <span>Subtotal (sin IVA)</span>
+              <span>{{ cart.subtotal() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </div>
+            <div class="cart-summary__row">
+              <span>IVA (16%)</span>
+              <span>{{ cart.iva() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </div>
+            <div class="cart-summary__row cart-summary__row--total">
+              <span>Total</span>
+              <span>{{ cart.total() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </div>
+          </div>
+
+          <div class="cart-summary__note">
+            <span class="material-symbols-outlined">info</span>
+            <p>El costo de envío se calcula al confirmar el pedido según tu código postal.</p>
+          </div>
+
+          <a
+            [href]="getWhatsAppUrl()"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-whatsapp"
+          >
+            <svg viewBox="0 0 24 24" class="btn-whatsapp__icon" aria-hidden="true">
+              <path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            Finalizar pedido por WhatsApp
+          </a>
+
+          <p class="cart-summary__disclaimer">
+            Al hacer clic serás redirigido a WhatsApp con el resumen de tu pedido. Un asesor te confirmará disponibilidad y costos de envío.
+          </p>
+        </aside>
+      </div>
+    }
+  </div>
+</div>

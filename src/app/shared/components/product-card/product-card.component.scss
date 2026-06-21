@@ -1,0 +1,158 @@
+@use '../../../../styles/variables' as v;
+
+.product-card {
+  background: v.$color-surface;
+  border: 1px solid v.$color-border;
+  border-radius: v.$radius-lg;
+  overflow: hidden;
+  box-shadow: v.$shadow-sm;
+  transition: box-shadow v.$transition-base, transform v.$transition-base;
+  display: flex;
+  flex-direction: column;
+
+  &:hover {
+    box-shadow: v.$shadow-md;
+    transform: translateY(-2px);
+
+    .product-card__image {
+      transform: scale(1.04);
+    }
+  }
+
+  &__image-link {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    background: v.$color-bg;
+  }
+
+  &__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform v.$transition-slow;
+  }
+
+  &__image-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: v.$color-bg;
+    color: v.$color-border;
+
+    .material-symbols-outlined {
+      font-size: 4rem;
+    }
+  }
+
+  &__badge {
+    position: absolute;
+    top: v.$spacing-sm;
+    padding: 2px v.$spacing-sm;
+    border-radius: v.$radius-full;
+    font-family: v.$font-headline;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+
+    &--stock {
+      left: v.$spacing-sm;
+      background: v.$color-success;
+      color: #fff;
+    }
+
+    &--order {
+      left: v.$spacing-sm;
+      background: v.$color-gold;
+      color: #fff;
+    }
+
+    &--featured {
+      right: v.$spacing-sm;
+      background: v.$color-primary;
+      color: #fff;
+    }
+  }
+
+  &__body {
+    padding: v.$spacing-md;
+    display: flex;
+    flex-direction: column;
+    gap: v.$spacing-sm;
+    flex: 1;
+  }
+
+  &__category {
+    font-family: v.$font-headline;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: v.$color-secondary;
+  }
+
+  &__name {
+    margin: 0;
+    font-family: v.$font-headline;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.4;
+
+    a {
+      color: v.$color-text;
+      text-decoration: none;
+
+      &:hover { color: v.$color-primary; }
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: v.$spacing-sm;
+    margin-top: auto;
+    padding-top: v.$spacing-sm;
+
+    a,
+    button {
+      flex: 1;
+      padding: v.$spacing-sm v.$spacing-md;
+      border-radius: v.$radius-md;
+      font-family: v.$font-headline;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: background v.$transition-fast, color v.$transition-fast;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: none;
+    }
+  }
+}
+
+.btn-primary {
+  background: v.$color-primary;
+  color: #fff;
+
+  &:hover { background: v.$color-primary-dark; }
+
+  .material-symbols-outlined { font-size: 1rem; }
+}
+
+.btn-outline-primary {
+  background: transparent;
+  border: 1.5px solid v.$color-primary !important;
+  color: v.$color-primary;
+
+  &:hover {
+    background: v.$color-primary;
+    color: #fff;
+  }
+}

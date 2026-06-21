@@ -1,0 +1,49 @@
+<article class="product-card">
+  <a [routerLink]="['/producto', product().slug]" class="product-card__image-link">
+    @if (product().primary_image) {
+      <img
+        [src]="product().primary_image!"
+        [alt]="product().name"
+        class="product-card__image"
+        loading="lazy"
+      />
+    } @else {
+      <div class="product-card__image-placeholder">
+        <span class="material-symbols-outlined">chair</span>
+      </div>
+    }
+    @if (product().availability_days === 0) {
+      <span class="product-card__badge product-card__badge--stock">Disponible</span>
+    } @else {
+      <span class="product-card__badge product-card__badge--order">{{ product().availability_days }} días</span>
+    }
+    @if (product().is_featured) {
+      <span class="product-card__badge product-card__badge--featured">Destacado</span>
+    }
+  </a>
+
+  <div class="product-card__body">
+    @if (product().category_name) {
+      <span class="product-card__category">{{ product().category_name }}</span>
+    }
+    <h3 class="product-card__name">
+      <a [routerLink]="['/producto', product().slug]">{{ product().name }}</a>
+    </h3>
+
+    <app-price-display
+      [priceCash]="product().price_cash"
+      [price6msi]="product().price_6msi"
+      layout="card"
+    ></app-price-display>
+
+    <div class="product-card__actions">
+      <a [routerLink]="['/producto', product().slug]" class="btn-outline-primary">
+        Ver detalle
+      </a>
+      <button type="button" class="btn-primary" (click)="onAddToCart($event)">
+        <span class="material-symbols-outlined">shopping_cart</span>
+        Agregar
+      </button>
+    </div>
+  </div>
+</article>
