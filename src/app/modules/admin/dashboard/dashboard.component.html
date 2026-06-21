@@ -1,0 +1,130 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Resumen general</span>
+    <h1 class="page-head__title">Dashboard</h1>
+  </div>
+</header>
+
+@if (loading()) {
+  <div class="dash-loading">
+    <span class="spinner"></span>
+    <p>Cargando estadísticas…</p>
+  </div>
+} @else if (stats(); as s) {
+
+  <!-- ===== KPI cards ===== -->
+  <section class="kpi-grid">
+    <article class="kpi kpi--primary">
+      <span class="kpi__icon material-symbols-outlined">group</span>
+      <div class="kpi__body">
+        <span class="kpi__value">{{ s.users.total }}</span>
+        <span class="kpi__label">Usuarios registrados</span>
+        <span class="kpi__meta">{{ s.users.active }} activos · {{ s.users.inactive }} inactivos</span>
+      </div>
+    </article>
+
+    <article class="kpi">
+      <span class="kpi__icon material-symbols-outlined">inventory_2</span>
+      <div class="kpi__body">
+        <span class="kpi__value">{{ s.products.total }}</span>
+        <span class="kpi__label">Productos activos</span>
+        <span class="kpi__meta">{{ s.categories }} categorías</span>
+      </div>
+    </article>
+
+    <article class="kpi" [class.kpi--alert]="s.products.lowStock > 0">
+      <span class="kpi__icon material-symbols-outlined">warning</span>
+      <div class="kpi__body">
+        <span class="kpi__value">{{ s.products.lowStock }}</span>
+        <span class="kpi__label">Stock bajo</span>
+        <span class="kpi__meta">{{ s.products.outOfStock }} agotados</span>
+      </div>
+    </article>
+
+    <article class="kpi">
+      <span class="kpi__icon material-symbols-outlined">savings</span>
+      <div class="kpi__body">
+        <span class="kpi__value">{{ s.products.inventoryValue | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}</span>
+        <span class="kpi__label">Valor de inventario</span>
+        <span class="kpi__meta">al costo base</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="dash-cols">
+
+    <!-- ===== Usuarios por rol ===== -->
+    <section class="card">
+      <div class="card__head">
+        <h2 class="card__title">Usuarios por rol</h2>
+        <a class="card__action" routerLink="../usuarios">Gestionar</a>
+      </div>
+      <ul class="role-list">
+        @for (r of s.users.byRole; track r.role) {
+          <li class="role-list__item">
+            <span class="role-list__name">{{ roleLabel(r.role) }}</span>
+            <span class="role-list__count">{{ r.count }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <!-- ===== Productos con stock bajo ===== -->
+    <section class="card">
+      <div class="card__head">
+        <h2 class="card__title">Alertas de stock</h2>
+      </div>
+      @if (s.lowStockProducts.length) {
+        <table class="mini-table">
+          <thead>
+            <tr><th>Producto</th><th>SKU</th><th class="num">Stock</th></tr>
+          </thead>
+          <tbody>
+            @for (p of s.lowStockProducts; track p.id) {
+              <tr>
+                <td>{{ p.name }}</td>
+                <td class="muted">{{ p.sku }}</td>
+                <td class="num">
+                  <span class="stock-badge" [class.stock-badge--out]="p.stock_quantity === 0">
+                    {{ p.stock_quantity }} / {{ p.stock_alert_level }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="empty">Sin alertas de stock 🎉</p>
+      }
+    </section>
+  </div>
+
+  <!-- ===== Productos recientes ===== -->
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title">Productos recientes</h2>
+    </div>
+    @if (s.recentProducts.length) {
+      <table class="mini-table">
+        <thead>
+          <tr><th>Producto</th><th>Categoría</th><th class="num">Precio</th><th class="num">Stock</th></tr>
+        </thead>
+        <tbody>
+          @for (p of s.recentProducts; track p.id) {
+            <tr>
+              <td>{{ p.name }}</td>
+              <td class="muted">{{ p.category_name ?? '—' }}</td>
+              <td class="num">{{ p.price_cash | currency: 'MXN' : 'symbol-narrow' }}</td>
+              <td class="num">{{ p.stock_quantity }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <p class="empty">Aún no hay productos.</p>
+    }
+  </section>
+
+} @else {
+  <p class="empty">No hay datos disponibles.</p>
+}

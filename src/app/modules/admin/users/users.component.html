@@ -1,0 +1,173 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Gestión de usuarios</h1>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <span class="material-symbols-outlined">add</span>
+    Nuevo usuario
+  </button>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="search"
+      placeholder="Buscar por nombre, email o rol…"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span><p>Cargando usuarios…</p></div>
+} @else {
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Teléfono</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th class="actions-col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of filteredUsers(); track user.id) {
+          <tr>
+            <td data-label="Nombre" class="strong">{{ user.fullName }}</td>
+            <td data-label="Email" class="muted">{{ user.email }}</td>
+            <td data-label="Teléfono">{{ user.phone || '—' }}</td>
+            <td data-label="Rol">
+              <span class="role-chip role-chip--{{ user.role }}">{{ roleLabel(user.role) }}</span>
+            </td>
+            <td data-label="Estado">
+              <button
+                type="button"
+                class="status"
+                [class.status--active]="user.isActive"
+                (click)="toggleStatus(user)"
+                [title]="user.isActive ? 'Desactivar' : 'Activar'"
+              >
+                <span class="status__dot"></span>
+                {{ user.isActive ? 'Activo' : 'Inactivo' }}
+              </button>
+            </td>
+            <td data-label="Acciones" class="actions">
+              <button type="button" class="icon-btn" (click)="openEdit(user)" title="Editar">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button type="button" class="icon-btn icon-btn--danger" (click)="confirmDelete(user)" title="Eliminar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="empty">No se encontraron usuarios.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ===== Modal crear/editar ===== -->
+@if (isModalOpen()) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>{{ isEditMode() ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+        <button type="button" class="icon-btn" (click)="closeModal()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="save()" novalidate class="modal__body">
+        <div class="field">
+          <label for="fullName">Nombre completo</label>
+          <input id="fullName" type="text" formControlName="fullName" />
+          @if (form.get('fullName')?.invalid && form.get('fullName')?.touched) {
+            <p class="field__error">Ingresa un nombre (mínimo 3 caracteres)</p>
+          }
+        </div>
+
+        <div class="field">
+          <label for="email">Correo electrónico</label>
+          <input id="email" type="email" formControlName="email" />
+          @if (form.get('email')?.invalid && form.get('email')?.touched) {
+            <p class="field__error">Ingresa un correo válido</p>
+          }
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="phone">Teléfono</label>
+            <input id="phone" type="tel" formControlName="phone" placeholder="Opcional" />
+          </div>
+          <div class="field">
+            <label for="roleId">Rol</label>
+            <select id="roleId" formControlName="roleId">
+              <option [ngValue]="null" disabled>Selecciona…</option>
+              @for (role of roles(); track role.id) {
+                <option [ngValue]="role.id">{{ roleLabel(role.name) }}</option>
+              }
+            </select>
+            @if (form.get('roleId')?.invalid && form.get('roleId')?.touched) {
+              <p class="field__error">Selecciona un rol</p>
+            }
+          </div>
+        </div>
+
+        @if (!isEditMode()) {
+          <div class="field">
+            <label for="password">Contraseña</label>
+            <input id="password" type="password" formControlName="password" autocomplete="new-password" />
+            @if (form.get('password')?.invalid && form.get('password')?.touched) {
+              <p class="field__error">Mínimo 8 caracteres</p>
+            }
+          </div>
+        }
+
+        @if (isEditMode()) {
+          <label class="checkbox">
+            <input type="checkbox" formControlName="isActive" />
+            <span>Usuario activo</span>
+          </label>
+        }
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            @if (saving()) { <span class="spinner spinner--sm"></span> }
+            {{ isEditMode() ? 'Guardar cambios' : 'Crear usuario' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Confirmación eliminar ===== -->
+@if (deleting(); as target) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__body">
+        <div class="confirm-icon"><span class="material-symbols-outlined">warning</span></div>
+        <h2 class="confirm-title">Eliminar usuario</h2>
+        <p class="confirm-text">
+          ¿Seguro que deseas eliminar a <strong>{{ target.fullName }}</strong>?
+          Esta acción no se puede deshacer.
+        </p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="cancelDelete()">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="executeDelete()">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

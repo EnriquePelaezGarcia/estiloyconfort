@@ -426,8 +426,32 @@ ENTREGABLES:
 ---
 
 ## 📊 FASE 3: DASHBOARD ADMINISTRADOR
-**Duración estimada:** 2 semanas  
+**Duración estimada:** 2 semanas
 **Entrega:** Panel de control completo para admin
+
+> **ESTADO (actualizado 2026-06-21):** Fase 3 reducida a los módulos que operan con
+> datos reales ya disponibles. Los módulos de Finanzas, Pedidos y Reportes de ventas
+> dependen de las tablas `orders` / `order_items` / `payments` que se crean hasta la
+> Fase 4, por lo que **se difieren a la Fase 4** (ver sección Fase 4 → "Módulos
+> administrativos diferidos de Fase 3").
+>
+> **✅ COMPLETADO en Fase 3:**
+> - Layout administrador (sidebar colapsable + topbar + logout, oculta navbar/footer público)
+> - Dashboard con KPIs reales (usuarios totales/activos, usuarios por rol, productos,
+>   stock bajo/agotado, valor de inventario, productos recientes y alertas de stock)
+> - Gestión de Usuarios: tabla con búsqueda, modal crear/editar (Reactive Forms),
+>   activar/desactivar, confirmación de borrado, toasts. Conectado a `/api/users`.
+> - Backend: `GET /api/admin/dashboard` y `GET /api/roles`.
+>
+> **⏳ PENDIENTE en Fase 3 (sigue siendo de esta fase, con backend ya listo):**
+> - Módulo Catálogo (CRUD de productos, categorías, variantes, imágenes) — usa
+>   `POST/PATCH/DELETE /api/products` que ya existen.
+> - Módulo Inventario (vista de stock actual, alertas, ajuste manual de stock).
+>
+> **➡️ DIFERIDO a Fase 4 (requiere tablas de pedidos/pagos):**
+> - Módulo Finanzas (resumen, transacciones, ganancias por tipo de pago, márgenes)
+> - Módulo Pedidos & Fabricantes (gestión de pedidos, lista semanal, estados)
+> - Módulo Reportes de ventas/ganancias (PDF/Excel)
 
 ### Objetivos:
 - Módulo de gestión de usuarios (crear, editar, eliminar, asignar roles)
@@ -600,13 +624,39 @@ ENTREGABLES:
 ---
 
 ## 👥 FASE 4: MÓDULOS DE NEGOCIO
-**Duración estimada:** 2-3 semanas  
+**Duración estimada:** 2-3 semanas
 **Entrega:** Interfaces y lógica para Vendedor, Repartidor y Fabricante
+
+> **NOTA (actualizado 2026-06-21):** Esta fase ahora incluye además los **módulos
+> administrativos diferidos de la Fase 3** que dependían de las tablas de pedidos/pagos.
+> Conviene crear primero las tablas `orders` / `order_items` / `deliveries` / `payments`
+> (definidas más abajo en el prompt backend de esta fase) y, sobre esos datos, levantar
+> tanto los paneles de Vendedor/Repartidor/Fabricante como los dashboards admin de
+> Finanzas, Pedidos y Reportes.
 
 ### Objetivos:
 - Módulo Vendedor: crear pedidos, procesar pagos, generar tickets
 - Módulo Repartidor: asignación entregas, GPS, firma digital, estado pagos
 - Módulo Fabricante: ver pedidos, marcar como listos, descargar PDF
+
+### ➕ Módulos administrativos diferidos de Fase 3 (admin, requieren tablas de pedidos/pagos):
+- **Finanzas (admin):**
+  - `GET /api/admin/finances/summary` — ingresos, egresos, saldo, margen %
+  - `GET /api/admin/finances/transactions` — historial con filtros
+  - `GET /api/admin/finances/by-payment-type` — ganancias por tipo de pago
+  - `GET /api/admin/finances/margin-analysis` — análisis de márgenes por producto
+  - Frontend: tarjetas resumen + gráfico pastel por tipo de pago + tabla de transacciones
+- **Pedidos & Fabricantes (admin):**
+  - `GET /api/admin/orders`, `GET /api/admin/orders/:id`, `PATCH /api/admin/orders/:id/status`
+  - `POST /api/admin/orders/weekly-list` — lista semanal para fabricantes (PDF)
+  - `GET /api/admin/manufacturers` — CRUD de fabricantes
+  - Frontend: tabla de pedidos con estados, generar lista semanal, CRUD fabricantes
+- **Reportes (admin):**
+  - `GET /api/admin/reports/sales`, `/profits`, `/inventory`, `/custom` (PDF/Excel)
+  - Frontend: selector de tipo/rango de fechas, preview en tabla, descarga PDF/Excel
+
+> Recordatorio: el módulo **Catálogo** e **Inventario** del admin son **Fase 3** (backend
+> de productos ya existe); no esperar a Fase 4 para ellos.
 
 ### Tareas:
 
@@ -947,21 +997,26 @@ ENTREGABLES:
 - [ ] Sin errores en consola del navegador
 
 ### FASE 3 Completa cuando:
-- [ ] Dashboard admin con datos reales
-- [ ] CRUD usuarios funcional
-- [ ] Módulo finanzas con gráficos
-- [ ] Inventario con alertas
-- [ ] Reportes PDF/Excel generables
-- [ ] Permisos validados por rol
-- [ ] Formularios con validaciones
+- [x] Dashboard admin con datos reales
+- [x] CRUD usuarios funcional
+- [x] Permisos validados por rol (roleGuard admin + middleware backend)
+- [x] Formularios con validaciones (Reactive Forms)
+- [ ] CRUD catálogo (productos, categorías, variantes, imágenes)
+- [ ] Inventario con alertas y ajuste manual de stock
+- [~] Módulo finanzas con gráficos → DIFERIDO a Fase 4
+- [~] Reportes PDF/Excel generables → DIFERIDO a Fase 4
 
 ### FASE 4 Completa cuando:
+- [ ] Tablas orders / order_items / deliveries / payments creadas
 - [ ] Vendedor puede crear pedidos
 - [ ] Repartidor puede ver entregas y capturar firma
 - [ ] Fabricante ve lista semanal
 - [ ] Todas las integraciones Google Maps activas
 - [ ] Flujos de pago registrados
 - [ ] Estados de pedidos y entregas correctos
+- [ ] (Admin diferido de Fase 3) Finanzas con gráficos y transacciones
+- [ ] (Admin diferido de Fase 3) Pedidos & Fabricantes con lista semanal
+- [ ] (Admin diferido de Fase 3) Reportes PDF/Excel generables
 
 ### FASE 5 Completa cuando:
 - [ ] Tests con >80% cobertura

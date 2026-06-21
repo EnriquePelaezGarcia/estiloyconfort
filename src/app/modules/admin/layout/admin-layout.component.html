@@ -1,0 +1,72 @@
+<div class="admin">
+
+  <!-- ===== Overlay móvil ===== -->
+  @if (sidebarOpen()) {
+    <div class="admin__overlay" (click)="closeSidebar()"></div>
+  }
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar" [class.sidebar--open]="sidebarOpen()">
+    <a class="sidebar__brand" routerLink="/">
+      <span class="sidebar__ornament">☾</span>
+      <span class="sidebar__brand-text">
+        Estilo y Confort
+        <small>Panel admin</small>
+      </span>
+    </a>
+
+    <nav class="sidebar__nav">
+      @for (item of navItems; track item.label) {
+        @if (item.soon) {
+          <span class="nav-link nav-link--disabled" aria-disabled="true">
+            <span class="material-symbols-outlined">{{ item.icon }}</span>
+            <span class="nav-link__label">{{ item.label }}</span>
+            <span class="nav-link__badge">Fase 4</span>
+          </span>
+        } @else {
+          <a
+            class="nav-link"
+            [routerLink]="item.route"
+            routerLinkActive="nav-link--active"
+            (click)="closeSidebar()"
+          >
+            <span class="material-symbols-outlined">{{ item.icon }}</span>
+            <span class="nav-link__label">{{ item.label }}</span>
+          </a>
+        }
+      }
+    </nav>
+
+    <button type="button" class="sidebar__logout" (click)="logout()">
+      <span class="material-symbols-outlined">logout</span>
+      Cerrar sesión
+    </button>
+  </aside>
+
+  <!-- ===== Contenido ===== -->
+  <div class="admin__main">
+    <header class="topbar">
+      <button
+        type="button"
+        class="topbar__menu"
+        (click)="toggleSidebar()"
+        aria-label="Abrir menú"
+      >
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+
+      <div class="topbar__user">
+        <div class="topbar__user-info">
+          <span class="topbar__user-name">{{ userName() }}</span>
+          <span class="topbar__user-email">{{ userEmail() }}</span>
+        </div>
+        <span class="topbar__avatar material-symbols-outlined">account_circle</span>
+      </div>
+    </header>
+
+    <main class="admin__content">
+      <router-outlet />
+    </main>
+  </div>
+
+</div>

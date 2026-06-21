@@ -1,7 +1,11 @@
 <app-loader />
-<app-navbar />
-<main class="main-content">
+@if (showPublicChrome()) {
+  <app-navbar />
+  <main class="main-content">
+    <router-outlet />
+  </main>
+  <app-footer />
+} @else {
   <router-outlet />
-</main>
-<app-footer />
+}
 <app-toast />
