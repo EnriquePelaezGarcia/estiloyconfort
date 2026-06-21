@@ -1,0 +1,45 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Repartidor</p>
+    <h1 class="page-head__title">{{ showAll() ? 'Historial de entregas' : 'Entregas de hoy' }}</h1>
+  </div>
+</header>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando entregas…</p></div>
+} @else if (assignments().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">local_shipping</span>
+    <p>{{ showAll() ? 'No tienes entregas registradas.' : 'No tienes entregas asignadas para hoy.' }}</p>
+  </div>
+} @else {
+  <div class="cards">
+    @for (a of assignments(); track a.id) {
+      <article class="dcard">
+        <div class="dcard__head">
+          <span class="dcard__order">{{ a.orderNumber }}</span>
+          <span class="badge" [class]="statusTone(a.deliveryStatus)">{{ statusLabel(a.deliveryStatus) }}</span>
+        </div>
+
+        <h2 class="dcard__customer">{{ a.customerName }}</h2>
+        @if (a.deliveryAddress) { <p class="dcard__address">{{ a.deliveryAddress }}</p> }
+
+        <div class="dcard__meta">
+          <span class="badge" [class]="payTone(a.paymentStatus)">Pago: {{ payLabel(a.paymentStatus) }}</span>
+          @if (pendingBalance(a) > 0) {
+            <span class="dcard__balance">Por cobrar: {{ pendingBalance(a) | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          }
+        </div>
+
+        <div class="dcard__actions">
+          <a class="btn btn--ghost" [href]="mapsUrl(a)" target="_blank" rel="noopener">
+            <span class="material-symbols-outlined">map</span> Ruta
+          </a>
+          <a class="btn btn--primary" [routerLink]="[a.id]">
+            <span class="material-symbols-outlined">arrow_forward</span> Abrir
+          </a>
+        </div>
+      </article>
+    }
+  </div>
+}

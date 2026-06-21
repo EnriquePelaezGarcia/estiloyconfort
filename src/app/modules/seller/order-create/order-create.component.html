@@ -1,0 +1,139 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Vendedor</p>
+    <h1 class="page-head__title">Nuevo pedido</h1>
+  </div>
+</header>
+
+<form [formGroup]="form" (ngSubmit)="submit()" class="order-grid">
+
+  <!-- ===== Columna izquierda: datos ===== -->
+  <div class="order-col">
+    <div class="panel">
+      <h2 class="panel__title">Datos del cliente</h2>
+      <div class="field">
+        <label for="customerName">Nombre completo *</label>
+        <input id="customerName" type="text" formControlName="customerName" placeholder="Nombre del cliente" />
+        @if (form.controls.customerName.touched && form.controls.customerName.invalid) {
+          <p class="field__error">Ingresa el nombre (mínimo 3 caracteres).</p>
+        }
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="customerEmail">Email</label>
+          <input id="customerEmail" type="email" formControlName="customerEmail" placeholder="correo@ejemplo.com" />
+        </div>
+        <div class="field">
+          <label for="customerPhone">Teléfono</label>
+          <input id="customerPhone" type="tel" formControlName="customerPhone" placeholder="2221234567" />
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel__title">Entrega y pago</h2>
+      <div class="field">
+        <label for="deliveryAddress">Dirección de entrega</label>
+        <textarea id="deliveryAddress" formControlName="deliveryAddress" placeholder="Calle, número, colonia, ciudad"></textarea>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="deliveryType">Tipo de envío</label>
+          <select id="deliveryType" formControlName="deliveryType">
+            <option value="standard">Estándar</option>
+            <option value="with_installation">Con instalación</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="paymentMethod">Método de pago</label>
+          <select id="paymentMethod" formControlName="paymentMethod">
+            <option value="cash">Efectivo</option>
+            <option value="card">Tarjeta</option>
+            <option value="msi">Meses sin intereses</option>
+            <option value="store_credit">Crédito tienda</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="expectedDeliveryDate">Fecha estimada de entrega</label>
+          <input id="expectedDeliveryDate" type="date" formControlName="expectedDeliveryDate" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="notes">Notas</label>
+        <textarea id="notes" formControlName="notes" placeholder="Observaciones del pedido"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Columna derecha: productos ===== -->
+  <div class="order-col">
+    <div class="panel">
+      <h2 class="panel__title">Productos</h2>
+      <div class="search">
+        <span class="material-symbols-outlined">search</span>
+        <input type="text" placeholder="Buscar producto por nombre o SKU" (input)="onSearchInput($event)" />
+      </div>
+
+      <div class="results">
+        @if (searching()) {
+          <div class="state"><div class="spinner"></div></div>
+        } @else {
+          @for (p of searchResults(); track p.id) {
+            <button type="button" class="result" (click)="addProduct(p)">
+              <span class="result__info">
+                <span class="result__name">{{ p.name }}</span>
+                <span class="result__sku">{{ p.sku }} · Stock: {{ p.stock_quantity }}</span>
+              </span>
+              <span class="result__price">{{ p.price_cash | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="material-symbols-outlined">add_circle</span>
+            </button>
+          } @empty {
+            <p class="empty">Sin resultados.</p>
+          }
+        }
+      </div>
+    </div>
+
+    <div class="panel cart">
+      <h2 class="panel__title">Pedido ({{ lines().length }})</h2>
+      @if (lines().length === 0) {
+        <p class="empty">Agrega productos desde el buscador.</p>
+      } @else {
+        @for (l of lines(); track l.product.id) {
+          <div class="cart-line">
+            <div class="cart-line__info">
+              <span class="cart-line__name">{{ l.product.name }}</span>
+              <span class="cart-line__price">{{ l.product.price_cash | currency:'MXN':'symbol-narrow':'1.0-0' }} c/u</span>
+            </div>
+            <div class="qty">
+              <button type="button" class="icon-btn" (click)="changeQty(l.product.id, -1)" aria-label="Quitar uno">
+                <span class="material-symbols-outlined">remove</span>
+              </button>
+              <span class="qty__value">{{ l.quantity }}</span>
+              <button type="button" class="icon-btn" (click)="changeQty(l.product.id, 1)" aria-label="Agregar uno">
+                <span class="material-symbols-outlined">add</span>
+              </button>
+            </div>
+            <span class="cart-line__subtotal">{{ l.product.price_cash * l.quantity | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(l.product.id)" aria-label="Eliminar">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
+        }
+
+        <div class="cart-total">
+          <span>Total</span>
+          <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+      }
+
+      <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
+        @if (saving()) { <span class="spinner spinner--sm"></span> Creando… }
+        @else { <span class="material-symbols-outlined">check_circle</span> Crear pedido }
+      </button>
+    </div>
+  </div>
+
+</form>

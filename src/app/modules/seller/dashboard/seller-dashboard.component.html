@@ -1,0 +1,70 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Vendedor</p>
+    <h1 class="page-head__title">Resumen del día</h1>
+  </div>
+  <a class="btn btn--primary" routerLink="../nuevo">
+    <span class="material-symbols-outlined">add_shopping_cart</span>
+    Nuevo pedido
+  </a>
+</header>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando resumen…</p></div>
+} @else if (stats(); as s) {
+  <section class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">today</span></span>
+      <span class="stat-card__label">Pedidos hoy</span>
+      <span class="stat-card__value">{{ s.todayOrders }}</span>
+      <span class="stat-card__hint">{{ s.todayAmount | currency:'MXN':'symbol-narrow':'1.0-0' }} vendidos hoy</span>
+    </div>
+    <div class="stat-card stat-card--gold">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">pending_actions</span></span>
+      <span class="stat-card__label">Pendientes</span>
+      <span class="stat-card__value">{{ s.pendingOrders }}</span>
+      <span class="stat-card__hint">por procesar</span>
+    </div>
+    <div class="stat-card stat-card--success">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">task_alt</span></span>
+      <span class="stat-card__label">Entregados</span>
+      <span class="stat-card__value">{{ s.deliveredOrders }}</span>
+      <span class="stat-card__hint">de {{ s.totalOrders }} totales</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">payments</span></span>
+      <span class="stat-card__label">Venta total</span>
+      <span class="stat-card__value">{{ s.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__hint">histórico</span>
+    </div>
+  </section>
+
+  <div class="panel">
+    <h2 class="panel__title">Últimos pedidos</h2>
+    @if (s.recentOrders.length === 0) {
+      <p class="empty">Aún no has registrado pedidos.</p>
+    } @else {
+      <div class="table-wrap">
+        <table class="table table--cards">
+          <thead>
+            <tr>
+              <th>Pedido</th><th>Cliente</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (o of s.recentOrders; track o.id) {
+              <tr>
+                <td data-label="Pedido" class="strong">{{ o.order_number }}</td>
+                <td data-label="Cliente">{{ o.customer_name }}</td>
+                <td data-label="Estado"><span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span></td>
+                <td data-label="Pago"><span class="badge" [class]="payTone(o.payment_status)">{{ payLabel(o.payment_status) }}</span></td>
+                <td data-label="Total" class="num">{{ o.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                <td data-label="Fecha" class="muted">{{ o.order_date | date:'dd/MM/yyyy' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+}

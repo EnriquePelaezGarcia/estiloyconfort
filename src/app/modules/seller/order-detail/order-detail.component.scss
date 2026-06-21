@@ -1,0 +1,71 @@
+@use '../../../../styles/variables' as vars;
+
+.head-actions { display: flex; gap: vars.$spacing-sm; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: vars.$spacing-lg;
+  align-items: start;
+
+  @media (max-width: vars.$bp-desktop) { grid-template-columns: 1fr; }
+}
+
+.totals {
+  margin: vars.$spacing-md 0;
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    font-size: 0.92rem;
+
+    &--balance {
+      border-top: 1px solid vars.$color-border;
+      margin-top: 0.3rem;
+      padding-top: 0.6rem;
+      font-weight: 700;
+      color: vars.$color-error;
+    }
+  }
+
+  &__amount { font-weight: 700; color: vars.$color-primary; }
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  div { display: flex; flex-direction: column; }
+  dt { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; color: vars.$color-text-secondary; font-weight: 600; }
+  dd { font-size: 0.92rem; color: vars.$color-text; }
+}
+
+.info-subtitle {
+  margin: vars.$spacing-lg 0 vars.$spacing-sm;
+  font-size: 0.9rem;
+  color: vars.$color-primary;
+  font-weight: 600;
+}
+
+.payments {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid vars.$color-border;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .panel { box-shadow: none; border: none; }
+}

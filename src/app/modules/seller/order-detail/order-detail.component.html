@@ -1,0 +1,150 @@
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando pedido…</p></div>
+} @else if (order(); as o) {
+  <button type="button" class="back-link no-print" (click)="goBack()">
+    <span class="material-symbols-outlined">arrow_back</span> Volver a mis pedidos
+  </button>
+
+  <header class="page-head">
+    <div>
+      <p class="page-head__overline">Pedido {{ o.orderNumber }}</p>
+      <h1 class="page-head__title">{{ o.customerName }}</h1>
+      <p class="page-head__sub">
+        <span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span>
+        <span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span>
+      </p>
+    </div>
+    <div class="head-actions no-print">
+      <button type="button" class="btn btn--ghost" (click)="printTicket()">
+        <span class="material-symbols-outlined">print</span> Ticket
+      </button>
+      @if (o.orderStatus !== 'cancelled' && o.orderStatus !== 'delivered') {
+        <button type="button" class="btn btn--danger" (click)="cancelModalOpen.set(true)">
+          <span class="material-symbols-outlined">cancel</span> Cancelar
+        </button>
+      }
+    </div>
+  </header>
+
+  <div class="detail-grid">
+    <!-- Items -->
+    <div class="panel">
+      <h2 class="panel__title">Productos</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Producto</th><th class="num">Cantidad</th><th class="num">P. unitario</th><th class="num">Subtotal</th></tr>
+          </thead>
+          <tbody>
+            @for (it of o.items; track it.id) {
+              <tr>
+                <td>
+                  <span class="strong">{{ it.productName }}</span>
+                  <span class="muted"> · {{ it.productSku }}</span>
+                </td>
+                <td class="num">{{ it.quantity }}</td>
+                <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                <td class="num strong">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="totals">
+        <div class="totals__row"><span>Total</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        <div class="totals__row"><span>Pagado</span><span>{{ o.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        <div class="totals__row totals__row--balance"><span>Saldo</span><span>{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+      </div>
+
+      @if (o.orderStatus !== 'cancelled' && balance() > 0) {
+        <button type="button" class="btn btn--success btn--block no-print" (click)="openPayment()">
+          <span class="material-symbols-outlined">payments</span> Registrar pago
+        </button>
+      }
+    </div>
+
+    <!-- Info -->
+    <div class="panel">
+      <h2 class="panel__title">Información</h2>
+      <dl class="info">
+        <div><dt>Cliente</dt><dd>{{ o.customerName }}</dd></div>
+        @if (o.customerEmail) { <div><dt>Email</dt><dd>{{ o.customerEmail }}</dd></div> }
+        @if (o.customerPhone) { <div><dt>Teléfono</dt><dd>{{ o.customerPhone }}</dd></div> }
+        @if (o.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ o.deliveryAddress }}</dd></div> }
+        <div><dt>Envío</dt><dd>{{ deliveryLabel(o.deliveryType) }}</dd></div>
+        <div><dt>Método de pago</dt><dd>{{ methodLabel(o.paymentMethod) }}</dd></div>
+        <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
+        @if (o.expectedDeliveryDate) { <div><dt>Entrega estimada</dt><dd>{{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}</dd></div> }
+        @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
+        @if (o.notes) { <div><dt>Notas</dt><dd>{{ o.notes }}</dd></div> }
+      </dl>
+
+      @if (o.payments && o.payments.length) {
+        <h3 class="info-subtitle">Pagos registrados</h3>
+        <ul class="payments">
+          @for (p of o.payments; track p.id) {
+            <li>
+              <span>{{ p.paymentDate | date:'dd/MM/yyyy' }} · {{ methodLabel(p.paymentMethod) }}</span>
+              <span class="strong">{{ p.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: registrar pago ===== -->
+@if (paymentModalOpen()) {
+  <div class="modal-backdrop no-print" (click)="paymentModalOpen.set(false)">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Registrar pago</h2>
+        <button type="button" class="icon-btn" (click)="paymentModalOpen.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form class="modal__body" [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
+        <div class="field">
+          <label for="amount">Monto a cobrar</label>
+          <input id="amount" type="number" formControlName="amount" min="1" />
+          @if (paymentForm.controls.amount.touched && paymentForm.controls.amount.invalid) {
+            <p class="field__error">Ingresa un monto mayor a 0.</p>
+          }
+        </div>
+        <div class="field">
+          <label for="pm">Método</label>
+          <select id="pm" formControlName="paymentMethod">
+            <option value="cash">Efectivo</option>
+            <option value="card">Tarjeta</option>
+            <option value="msi">Meses sin intereses</option>
+            <option value="store_credit">Crédito tienda</option>
+          </select>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>
+          <button type="submit" class="btn btn--success" [disabled]="savingPayment()">
+            @if (savingPayment()) { <span class="spinner spinner--sm"></span> } @else { Registrar }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: cancelar pedido ===== -->
+@if (cancelModalOpen()) {
+  <div class="modal-backdrop no-print" (click)="cancelModalOpen.set(false)">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__body">
+        <h2 class="panel__title">¿Cancelar este pedido?</h2>
+        <p class="muted">Esta acción marcará el pedido como cancelado.</p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="cancelModalOpen.set(false)">No</button>
+          <button type="button" class="btn btn--danger" (click)="confirmCancel()">Sí, cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

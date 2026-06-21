@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "db:seed": "node src/database/seed.js"
+    "db:seed": "node src/database/seed.js",
+    "db:seed:fase2": "node src/database/seed_fase2.js",
+    "db:seed:fase4": "node src/database/seed_fase4.js",
+    "db:schema:fase4": "node src/database/run-schema.js schema_fase4.sql"
   },
   "keywords": ["express", "mysql", "jwt", "muebleria"],
   "author": "",

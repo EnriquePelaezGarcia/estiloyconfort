@@ -5,8 +5,33 @@ export const deliveryRoutes: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('../coming-soon/coming-soon.component').then((m) => m.ComingSoonComponent),
-    title: 'Mis Entregas - Estilo y Confort',
-    data: { moduleTitle: 'Panel Repartidor', icon: 'local_shipping', phase: 4 },
+      import('./layout/delivery-layout.component').then((m) => m.DeliveryLayoutComponent),
+    children: [
+      { path: '', redirectTo: 'entregas', pathMatch: 'full' },
+      {
+        path: 'entregas',
+        loadComponent: () =>
+          import('./assignments/delivery-assignments.component').then(
+            (m) => m.DeliveryAssignmentsComponent,
+          ),
+        title: 'Entregas de hoy - Repartidor',
+      },
+      {
+        path: 'historial',
+        loadComponent: () =>
+          import('./assignments/delivery-assignments.component').then(
+            (m) => m.DeliveryAssignmentsComponent,
+          ),
+        data: { all: true },
+        title: 'Historial - Repartidor',
+      },
+      {
+        path: 'entregas/:id',
+        loadComponent: () =>
+          import('./detail/delivery-detail.component').then((m) => m.DeliveryDetailComponent),
+        title: 'Detalle de entrega - Repartidor',
+      },
+      { path: '**', redirectTo: 'entregas' },
+    ],
   },
 ];

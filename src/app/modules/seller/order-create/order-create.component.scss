@@ -1,0 +1,81 @@
+@use '../../../../styles/variables' as vars;
+
+.order-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-lg;
+  align-items: start;
+
+  @media (max-width: vars.$bp-desktop) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.order-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.results {
+  margin-top: vars.$spacing-sm;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  width: 100%;
+  padding: 0.6rem vars.$spacing-sm;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-md;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background vars.$transition-fast;
+
+  &:hover { background: vars.$color-bg; border-color: vars.$color-border; }
+
+  &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  &__name { font-weight: 600; font-size: 0.9rem; color: vars.$color-text; }
+  &__sku { font-size: 0.78rem; color: vars.$color-text-secondary; }
+  &__price { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
+
+  .material-symbols-outlined { color: vars.$color-primary; }
+}
+
+.cart-line {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm 0;
+  border-bottom: 1px solid vars.$color-border;
+
+  &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  &__name { font-weight: 600; font-size: 0.88rem; }
+  &__price { font-size: 0.78rem; color: vars.$color-text-secondary; }
+  &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }
+}
+
+.qty {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+
+  &__value { min-width: 28px; text-align: center; font-weight: 600; }
+}
+
+.cart-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: vars.$spacing-md 0;
+  margin-bottom: vars.$spacing-md;
+  font-weight: 600;
+
+  &__amount { font-size: 1.4rem; color: vars.$color-primary; }
+}

@@ -1,0 +1,151 @@
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando entrega…</p></div>
+} @else if (assignment(); as a) {
+  <button type="button" class="back-link" (click)="goBack()">
+    <span class="material-symbols-outlined">arrow_back</span> Volver a entregas
+  </button>
+
+  <header class="page-head">
+    <div>
+      <p class="page-head__overline">Entrega {{ a.orderNumber }}</p>
+      <h1 class="page-head__title">{{ a.customerName }}</h1>
+    </div>
+    <a class="btn btn--ghost" [href]="mapsUrl(a)" target="_blank" rel="noopener">
+      <span class="material-symbols-outlined">map</span> Abrir en Maps
+    </a>
+  </header>
+
+  <div class="detail-grid">
+    <div>
+      <!-- Info -->
+      <div class="panel">
+        <h2 class="panel__title">Información de entrega</h2>
+        <dl class="info">
+          @if (a.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ a.deliveryAddress }}</dd></div> }
+          @if (a.customerPhone) { <div><dt>Teléfono</dt><dd>{{ a.customerPhone }}</dd></div> }
+          <div><dt>Total</dt><dd>{{ a.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
+          <div>
+            <dt>Estado de pago</dt>
+            <dd><span class="badge" [class]="payTone(a.paymentStatus)">{{ payLabel(a.paymentStatus) }}</span></dd>
+          </div>
+          @if (balance() > 0) { <div><dt>Por cobrar</dt><dd class="balance">{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div> }
+        </dl>
+
+        @if (a.items && a.items.length) {
+          <h3 class="info-subtitle">Productos</h3>
+          <ul class="items">
+            @for (it of a.items; track it.id) {
+              <li><span>{{ it.productName }}</span><span class="muted">x{{ it.quantity }}</span></li>
+            }
+          </ul>
+        }
+
+        @if (balance() > 0 && a.deliveryStatus !== 'completed') {
+          <button type="button" class="btn btn--success btn--block" (click)="openPayment()">
+            <span class="material-symbols-outlined">payments</span> Registrar cobro
+          </button>
+        }
+      </div>
+    </div>
+
+    <div>
+      <!-- Evidencia -->
+      <div class="panel">
+        <h2 class="panel__title">Evidencia de entrega</h2>
+
+        <div class="field">
+          <label>Foto del mueble entregado</label>
+          @if (photoData()) {
+            <div class="photo-preview">
+              <img [src]="photoData()!" alt="Foto de entrega" />
+              @if (a.deliveryStatus !== 'completed') {
+                <button type="button" class="icon-btn icon-btn--danger" (click)="photoData.set(null)" aria-label="Quitar foto">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              }
+            </div>
+          } @else {
+            <label class="photo-input">
+              <span class="material-symbols-outlined">photo_camera</span>
+              <span>Tomar / subir foto</span>
+              <input type="file" accept="image/*" capture="environment" (change)="onPhotoSelected($event)" hidden />
+            </label>
+          }
+        </div>
+
+        <div class="field">
+          <label>Firma del cliente</label>
+          <div class="signature-wrap">
+            <canvas
+              #signature
+              class="signature"
+              (pointerdown)="onPointerDown($event)"
+              (pointermove)="onPointerMove($event)"
+              (pointerup)="onPointerUp()"
+              (pointerleave)="onPointerUp()"
+            ></canvas>
+            @if (a.deliveryStatus !== 'completed') {
+              <button type="button" class="signature-clear" (click)="clearSignature()">
+                <span class="material-symbols-outlined">ink_eraser</span> Borrar
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (a.deliveryStatus === 'completed') {
+          <div class="completed-banner">
+            <span class="material-symbols-outlined">check_circle</span> Entrega completada
+          </div>
+        } @else {
+          <div class="proof-actions">
+            <button type="button" class="btn btn--ghost" (click)="saveProof()" [disabled]="saving()">
+              <span class="material-symbols-outlined">save</span> Guardar evidencia
+            </button>
+            <button type="button" class="btn btn--success" (click)="markDelivered()" [disabled]="!canComplete() || saving()">
+              @if (saving()) { <span class="spinner spinner--sm"></span> }
+              @else { <span class="material-symbols-outlined">task_alt</span> }
+              Marcar entregada
+            </button>
+          </div>
+          @if (!canComplete()) {
+            <p class="hint">Se requiere foto y firma para completar la entrega.</p>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}
+
+@if (paymentModalOpen()) {
+  <div class="modal-backdrop" (click)="paymentModalOpen.set(false)">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Registrar cobro</h2>
+        <button type="button" class="icon-btn" (click)="paymentModalOpen.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form class="modal__body" [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
+        <div class="field">
+          <label for="amount">Monto</label>
+          <input id="amount" type="number" formControlName="amount" min="1" />
+        </div>
+        <div class="field">
+          <label for="pm">Método</label>
+          <select id="pm" formControlName="paymentMethod">
+            <option value="cash">Efectivo</option>
+            <option value="card">Tarjeta</option>
+            <option value="msi">Meses sin intereses</option>
+            <option value="store_credit">Crédito tienda</option>
+          </select>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>
+          <button type="submit" class="btn btn--success" [disabled]="savingPayment()">
+            @if (savingPayment()) { <span class="spinner spinner--sm"></span> } @else { Registrar }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

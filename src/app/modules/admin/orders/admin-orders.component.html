@@ -1,0 +1,97 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Pedidos &amp; Fabricantes</h1>
+  </div>
+</header>
+
+<div class="toolbar">
+  <select class="filter-select" (change)="onFilterChange($event)">
+    @for (opt of statusOptions; track opt.value) {
+      <option [value]="opt.value">{{ opt.label }}</option>
+    }
+  </select>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando pedidos…</p></div>
+} @else if (orders().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">local_shipping</span>
+    <p>No hay pedidos con este filtro.</p>
+  </div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>Pago</th><th class="num">Total</th>
+          <th>Estado</th><th>Repartidor</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (o of orders(); track o.id) {
+          <tr>
+            <td data-label="Pedido" class="strong">{{ o.orderNumber }}</td>
+            <td data-label="Cliente">{{ o.customerName }}</td>
+            <td data-label="Vendedor" class="muted">{{ o.sellerName ?? '—' }}</td>
+            <td data-label="Pago"><span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span></td>
+            <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            <td data-label="Estado">
+              <select class="status-select" [value]="o.orderStatus" (change)="changeStatus(o, $event)">
+                @for (s of allStatuses; track s) {
+                  <option [value]="s">{{ statusLabel(s) }}</option>
+                }
+              </select>
+            </td>
+            <td data-label="Repartidor" class="muted">{{ o.deliveryPersonName ?? '—' }}</td>
+            <td class="actions">
+              <button
+                type="button"
+                class="icon-btn"
+                (click)="openAssign(o)"
+                [disabled]="o.orderStatus === 'cancelled'"
+                aria-label="Asignar repartidor"
+              >
+                <span class="material-symbols-outlined">assignment_ind</span>
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ===== Modal: asignar repartidor ===== -->
+@if (assigning(); as order) {
+  <div class="modal-backdrop" (click)="assigning.set(null)">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Asignar repartidor</h2>
+        <button type="button" class="icon-btn" (click)="assigning.set(null)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="muted">Pedido <strong>{{ order.orderNumber }}</strong> — {{ order.customerName }}</p>
+        <div class="field">
+          <label for="dp">Repartidor</label>
+          <select id="dp" [ngModel]="selectedDeliveryPerson()" (ngModelChange)="selectedDeliveryPerson.set($event)">
+            <option [ngValue]="null" disabled>Selecciona un repartidor</option>
+            @for (p of deliveryPeople(); track p.id) {
+              <option [ngValue]="p.id">{{ p.fullName }}</option>
+            }
+          </select>
+        </div>
+        @if (deliveryPeople().length === 0) {
+          <p class="field__error">No hay repartidores activos registrados.</p>
+        }
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="assigning.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--primary" (click)="confirmAssign()">Asignar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

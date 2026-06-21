@@ -1,0 +1,63 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Fabricante</p>
+    <h1 class="page-head__title">Pedidos a fabricar</h1>
+  </div>
+</header>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando pedidos…</p></div>
+} @else if (orders().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">precision_manufacturing</span>
+    <p>No hay pedidos en fabricación.</p>
+  </div>
+} @else {
+  <div class="orders">
+    @for (o of orders(); track o.id) {
+      <article class="panel order">
+        <div class="order__head">
+          <div>
+            <span class="order__number">{{ o.order_number }}</span>
+            <span class="order__customer">{{ o.customer_name }}</span>
+          </div>
+          <div class="order__meta">
+            <span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span>
+            @if (o.expected_delivery_date) {
+              <span class="order__date">Entrega: {{ o.expected_delivery_date | date:'dd/MM/yyyy' }}</span>
+            }
+          </div>
+        </div>
+
+        @if (o.order_status === 'pending') {
+          <button type="button" class="btn btn--ghost order__start" (click)="startFabrication(o)">
+            <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación
+          </button>
+        }
+
+        <ul class="item-list">
+          @for (it of o.items; track it.id) {
+            <li class="item" [class.item--ready]="it.isReady">
+              <label class="item__check">
+                <input
+                  type="checkbox"
+                  [checked]="it.isReady"
+                  (change)="toggleItem(o, it.id, ($any($event.target).checked))"
+                />
+                <span class="item__info">
+                  <span class="item__name">{{ it.productName }}</span>
+                  <span class="item__sku">{{ it.productSku }} · x{{ it.quantity }}</span>
+                </span>
+              </label>
+              @if (it.isReady) {
+                <span class="badge badge--green">Listo</span>
+              } @else {
+                <span class="badge badge--amber">Pendiente</span>
+              }
+            </li>
+          }
+        </ul>
+      </article>
+    }
+  </div>
+}

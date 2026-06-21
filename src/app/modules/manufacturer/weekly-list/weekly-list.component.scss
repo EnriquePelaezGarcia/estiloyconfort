@@ -1,0 +1,11 @@
+@use '../../../../styles/variables' as vars;
+
+.table tfoot td {
+  padding: vars.$spacing-md;
+  border-top: 2px solid vars.$color-border;
+  background: vars.$color-bg;
+}
+
+@media print {
+  .no-print { display: none !important; }
+}

@@ -20,6 +20,24 @@ export const adminRoutes: Routes = [
           import('./users/users.component').then((m) => m.UsersComponent),
         title: 'Usuarios - Panel Admin',
       },
+      {
+        path: 'finanzas',
+        loadComponent: () =>
+          import('./finances/finances.component').then((m) => m.FinancesComponent),
+        title: 'Finanzas - Panel Admin',
+      },
+      {
+        path: 'pedidos',
+        loadComponent: () =>
+          import('./orders/admin-orders.component').then((m) => m.AdminOrdersComponent),
+        title: 'Pedidos - Panel Admin',
+      },
+      {
+        path: 'reportes',
+        loadComponent: () =>
+          import('./reports/reports.component').then((m) => m.ReportsComponent),
+        title: 'Reportes - Panel Admin',
+      },
       { path: '**', redirectTo: 'dashboard' },
     ],
   },

@@ -1,0 +1,48 @@
+@use '../../../../styles/variables' as vars;
+
+.head-actions { display: flex; gap: vars.$spacing-sm; }
+
+.tabs {
+  display: flex;
+  gap: vars.$spacing-xs;
+  margin-bottom: vars.$spacing-md;
+  border-bottom: 1px solid vars.$color-border;
+}
+
+.tab {
+  padding: 0.6rem vars.$spacing-md;
+  border: none;
+  background: transparent;
+  font-family: vars.$font-body;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+
+  &--active { color: vars.$color-primary; border-bottom-color: vars.$color-primary; }
+}
+
+.date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+
+  label { font-size: 0.74rem; font-weight: 600; color: vars.$color-text-secondary; text-transform: uppercase; }
+
+  input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    font-family: vars.$font-body;
+    font-size: 0.9rem;
+    color: vars.$color-text;
+  }
+}
+
+.table .low { color: vars.$color-error; font-weight: 700; }
+
+@media print {
+  .no-print { display: none !important; }
+}

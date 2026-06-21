@@ -1,0 +1,12 @@
+@use '../../../../styles/variables' as vars;
+
+.status-select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface;
+  font-family: vars.$font-body;
+  font-size: 0.82rem;
+  color: vars.$color-text;
+  cursor: pointer;
+}

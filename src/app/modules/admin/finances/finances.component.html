@@ -1,0 +1,85 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Finanzas</h1>
+  </div>
+</header>
+
+@if (summary(); as s) {
+  <section class="stat-grid">
+    <div class="stat-card stat-card--success">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">trending_up</span></span>
+      <span class="stat-card__label">Ingresos totales</span>
+      <span class="stat-card__value">{{ s.totalIncome | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__hint">{{ s.monthIncome | currency:'MXN':'symbol-narrow':'1.0-0' }} este mes</span>
+    </div>
+    <div class="stat-card stat-card--danger">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">trending_down</span></span>
+      <span class="stat-card__label">Costo de producción</span>
+      <span class="stat-card__value">{{ s.totalCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__hint">pedidos entregados</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">savings</span></span>
+      <span class="stat-card__label">Ganancia neta</span>
+      <span class="stat-card__value">{{ s.netProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__hint">margen {{ s.margin }}%</span>
+    </div>
+    <div class="stat-card stat-card--gold">
+      <span class="stat-card__icon"><span class="material-symbols-outlined">pending</span></span>
+      <span class="stat-card__label">Por cobrar</span>
+      <span class="stat-card__value">{{ s.pendingCollection | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__hint">saldos pendientes</span>
+    </div>
+  </section>
+}
+
+<div class="panel">
+  <h2 class="panel__title">Ingresos por tipo de pago</h2>
+  @if (breakdown().length === 0) {
+    <p class="empty">Aún no hay pagos registrados.</p>
+  } @else {
+    <div class="breakdown">
+      @for (b of breakdown(); track b.paymentMethod) {
+        <div class="breakdown__row">
+          <span class="breakdown__label">{{ methodLabel(b.paymentMethod) }}</span>
+          <div class="breakdown__bar">
+            <div class="breakdown__fill" [style.width.%]="percent(b.total)"></div>
+          </div>
+          <span class="breakdown__value">
+            {{ b.total | currency:'MXN':'symbol-narrow':'1.0-0' }} ({{ percent(b.total) }}%)
+          </span>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<div class="panel">
+  <h2 class="panel__title">Transacciones recientes</h2>
+  @if (loading()) {
+    <div class="state"><div class="spinner"></div></div>
+  } @else if (transactions().length === 0) {
+    <p class="empty">No hay transacciones.</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead>
+          <tr><th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Método</th><th>Cobró</th><th class="num">Monto</th></tr>
+        </thead>
+        <tbody>
+          @for (t of transactions(); track t.id) {
+            <tr>
+              <td data-label="Fecha" class="muted">{{ t.payment_date | date:'dd/MM/yyyy' }}</td>
+              <td data-label="Pedido" class="strong">{{ t.order_number }}</td>
+              <td data-label="Cliente">{{ t.customer_name }}</td>
+              <td data-label="Método">{{ methodLabel(t.payment_method) }}</td>
+              <td data-label="Cobró" class="muted">{{ t.collected_by ?? '—' }}</td>
+              <td data-label="Monto" class="num strong">{{ t.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

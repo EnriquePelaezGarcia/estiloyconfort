@@ -1,0 +1,127 @@
+@use '../../../../styles/variables' as vars;
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: vars.$spacing-lg;
+  align-items: start;
+
+  @media (max-width: vars.$bp-desktop) { grid-template-columns: 1fr; }
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: vars.$spacing-md;
+
+  div { display: flex; flex-direction: column; }
+  dt { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; color: vars.$color-text-secondary; font-weight: 600; }
+  dd { font-size: 0.92rem; color: vars.$color-text; }
+  .balance { color: vars.$color-error; font-weight: 700; }
+}
+
+.info-subtitle { margin: vars.$spacing-md 0 vars.$spacing-sm; font-size: 0.9rem; color: vars.$color-primary; font-weight: 600; }
+
+.items {
+  list-style: none;
+  margin-bottom: vars.$spacing-md;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid vars.$color-border;
+    font-size: 0.9rem;
+  }
+}
+
+.photo-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: vars.$spacing-xl;
+  border: 2px dashed vars.$color-border;
+  border-radius: vars.$radius-md;
+  cursor: pointer;
+  color: vars.$color-text-secondary;
+  transition: border-color vars.$transition-fast, color vars.$transition-fast;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+  .material-symbols-outlined { font-size: 2rem; }
+}
+
+.photo-preview {
+  position: relative;
+
+  img { width: 100%; border-radius: vars.$radius-md; border: 1px solid vars.$color-border; max-height: 260px; object-fit: cover; }
+
+  .icon-btn {
+    position: absolute;
+    top: vars.$spacing-sm;
+    right: vars.$spacing-sm;
+    background: rgba(#fff, 0.9);
+  }
+}
+
+.signature-wrap {
+  position: relative;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background:
+    repeating-linear-gradient(transparent, transparent 28px, rgba(vars.$color-border, 0.5) 29px);
+  overflow: hidden;
+}
+
+.signature {
+  display: block;
+  width: 100%;
+  height: 180px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.signature-clear {
+  position: absolute;
+  bottom: vars.$spacing-sm;
+  right: vars.$spacing-sm;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  background: rgba(#fff, 0.9);
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+
+  .material-symbols-outlined { font-size: 1rem; }
+  &:hover { color: vars.$color-error; }
+}
+
+.proof-actions {
+  display: flex;
+  gap: vars.$spacing-sm;
+  margin-top: vars.$spacing-md;
+
+  .btn { flex: 1; }
+}
+
+.hint { margin-top: vars.$spacing-sm; font-size: 0.82rem; color: vars.$color-text-secondary; text-align: center; }
+
+.completed-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  background: rgba(vars.$color-success, 0.1);
+  color: vars.$color-success;
+  font-weight: 600;
+}

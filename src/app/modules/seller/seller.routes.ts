@@ -5,8 +5,34 @@ export const sellerRoutes: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('../coming-soon/coming-soon.component').then((m) => m.ComingSoonComponent),
-    title: 'Panel Vendedor - Estilo y Confort',
-    data: { moduleTitle: 'Panel Vendedor', icon: 'point_of_sale', phase: 4 },
+      import('./layout/seller-layout.component').then((m) => m.SellerLayoutComponent),
+    children: [
+      { path: '', redirectTo: 'resumen', pathMatch: 'full' },
+      {
+        path: 'resumen',
+        loadComponent: () =>
+          import('./dashboard/seller-dashboard.component').then((m) => m.SellerDashboardComponent),
+        title: 'Resumen - Vendedor',
+      },
+      {
+        path: 'nuevo',
+        loadComponent: () =>
+          import('./order-create/order-create.component').then((m) => m.OrderCreateComponent),
+        title: 'Nuevo pedido - Vendedor',
+      },
+      {
+        path: 'pedidos',
+        loadComponent: () =>
+          import('./orders/seller-orders.component').then((m) => m.SellerOrdersComponent),
+        title: 'Mis pedidos - Vendedor',
+      },
+      {
+        path: 'pedidos/:id',
+        loadComponent: () =>
+          import('./order-detail/order-detail.component').then((m) => m.OrderDetailComponent),
+        title: 'Detalle de pedido - Vendedor',
+      },
+      { path: '**', redirectTo: 'resumen' },
+    ],
   },
 ];

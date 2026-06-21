@@ -8,6 +8,17 @@ import {
   Role,
   UpdateUserRequest,
 } from '../models/admin.model';
+import {
+  DeliveryPerson,
+  FinancesSummary,
+  InventoryReportRow,
+  Order,
+  OrderStatus,
+  Paginated,
+  PaymentTypeBreakdown,
+  SalesReportRow,
+  Transaction,
+} from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
 export class AdminService {
@@ -42,5 +53,67 @@ export class AdminService {
 
   deleteUser(id: number): Observable<void> {
     return this.api.delete<void>(`/users/${id}`);
+  }
+
+  // ===== Finanzas (Fase 4) =====
+  getFinancesSummary(): Observable<FinancesSummary> {
+    return this.api.get<FinancesSummary>('/admin/finances/summary');
+  }
+
+  getTransactions(from?: string, to?: string): Observable<{ data: Transaction[] }> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    return this.api.get<{ data: Transaction[] }>('/admin/finances/transactions', params);
+  }
+
+  getByPaymentType(): Observable<{ data: PaymentTypeBreakdown[] }> {
+    return this.api.get<{ data: PaymentTypeBreakdown[] }>('/admin/finances/by-payment-type');
+  }
+
+  // ===== Pedidos (Fase 4) =====
+  getOrders(status?: string): Observable<Paginated<Order>> {
+    return this.api.get<Paginated<Order>>('/admin/orders', status ? { status } : undefined);
+  }
+
+  getOrder(id: number): Observable<{ data: Order }> {
+    return this.api.get<{ data: Order }>(`/admin/orders/${id}`);
+  }
+
+  updateOrderStatus(id: number, status: OrderStatus): Observable<{ data: Order }> {
+    return this.api.patch<{ data: Order }>(`/admin/orders/${id}/status`, { status });
+  }
+
+  assignDelivery(
+    id: number,
+    deliveryPersonId: number,
+    assignmentDate?: string,
+  ): Observable<{ data: Order }> {
+    return this.api.patch<{ data: Order }>(`/admin/orders/${id}/assign`, {
+      deliveryPersonId,
+      assignmentDate,
+    });
+  }
+
+  getDeliveryPeople(): Observable<{ data: DeliveryPerson[] }> {
+    return this.api.get<{ data: DeliveryPerson[] }>('/admin/delivery-people');
+  }
+
+  // ===== Reportes (Fase 4) =====
+  getSalesReport(
+    from?: string,
+    to?: string,
+  ): Observable<{ summary: { orders: number; revenue: number }; data: SalesReportRow[] }> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    return this.api.get<{ summary: { orders: number; revenue: number }; data: SalesReportRow[] }>(
+      '/admin/reports/sales',
+      params,
+    );
+  }
+
+  getInventoryReport(): Observable<{ data: InventoryReportRow[] }> {
+    return this.api.get<{ data: InventoryReportRow[] }>('/admin/reports/inventory');
   }
 }

@@ -5,8 +5,24 @@ export const manufacturerRoutes: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('../coming-soon/coming-soon.component').then((m) => m.ComingSoonComponent),
-    title: 'Lista Semanal - Estilo y Confort',
-    data: { moduleTitle: 'Panel Fabricante', icon: 'factory', phase: 4 },
+      import('./layout/manufacturer-layout.component').then((m) => m.ManufacturerLayoutComponent),
+    children: [
+      { path: '', redirectTo: 'lista-semanal', pathMatch: 'full' },
+      {
+        path: 'lista-semanal',
+        loadComponent: () =>
+          import('./weekly-list/weekly-list.component').then((m) => m.WeeklyListComponent),
+        title: 'Lista semanal - Fabricante',
+      },
+      {
+        path: 'pedidos',
+        loadComponent: () =>
+          import('./orders/manufacturer-orders.component').then(
+            (m) => m.ManufacturerOrdersComponent,
+          ),
+        title: 'Pedidos a fabricar - Fabricante',
+      },
+      { path: '**', redirectTo: 'lista-semanal' },
+    ],
   },
 ];

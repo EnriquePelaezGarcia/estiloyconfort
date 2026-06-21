@@ -1,0 +1,54 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Vendedor</p>
+    <h1 class="page-head__title">Mis pedidos</h1>
+  </div>
+  <a class="btn btn--primary" routerLink="../nuevo">
+    <span class="material-symbols-outlined">add_shopping_cart</span>
+    Nuevo pedido
+  </a>
+</header>
+
+<div class="toolbar">
+  <select class="filter-select" (change)="onFilterChange($event)">
+    @for (opt of statusOptions; track opt.value) {
+      <option [value]="opt.value">{{ opt.label }}</option>
+    }
+  </select>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando pedidos…</p></div>
+} @else if (orders().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">receipt_long</span>
+    <p>No hay pedidos con este filtro.</p>
+  </div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Pedido</th><th>Cliente</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th>Fecha</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (o of orders(); track o.id) {
+          <tr>
+            <td data-label="Pedido" class="strong">{{ o.orderNumber }}</td>
+            <td data-label="Cliente">{{ o.customerName }}</td>
+            <td data-label="Estado"><span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span></td>
+            <td data-label="Pago"><span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span></td>
+            <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
+            <td class="actions">
+              <a class="icon-btn" [routerLink]="[o.id]" aria-label="Ver detalle">
+                <span class="material-symbols-outlined">visibility</span>
+              </a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

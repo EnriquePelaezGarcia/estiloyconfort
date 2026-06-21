@@ -1,0 +1,34 @@
+@use '../../../../styles/variables' as vars;
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: vars.$spacing-md;
+}
+
+.dcard {
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+  box-shadow: vars.$shadow-sm;
+  padding: vars.$spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  &__head { display: flex; align-items: center; justify-content: space-between; }
+  &__order { font-weight: 700; color: vars.$color-primary; font-size: 0.9rem; }
+  &__customer { font-size: 1.1rem; color: vars.$color-text; }
+  &__address { font-size: 0.85rem; color: vars.$color-text-secondary; }
+
+  &__meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.3rem; }
+  &__balance { font-weight: 700; color: vars.$color-error; font-size: 0.85rem; }
+
+  &__actions {
+    display: flex;
+    gap: vars.$spacing-sm;
+    margin-top: vars.$spacing-sm;
+
+    .btn { flex: 1; }
+  }
+}

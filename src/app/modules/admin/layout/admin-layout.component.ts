@@ -27,9 +27,9 @@ export class AdminLayoutComponent {
     { label: 'Usuarios', icon: 'group', route: 'usuarios' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo', soon: true },
     { label: 'Inventario', icon: 'warehouse', route: 'inventario', soon: true },
-    { label: 'Finanzas', icon: 'payments', soon: true },
-    { label: 'Pedidos', icon: 'local_shipping', soon: true },
-    { label: 'Reportes', icon: 'summarize', soon: true },
+    { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
+    { label: 'Pedidos', icon: 'local_shipping', route: 'pedidos' },
+    { label: 'Reportes', icon: 'summarize', route: 'reportes' },
   ];
 
   protected userName = computed(() => this.auth.currentUser()?.fullName ?? 'Administrador');
