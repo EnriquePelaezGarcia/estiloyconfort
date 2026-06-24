@@ -39,6 +39,18 @@ export const adminRoutes: Routes = [
         title: 'Reglas de precios - Panel Admin',
       },
       {
+        path: 'punto-venta',
+        loadComponent: () =>
+          import('../seller/order-create/order-create.component').then((m) => m.OrderCreateComponent),
+        title: 'Punto de venta - Panel Admin',
+      },
+      {
+        path: 'punto-venta/:id',
+        loadComponent: () =>
+          import('../seller/order-detail/order-detail.component').then((m) => m.OrderDetailComponent),
+        title: 'Venta - Panel Admin',
+      },
+      {
         path: 'finanzas',
         loadComponent: () =>
           import('./finances/finances.component').then((m) => m.FinancesComponent),

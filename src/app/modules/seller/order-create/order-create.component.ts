@@ -1,10 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
+import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { CreateOrderRequest, InventoryItem } from '../../../core/models/order.model';
+import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
 interface CartLine {
   product: InventoryItem;
@@ -44,8 +47,33 @@ export class OrderCreateComponent implements OnInit {
     this.lines().reduce((sum, l) => sum + l.product.price_cash * l.quantity, 0),
   );
 
+  /** Método de pago seleccionado, como signal para reaccionar en la plantilla. */
+  private paymentMethodSig = toSignal(this.form.controls.paymentMethod.valueChanges, {
+    initialValue: this.form.controls.paymentMethod.value,
+  });
+  protected isCredit = computed(() => this.paymentMethodSig() === 'store_credit');
+
+  /** Parámetros del crédito en tienda (interés, inicial, semanas). */
+  private creditConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
+
+  /** Plan de crédito calculado en vivo a partir del total de contado. */
+  protected creditQuote = computed(() =>
+    this.isCredit() ? PricingService.calculateCredit(this.total(), this.creditConfig()) : null,
+  );
+
   ngOnInit(): void {
     this.searchProducts('');
+    this.sellerService.getCreditConfig().subscribe({
+      next: ({ data }) =>
+        this.creditConfig.set({
+          ...DEFAULT_PRICING_CONFIG,
+          credit_interest: data.creditInterest,
+          credit_initial_pct: data.creditInitialPct,
+          credit_weeks: data.creditWeeks,
+          rounding_step: data.roundingStep,
+        }),
+      error: () => {},
+    });
   }
 
   protected searchProducts(term: string): void {
@@ -118,7 +146,8 @@ export class OrderCreateComponent implements OnInit {
     this.sellerService.createOrder(payload).subscribe({
       next: (res) => {
         this.notification.success(`Pedido ${res.data.orderNumber} creado`);
-        this.router.navigate(['/vendedor/pedidos', res.data.id]);
+        const base = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/pedidos';
+        this.router.navigate([base, res.data.id]);
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);

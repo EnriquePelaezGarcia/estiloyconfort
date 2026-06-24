@@ -42,6 +42,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   card: 'Tarjeta',
   msi: 'Meses sin intereses',
   store_credit: 'Crédito tienda',
+  transfer: 'Transferencia',
 };
 
 export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {

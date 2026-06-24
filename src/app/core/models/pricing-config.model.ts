@@ -12,7 +12,10 @@ export type PricingConfigKey =
   | 'iva'
   | 'card_commission'
   | 'msi_commission'
-  | 'rounding_step';
+  | 'rounding_step'
+  | 'credit_interest'
+  | 'credit_initial_pct'
+  | 'credit_weeks';
 
 /** Mapa key -> valor usado por el calculador de precios. */
 export type PricingConfigMap = Record<PricingConfigKey, number>;
@@ -22,9 +25,34 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   card_commission: 3.2364,
   msi_commission: 8.9204,
   rounding_step: 10,
+  credit_interest: 22,
+  credit_initial_pct: 35,
+  credit_weeks: 12,
 };
 
 export interface CalculatedPrices {
   price_cash: number | null;
   price_6msi: number | null;
+}
+
+/** Desglose del plan de financiamiento "Crédito Tienda". */
+export interface CreditQuote {
+  /** Total de contado (base sin interés). */
+  cashTotal: number;
+  /** Precio a crédito (contado + interés, redondeado). */
+  creditPrice: number;
+  /** Pago inicial obligatorio. */
+  downPayment: number;
+  /** Cuota semanal. */
+  weeklyPayment: number;
+  /** Número de abonos semanales. */
+  weeks: number;
+}
+
+/** Parámetros del crédito en tienda que consume el Punto de Venta. */
+export interface CreditConfig {
+  creditInterest: number;
+  creditInitialPct: number;
+  creditWeeks: number;
+  roundingStep: number;
 }

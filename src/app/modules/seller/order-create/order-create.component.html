@@ -1,6 +1,6 @@
 <header class="page-head">
   <div>
-    <p class="page-head__overline">Vendedor</p>
+    <p class="page-head__overline">Punto de venta</p>
     <h1 class="page-head__title">Nuevo pedido</h1>
   </div>
 </header>
@@ -127,6 +127,34 @@
           <span>Total</span>
           <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
         </div>
+      }
+
+      @if (isCredit()) {
+        @if (creditQuote(); as credit) {
+          <div class="credit-plan">
+            <h3 class="credit-plan__title">
+              <span class="material-symbols-outlined">credit_score</span> Plan de Crédito en Tienda
+            </h3>
+            <div class="credit-plan__row">
+              <span>Precio a crédito</span>
+              <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </div>
+            <div class="credit-plan__row credit-plan__row--highlight">
+              <span>Pago inicial</span>
+              <span class="strong">{{ credit.downPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </div>
+            <div class="credit-plan__row">
+              <span>{{ credit.weeks }} cuotas semanales de</span>
+              <span class="strong">{{ credit.weeklyPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            </div>
+            <p class="credit-plan__note">
+              El mueble no se envía hasta cubrir el pago inicial. Los abonos semanales
+              sólo se reciben en efectivo o transferencia.
+            </p>
+          </div>
+        } @else {
+          <p class="credit-plan__empty">Agrega productos para calcular el plan de crédito.</p>
+        }
       }
 
       <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">

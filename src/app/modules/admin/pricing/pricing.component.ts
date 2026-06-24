@@ -30,6 +30,9 @@ export class PricingComponent implements OnInit {
     card_commission: [DEFAULT_PRICING_CONFIG.card_commission, [Validators.required, Validators.min(0), Validators.max(100)]],
     msi_commission: [DEFAULT_PRICING_CONFIG.msi_commission, [Validators.required, Validators.min(0), Validators.max(100)]],
     rounding_step: [DEFAULT_PRICING_CONFIG.rounding_step, [Validators.required, Validators.min(1)]],
+    credit_interest: [DEFAULT_PRICING_CONFIG.credit_interest, [Validators.required, Validators.min(0), Validators.max(100)]],
+    credit_initial_pct: [DEFAULT_PRICING_CONFIG.credit_initial_pct, [Validators.required, Validators.min(1), Validators.max(99)]],
+    credit_weeks: [DEFAULT_PRICING_CONFIG.credit_weeks, [Validators.required, Validators.min(1), Validators.max(104)]],
   });
 
   // ===== Simulador en vivo =====
@@ -45,6 +48,13 @@ export class PricingComponent implements OnInit {
     PricingService.calculatePrices(this.simValue().baseCost, this.simValue().margin, this.formValue()),
   );
 
+  /** Plan de crédito en tienda calculado sobre el precio de contado simulado. */
+  protected creditResult = computed(() =>
+    PricingService.calculateCredit(this.simResult().price_cash, this.formValue()),
+  );
+
+  protected formValueInitialPct = computed(() => this.formValue().credit_initial_pct);
+
   constructor() {
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe((v) => {
       this.formValue.set({
@@ -52,6 +62,9 @@ export class PricingComponent implements OnInit {
         card_commission: v.card_commission ?? DEFAULT_PRICING_CONFIG.card_commission,
         msi_commission: v.msi_commission ?? DEFAULT_PRICING_CONFIG.msi_commission,
         rounding_step: v.rounding_step ?? DEFAULT_PRICING_CONFIG.rounding_step,
+        credit_interest: v.credit_interest ?? DEFAULT_PRICING_CONFIG.credit_interest,
+        credit_initial_pct: v.credit_initial_pct ?? DEFAULT_PRICING_CONFIG.credit_initial_pct,
+        credit_weeks: v.credit_weeks ?? DEFAULT_PRICING_CONFIG.credit_weeks,
       });
     });
 

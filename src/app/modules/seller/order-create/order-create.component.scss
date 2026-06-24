@@ -79,3 +79,48 @@
 
   &__amount { font-size: 1.4rem; color: vars.$color-primary; }
 }
+
+.credit-plan {
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.95rem;
+    color: vars.$color-primary;
+  }
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+
+    &--highlight {
+      border-top: 1px dashed vars.$color-border;
+      border-bottom: 1px dashed vars.$color-border;
+      margin: 0.2rem 0;
+      font-size: 1rem;
+    }
+  }
+
+  &__note {
+    margin: vars.$spacing-sm 0 0;
+    font-size: 0.76rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__empty {
+    margin-bottom: vars.$spacing-md;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+  }
+
+  .strong { font-weight: 700; }
+}

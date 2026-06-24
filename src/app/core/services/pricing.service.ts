@@ -4,6 +4,7 @@ import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import {
   CalculatedPrices,
+  CreditQuote,
   DEFAULT_PRICING_CONFIG,
   PricingConfigItem,
   PricingConfigMap,
@@ -70,5 +71,35 @@ export class PricingService {
       price_cash: ceilTo(I / cashDenom, step),
       price_6msi: ceilTo(I / msiDenom, step),
     };
+  }
+
+  /**
+   * Calcula el plan de "Crédito Tienda" a partir del total de contado de un
+   * pedido. Espejo de backend/src/utils/pricingCalculator.js → calculateCredit
+   * para mostrar el desglose en vivo en el Punto de Venta. El backend recalcula
+   * y es la fuente de verdad al crear el pedido.
+   */
+  static calculateCredit(
+    cashTotal: number | null,
+    config: PricingConfigMap,
+  ): CreditQuote | null {
+    const M = Number(cashTotal);
+    if (!Number.isFinite(M) || M <= 0) return null;
+
+    const interest = config.credit_interest / 100;
+    const initialPct = config.credit_initial_pct / 100;
+    const weeks = Math.max(1, Math.trunc(config.credit_weeks) || 12);
+    const step = config.rounding_step || 10;
+
+    if (!Number.isFinite(interest) || interest < 0 || initialPct <= 0 || initialPct >= 1) {
+      return null;
+    }
+
+    const ceilTo = (value: number, s: number) => Math.ceil(value / s) * s;
+    const creditPrice = ceilTo(M * (1 + interest), step);
+    const downPayment = ceilTo(creditPrice * initialPct, 1);
+    const weeklyPayment = ceilTo((creditPrice - downPayment) / weeks, 1);
+
+    return { cashTotal: M, creditPrice, downPayment, weeklyPayment, weeks };
   }
 }

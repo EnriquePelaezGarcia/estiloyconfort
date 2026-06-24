@@ -11,10 +11,22 @@ const Payment = {
     try {
       await conn.beginTransaction();
 
+      const [[orderRow]] = await conn.execute(
+        'SELECT payment_method FROM orders WHERE id = ?', [data.orderId],
+      );
+      const method = data.paymentMethod ?? 'cash';
+      // Crédito Tienda: tanto el pago inicial como los abonos semanales sólo se
+      // reciben en Efectivo o Transferencia Bancaria.
+      if (orderRow?.payment_method === 'store_credit' && !['cash', 'transfer'].includes(method)) {
+        const err = new Error('Los abonos del crédito en tienda sólo se reciben en efectivo o transferencia');
+        err.statusCode = 400;
+        throw err;
+      }
+
       await conn.execute(
         `INSERT INTO payments (order_id, amount, payment_method, collected_by_id, notes)
          VALUES (?,?,?,?,?)`,
-        [data.orderId, data.amount, data.paymentMethod ?? 'cash', collectedById ?? null, data.notes ?? null],
+        [data.orderId, data.amount, method, collectedById ?? null, data.notes ?? null],
       );
 
       const [[{ paid }]] = await conn.execute(

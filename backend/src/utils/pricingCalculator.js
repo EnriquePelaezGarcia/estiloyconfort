@@ -53,4 +53,38 @@ function calculatePrices(baseCost, marginPct, config) {
   };
 }
 
-module.exports = { calculatePrices, ceilTo };
+/**
+ * Calcula el plan de financiamiento "Crédito Tienda" a partir del total de
+ * contado de un pedido, según la especificación de Reglas de Precios:
+ *
+ *   Q = M * interes            Interés sobre el precio de contado
+ *   R = CEILING(M + Q, paso)   Precio a crédito (redondeo a la decena)
+ *   S = CEILING(R * inicial, 1) Pago inicial (35% del precio a crédito)
+ *   T = CEILING((R - S) / N, 1) Cuota semanal sobre el saldo
+ *
+ * @param {number} cashTotal Total de contado del pedido (suma de precios M).
+ * @param {{credit_interest:number, credit_initial_pct:number, credit_weeks:number, rounding_step:number}} config
+ *        Parámetros globales (interés e inicial en %, semanas y paso de redondeo).
+ * @returns {{ cashTotal:number, creditPrice:number, downPayment:number, weeklyPayment:number, weeks:number }|null}
+ */
+function calculateCredit(cashTotal, config) {
+  const M = Number(cashTotal);
+  if (!Number.isFinite(M) || M <= 0) return null;
+
+  const interest = Number(config.credit_interest) / 100;
+  const initialPct = Number(config.credit_initial_pct) / 100;
+  const weeks = Math.max(1, Math.trunc(Number(config.credit_weeks)) || 12);
+  const step = Number(config.rounding_step) || 10;
+
+  if (!Number.isFinite(interest) || interest < 0 || !Number.isFinite(initialPct) || initialPct <= 0 || initialPct >= 1) {
+    return null;
+  }
+
+  const creditPrice = ceilTo(M * (1 + interest), step);
+  const downPayment = ceilTo(creditPrice * initialPct, 1);
+  const weeklyPayment = ceilTo((creditPrice - downPayment) / weeks, 1);
+
+  return { cashTotal: M, creditPrice, downPayment, weeklyPayment, weeks };
+}
+
+module.exports = { calculatePrices, calculateCredit, ceilTo };

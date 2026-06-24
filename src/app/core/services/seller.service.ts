@@ -8,6 +8,7 @@ import {
   Paginated,
   SellerDashboard,
 } from '../models/order.model';
+import { CreditConfig } from '../models/pricing-config.model';
 
 @Injectable({ providedIn: 'root' })
 export class SellerService {
@@ -39,6 +40,11 @@ export class SellerService {
 
   registerPayment(orderId: number, amount: number, paymentMethod: string): Observable<unknown> {
     return this.api.post('/seller/payments', { orderId, amount, paymentMethod });
+  }
+
+  /** Parámetros del crédito en tienda para simular el plan en el POS. */
+  getCreditConfig(): Observable<{ data: CreditConfig }> {
+    return this.api.get<{ data: CreditConfig }>('/seller/credit-config');
   }
 
   searchInventory(search?: string): Observable<{ data: InventoryItem[] }> {

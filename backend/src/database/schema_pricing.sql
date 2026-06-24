@@ -21,10 +21,13 @@ CREATE TABLE IF NOT EXISTS pricing_config (
 
 -- Valores base de la especificación (idempotente).
 INSERT INTO pricing_config (config_key, config_value, label, description, unit, order_display) VALUES
-  ('iva',             16.0000, 'IVA',               'Impuesto al valor agregado aplicado sobre el precio base sin IVA.',            '%',  1),
-  ('card_commission',  3.2364, 'Comisión tarjeta',  'Comisión neta de tarjeta que se absorbe en el precio de contado.',             '%',  2),
-  ('msi_commission',   8.9204, 'Comisión 6 MSI',    'Comisión neta adicional de 6 meses sin intereses que se absorbe en el precio a 6 MSI.', '%', 3),
-  ('rounding_step',   10.0000, 'Redondeo',          'Los precios de contado y 6 MSI se redondean hacia arriba al múltiplo indicado.', '$', 4)
+  ('iva',                16.0000, 'IVA',                  'Impuesto al valor agregado aplicado sobre el precio base sin IVA.',            '%',  1),
+  ('card_commission',     3.2364, 'Comisión tarjeta',     'Comisión neta de tarjeta que se absorbe en el precio de contado.',             '%',  2),
+  ('msi_commission',      8.9204, 'Comisión 6 MSI',       'Comisión neta adicional de 6 meses sin intereses que se absorbe en el precio a 6 MSI.', '%', 3),
+  ('rounding_step',      10.0000, 'Redondeo',             'Los precios de contado y 6 MSI se redondean hacia arriba al múltiplo indicado.', '$', 4),
+  ('credit_interest',    22.0000, 'Interés Crédito Tienda','Interés que se suma al precio de contado para obtener el precio a crédito en tienda.', '%', 5),
+  ('credit_initial_pct', 35.0000, 'Pago inicial Crédito', 'Porcentaje del precio a crédito que el cliente debe cubrir como pago inicial antes del envío.', '%', 6),
+  ('credit_weeks',       12.0000, 'Semanas de crédito',   'Número de abonos semanales en que se difiere el saldo del crédito en tienda.', 'sem', 7)
 ON DUPLICATE KEY UPDATE
   label = VALUES(label),
   description = VALUES(description),

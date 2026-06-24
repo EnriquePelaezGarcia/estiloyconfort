@@ -53,6 +53,21 @@
   margin-top: 0.3rem;
 }
 
+.form-section {
+  margin: vars.$spacing-lg 0 vars.$spacing-sm;
+  padding-top: vars.$spacing-sm;
+  border-top: 1px solid vars.$color-border;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: vars.$color-primary;
+}
+
+.credit-title {
+  margin-top: vars.$spacing-lg;
+}
+
 .result {
   display: grid;
   grid-template-columns: 1fr 1fr;

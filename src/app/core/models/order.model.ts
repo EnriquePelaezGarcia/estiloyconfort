@@ -6,7 +6,7 @@ export type OrderStatus =
   | 'delivered'
   | 'cancelled';
 
-export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit';
+export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit' | 'transfer';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -54,6 +54,14 @@ export interface Order {
   orderDate: string;
   expectedDeliveryDate?: string | null;
   totalAmount: number;
+  /** Total de contado (base del crédito, sin interés). Sólo en pedidos a crédito. */
+  cashTotal?: number | null;
+  /** Pago inicial obligatorio del crédito en tienda. */
+  downPayment?: number | null;
+  /** Cuota semanal del crédito en tienda. */
+  weeklyPayment?: number | null;
+  /** Número de abonos semanales del crédito. */
+  creditWeeks?: number | null;
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;

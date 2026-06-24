@@ -64,8 +64,68 @@
   }
 }
 
+.credit-box {
+  margin: vars.$spacing-md 0;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+
+    .strong { font-weight: 700; color: vars.$color-primary; }
+  }
+
+  &__warn,
+  &__ok {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: vars.$spacing-sm 0 0;
+    font-size: 0.82rem;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+  }
+
+  &__warn { color: vars.$color-error; }
+  &__ok { color: vars.$color-success; }
+}
+
+// ===== Ticket de abono (sólo impresión) =====
+.abono-ticket {
+  display: none;
+  max-width: 320px;
+  margin: 0 auto;
+  font-family: 'Courier New', monospace;
+  color: #000;
+
+  hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+
+  &__brand { text-align: center; font-weight: 700; font-size: 1.05rem; margin: 0; }
+  &__sub { text-align: center; font-size: 0.78rem; margin: 2px 0 0; }
+  &__foot { text-align: center; font-size: 0.8rem; margin: 6px 0 0; }
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    padding: 2px 0;
+
+    &--amount { font-weight: 700; font-size: 0.95rem; }
+    &--balance { font-weight: 700; }
+  }
+}
+
 @media print {
   .no-print { display: none !important; }
   .detail-grid { grid-template-columns: 1fr; }
   .panel { box-shadow: none; border: none; }
+
+  // Al imprimir un abono, ocultamos el detalle y mostramos sólo el ticket.
+  .detail-view.print-abono .detail-screen { display: none; }
+  .detail-view.print-abono .abono-ticket { display: block; }
 }

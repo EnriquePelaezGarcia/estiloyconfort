@@ -1,7 +1,9 @@
 const Order = require('../models/Order');
 const Payment = require('../models/Payment');
+const PricingConfig = require('../models/PricingConfig');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { calculateCredit } = require('../utils/pricingCalculator');
 const { pool } = require('../config/database');
 
 /**
@@ -96,6 +98,29 @@ const sellerController = {
     if (order.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
     const result = await Payment.create(req.body, req.user.id);
     res.status(201).json({ data: result, message: 'Pago registrado' });
+  }),
+
+  // GET /api/seller/credit-config — parámetros del crédito en tienda para el POS
+  creditConfig: asyncHandler(async (req, res) => {
+    const config = await PricingConfig.getMap();
+    res.json({
+      data: {
+        creditInterest: Number(config.credit_interest),
+        creditInitialPct: Number(config.credit_initial_pct),
+        creditWeeks: Number(config.credit_weeks),
+        roundingStep: Number(config.rounding_step),
+      },
+    });
+  }),
+
+  // POST /api/seller/credit-quote — simula el plan de crédito para un total
+  creditQuote: asyncHandler(async (req, res) => {
+    const { amount } = req.body;
+    if (!amount || Number(amount) <= 0) throw ApiError.badRequest('amount (mayor a 0) es obligatorio');
+    const config = await PricingConfig.getMap();
+    const quote = calculateCredit(Number(amount), config);
+    if (!quote) throw ApiError.badRequest('No se pudo calcular el plan de crédito');
+    res.json({ data: quote });
   }),
 
   // GET /api/seller/inventory — disponibilidad de productos para armar pedidos

@@ -1,10 +1,12 @@
 @if (loading()) {
   <div class="state"><div class="spinner"></div><p>Cargando pedido…</p></div>
 } @else if (order(); as o) {
+  <div class="detail-view" [class.print-abono]="printMode() === 'abono'">
   <button type="button" class="back-link no-print" (click)="goBack()">
     <span class="material-symbols-outlined">arrow_back</span> Volver a mis pedidos
   </button>
 
+  <div class="detail-screen">
   <header class="page-head">
     <div>
       <p class="page-head__overline">Pedido {{ o.orderNumber }}</p>
@@ -52,14 +54,43 @@
       </div>
 
       <div class="totals">
-        <div class="totals__row"><span>Total</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        @if (isCredit() && o.cashTotal != null) {
+          <div class="totals__row"><span>Subtotal contado</span><span>{{ o.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+          <div class="totals__row"><span>Interés crédito</span><span>{{ (o.totalAmount - o.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        }
+        <div class="totals__row"><span>{{ isCredit() ? 'Precio a crédito' : 'Total' }}</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         <div class="totals__row"><span>Pagado</span><span>{{ o.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         <div class="totals__row totals__row--balance"><span>Saldo</span><span>{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
       </div>
 
+      @if (isCredit()) {
+        <div class="credit-box">
+          <div class="credit-box__row"><span>Pago inicial</span><span class="strong">{{ o.downPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span></div>
+          <div class="credit-box__row"><span>{{ o.creditWeeks }} cuotas semanales</span><span class="strong">{{ o.weeklyPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span></div>
+          @if (!downPaymentCovered()) {
+            <p class="credit-box__warn">
+              <span class="material-symbols-outlined">lock</span>
+              Falta {{ downPaymentRemaining() | currency:'MXN':'symbol-narrow':'1.0-0' }} del pago inicial.
+              El mueble no puede enviarse hasta cubrirlo.
+            </p>
+          } @else {
+            <p class="credit-box__ok">
+              <span class="material-symbols-outlined">check_circle</span>
+              Pago inicial cubierto. El pedido puede avanzar a envío.
+            </p>
+          }
+        </div>
+      }
+
       @if (o.orderStatus !== 'cancelled' && balance() > 0) {
         <button type="button" class="btn btn--success btn--block no-print" (click)="openPayment()">
-          <span class="material-symbols-outlined">payments</span> Registrar pago
+          <span class="material-symbols-outlined">payments</span>
+          {{ isCredit() ? (downPaymentCovered() ? 'Registrar abono' : 'Registrar pago inicial') : 'Registrar pago' }}
+        </button>
+      }
+      @if (isCredit() && lastReceipt()) {
+        <button type="button" class="btn btn--ghost btn--block no-print" (click)="reprintAbono()">
+          <span class="material-symbols-outlined">print</span> Reimprimir último abono
         </button>
       }
     </div>
@@ -93,6 +124,26 @@
       }
     </div>
   </div>
+  </div><!-- /.detail-screen -->
+
+  @if (lastReceipt(); as r) {
+    <div class="abono-ticket">
+      <p class="abono-ticket__brand">Mueblería Estilo y Confort</p>
+      <p class="abono-ticket__sub">Comprobante de abono · Crédito en Tienda</p>
+      <hr />
+      <div class="abono-ticket__row"><span>Folio venta</span><span>{{ r.orderNumber }}</span></div>
+      <div class="abono-ticket__row"><span>Cliente</span><span>{{ r.customerName }}</span></div>
+      <div class="abono-ticket__row"><span>Fecha</span><span>{{ r.date | date:'dd/MM/yyyy HH:mm' }}</span></div>
+      <div class="abono-ticket__row"><span>Método</span><span>{{ methodLabel(r.paymentMethod) }}</span></div>
+      <hr />
+      <div class="abono-ticket__row"><span>Saldo anterior</span><span>{{ r.previousBalance | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+      <div class="abono-ticket__row abono-ticket__row--amount"><span>Abono</span><span>{{ r.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+      <div class="abono-ticket__row abono-ticket__row--balance"><span>Nuevo saldo</span><span>{{ r.newBalance | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+      <hr />
+      <p class="abono-ticket__foot">¡Gracias por su pago!</p>
+    </div>
+  }
+  </div><!-- /.detail-view -->
 }
 
 <!-- ===== Modal: registrar pago ===== -->
@@ -116,12 +167,20 @@
           </div>
           <div class="field">
             <label for="pm">Método</label>
-            <select id="pm" formControlName="paymentMethod">
-              <option value="cash">Efectivo</option>
-              <option value="card">Tarjeta</option>
-              <option value="msi">Meses sin intereses</option>
-              <option value="store_credit">Crédito tienda</option>
-            </select>
+            @if (isCredit()) {
+              <select id="pm" formControlName="paymentMethod">
+                <option value="cash">Efectivo</option>
+                <option value="transfer">Transferencia bancaria</option>
+              </select>
+              <p class="field__hint">Los abonos del crédito sólo se reciben en efectivo o transferencia.</p>
+            } @else {
+              <select id="pm" formControlName="paymentMethod">
+                <option value="cash">Efectivo</option>
+                <option value="card">Tarjeta</option>
+                <option value="msi">Meses sin intereses</option>
+                <option value="transfer">Transferencia bancaria</option>
+              </select>
+            }
           </div>
           <div class="modal__foot">
             <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>

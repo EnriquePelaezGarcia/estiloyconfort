@@ -10,6 +10,8 @@ router.use(authenticate, authorize('seller', 'admin'));
 
 router.get('/dashboard', sellerController.dashboard);
 router.get('/inventory', sellerController.inventory);
+router.get('/credit-config', sellerController.creditConfig);
+router.post('/credit-quote', sellerController.creditQuote);
 router.get('/orders', sellerController.list);
 router.get('/orders/:id', sellerController.getOne);
 router.post('/orders', sellerController.create);

@@ -1,7 +1,13 @@
 const { pool } = require('../config/database');
+const PricingConfig = require('./PricingConfig');
+const { calculateCredit } = require('../utils/pricingCalculator');
 
 // Estados que el fabricante/admin considera "en proceso de fabricación".
 const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
+
+// Estados que implican que el mueble ya sale de la tienda. Para pedidos a
+// "Crédito Tienda" no se permiten hasta cubrir el pago inicial.
+const SHIPPING_STATUSES = ['ready', 'in_delivery', 'delivered'];
 
 function mapItem(row) {
   return {
@@ -51,6 +57,10 @@ function mapOrder(row) {
     orderDate: row.order_date,
     expectedDeliveryDate: row.expected_delivery_date,
     totalAmount: Number(row.total_amount),
+    cashTotal: row.cash_total != null ? Number(row.cash_total) : null,
+    downPayment: row.down_payment != null ? Number(row.down_payment) : null,
+    weeklyPayment: row.weekly_payment != null ? Number(row.weekly_payment) : null,
+    creditWeeks: row.credit_weeks != null ? Number(row.credit_weeks) : null,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -150,20 +160,42 @@ const Order = {
         });
       }
 
+      // Para "Crédito Tienda" el total a cobrar es el precio a crédito (con
+      // interés) y se guarda el desglose del financiamiento. El cálculo es
+      // autoritativo en el servidor con las reglas globales vigentes.
+      const paymentMethod = data.paymentMethod ?? 'cash';
+      let totalAmount = total;
+      let cashTotal = null;
+      let downPayment = null;
+      let weeklyPayment = null;
+      let creditWeeks = null;
+      if (paymentMethod === 'store_credit') {
+        const config = await PricingConfig.getMap();
+        const credit = calculateCredit(total, config);
+        if (!credit) throw new Error('No se pudo calcular el plan de crédito para este pedido');
+        totalAmount = credit.creditPrice;
+        cashTotal = credit.cashTotal;
+        downPayment = credit.downPayment;
+        weeklyPayment = credit.weeklyPayment;
+        creditWeeks = credit.weeks;
+      }
+
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
            delivery_address, delivery_address_lat, delivery_address_lng, delivery_type,
            payment_method, payment_status, payment_amount, order_status,
-           expected_delivery_date, total_amount, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           expected_delivery_date, total_amount, cash_total, down_payment,
+           weekly_payment, credit_weeks, notes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
           data.deliveryAddressLat ?? null, data.deliveryAddressLng ?? null,
-          data.deliveryType ?? 'standard', data.paymentMethod ?? 'cash',
+          data.deliveryType ?? 'standard', paymentMethod,
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
-          total, data.notes ?? null,
+          totalAmount, cashTotal, downPayment, weeklyPayment, creditWeeks,
+          data.notes ?? null,
         ],
       );
       const orderId = result.insertId;
@@ -209,13 +241,37 @@ const Order = {
     return this.findById(id);
   },
 
+  /**
+   * Verifica que un pedido a "Crédito Tienda" tenga cubierto el pago inicial
+   * antes de avanzar a un estado de envío (listo/en reparto/entregado).
+   * Lanza un error con `.statusCode = 400` si no se cumple.
+   */
+  assertInitialPaymentCovered(order, targetStatus) {
+    if (!order || order.paymentMethod !== 'store_credit') return;
+    if (!SHIPPING_STATUSES.includes(targetStatus)) return;
+    const down = Number(order.downPayment) || 0;
+    if (Number(order.paymentAmount) + 1e-6 < down) {
+      const err = new Error(
+        'No se puede avanzar el pedido: falta cubrir el pago inicial del crédito en tienda',
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  },
+
   async updateStatus(id, status) {
     if (!ORDER_STATUSES.includes(status)) throw new Error('Estado inválido');
+    const order = await this.findById(id);
+    if (!order) throw new Error('Pedido no encontrado');
+    this.assertInitialPaymentCovered(order, status);
     await pool.execute('UPDATE orders SET order_status = ? WHERE id = ?', [status, id]);
     return this.findById(id);
   },
 
   async assignDeliveryPerson(id, deliveryPersonId, assignmentDate) {
+    const order = await this.findById(id);
+    if (!order) throw new Error('Pedido no encontrado');
+    this.assertInitialPaymentCovered(order, 'in_delivery');
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -254,10 +310,18 @@ const Order = {
       'SELECT SUM(is_ready = FALSE) AS pending FROM order_items WHERE order_id = ?', [orderId],
     );
     if (Number(pending) === 0) {
-      await pool.execute(
-        "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'fabricating'",
-        [orderId],
-      );
+      // Crédito Tienda: el pedido no pasa a "listo" mientras no se cubra el
+      // pago inicial, aunque la fabricación esté terminada.
+      const order = await this.findById(orderId);
+      const down = order && order.paymentMethod === 'store_credit' ? Number(order.downPayment) || 0 : 0;
+      const initialCovered = !order || order.paymentMethod !== 'store_credit'
+        || Number(order.paymentAmount) + 1e-6 >= down;
+      if (initialCovered) {
+        await pool.execute(
+          "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'fabricating'",
+          [orderId],
+        );
+      }
     }
     return this.findById(orderId);
   },

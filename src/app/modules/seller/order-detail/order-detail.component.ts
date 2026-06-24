@@ -18,6 +18,17 @@ import {
   PaymentMethod,
 } from '../../../core/models/order.model';
 
+/** Datos para imprimir el ticket de cada abono semanal. */
+interface AbonoReceipt {
+  orderNumber: string;
+  customerName: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  previousBalance: number;
+  newBalance: number;
+  date: string;
+}
+
 @Component({
   selector: 'app-order-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -38,10 +49,28 @@ export class OrderDetailComponent implements OnInit {
   protected cancelModalOpen = signal(false);
   protected savingPayment = signal(false);
 
+  /** Controla qué se imprime: el ticket de venta o el ticket de abono. */
+  protected printMode = signal<'order' | 'abono' | null>(null);
+  /** Datos del último abono registrado para el ticket de abono. */
+  protected lastReceipt = signal<AbonoReceipt | null>(null);
+
   protected balance = computed(() => {
     const o = this.order();
     return o ? Math.max(0, o.totalAmount - o.paymentAmount) : 0;
   });
+
+  /** ¿El pedido se vendió a Crédito Tienda? */
+  protected isCredit = computed(() => this.order()?.paymentMethod === 'store_credit');
+
+  /** Pago inicial pendiente por cubrir (0 si ya está cubierto o no es crédito). */
+  protected downPaymentRemaining = computed(() => {
+    const o = this.order();
+    if (!o || o.paymentMethod !== 'store_credit') return 0;
+    return Math.max(0, (o.downPayment ?? 0) - o.paymentAmount);
+  });
+
+  /** El pago inicial del crédito ya quedó cubierto. */
+  protected downPaymentCovered = computed(() => this.downPaymentRemaining() <= 0);
 
   protected canEdit = computed(() => this.order()?.orderStatus === 'pending');
 
@@ -70,7 +99,17 @@ export class OrderDetailComponent implements OnInit {
   }
 
   protected openPayment(): void {
-    this.paymentForm.reset({ amount: this.balance(), paymentMethod: this.order()?.paymentMethod ?? 'cash' });
+    // En crédito, sugiere el pago inicial pendiente y, si ya se cubrió, la cuota
+    // semanal. El método por defecto es efectivo (válido para abonos).
+    let suggested = this.balance();
+    let method: PaymentMethod = this.order()?.paymentMethod ?? 'cash';
+    if (this.isCredit()) {
+      method = 'cash';
+      suggested = this.downPaymentCovered()
+        ? Math.min(this.balance(), this.order()?.weeklyPayment ?? this.balance())
+        : this.downPaymentRemaining();
+    }
+    this.paymentForm.reset({ amount: suggested, paymentMethod: method });
     this.paymentModalOpen.set(true);
   }
 
@@ -82,6 +121,8 @@ export class OrderDetailComponent implements OnInit {
     const order = this.order();
     if (!order) return;
     const { amount, paymentMethod } = this.paymentForm.getRawValue();
+    const previousBalance = this.balance();
+    const credit = this.isCredit();
     this.savingPayment.set(true);
     this.sellerService.registerPayment(order.id, amount!, paymentMethod!).subscribe({
       next: () => {
@@ -89,6 +130,18 @@ export class OrderDetailComponent implements OnInit {
         this.savingPayment.set(false);
         this.paymentModalOpen.set(false);
         this.load(order.id);
+        // Crédito Tienda: cada abono dispara la impresión de su ticket.
+        if (credit) {
+          this.printAbono({
+            orderNumber: order.orderNumber,
+            customerName: order.customerName,
+            amount: amount!,
+            paymentMethod: paymentMethod!,
+            previousBalance,
+            newBalance: Math.max(0, previousBalance - amount!),
+            date: new Date().toISOString(),
+          });
+        }
       },
       error: (err: { error?: { message?: string } }) => {
         this.savingPayment.set(false);
@@ -113,12 +166,36 @@ export class OrderDetailComponent implements OnInit {
     });
   }
 
+  /** Imprime el ticket de venta original (con el desglose del crédito). */
   protected printTicket(): void {
-    window.print();
+    this.printMode.set('order');
+    setTimeout(() => {
+      window.print();
+      this.printMode.set(null);
+    }, 50);
+  }
+
+  /** Reimprime el ticket del último abono registrado. */
+  protected reprintAbono(): void {
+    if (this.lastReceipt()) this.triggerAbonoPrint();
+  }
+
+  private printAbono(receipt: AbonoReceipt): void {
+    this.lastReceipt.set(receipt);
+    this.triggerAbonoPrint();
+  }
+
+  private triggerAbonoPrint(): void {
+    this.printMode.set('abono');
+    setTimeout(() => {
+      window.print();
+      this.printMode.set(null);
+    }, 50);
   }
 
   protected goBack(): void {
-    this.router.navigate(['/vendedor/pedidos']);
+    const base = this.router.url.startsWith('/admin') ? '/admin/pedidos' : '/vendedor/pedidos';
+    this.router.navigate([base]);
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

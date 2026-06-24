@@ -44,6 +44,26 @@
           <p class="field__hint">{{ itemMeta('rounding_step')?.description }}</p>
         </div>
 
+        <p class="form-section">Crédito en tienda</p>
+
+        <div class="field">
+          <label for="creditInterest">{{ itemMeta('credit_interest')?.label ?? 'Interés Crédito Tienda' }} (%)</label>
+          <input id="creditInterest" type="number" formControlName="credit_interest" min="0" max="100" step="0.0001" />
+          <p class="field__hint">{{ itemMeta('credit_interest')?.description }}</p>
+        </div>
+
+        <div class="field">
+          <label for="creditInitial">{{ itemMeta('credit_initial_pct')?.label ?? 'Pago inicial Crédito' }} (%)</label>
+          <input id="creditInitial" type="number" formControlName="credit_initial_pct" min="1" max="99" step="0.01" />
+          <p class="field__hint">{{ itemMeta('credit_initial_pct')?.description }}</p>
+        </div>
+
+        <div class="field">
+          <label for="creditWeeks">{{ itemMeta('credit_weeks')?.label ?? 'Semanas de crédito' }}</label>
+          <input id="creditWeeks" type="number" formControlName="credit_weeks" min="1" max="104" step="1" />
+          <p class="field__hint">{{ itemMeta('credit_weeks')?.description }}</p>
+        </div>
+
         <div class="card__foot">
           <button type="submit" class="btn btn--primary" [disabled]="saving()">
             @if (saving()) { <span class="spinner spinner--sm"></span> }
@@ -81,6 +101,24 @@
           <span class="result__value">{{ money(simResult().price_6msi) }}</span>
         </div>
       </div>
+
+      @if (creditResult(); as credit) {
+        <h3 class="card__subtitle credit-title">Plan de Crédito en Tienda</h3>
+        <div class="result">
+          <div class="result__item">
+            <span class="result__label">Precio a crédito</span>
+            <span class="result__value">{{ money(credit.creditPrice) }}</span>
+          </div>
+          <div class="result__item result__item--msi">
+            <span class="result__label">Pago inicial ({{ formValueInitialPct() }}%)</span>
+            <span class="result__value">{{ money(credit.downPayment) }}</span>
+          </div>
+          <div class="result__item">
+            <span class="result__label">{{ credit.weeks }} cuotas semanales de</span>
+            <span class="result__value">{{ money(credit.weeklyPayment) }}</span>
+          </div>
+        </div>
+      }
     </section>
   </div>
 }

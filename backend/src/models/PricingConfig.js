@@ -1,6 +1,14 @@
 const { pool } = require('../config/database');
 
-const ALLOWED_KEYS = ['iva', 'card_commission', 'msi_commission', 'rounding_step'];
+const ALLOWED_KEYS = [
+  'iva',
+  'card_commission',
+  'msi_commission',
+  'rounding_step',
+  'credit_interest',
+  'credit_initial_pct',
+  'credit_weeks',
+];
 
 const PricingConfig = {
   /** Devuelve la lista completa de parámetros (con metadatos) para la UI. */
@@ -17,7 +25,15 @@ const PricingConfig = {
    */
   async getMap() {
     const rows = await this.findAll();
-    const map = { iva: 16, card_commission: 3.2364, msi_commission: 8.9204, rounding_step: 10 };
+    const map = {
+      iva: 16,
+      card_commission: 3.2364,
+      msi_commission: 8.9204,
+      rounding_step: 10,
+      credit_interest: 22,
+      credit_initial_pct: 35,
+      credit_weeks: 12,
+    };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;
   },
