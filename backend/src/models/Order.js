@@ -2,12 +2,13 @@ const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const { calculateCredit } = require('../utils/pricingCalculator');
 
-// Estados que el fabricante/admin considera "en proceso de fabricación".
 const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
 
-// Estados que implican que el mueble ya sale de la tienda. Para pedidos a
-// "Crédito Tienda" no se permiten hasta cubrir el pago inicial.
+// Para Crédito Tienda y Apartado no se permite envío hasta cubrir el pago completo/inicial.
 const SHIPPING_STATUSES = ['ready', 'in_delivery', 'delivered'];
+
+const LAYAWAY_MIN_DEPOSIT = 500;
+const LAYAWAY_MONTHS = 3;
 
 function mapItem(row) {
   return {
@@ -61,6 +62,8 @@ function mapOrder(row) {
     downPayment: row.down_payment != null ? Number(row.down_payment) : null,
     weeklyPayment: row.weekly_payment != null ? Number(row.weekly_payment) : null,
     creditWeeks: row.credit_weeks != null ? Number(row.credit_weeks) : null,
+    layawayDeadline: row.layaway_deadline ?? null,
+    layawayConverted: !!row.layaway_converted,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -160,15 +163,16 @@ const Order = {
         });
       }
 
-      // Para "Crédito Tienda" el total a cobrar es el precio a crédito (con
-      // interés) y se guarda el desglose del financiamiento. El cálculo es
-      // autoritativo en el servidor con las reglas globales vigentes.
+      // Para "Crédito Tienda" el total es precio con interés y se guarda el desglose.
+      // Para "Apartado" el total es precio de contado; si vence el plazo se recalcula.
       const paymentMethod = data.paymentMethod ?? 'cash';
       let totalAmount = total;
       let cashTotal = null;
       let downPayment = null;
       let weeklyPayment = null;
       let creditWeeks = null;
+      let layawayDeadline = null;
+
       if (paymentMethod === 'store_credit') {
         const config = await PricingConfig.getMap();
         const credit = calculateCredit(total, config);
@@ -178,6 +182,13 @@ const Order = {
         downPayment = credit.downPayment;
         weeklyPayment = credit.weeklyPayment;
         creditWeeks = credit.weeks;
+      } else if (paymentMethod === 'layaway') {
+        // Precio de contado durante 3 meses; el cliente abona lo que pueda (mín. $500 inicial).
+        cashTotal = total;
+        downPayment = LAYAWAY_MIN_DEPOSIT;
+        const deadline = new Date();
+        deadline.setMonth(deadline.getMonth() + LAYAWAY_MONTHS);
+        layawayDeadline = deadline.toISOString().slice(0, 10);
       }
 
       const [result] = await conn.execute(
@@ -186,8 +197,8 @@ const Order = {
            delivery_address, delivery_address_lat, delivery_address_lng, delivery_type,
            payment_method, payment_status, payment_amount, order_status,
            expected_delivery_date, total_amount, cash_total, down_payment,
-           weekly_payment, credit_weeks, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           weekly_payment, credit_weeks, layaway_deadline, notes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -195,7 +206,7 @@ const Order = {
           data.deliveryType ?? 'standard', paymentMethod,
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
           totalAmount, cashTotal, downPayment, weeklyPayment, creditWeeks,
-          data.notes ?? null,
+          layawayDeadline, data.notes ?? null,
         ],
       );
       const orderId = result.insertId;
@@ -242,20 +253,31 @@ const Order = {
   },
 
   /**
-   * Verifica que un pedido a "Crédito Tienda" tenga cubierto el pago inicial
-   * antes de avanzar a un estado de envío (listo/en reparto/entregado).
-   * Lanza un error con `.statusCode = 400` si no se cumple.
+   * Verifica que pedidos a Crédito Tienda/Apartado tengan cubierto el pago
+   * inicial antes de avanzar a un estado de envío.
+   * Para Apartado el mueble solo se entrega cuando está totalmente pagado.
    */
   assertInitialPaymentCovered(order, targetStatus) {
-    if (!order || order.paymentMethod !== 'store_credit') return;
+    if (!order) return;
     if (!SHIPPING_STATUSES.includes(targetStatus)) return;
-    const down = Number(order.downPayment) || 0;
-    if (Number(order.paymentAmount) + 1e-6 < down) {
-      const err = new Error(
-        'No se puede avanzar el pedido: falta cubrir el pago inicial del crédito en tienda',
-      );
-      err.statusCode = 400;
-      throw err;
+    if (order.paymentMethod === 'store_credit') {
+      const down = Number(order.downPayment) || 0;
+      if (Number(order.paymentAmount) + 1e-6 < down) {
+        const err = new Error(
+          'No se puede avanzar el pedido: falta cubrir el pago inicial del crédito en tienda',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    } else if (order.paymentMethod === 'layaway') {
+      const total = Number(order.totalAmount) || 0;
+      if (Number(order.paymentAmount) + 1e-6 < total) {
+        const err = new Error(
+          'No se puede enviar el pedido en apartado: debe estar totalmente liquidado',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
     }
   },
 
@@ -310,13 +332,15 @@ const Order = {
       'SELECT SUM(is_ready = FALSE) AS pending FROM order_items WHERE order_id = ?', [orderId],
     );
     if (Number(pending) === 0) {
-      // Crédito Tienda: el pedido no pasa a "listo" mientras no se cubra el
-      // pago inicial, aunque la fabricación esté terminada.
       const order = await this.findById(orderId);
-      const down = order && order.paymentMethod === 'store_credit' ? Number(order.downPayment) || 0 : 0;
-      const initialCovered = !order || order.paymentMethod !== 'store_credit'
-        || Number(order.paymentAmount) + 1e-6 >= down;
-      if (initialCovered) {
+      let canAdvance = true;
+      if (order?.paymentMethod === 'store_credit') {
+        const down = Number(order.downPayment) || 0;
+        canAdvance = Number(order.paymentAmount) + 1e-6 >= down;
+      } else if (order?.paymentMethod === 'layaway') {
+        canAdvance = Number(order.paymentAmount) + 1e-6 >= Number(order.totalAmount);
+      }
+      if (canAdvance) {
         await pool.execute(
           "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'fabricating'",
           [orderId],
@@ -324,6 +348,81 @@ const Order = {
       }
     }
     return this.findById(orderId);
+  },
+
+  /**
+   * Retorna todos los pedidos a Crédito Tienda o Apartado sin liquidar.
+   * Si un apartado venció el plazo y no fue convertido, actualiza el precio
+   * al de crédito y marca layaway_converted = 1.
+   * @param {object} opts  { sellerId } para filtrar por vendedor (admin omite)
+   */
+  async findCreditClients({ sellerId } = {}) {
+    const params = [];
+    let sellerFilter = '';
+    if (sellerId) {
+      sellerFilter = 'AND o.seller_id = ?';
+      params.push(Number(sellerId));
+    }
+
+    // Convertir apartados vencidos al precio de crédito (operación global, no por vendedor).
+    await pool.execute(
+      `UPDATE orders o
+       INNER JOIN (
+         SELECT config_value AS interest
+         FROM pricing_config WHERE config_key = 'credit_interest'
+       ) cfg ON 1=1
+       SET o.total_amount = ROUND(o.cash_total * (1 + cfg.interest / 100), 2),
+           o.layaway_converted = 1
+       WHERE o.payment_method = 'layaway'
+         AND o.layaway_converted = 0
+         AND o.layaway_deadline < CURDATE()
+         AND o.payment_status != 'paid'`,
+      [],
+    );
+
+    const [rows] = await pool.execute(
+      `SELECT
+         o.id, o.order_number, o.seller_id,
+         s.full_name AS seller_name,
+         o.customer_name, o.customer_phone, o.customer_email,
+         o.payment_method, o.payment_status,
+         o.total_amount, o.payment_amount,
+         (o.total_amount - o.payment_amount) AS balance,
+         o.cash_total, o.down_payment, o.weekly_payment, o.credit_weeks,
+         o.layaway_deadline, o.layaway_converted,
+         o.order_status, o.created_at
+       FROM orders o
+       LEFT JOIN users s ON s.id = o.seller_id
+       WHERE o.payment_method IN ('store_credit', 'layaway')
+         AND o.payment_status != 'paid'
+         AND o.order_status != 'cancelled'
+         ${sellerFilter}
+       ORDER BY o.created_at DESC`,
+      params,
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      orderNumber: r.order_number,
+      sellerId: r.seller_id,
+      sellerName: r.seller_name ?? null,
+      customerName: r.customer_name,
+      customerPhone: r.customer_phone ?? null,
+      customerEmail: r.customer_email ?? null,
+      paymentMethod: r.payment_method,
+      paymentStatus: r.payment_status,
+      orderStatus: r.order_status,
+      totalAmount: Number(r.total_amount),
+      paymentAmount: Number(r.payment_amount),
+      balance: Number(r.balance),
+      cashTotal: r.cash_total != null ? Number(r.cash_total) : null,
+      downPayment: r.down_payment != null ? Number(r.down_payment) : null,
+      weeklyPayment: r.weekly_payment != null ? Number(r.weekly_payment) : null,
+      creditWeeks: r.credit_weeks != null ? Number(r.credit_weeks) : null,
+      layawayDeadline: r.layaway_deadline ?? null,
+      layawayConverted: !!r.layaway_converted,
+      createdAt: r.created_at,
+    }));
   },
 };
 

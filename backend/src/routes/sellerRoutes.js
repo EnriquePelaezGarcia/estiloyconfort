@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const sellerController = require('../controllers/sellerController');
+const creditClientsController = require('../controllers/creditClientsController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -18,5 +19,9 @@ router.post('/orders', sellerController.create);
 router.patch('/orders/:id', sellerController.update);
 router.delete('/orders/:id', sellerController.remove);
 router.post('/payments', sellerController.registerPayment);
+
+// Clientes con crédito tienda / sistema de apartado
+router.get('/credit-clients', creditClientsController.list);
+router.post('/credit-clients/:orderId/payments', creditClientsController.registerPayment);
 
 module.exports = router;

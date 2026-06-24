@@ -38,6 +38,14 @@ export const sellerRoutes: Routes = [
           import('./order-detail/order-detail.component').then((m) => m.OrderDetailComponent),
         title: 'Detalle de pedido - Vendedor',
       },
+      {
+        path: 'clientes-credito',
+        loadComponent: () =>
+          import('./credit-clients/credit-clients.component').then(
+            (m) => m.CreditClientsComponent,
+          ),
+        title: 'Clientes Crédito y Apartado - Vendedor',
+      },
       { path: '**', redirectTo: 'resumen' },
     ],
   },

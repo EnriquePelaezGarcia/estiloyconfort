@@ -6,7 +6,7 @@ export type OrderStatus =
   | 'delivered'
   | 'cancelled';
 
-export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit' | 'transfer';
+export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit' | 'transfer' | 'layaway';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -62,6 +62,10 @@ export interface Order {
   weeklyPayment?: number | null;
   /** Número de abonos semanales del crédito. */
   creditWeeks?: number | null;
+  /** Fecha límite para pagar en apartado al precio de contado. */
+  layawayDeadline?: string | null;
+  /** TRUE cuando el precio de contado del apartado fue reemplazado por precio crédito. */
+  layawayConverted?: boolean;
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -218,4 +222,28 @@ export interface InventoryReportRow {
   base_cost: number;
   price_cash: number;
   stock_value: number;
+}
+
+/** Cliente con pedido pendiente de crédito tienda o sistema de apartado. */
+export interface CreditClient {
+  id: number;
+  orderNumber: string;
+  sellerId: number | null;
+  sellerName?: string | null;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  paymentMethod: 'store_credit' | 'layaway';
+  paymentStatus: PaymentStatus;
+  orderStatus: string;
+  totalAmount: number;
+  paymentAmount: number;
+  balance: number;
+  cashTotal?: number | null;
+  downPayment?: number | null;
+  weeklyPayment?: number | null;
+  creditWeeks?: number | null;
+  layawayDeadline?: string | null;
+  layawayConverted?: boolean;
+  createdAt?: string;
 }

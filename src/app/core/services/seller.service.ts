@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   CreateOrderRequest,
+  CreditClient,
   InventoryItem,
   Order,
   Paginated,
@@ -52,5 +53,22 @@ export class SellerService {
       '/seller/inventory',
       search ? { search } : undefined,
     );
+  }
+
+  getCreditClients(): Observable<{ data: CreditClient[] }> {
+    return this.api.get<{ data: CreditClient[] }>('/seller/credit-clients');
+  }
+
+  registerCreditPayment(
+    orderId: number,
+    amount: number,
+    paymentMethod: string,
+    notes?: string,
+  ): Observable<{ data: { paid: number; total: number; status: string }; message: string }> {
+    return this.api.post(`/seller/credit-clients/${orderId}/payments`, {
+      amount,
+      paymentMethod,
+      notes: notes || null,
+    });
   }
 }

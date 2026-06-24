@@ -122,5 +122,12 @@
     color: vars.$color-text-secondary;
   }
 
+  &--layaway {
+    border-color: vars.$color-gold;
+    background: color-mix(in srgb, vars.$color-gold 8%, white);
+
+    .credit-plan__title { color: vars.$color-gold; }
+  }
+
   .strong { font-weight: 700; }
 }

@@ -38,7 +38,7 @@ export class OrderCreateComponent implements OnInit {
     customerPhone: [''],
     deliveryAddress: [''],
     deliveryType: ['standard' as 'standard' | 'with_installation', Validators.required],
-    paymentMethod: ['cash' as 'cash' | 'card' | 'msi' | 'store_credit', Validators.required],
+    paymentMethod: ['cash' as 'cash' | 'card' | 'msi' | 'store_credit' | 'layaway', Validators.required],
     expectedDeliveryDate: [''],
     notes: [''],
   });
@@ -52,6 +52,14 @@ export class OrderCreateComponent implements OnInit {
     initialValue: this.form.controls.paymentMethod.value,
   });
   protected isCredit = computed(() => this.paymentMethodSig() === 'store_credit');
+  protected isLayaway = computed(() => this.paymentMethodSig() === 'layaway');
+
+  protected layawayDeadline = computed(() => {
+    if (!this.isLayaway()) return null;
+    const d = new Date();
+    d.setMonth(d.getMonth() + 3);
+    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  });
 
   /** Parámetros del crédito en tienda (interés, inicial, semanas). */
   private creditConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });

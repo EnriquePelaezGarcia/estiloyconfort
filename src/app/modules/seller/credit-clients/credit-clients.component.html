@@ -1,0 +1,239 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Módulo de cobranza</p>
+    <h1 class="page-head__title">Clientes Crédito y Apartado</h1>
+  </div>
+  <button class="btn btn--outline" (click)="load()">
+    <span class="material-symbols-outlined">refresh</span> Actualizar
+  </button>
+</header>
+
+<!-- ─── Tabs de filtro ─────────────────────────────────────────────────────── -->
+<div class="tabs">
+  <button class="tab" [class.tab--active]="activeTab() === 'all'" (click)="setTab('all')">
+    Todos
+  </button>
+  <button class="tab" [class.tab--active]="activeTab() === 'store_credit'" (click)="setTab('store_credit')">
+    <span class="dot dot--credit"></span> Crédito tienda
+  </button>
+  <button class="tab" [class.tab--active]="activeTab() === 'layaway'" (click)="setTab('layaway')">
+    <span class="dot dot--layaway"></span> Apartado
+  </button>
+</div>
+
+<!-- ─── Buscador ──────────────────────────────────────────────────────────── -->
+<div class="search-bar">
+  <span class="search-bar__icon material-symbols-outlined">search</span>
+  <input
+    class="search-bar__input"
+    type="search"
+    placeholder="Buscar por nombre o número de pedido…"
+    [value]="searchQuery()"
+    (input)="searchQuery.set($any($event.target).value)"
+  />
+  @if (searchQuery()) {
+    <button class="search-bar__clear icon-btn" (click)="searchQuery.set('')" aria-label="Limpiar búsqueda">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  }
+</div>
+
+<!-- ─── Resumen rápido ────────────────────────────────────────────────────── -->
+<div class="summary-bar">
+  <div class="summary-bar__item">
+    <span class="summary-bar__label">Clientes activos</span>
+    <span class="summary-bar__value">{{ filtered().length }}</span>
+  </div>
+  <div class="summary-bar__item">
+    <span class="summary-bar__label">Saldo total por cobrar</span>
+    <span class="summary-bar__value summary-bar__value--accent">
+      {{ totalBalance() | currency:'MXN':'symbol-narrow':'1.0-0' }}
+    </span>
+  </div>
+  @if (overdueCount() > 0) {
+    <div class="summary-bar__item summary-bar__item--alert">
+      <span class="material-symbols-outlined">warning</span>
+      <span class="summary-bar__label">{{ overdueCount() }} apartado(s) vencido(s)</span>
+    </div>
+  }
+</div>
+
+<!-- ─── Lista de clientes ─────────────────────────────────────────────────── -->
+@if (loading()) {
+  <div class="state-center"><div class="spinner"></div></div>
+} @else if (filtered().length === 0) {
+  <div class="state-center">
+    <span class="material-symbols-outlined state-center__icon">{{ searchQuery() ? 'search_off' : 'people' }}</span>
+    <p>{{ searchQuery() ? 'Sin resultados para "' + searchQuery() + '".' : 'No hay clientes con crédito o apartado pendiente.' }}</p>
+  </div>
+} @else {
+  <div class="client-list">
+    @for (client of filtered(); track client.id) {
+      <div class="client-card" [class.client-card--overdue]="isOverdue(client)">
+
+        <!-- Encabezado: cliente + método -->
+        <div class="client-card__head">
+          <div class="client-card__info">
+            <span class="client-card__name">{{ client.customerName }}</span>
+            @if (client.customerPhone) {
+              <span class="client-card__phone">
+                <span class="material-symbols-outlined">phone</span>{{ client.customerPhone }}
+              </span>
+            }
+          </div>
+          <div class="client-card__badges">
+            @if (client.paymentMethod === 'store_credit') {
+              <span class="badge badge--credit">Crédito</span>
+            } @else {
+              <span class="badge" [class.badge--overdue]="isOverdue(client)" [class.badge--layaway]="!isOverdue(client)">
+                Apartado
+              </span>
+            }
+            <span class="badge badge--order">{{ client.orderNumber }}</span>
+          </div>
+        </div>
+
+        <!-- Barra de progreso -->
+        <div class="progress-wrap">
+          <div class="progress-bar">
+            <div class="progress-bar__fill" [style.width.%]="pctPaid(client)"></div>
+          </div>
+          <span class="progress-wrap__pct">{{ pctPaid(client) }}% pagado</span>
+        </div>
+
+        <!-- Montos -->
+        <div class="client-card__amounts">
+          <div class="amount-col">
+            <span class="amount-col__label">Total</span>
+            <span class="amount-col__value">{{ client.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          </div>
+          <div class="amount-col">
+            <span class="amount-col__label">Pagado</span>
+            <span class="amount-col__value amount-col__value--paid">{{ client.paymentAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          </div>
+          <div class="amount-col">
+            <span class="amount-col__label">Saldo</span>
+            <span class="amount-col__value amount-col__value--balance">{{ client.balance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          </div>
+        </div>
+
+        <!-- Detalle según tipo -->
+        @if (client.paymentMethod === 'store_credit') {
+          <div class="client-card__detail">
+            @if (client.weeklyPayment) {
+              <span>
+                <span class="material-symbols-outlined">calendar_today</span>
+                Cuota semanal: <b>{{ client.weeklyPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</b>
+              </span>
+              @if (nextWeeklyDate(client); as nextDate) {
+                <span>Próximo abono: <b>{{ nextDate }}</b></span>
+              }
+            }
+          </div>
+        } @else {
+          <div class="client-card__detail" [class.client-card__detail--alert]="isOverdue(client)">
+            @if (client.layawayConverted) {
+              <span class="alert-text">
+                <span class="material-symbols-outlined">error</span>
+                Precio crédito aplicado por vencimiento del plazo
+              </span>
+            } @else {
+              <span>
+                <span class="material-symbols-outlined">event</span>
+                Plazo: <b>{{ client.layawayDeadline | date:'dd/MMM/yyyy':'':'es-MX' }}</b>
+              </span>
+              @if (daysUntilDeadline(client); as days) {
+                @if (days !== null) {
+                  <span [class.overdue-text]="days < 0" [class.warning-text]="days >= 0 && days <= 7">
+                    @if (days < 0) { Venció hace {{ days * -1 }} día(s) }
+                    @else if (days === 0) { Vence hoy }
+                    @else { {{ days }} día(s) restantes }
+                  </span>
+                }
+              }
+            }
+          </div>
+        }
+
+        <!-- Acciones -->
+        <div class="client-card__actions">
+          <a [routerLink]="['..', 'pedidos', client.id]" class="btn btn--sm btn--outline">
+            <span class="material-symbols-outlined">receipt_long</span> Ver pedido
+          </a>
+          @if (client.paymentStatus !== 'paid') {
+            <button class="btn btn--sm btn--primary" (click)="openPayment(client)">
+              <span class="material-symbols-outlined">payments</span> Registrar abono
+            </button>
+          }
+        </div>
+
+      </div>
+    }
+  </div>
+}
+
+<!-- ─── Modal de abono ────────────────────────────────────────────────────── -->
+@if (selectedClient(); as client) {
+  <div class="modal-backdrop" (click)="closePayment()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2 class="modal__title">Registrar abono</h2>
+        <button class="icon-btn" (click)="closePayment()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal__client-info">
+        <span class="modal__client-name">{{ client.customerName }}</span>
+        <span class="modal__order-num">{{ client.orderNumber }}</span>
+      </div>
+
+      <div class="modal__balance">
+        <span>Saldo pendiente:</span>
+        <span class="modal__balance-amount">{{ client.balance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      </div>
+
+      @if (client.paymentMethod === 'layaway' && client.paymentAmount === 0) {
+        <p class="modal__note modal__note--warning">
+          <span class="material-symbols-outlined">info</span>
+          Primer abono mínimo: $500
+        </p>
+      }
+
+      <form [formGroup]="paymentForm" (ngSubmit)="submitPayment()" class="modal__form">
+        <div class="field">
+          <label for="amount">Monto del abono *</label>
+          <input
+            id="amount"
+            type="number"
+            formControlName="amount"
+            placeholder="0.00"
+            min="1"
+            step="0.01"
+          />
+          @if (paymentForm.controls.amount.touched && paymentForm.controls.amount.invalid) {
+            <p class="field__error">Ingresa un monto válido.</p>
+          }
+        </div>
+        <div class="field">
+          <label for="payMethod">Forma de pago *</label>
+          <select id="payMethod" formControlName="paymentMethod">
+            <option value="cash">Efectivo</option>
+            <option value="transfer">Transferencia</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="notes">Notas</label>
+          <input id="notes" type="text" formControlName="notes" placeholder="Opcional" />
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--outline" (click)="closePayment()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="savingPayment()">
+            @if (savingPayment()) { <span class="spinner spinner--sm"></span> Guardando… }
+            @else { Registrar abono }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

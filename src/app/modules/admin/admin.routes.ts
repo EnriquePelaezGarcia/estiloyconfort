@@ -68,6 +68,14 @@ export const adminRoutes: Routes = [
           import('./reports/reports.component').then((m) => m.ReportsComponent),
         title: 'Reportes - Panel Admin',
       },
+      {
+        path: 'clientes-credito',
+        loadComponent: () =>
+          import('../seller/credit-clients/credit-clients.component').then(
+            (m) => m.CreditClientsComponent,
+          ),
+        title: 'Clientes Crédito y Apartado - Panel Admin',
+      },
       { path: '**', redirectTo: 'dashboard' },
     ],
   },

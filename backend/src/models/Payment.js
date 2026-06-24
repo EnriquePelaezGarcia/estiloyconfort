@@ -12,15 +12,23 @@ const Payment = {
       await conn.beginTransaction();
 
       const [[orderRow]] = await conn.execute(
-        'SELECT payment_method FROM orders WHERE id = ?', [data.orderId],
+        'SELECT payment_method, payment_amount, total_amount FROM orders WHERE id = ?', [data.orderId],
       );
       const method = data.paymentMethod ?? 'cash';
-      // Crédito Tienda: tanto el pago inicial como los abonos semanales sólo se
-      // reciben en Efectivo o Transferencia Bancaria.
-      if (orderRow?.payment_method === 'store_credit' && !['cash', 'transfer'].includes(method)) {
-        const err = new Error('Los abonos del crédito en tienda sólo se reciben en efectivo o transferencia');
+      // Crédito Tienda y Apartado: abonos solo en efectivo o transferencia.
+      if (['store_credit', 'layaway'].includes(orderRow?.payment_method) && !['cash', 'transfer'].includes(method)) {
+        const err = new Error('Los abonos de crédito/apartado solo se reciben en efectivo o transferencia');
         err.statusCode = 400;
         throw err;
+      }
+      // Apartado: el primer abono debe ser al menos $500.
+      if (orderRow?.payment_method === 'layaway') {
+        const alreadyPaid = Number(orderRow.payment_amount) || 0;
+        if (alreadyPaid === 0 && Number(data.amount) < 500) {
+          const err = new Error('El apartado requiere un abono inicial mínimo de $500');
+          err.statusCode = 400;
+          throw err;
+        }
       }
 
       await conn.execute(

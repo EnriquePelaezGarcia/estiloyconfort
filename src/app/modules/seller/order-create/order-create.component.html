@@ -51,6 +51,7 @@
             <option value="card">Tarjeta</option>
             <option value="msi">Meses sin intereses</option>
             <option value="store_credit">Crédito tienda</option>
+            <option value="layaway">Apartado</option>
           </select>
         </div>
       </div>
@@ -126,6 +127,37 @@
         <div class="cart-total">
           <span>Total</span>
           <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+      }
+
+      @if (isLayaway()) {
+        <div class="credit-plan credit-plan--layaway">
+          <h3 class="credit-plan__title">
+            <span class="material-symbols-outlined">event_available</span> Sistema de Apartado
+          </h3>
+          <div class="credit-plan__row credit-plan__row--highlight">
+            <span>Precio de contado</span>
+            <span class="strong">{{ total() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          </div>
+          <div class="credit-plan__row">
+            <span>Abono inicial mínimo</span>
+            <span class="strong">$500</span>
+          </div>
+          <div class="credit-plan__row">
+            <span>Plazo al precio de contado</span>
+            <span class="strong">3 meses</span>
+          </div>
+          @if (layawayDeadline()) {
+            <div class="credit-plan__row">
+              <span>Fecha límite</span>
+              <span class="strong">{{ layawayDeadline() }}</span>
+            </div>
+          }
+          <p class="credit-plan__note">
+            El cliente abona la cantidad que desee (mínimo $500 al apartar).
+            Si no liquida antes del {{ layawayDeadline() }}, se aplica el precio de crédito.
+            El mueble se entrega hasta cubrir el pago total.
+          </p>
         </div>
       }
 

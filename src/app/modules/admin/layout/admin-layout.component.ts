@@ -29,6 +29,7 @@ export class AdminLayoutComponent {
     { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
     { label: 'Reglas de precios', icon: 'percent', route: 'reglas-precios' },
     { label: 'Punto de venta', icon: 'point_of_sale', route: 'punto-venta' },
+    { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
     { label: 'Pedidos', icon: 'local_shipping', route: 'pedidos' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },
