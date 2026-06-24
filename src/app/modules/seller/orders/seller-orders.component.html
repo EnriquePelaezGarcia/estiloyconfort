@@ -9,6 +9,17 @@
   </a>
 </header>
 
+<nav class="tabbar">
+  <button type="button" class="tabbar__tab" [class.tabbar__tab--active]="tab() === 'activos'"
+          (click)="setTab('activos')">
+    Seguimiento de entregas <span class="tabbar__count">{{ activosCount() }}</span>
+  </button>
+  <button type="button" class="tabbar__tab" [class.tabbar__tab--active]="tab() === 'historial'"
+          (click)="setTab('historial')">
+    Historial de pedidos <span class="tabbar__count">{{ historialCount() }}</span>
+  </button>
+</nav>
+
 <div class="toolbar">
   <select class="filter-select" (change)="onFilterChange($event)">
     @for (opt of statusOptions; track opt.value) {
@@ -19,10 +30,10 @@
 
 @if (loading()) {
   <div class="state"><div class="spinner"></div><p>Cargando pedidos…</p></div>
-} @else if (orders().length === 0) {
+} @else if (visibleOrders().length === 0) {
   <div class="state">
     <span class="material-symbols-outlined" style="font-size:2.5rem">receipt_long</span>
-    <p>No hay pedidos con este filtro.</p>
+    <p>No hay pedidos en esta vista.</p>
   </div>
 } @else {
   <div class="table-wrap">
@@ -33,7 +44,7 @@
         </tr>
       </thead>
       <tbody>
-        @for (o of orders(); track o.id) {
+        @for (o of visibleOrders(); track o.id) {
           <tr>
             <td data-label="Pedido" class="strong">{{ o.orderNumber }}</td>
             <td data-label="Cliente">{{ o.customerName }}</td>

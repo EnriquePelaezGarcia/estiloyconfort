@@ -1,0 +1,18 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Fabricante</h1>
+    <p class="page-head__sub">Órdenes de compra, pedidos a fábrica y catálogo por fabricante.</p>
+  </div>
+</header>
+
+<nav class="tabbar">
+  @for (t of tabs; track t.route) {
+    <a class="tabbar__tab" [routerLink]="t.route" routerLinkActive="tabbar__tab--active">
+      <span class="material-symbols-outlined">{{ t.icon }}</span>
+      {{ t.label }}
+    </a>
+  }
+</nav>
+
+<router-outlet />

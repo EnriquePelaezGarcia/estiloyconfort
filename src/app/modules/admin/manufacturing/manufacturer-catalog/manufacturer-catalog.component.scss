@@ -1,0 +1,42 @@
+@use '../../../../../styles/variables' as vars;
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: vars.$color-text-secondary;
+}
+
+.panel + .panel {
+  margin-top: vars.$spacing-lg;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-sm;
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 vars.$spacing-sm;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+  .material-symbols-outlined { font-size: 1.05rem; color: vars.$color-gold; }
+}

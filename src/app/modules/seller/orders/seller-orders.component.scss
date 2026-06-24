@@ -1,3 +1,46 @@
+@use '../../../../styles/variables' as vars;
+
 :host {
   display: block;
+}
+
+.tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: vars.$spacing-md;
+  border-bottom: 1px solid vars.$color-border;
+
+  &__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.9rem;
+    font-family: vars.$font-body;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+
+    &:hover { color: vars.$color-primary; }
+
+    &--active {
+      color: vars.$color-primary;
+      border-bottom-color: vars.$color-primary;
+    }
+  }
+
+  &__count {
+    min-width: 1.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: vars.$radius-full;
+    background: vars.$color-bg;
+    font-size: 0.72rem;
+    text-align: center;
+  }
 }

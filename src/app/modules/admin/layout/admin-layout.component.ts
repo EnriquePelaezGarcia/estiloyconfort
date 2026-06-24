@@ -32,6 +32,7 @@ export class AdminLayoutComponent {
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
     { label: 'Pedidos', icon: 'local_shipping', route: 'pedidos' },
+    { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },
   ];
 

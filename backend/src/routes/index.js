@@ -8,6 +8,7 @@ const roleRoutes = require('./roleRoutes');
 const sellerRoutes = require('./sellerRoutes');
 const deliveryRoutes = require('./deliveryRoutes');
 const manufacturerRoutes = require('./manufacturerRoutes');
+const manufacturingRoutes = require('./manufacturingRoutes');
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/roles', roleRoutes);
 router.use('/seller', sellerRoutes);
 router.use('/delivery', deliveryRoutes);
 router.use('/manufacturer', manufacturerRoutes);
+router.use('/manufacturing', manufacturingRoutes);
 
 module.exports = router;

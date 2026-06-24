@@ -1,0 +1,46 @@
+<div class="section-head">
+  <p class="muted">Productos pendientes de fabricar, agregados desde los pedidos de clientes activos.</p>
+  @if (!loading() && rows().length > 0) {
+    <button type="button" class="btn btn--ghost no-print" (click)="print()">
+      <span class="material-symbols-outlined">print</span> Imprimir
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando lista…</p></div>
+} @else if (rows().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">check_circle</span>
+    <p>No hay productos pendientes de fabricación.</p>
+  </div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>SKU</th><th>Producto</th><th class="num">Cantidad total</th>
+          <th class="num">Líneas pend.</th><th class="num">Listas</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of rows(); track r.productSku) {
+          <tr>
+            <td data-label="SKU" class="strong">{{ r.productSku }}</td>
+            <td data-label="Producto">{{ r.productName }}</td>
+            <td data-label="Cantidad total" class="num strong">{{ r.totalQuantity }}</td>
+            <td data-label="Pendientes" class="num">{{ r.pendingLines }}</td>
+            <td data-label="Listas" class="num muted">{{ r.readyLines }}</td>
+          </tr>
+        }
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" class="strong">Total de unidades</td>
+          <td class="num strong">{{ totalUnits() }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+}

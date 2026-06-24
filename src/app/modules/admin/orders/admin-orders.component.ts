@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
@@ -31,6 +31,26 @@ export class AdminOrdersComponent implements OnInit {
   protected loading = signal(true);
   protected statusFilter = signal('');
   protected deliveryPeople = signal<DeliveryPerson[]>([]);
+
+  /** Pestaña activa: pedidos en curso vs. finalizados. */
+  protected tab = signal<'activos' | 'historial'>('activos');
+
+  private readonly activeStatuses: OrderStatus[] = ['pending', 'fabricating', 'ready', 'in_delivery'];
+
+  /** Pedidos visibles según la pestaña (Activos = en curso, Historial = entregados/cancelados). */
+  protected visibleOrders = computed(() => {
+    const isActive = this.tab() === 'activos';
+    return this.orders().filter((o) =>
+      isActive ? this.activeStatuses.includes(o.orderStatus) : !this.activeStatuses.includes(o.orderStatus),
+    );
+  });
+
+  protected activosCount = computed(
+    () => this.orders().filter((o) => this.activeStatuses.includes(o.orderStatus)).length,
+  );
+  protected historialCount = computed(
+    () => this.orders().filter((o) => !this.activeStatuses.includes(o.orderStatus)).length,
+  );
 
   /** Pedido seleccionado para asignar repartidor. */
   protected assigning = signal<Order | null>(null);
@@ -69,6 +89,10 @@ export class AdminOrdersComponent implements OnInit {
   protected onFilterChange(event: Event): void {
     this.statusFilter.set((event.target as HTMLSelectElement).value);
     this.load();
+  }
+
+  protected setTab(tab: 'activos' | 'historial'): void {
+    this.tab.set(tab);
   }
 
   protected changeStatus(order: Order, event: Event): void {

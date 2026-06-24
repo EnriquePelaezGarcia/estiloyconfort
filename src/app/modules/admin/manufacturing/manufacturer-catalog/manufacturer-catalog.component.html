@@ -1,0 +1,147 @@
+<div class="section-head">
+  <div class="filter">
+    <label for="mf">Fabricante</label>
+    <select id="mf" class="filter-select" (change)="onFilterChange($event)">
+      <option value="">Todos los fabricantes</option>
+      @for (m of manufacturers(); track m.id) {
+        <option [value]="m.id">{{ m.name }}{{ m.isActive ? '' : ' (inactivo)' }}</option>
+      }
+    </select>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <span class="material-symbols-outlined">add</span> Nuevo fabricante
+  </button>
+</div>
+
+<!-- ===== Fabricantes registrados ===== -->
+<section class="panel">
+  <h2 class="panel__title">Fabricantes</h2>
+  @if (manufacturers().length === 0) {
+    <p class="empty">Aún no hay fabricantes registrados.</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead>
+          <tr><th>Nombre</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody>
+          @for (m of manufacturers(); track m.id) {
+            <tr>
+              <td data-label="Nombre" class="strong">{{ m.name }}</td>
+              <td data-label="Contacto" class="muted">{{ m.contactName ?? '—' }}</td>
+              <td data-label="Teléfono" class="muted">{{ m.phone ?? '—' }}</td>
+              <td data-label="Estado">
+                <span class="badge" [class]="m.isActive ? 'badge--green' : 'badge--gray'">
+                  {{ m.isActive ? 'Activo' : 'Inactivo' }}
+                </span>
+              </td>
+              <td class="actions">
+                <button type="button" class="icon-btn" (click)="openEdit(m)" aria-label="Editar">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button type="button" class="icon-btn" (click)="toggleActive(m)"
+                        [attr.aria-label]="m.isActive ? 'Desactivar' : 'Activar'">
+                  <span class="material-symbols-outlined">{{ m.isActive ? 'toggle_on' : 'toggle_off' }}</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<!-- ===== Catálogo de productos ===== -->
+<section class="panel">
+  <h2 class="panel__title">Catálogo de productos</h2>
+  @if (unassignedCount() > 0 && selectedManufacturer() === null) {
+    <p class="hint">
+      <span class="material-symbols-outlined">info</span>
+      {{ unassignedCount() }} producto(s) sin fabricante asignado.
+    </p>
+  }
+  @if (loading()) {
+    <div class="state"><div class="spinner"></div><p>Cargando catálogo…</p></div>
+  } @else if (products().length === 0) {
+    <p class="empty">No hay productos para este filtro.</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead>
+          <tr>
+            <th>Producto</th><th>SKU</th><th>Fabricante</th><th>Categoría</th>
+            <th class="num">Costo</th><th class="num">Precio</th><th class="num">Stock</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of products(); track p.id) {
+            <tr>
+              <td data-label="Producto" class="strong">{{ p.name }}</td>
+              <td data-label="SKU" class="muted">{{ p.sku ?? '—' }}</td>
+              <td data-label="Fabricante">{{ p.manufacturerName ?? '—' }}</td>
+              <td data-label="Categoría" class="muted">{{ p.categoryName ?? '—' }}</td>
+              <td data-label="Costo" class="num">{{ p.baseCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              <td data-label="Precio" class="num">{{ p.priceCash | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              <td data-label="Stock" class="num">{{ p.stockQuantity }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<!-- ===== Modal: alta/edición de fabricante ===== -->
+@if (editing() !== null) {
+  <div class="modal-backdrop">
+    <div class="modal">
+      <div class="modal__head">
+        <h2>{{ editing() ? 'Editar fabricante' : 'Nuevo fabricante' }}</h2>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form class="modal__body" [formGroup]="form" (ngSubmit)="save()">
+        <div class="field">
+          <label for="name">Nombre *</label>
+          <input id="name" type="text" formControlName="name" />
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <p class="field__error">El nombre es obligatorio.</p>
+          }
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="contactName">Contacto</label>
+            <input id="contactName" type="text" formControlName="contactName" />
+          </div>
+          <div class="field">
+            <label for="phone">Teléfono</label>
+            <input id="phone" type="text" formControlName="phone" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" formControlName="email" />
+          @if (form.controls.email.touched && form.controls.email.invalid) {
+            <p class="field__error">Email no válido.</p>
+          }
+        </div>
+        <div class="field">
+          <label for="address">Dirección</label>
+          <input id="address" type="text" formControlName="address" />
+        </div>
+        <div class="field">
+          <label for="notes">Notas</label>
+          <textarea id="notes" rows="2" formControlName="notes"></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeForm()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            {{ saving() ? 'Guardando…' : 'Guardar' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

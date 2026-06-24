@@ -1,0 +1,118 @@
+@use '../../../../../styles/variables' as vars;
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+}
+
+.status-select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface;
+  font-family: vars.$font-body;
+  font-size: 0.82rem;
+  color: vars.$color-text;
+  cursor: pointer;
+}
+
+.modal--lg {
+  max-width: 760px;
+  width: 100%;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-sm;
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn--sm {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: vars.$spacing-md 0 vars.$spacing-sm;
+
+  h3 { margin: 0; font-size: 0.95rem; }
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.item-card {
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  background: vars.$color-bg;
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+  }
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  input { width: auto; }
+}
+
+.form-total {
+  margin-right: auto;
+  font-size: 0.95rem;
+  color: vars.$color-text-secondary;
+  strong { color: vars.$color-primary; }
+}
+
+// ── Fila de detalle (items de la OC) ──
+.detail-row > td {
+  background: rgba(vars.$color-primary, 0.02);
+}
+
+.subtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+
+  th, td {
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid vars.$color-border;
+  }
+  .num { text-align: right; }
+}
+
+.specs {
+  display: block;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  margin-top: 0.15rem;
+}
+
+.po-notes {
+  margin: vars.$spacing-sm 0 0;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+}

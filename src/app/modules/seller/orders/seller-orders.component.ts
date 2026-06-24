@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
@@ -25,6 +25,25 @@ export class SellerOrdersComponent implements OnInit {
   protected orders = signal<Order[]>([]);
   protected loading = signal(true);
   protected statusFilter = signal('');
+
+  /** Pestaña activa: pedidos en curso vs. finalizados. */
+  protected tab = signal<'activos' | 'historial'>('activos');
+
+  private readonly activeStatuses: OrderStatus[] = ['pending', 'fabricating', 'ready', 'in_delivery'];
+
+  protected visibleOrders = computed(() => {
+    const isActive = this.tab() === 'activos';
+    return this.orders().filter((o) =>
+      isActive ? this.activeStatuses.includes(o.orderStatus) : !this.activeStatuses.includes(o.orderStatus),
+    );
+  });
+
+  protected activosCount = computed(
+    () => this.orders().filter((o) => this.activeStatuses.includes(o.orderStatus)).length,
+  );
+  protected historialCount = computed(
+    () => this.orders().filter((o) => !this.activeStatuses.includes(o.orderStatus)).length,
+  );
 
   protected readonly statusOptions: { value: string; label: string }[] = [
     { value: '', label: 'Todos los estados' },
@@ -57,6 +76,10 @@ export class SellerOrdersComponent implements OnInit {
   protected onFilterChange(event: Event): void {
     this.statusFilter.set((event.target as HTMLSelectElement).value);
     this.load();
+  }
+
+  protected setTab(tab: 'activos' | 'historial'): void {
+    this.tab.set(tab);
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

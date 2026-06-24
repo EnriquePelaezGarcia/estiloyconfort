@@ -1,0 +1,201 @@
+<div class="section-head">
+  <select class="filter-select" (change)="onFilterChange($event)">
+    @for (opt of statusOptions; track opt.value) {
+      <option [value]="opt.value">{{ opt.label }}</option>
+    }
+  </select>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <span class="material-symbols-outlined">add</span> Nueva orden
+  </button>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando órdenes…</p></div>
+} @else if (orders().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">receipt_long</span>
+    <p>No hay órdenes de compra con este filtro.</p>
+  </div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Orden</th><th>Fabricante</th><th class="num">Items</th><th class="num">Total</th>
+          <th>Fecha</th><th>Estado</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (o of orders(); track o.id) {
+          <tr>
+            <td data-label="Orden" class="strong">{{ o.poNumber }}</td>
+            <td data-label="Fabricante">{{ o.manufacturerName ?? '—' }}</td>
+            <td data-label="Items" class="num">{{ o.itemCount ?? 0 }}</td>
+            <td data-label="Total" class="num">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
+            <td data-label="Estado">
+              <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
+                @for (s of allStatuses; track s) {
+                  <option [value]="s">{{ statusLabel(s) }}</option>
+                }
+              </select>
+            </td>
+            <td class="actions">
+              <button type="button" class="icon-btn" (click)="toggle(o)" aria-label="Ver items">
+                <span class="material-symbols-outlined">
+                  {{ expanded() === o.id ? 'expand_less' : 'expand_more' }}
+                </span>
+              </button>
+            </td>
+          </tr>
+          @if (expanded() === o.id) {
+            <tr class="detail-row">
+              <td colspan="7">
+                @if (expandedItems().length === 0) {
+                  <p class="empty">Cargando items…</p>
+                } @else {
+                  <table class="subtable">
+                    <thead>
+                      <tr>
+                        <th>Producto</th><th>SKU</th><th>Tipo</th>
+                        <th class="num">Cant.</th><th class="num">Costo unit.</th><th class="num">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (it of expandedItems(); track it.id) {
+                        <tr>
+                          <td>
+                            {{ it.productName }}
+                            @if (it.specifications) {
+                              <span class="specs">{{ it.specifications }}</span>
+                            }
+                          </td>
+                          <td class="muted">{{ it.productSku ?? '—' }}</td>
+                          <td>
+                            <span class="badge" [class]="it.isNewProduct ? 'badge--amber' : 'badge--gray'">
+                              {{ it.isNewProduct ? 'Nuevo' : 'Existente' }}
+                            </span>
+                          </td>
+                          <td class="num">{{ it.quantity }}</td>
+                          <td class="num">{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                          <td class="num">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                  @if (o.notes) { <p class="po-notes"><strong>Notas:</strong> {{ o.notes }}</p> }
+                }
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ===== Modal: nueva orden de compra ===== -->
+@if (creating()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--lg">
+      <div class="modal__head">
+        <h2>Nueva orden de compra</h2>
+        <button type="button" class="icon-btn" (click)="closeCreate()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form class="modal__body" [formGroup]="form" (ngSubmit)="save()">
+        <div class="grid-2">
+          <div class="field">
+            <label for="mf">Fabricante</label>
+            <select id="mf" formControlName="manufacturerId">
+              <option [ngValue]="null">Sin asignar</option>
+              @for (m of activeManufacturers(); track m.id) {
+                <option [ngValue]="m.id">{{ m.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="ed">Fecha esperada</label>
+            <input id="ed" type="date" formControlName="expectedDate" />
+          </div>
+        </div>
+
+        <div class="items-head">
+          <h3>Productos a solicitar</h3>
+          <button type="button" class="btn btn--ghost btn--sm" (click)="addItem()">
+            <span class="material-symbols-outlined">add</span> Agregar item
+          </button>
+        </div>
+
+        <div formArrayName="items" class="items">
+          @for (item of items.controls; track $index; let i = $index) {
+            <div class="item-card" [formGroupName]="i">
+              <div class="item-card__top">
+                <label class="check">
+                  <input type="checkbox" formControlName="isNewProduct" (change)="recalcTotal()" />
+                  Producto nuevo (con especificaciones)
+                </label>
+                <button type="button" class="icon-btn" (click)="removeItem(i)" aria-label="Quitar item">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+
+              @if (!item.get('isNewProduct')?.value) {
+                <div class="field">
+                  <label>Producto existente</label>
+                  <select (change)="onProductSelected(i, $event)" [value]="item.get('productId')?.value ?? ''">
+                    <option value="">Selecciona un producto…</option>
+                    @for (p of products(); track p.id) {
+                      <option [value]="p.id">{{ p.name }} @if (p.sku) { ({{ p.sku }}) }</option>
+                    }
+                  </select>
+                </div>
+              } @else {
+                <div class="grid-2">
+                  <div class="field">
+                    <label>Nombre del producto</label>
+                    <input type="text" formControlName="productName" placeholder="Nombre" />
+                  </div>
+                  <div class="field">
+                    <label>SKU (opcional)</label>
+                    <input type="text" formControlName="productSku" placeholder="SKU" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Especificaciones</label>
+                  <textarea rows="2" formControlName="specifications"
+                            placeholder="Material, medidas, color, acabados…"></textarea>
+                </div>
+              }
+
+              <div class="grid-2">
+                <div class="field">
+                  <label>Cantidad</label>
+                  <input type="number" min="1" formControlName="quantity" (input)="recalcTotal()" />
+                </div>
+                <div class="field">
+                  <label>Costo unitario</label>
+                  <input type="number" min="0" step="0.01" formControlName="unitCost" (input)="recalcTotal()" />
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="field">
+          <label for="notes">Notas</label>
+          <textarea id="notes" rows="2" formControlName="notes"></textarea>
+        </div>
+
+        <div class="modal__foot">
+          <span class="form-total">Total: <strong>{{ formTotal() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          <button type="button" class="btn btn--ghost" (click)="closeCreate()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            {{ saving() ? 'Guardando…' : 'Crear orden' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

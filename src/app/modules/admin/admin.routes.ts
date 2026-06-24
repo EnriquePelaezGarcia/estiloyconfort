@@ -71,6 +71,39 @@ export const adminRoutes: Routes = [
         title: 'Pedidos - Panel Admin',
       },
       {
+        path: 'fabricante',
+        loadComponent: () =>
+          import('./manufacturing/manufacturing.component').then((m) => m.ManufacturingComponent),
+        title: 'Fabricante - Panel Admin',
+        children: [
+          { path: '', redirectTo: 'ordenes-compra', pathMatch: 'full' },
+          {
+            path: 'ordenes-compra',
+            loadComponent: () =>
+              import('./manufacturing/purchase-orders/purchase-orders.component').then(
+                (m) => m.PurchaseOrdersComponent,
+              ),
+            title: 'Órdenes de compra - Panel Admin',
+          },
+          {
+            path: 'pedidos-fabrica',
+            loadComponent: () =>
+              import('./manufacturing/factory-orders/factory-orders.component').then(
+                (m) => m.FactoryOrdersComponent,
+              ),
+            title: 'Pedidos a fábrica - Panel Admin',
+          },
+          {
+            path: 'catalogo',
+            loadComponent: () =>
+              import('./manufacturing/manufacturer-catalog/manufacturer-catalog.component').then(
+                (m) => m.ManufacturerCatalogComponent,
+              ),
+            title: 'Catálogo por fabricante - Panel Admin',
+          },
+        ],
+      },
+      {
         path: 'reportes',
         loadComponent: () =>
           import('./reports/reports.component').then((m) => m.ReportsComponent),

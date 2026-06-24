@@ -1,0 +1,10 @@
+@use '../../../../../styles/variables' as vars;
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+}

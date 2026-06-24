@@ -33,9 +33,11 @@ const Product = {
 
     const [rows] = await pool.execute(
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug,
+              m.name AS manufacturer_name,
               (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
        ${where}
        ORDER BY ${orderBy}
        LIMIT ${safeLimit} OFFSET ${offset}`,
@@ -47,9 +49,11 @@ const Product = {
 
   async findById(id, { includeInactive = false } = {}) {
     const [[product]] = await pool.execute(
-      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug,
+              m.name AS manufacturer_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
        WHERE p.id = ?${includeInactive ? '' : ' AND p.is_active = TRUE'}`,
       [id]
     );
@@ -86,7 +90,7 @@ const Product = {
   },
 
   async create(data) {
-    const fields = ['name','slug','sku','category_id','description','materials',
+    const fields = ['name','slug','sku','category_id','manufacturer_id','description','materials',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','base_cost','margin_percentage','price_cash','price_6msi',
       'stock_quantity','stock_alert_level','is_featured'];
@@ -99,7 +103,7 @@ const Product = {
   },
 
   async update(id, data) {
-    const allowed = ['name','slug','sku','category_id','description','materials',
+    const allowed = ['name','slug','sku','category_id','manufacturer_id','description','materials',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','base_cost','margin_percentage','price_cash','price_6msi',
       'stock_quantity','stock_alert_level','is_featured','is_active'];
