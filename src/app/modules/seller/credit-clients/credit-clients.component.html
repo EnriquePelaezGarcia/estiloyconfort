@@ -174,8 +174,8 @@
 
 <!-- ─── Modal de abono ────────────────────────────────────────────────────── -->
 @if (selectedClient(); as client) {
-  <div class="modal-backdrop" (click)="closePayment()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop">
+    <div class="modal">
       <div class="modal__head">
         <h2 class="modal__title">Registrar abono</h2>
         <button class="icon-btn" (click)="closePayment()" aria-label="Cerrar">

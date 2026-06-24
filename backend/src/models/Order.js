@@ -48,6 +48,7 @@ function mapOrder(row) {
     deliveryAddress: row.delivery_address,
     deliveryAddressLat: row.delivery_address_lat != null ? Number(row.delivery_address_lat) : null,
     deliveryAddressLng: row.delivery_address_lng != null ? Number(row.delivery_address_lng) : null,
+    googleMapsUrl: row.google_maps_url ?? null,
     deliveryType: row.delivery_type,
     deliveryPersonId: row.delivery_person_id,
     deliveryPersonName: row.delivery_person_name ?? null,
@@ -140,15 +141,22 @@ const Order = {
       const orderNumber = await this.generateOrderNumber();
       const items = Array.isArray(data.items) ? data.items : [];
 
-      // Resuelve precios/snapshots desde la tabla products (fuente de verdad).
+      // Resuelve precios/snapshots desde la tabla products (fuente de verdad) y valida stock.
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
         const [[product]] = await conn.execute(
-          'SELECT id, name, sku, price_cash FROM products WHERE id = ?', [it.productId],
+          'SELECT id, name, sku, price_cash, stock_quantity FROM products WHERE id = ?', [it.productId],
         );
         if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
         const qty = Math.max(1, Number(it.quantity) || 1);
+        if (Number(product.stock_quantity) < qty) {
+          const stockErr = new Error(
+            `Stock insuficiente para "${product.name}". Disponible: ${product.stock_quantity}`,
+          );
+          stockErr.statusCode = 400;
+          throw stockErr;
+        }
         const unitPrice = it.unitPrice != null ? Number(it.unitPrice) : Number(product.price_cash);
         const subtotal = unitPrice * qty;
         total += subtotal;
@@ -194,15 +202,16 @@ const Order = {
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
-           delivery_address, delivery_address_lat, delivery_address_lng, delivery_type,
-           payment_method, payment_status, payment_amount, order_status,
+           delivery_address, delivery_address_lat, delivery_address_lng, google_maps_url,
+           delivery_type, payment_method, payment_status, payment_amount, order_status,
            expected_delivery_date, total_amount, cash_total, down_payment,
            weekly_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
           data.deliveryAddressLat ?? null, data.deliveryAddressLng ?? null,
+          data.googleMapsUrl ?? null,
           data.deliveryType ?? 'standard', paymentMethod,
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
           totalAmount, cashTotal, downPayment, weeklyPayment, creditWeeks,
@@ -222,6 +231,11 @@ const Order = {
             it.unitPrice, it.subtotal,
           ],
         );
+        // Descontar stock del producto dentro de la misma transacción.
+        await conn.execute(
+          'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+          [it.quantity, it.productId],
+        );
       }
 
       await conn.commit();
@@ -235,9 +249,16 @@ const Order = {
   },
 
   async update(id, data) {
+    // Si vienen items, se reemplaza el contenido del pedido en una transacción:
+    // se devuelve el stock anterior, se valida/aplica el nuevo y se recalculan totales.
+    if (Array.isArray(data.items)) {
+      return this.updateWithItems(id, data);
+    }
+
     const allowed = {
       customerName: 'customer_name', customerEmail: 'customer_email',
       customerPhone: 'customer_phone', deliveryAddress: 'delivery_address',
+      googleMapsUrl: 'google_maps_url',
       deliveryType: 'delivery_type', paymentMethod: 'payment_method',
       expectedDeliveryDate: 'expected_delivery_date', notes: 'notes',
     };
@@ -250,6 +271,151 @@ const Order = {
     params.push(id);
     await pool.execute(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`, params);
     return this.findById(id);
+  },
+
+  /**
+   * Edita un pedido reemplazando sus items. Recalcula el total (y el plan de
+   * crédito/apartado según el método) ajustando el stock de forma atómica:
+   * primero devuelve el stock de los items actuales y luego descuenta el nuevo.
+   */
+  async updateWithItems(id, data) {
+    const existing = await this.findById(id);
+    if (!existing) throw new Error('Pedido no encontrado');
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // 1. Devolver al inventario el stock de los items actuales.
+      const [oldItems] = await conn.execute(
+        'SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id],
+      );
+      for (const it of oldItems) {
+        if (it.product_id != null) {
+          await conn.execute(
+            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+            [it.quantity, it.product_id],
+          );
+        }
+      }
+
+      // 2. Resolver los nuevos items y validar stock (ya restaurado).
+      const items = Array.isArray(data.items) ? data.items : [];
+      let total = 0;
+      const resolvedItems = [];
+      for (const it of items) {
+        const [[product]] = await conn.execute(
+          'SELECT id, name, sku, price_cash, stock_quantity FROM products WHERE id = ?', [it.productId],
+        );
+        if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
+        const qty = Math.max(1, Number(it.quantity) || 1);
+        if (Number(product.stock_quantity) < qty) {
+          const stockErr = new Error(
+            `Stock insuficiente para "${product.name}". Disponible: ${product.stock_quantity}`,
+          );
+          stockErr.statusCode = 400;
+          throw stockErr;
+        }
+        const unitPrice = it.unitPrice != null ? Number(it.unitPrice) : Number(product.price_cash);
+        const subtotal = unitPrice * qty;
+        total += subtotal;
+        resolvedItems.push({
+          productId: product.id,
+          productName: product.name,
+          productSku: product.sku,
+          quantity: qty,
+          variantSelections: it.variantSelections ?? null,
+          unitPrice,
+          subtotal,
+        });
+      }
+
+      // 3. Recalcular totales y desglose según el método de pago.
+      const paymentMethod = data.paymentMethod ?? existing.paymentMethod ?? 'cash';
+      let totalAmount = total;
+      let cashTotal = null;
+      let downPayment = null;
+      let weeklyPayment = null;
+      let creditWeeks = null;
+      let layawayDeadline = null;
+
+      if (paymentMethod === 'store_credit') {
+        const config = await PricingConfig.getMap();
+        const credit = calculateCredit(total, config);
+        if (!credit) throw new Error('No se pudo calcular el plan de crédito para este pedido');
+        totalAmount = credit.creditPrice;
+        cashTotal = credit.cashTotal;
+        downPayment = credit.downPayment;
+        weeklyPayment = credit.weeklyPayment;
+        creditWeeks = credit.weeks;
+      } else if (paymentMethod === 'layaway') {
+        cashTotal = total;
+        downPayment = LAYAWAY_MIN_DEPOSIT;
+        // Conservar la fecha límite original si el pedido ya era apartado.
+        if (existing.paymentMethod === 'layaway' && existing.layawayDeadline) {
+          layawayDeadline = existing.layawayDeadline;
+        } else {
+          const deadline = new Date();
+          deadline.setMonth(deadline.getMonth() + LAYAWAY_MONTHS);
+          layawayDeadline = deadline.toISOString().slice(0, 10);
+        }
+      }
+
+      // 4. Reemplazar los items y descontar el nuevo stock.
+      await conn.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
+      for (const it of resolvedItems) {
+        await conn.execute(
+          `INSERT INTO order_items
+            (order_id, product_id, product_name, product_sku, quantity, variant_selections, unit_price, subtotal)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [
+            id, it.productId, it.productName, it.productSku, it.quantity,
+            it.variantSelections ? JSON.stringify(it.variantSelections) : null,
+            it.unitPrice, it.subtotal,
+          ],
+        );
+        await conn.execute(
+          'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+          [it.quantity, it.productId],
+        );
+      }
+
+      // 5. Recalcular el estado de pago contra el nuevo total.
+      const paid = Number(existing.paymentAmount) || 0;
+      const paymentStatus = paid >= totalAmount && totalAmount > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+
+      // 6. Actualizar la cabecera del pedido.
+      await conn.execute(
+        `UPDATE orders SET
+           customer_name = ?, customer_email = ?, customer_phone = ?,
+           delivery_address = ?, google_maps_url = ?, delivery_type = ?,
+           payment_method = ?, payment_status = ?, expected_delivery_date = ?, notes = ?,
+           total_amount = ?, cash_total = ?, down_payment = ?,
+           weekly_payment = ?, credit_weeks = ?, layaway_deadline = ?
+         WHERE id = ?`,
+        [
+          data.customerName ?? existing.customerName,
+          data.customerEmail !== undefined ? data.customerEmail : existing.customerEmail,
+          data.customerPhone !== undefined ? data.customerPhone : existing.customerPhone,
+          data.deliveryAddress !== undefined ? data.deliveryAddress : existing.deliveryAddress,
+          data.googleMapsUrl !== undefined ? data.googleMapsUrl : existing.googleMapsUrl,
+          data.deliveryType ?? existing.deliveryType,
+          paymentMethod, paymentStatus,
+          data.expectedDeliveryDate !== undefined ? data.expectedDeliveryDate : existing.expectedDeliveryDate,
+          data.notes !== undefined ? data.notes : existing.notes,
+          totalAmount, cashTotal, downPayment, weeklyPayment, creditWeeks, layawayDeadline,
+          id,
+        ],
+      );
+
+      await conn.commit();
+      return this.findById(id);
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   },
 
   /**
@@ -319,7 +485,27 @@ const Order = {
   },
 
   async remove(id) {
-    await pool.execute("UPDATE orders SET order_status = 'cancelled' WHERE id = ?", [id]);
+    const [items] = await pool.execute(
+      'SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id],
+    );
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE id = ?", [id]);
+      // Devolver stock al cancelar el pedido.
+      for (const item of items) {
+        await conn.execute(
+          'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+          [item.quantity, item.product_id],
+        );
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   },
 
   /** Marca un item como listo y, si todos lo están, el pedido pasa a 'ready'. */

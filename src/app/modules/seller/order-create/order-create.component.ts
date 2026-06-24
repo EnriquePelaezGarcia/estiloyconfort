@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -26,26 +26,28 @@ export class OrderCreateComponent implements OnInit {
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   protected saving = signal(false);
   protected searchResults = signal<InventoryItem[]>([]);
   protected searching = signal(false);
   protected lines = signal<CartLine[]>([]);
 
+  /** Id del pedido cuando se entra en modo edición (?edit=ID); null al crear. */
+  protected editId = signal<number | null>(null);
+  protected isEditing = computed(() => this.editId() !== null);
+
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
     customerEmail: ['', [Validators.email]],
     customerPhone: [''],
     deliveryAddress: [''],
+    googleMapsUrl: [''],
     deliveryType: ['standard' as 'standard' | 'with_installation', Validators.required],
-    paymentMethod: ['cash' as 'cash' | 'card' | 'msi' | 'store_credit' | 'layaway', Validators.required],
+    paymentMethod: ['cash' as 'cash' | 'card' | 'msi' | 'store_credit' | 'layaway' | 'transfer', Validators.required],
     expectedDeliveryDate: [''],
     notes: [''],
   });
-
-  protected total = computed(() =>
-    this.lines().reduce((sum, l) => sum + l.product.price_cash * l.quantity, 0),
-  );
 
   /** Método de pago seleccionado, como signal para reaccionar en la plantilla. */
   private paymentMethodSig = toSignal(this.form.controls.paymentMethod.valueChanges, {
@@ -53,6 +55,23 @@ export class OrderCreateComponent implements OnInit {
   });
   protected isCredit = computed(() => this.paymentMethodSig() === 'store_credit');
   protected isLayaway = computed(() => this.paymentMethodSig() === 'layaway');
+  /** ¿El método de pago es 6 Meses sin intereses? */
+  protected isMsi = computed(() => this.paymentMethodSig() === 'msi');
+
+  /** Precio unitario base según método de pago: 6 MSI usa price_6msi del catálogo. */
+  private priceFor(product: InventoryItem, msi: boolean): number {
+    return msi && product.price_6msi > 0 ? product.price_6msi : product.price_cash;
+  }
+
+  /** Precio unitario aplicado al producto según el método de pago actual. */
+  protected unitPrice(product: InventoryItem): number {
+    return this.priceFor(product, this.isMsi());
+  }
+
+  protected total = computed(() => {
+    const msi = this.isMsi();
+    return this.lines().reduce((sum, l) => sum + this.priceFor(l.product, msi) * l.quantity, 0);
+  });
 
   protected layawayDeadline = computed(() => {
     if (!this.isLayaway()) return null;
@@ -71,6 +90,14 @@ export class OrderCreateComponent implements OnInit {
 
   ngOnInit(): void {
     this.searchProducts('');
+
+    // Modo edición: ?edit=ID precarga los datos del pedido en el formulario.
+    const editParam = this.route.snapshot.queryParamMap.get('edit');
+    if (editParam) {
+      const id = Number(editParam);
+      if (!Number.isNaN(id)) this.loadOrderForEdit(id);
+    }
+
     this.sellerService.getCreditConfig().subscribe({
       next: ({ data }) =>
         this.creditConfig.set({
@@ -81,6 +108,43 @@ export class OrderCreateComponent implements OnInit {
           rounding_step: data.roundingStep,
         }),
       error: () => {},
+    });
+  }
+
+  /** Carga un pedido existente y precarga formulario + carrito para editarlo. */
+  private loadOrderForEdit(id: number): void {
+    this.sellerService.getOrder(id).subscribe({
+      next: ({ data }) => {
+        this.editId.set(data.id);
+        this.form.patchValue({
+          customerName: data.customerName ?? '',
+          customerEmail: data.customerEmail ?? '',
+          customerPhone: data.customerPhone ?? '',
+          deliveryAddress: data.deliveryAddress ?? '',
+          googleMapsUrl: data.googleMapsUrl ?? '',
+          deliveryType: data.deliveryType ?? 'standard',
+          paymentMethod: data.paymentMethod ?? 'cash',
+          expectedDeliveryDate: data.expectedDeliveryDate
+            ? String(data.expectedDeliveryDate).slice(0, 10)
+            : '',
+          notes: data.notes ?? '',
+        });
+        this.lines.set(
+          (data.items ?? []).map((it) => ({
+            product: {
+              id: it.productId,
+              name: it.productName ?? '',
+              sku: it.productSku ?? '',
+              price_cash: it.unitPrice,
+              price_6msi: 0,
+              stock_quantity: 0,
+              availability_days: 0,
+            },
+            quantity: it.quantity,
+          })),
+        );
+      },
+      error: () => this.notification.error('No se pudo cargar el pedido para editar'),
     });
   }
 
@@ -127,6 +191,7 @@ export class OrderCreateComponent implements OnInit {
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.notification.error('Revisa los campos marcados en rojo antes de continuar');
       return;
     }
     if (this.lines().length === 0) {
@@ -139,6 +204,7 @@ export class OrderCreateComponent implements OnInit {
       customerEmail: raw.customerEmail || null,
       customerPhone: raw.customerPhone || null,
       deliveryAddress: raw.deliveryAddress || null,
+      googleMapsUrl: raw.googleMapsUrl || null,
       deliveryType: raw.deliveryType!,
       paymentMethod: raw.paymentMethod!,
       expectedDeliveryDate: raw.expectedDeliveryDate || null,
@@ -146,16 +212,32 @@ export class OrderCreateComponent implements OnInit {
       items: this.lines().map((l) => ({
         productId: l.product.id,
         quantity: l.quantity,
-        unitPrice: l.product.price_cash,
+        unitPrice: this.unitPrice(l.product),
       })),
     };
 
+    const detailBase = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/pedidos';
+    const editId = this.editId();
     this.saving.set(true);
+
+    if (editId !== null) {
+      this.sellerService.updateOrder(editId, payload).subscribe({
+        next: (res) => {
+          this.notification.success('Pedido actualizado');
+          this.router.navigate([detailBase, res.data.id]);
+        },
+        error: (err: { error?: { message?: string } }) => {
+          this.saving.set(false);
+          this.notification.error(err?.error?.message ?? 'No se pudo actualizar el pedido');
+        },
+      });
+      return;
+    }
+
     this.sellerService.createOrder(payload).subscribe({
       next: (res) => {
         this.notification.success(`Pedido ${res.data.orderNumber} creado`);
-        const base = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/pedidos';
-        this.router.navigate([base, res.data.id]);
+        this.router.navigate([detailBase, res.data.id]);
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);

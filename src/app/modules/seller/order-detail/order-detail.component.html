@@ -20,6 +20,11 @@
       <button type="button" class="btn btn--ghost" (click)="printTicket()">
         <span class="material-symbols-outlined">print</span> Ticket
       </button>
+      @if (canEdit()) {
+        <button type="button" class="btn btn--ghost" (click)="editOrder()">
+          <span class="material-symbols-outlined">edit</span> Editar pedido
+        </button>
+      }
       @if (o.orderStatus !== 'cancelled' && o.orderStatus !== 'delivered') {
         <button type="button" class="btn btn--danger" (click)="cancelModalOpen.set(true)">
           <span class="material-symbols-outlined">cancel</span> Cancelar
@@ -148,15 +153,15 @@
 
 <!-- ===== Modal: registrar pago ===== -->
 @if (paymentModalOpen()) {
-  <div class="modal-backdrop no-print" (click)="paymentModalOpen.set(false)">
-    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
       <div class="modal__head">
         <h2>Registrar pago</h2>
         <button type="button" class="icon-btn" (click)="paymentModalOpen.set(false)" aria-label="Cerrar">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
-      <div class="modal__body" (click)="$event.stopPropagation()">
+      <div class="modal__body">
         <form [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
           <div class="field">
             <label for="amount">Monto a cobrar</label>
@@ -167,12 +172,15 @@
           </div>
           <div class="field">
             <label for="pm">Método</label>
-            @if (isCredit()) {
+            @if (isCredit() || isLayaway()) {
               <select id="pm" formControlName="paymentMethod">
                 <option value="cash">Efectivo</option>
                 <option value="transfer">Transferencia bancaria</option>
               </select>
-              <p class="field__hint">Los abonos del crédito sólo se reciben en efectivo o transferencia.</p>
+              <p class="field__hint">
+                @if (isCredit()) { Los abonos del crédito sólo se reciben en efectivo o transferencia. }
+                @else { Los abonos de apartado sólo se reciben en efectivo o transferencia. }
+              </p>
             } @else {
               <select id="pm" formControlName="paymentMethod">
                 <option value="cash">Efectivo</option>
@@ -196,9 +204,9 @@
 
 <!-- ===== Modal: cancelar pedido ===== -->
 @if (cancelModalOpen()) {
-  <div class="modal-backdrop no-print" (click)="cancelModalOpen.set(false)">
-    <div class="modal modal--sm" (click)="$event.stopPropagation()">
-      <div class="modal__body" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
         <h2 class="panel__title">¿Cancelar este pedido?</h2>
         <p class="muted">Esta acción marcará el pedido como cancelado.</p>
         <div class="modal__foot">

@@ -1,7 +1,7 @@
 <header class="page-head">
   <div>
     <p class="page-head__overline">Punto de venta</p>
-    <h1 class="page-head__title">Nuevo pedido</h1>
+    <h1 class="page-head__title">{{ isEditing() ? 'Editar pedido' : 'Nuevo pedido' }}</h1>
   </div>
 </header>
 
@@ -11,7 +11,7 @@
   <div class="order-col">
     <div class="panel">
       <h2 class="panel__title">Datos del cliente</h2>
-      <div class="field">
+      <div class="field" [class.field--error]="form.controls.customerName.touched && form.controls.customerName.invalid">
         <label for="customerName">Nombre completo *</label>
         <input id="customerName" type="text" formControlName="customerName" placeholder="Nombre del cliente" />
         @if (form.controls.customerName.touched && form.controls.customerName.invalid) {
@@ -19,9 +19,12 @@
         }
       </div>
       <div class="field-row">
-        <div class="field">
+        <div class="field" [class.field--error]="form.controls.customerEmail.touched && form.controls.customerEmail.invalid">
           <label for="customerEmail">Email</label>
           <input id="customerEmail" type="email" formControlName="customerEmail" placeholder="correo@ejemplo.com" />
+          @if (form.controls.customerEmail.touched && form.controls.customerEmail.invalid) {
+            <p class="field__error">Ingresa un correo válido.</p>
+          }
         </div>
         <div class="field">
           <label for="customerPhone">Teléfono</label>
@@ -36,6 +39,16 @@
         <label for="deliveryAddress">Dirección de entrega</label>
         <textarea id="deliveryAddress" formControlName="deliveryAddress" placeholder="Calle, número, colonia, ciudad"></textarea>
       </div>
+      <div class="field">
+        <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
+        <input
+          id="googleMapsUrl"
+          type="url"
+          formControlName="googleMapsUrl"
+          placeholder="https://maps.google.com/?q=..."
+        />
+        <p class="field__hint">Pega el enlace de Google Maps; el repartidor podrá abrirlo con un clic.</p>
+      </div>
       <div class="field-row">
         <div class="field">
           <label for="deliveryType">Tipo de envío</label>
@@ -49,6 +62,7 @@
           <select id="paymentMethod" formControlName="paymentMethod">
             <option value="cash">Efectivo</option>
             <option value="card">Tarjeta</option>
+            <option value="transfer">Transferencia</option>
             <option value="msi">Meses sin intereses</option>
             <option value="store_credit">Crédito tienda</option>
             <option value="layaway">Apartado</option>
@@ -87,7 +101,7 @@
                 <span class="result__name">{{ p.name }}</span>
                 <span class="result__sku">{{ p.sku }} · Stock: {{ p.stock_quantity }}</span>
               </span>
-              <span class="result__price">{{ p.price_cash | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="result__price">{{ unitPrice(p) | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
               <span class="material-symbols-outlined">add_circle</span>
             </button>
           } @empty {
@@ -106,7 +120,7 @@
           <div class="cart-line">
             <div class="cart-line__info">
               <span class="cart-line__name">{{ l.product.name }}</span>
-              <span class="cart-line__price">{{ l.product.price_cash | currency:'MXN':'symbol-narrow':'1.0-0' }} c/u</span>
+              <span class="cart-line__price">{{ unitPrice(l.product) | currency:'MXN':'symbol-narrow':'1.0-0' }} c/u</span>
             </div>
             <div class="qty">
               <button type="button" class="icon-btn" (click)="changeQty(l.product.id, -1)" aria-label="Quitar uno">
@@ -117,7 +131,7 @@
                 <span class="material-symbols-outlined">add</span>
               </button>
             </div>
-            <span class="cart-line__subtotal">{{ l.product.price_cash * l.quantity | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="cart-line__subtotal">{{ unitPrice(l.product) * l.quantity | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
             <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(l.product.id)" aria-label="Eliminar">
               <span class="material-symbols-outlined">delete</span>
             </button>
@@ -125,9 +139,15 @@
         }
 
         <div class="cart-total">
-          <span>Total</span>
+          <span>{{ isMsi() ? 'Total a 6 MSI' : 'Total' }}</span>
           <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
         </div>
+        @if (isMsi()) {
+          <p class="msi-note">
+            <span class="material-symbols-outlined">credit_card</span>
+            Se aplica el precio a 6 meses sin intereses del catálogo.
+          </p>
+        }
       }
 
       @if (isLayaway()) {
@@ -190,8 +210,12 @@
       }
 
       <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
-        @if (saving()) { <span class="spinner spinner--sm"></span> Creando… }
-        @else { <span class="material-symbols-outlined">check_circle</span> Crear pedido }
+        @if (saving()) {
+          <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
+        } @else {
+          <span class="material-symbols-outlined">check_circle</span>
+          {{ isEditing() ? 'Guardar cambios' : 'Crear pedido' }}
+        }
       </button>
     </div>
   </div>

@@ -65,8 +65,8 @@
 
 <!-- ===== Modal: asignar repartidor ===== -->
 @if (assigning(); as order) {
-  <div class="modal-backdrop" (click)="assigning.set(null)">
-    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
       <div class="modal__head">
         <h2>Asignar repartidor</h2>
         <button type="button" class="icon-btn" (click)="assigning.set(null)" aria-label="Cerrar">

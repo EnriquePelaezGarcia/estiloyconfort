@@ -19,6 +19,7 @@ function mapDelivery(row) {
     deliveryAddress: row.delivery_address,
     deliveryAddressLat: row.delivery_address_lat != null ? Number(row.delivery_address_lat) : null,
     deliveryAddressLng: row.delivery_address_lng != null ? Number(row.delivery_address_lng) : null,
+    googleMapsUrl: row.google_maps_url ?? null,
     paymentStatus: row.payment_status,
     paymentMethod: row.payment_method,
     totalAmount: row.total_amount != null ? Number(row.total_amount) : null,
@@ -28,7 +29,7 @@ function mapDelivery(row) {
 
 const BASE_SELECT = `
   SELECT dv.*, o.order_number, o.customer_name, o.customer_phone, o.delivery_address,
-         o.delivery_address_lat, o.delivery_address_lng, o.payment_status,
+         o.delivery_address_lat, o.delivery_address_lng, o.google_maps_url, o.payment_status,
          o.payment_method, o.total_amount, o.payment_amount
   FROM deliveries dv
   JOIN orders o ON o.id = dv.order_id

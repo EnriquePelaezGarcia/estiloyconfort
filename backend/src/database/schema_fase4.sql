@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS orders (
   delivery_address      TEXT,
   delivery_address_lat  DECIMAL(10,8),
   delivery_address_lng  DECIMAL(11,8),
+  google_maps_url       VARCHAR(500),
   delivery_type         ENUM('standard','with_installation') DEFAULT 'standard',
   delivery_person_id    INT,
   payment_method        ENUM('cash','card','msi','store_credit') DEFAULT 'cash',

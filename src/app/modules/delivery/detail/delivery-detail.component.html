@@ -22,6 +22,16 @@
         <h2 class="panel__title">Información de entrega</h2>
         <dl class="info">
           @if (a.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ a.deliveryAddress }}</dd></div> }
+          @if (a.googleMapsUrl) {
+            <div>
+              <dt>Ubicación</dt>
+              <dd>
+                <a [href]="a.googleMapsUrl" target="_blank" rel="noopener" class="maps-link">
+                  <span class="material-symbols-outlined">map</span> Abrir ubicación en Google Maps
+                </a>
+              </dd>
+            </div>
+          }
           @if (a.customerPhone) { <div><dt>Teléfono</dt><dd>{{ a.customerPhone }}</dd></div> }
           <div><dt>Total</dt><dd>{{ a.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
           <div>
@@ -117,8 +127,8 @@
 }
 
 @if (paymentModalOpen()) {
-  <div class="modal-backdrop" (click)="paymentModalOpen.set(false)">
-    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
       <div class="modal__head">
         <h2>Registrar cobro</h2>
         <button type="button" class="icon-btn" (click)="paymentModalOpen.set(false)" aria-label="Cerrar">

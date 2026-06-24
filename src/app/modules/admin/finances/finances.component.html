@@ -5,11 +5,34 @@
   </div>
 </header>
 
+<section class="filters">
+  <div class="filters__periods">
+    <button type="button" class="chip" [class.chip--active]="period() === 'today'" (click)="selectPeriod('today')">Hoy</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'month'" (click)="selectPeriod('month')">Este mes</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'all'" (click)="selectPeriod('all')">Histórico</button>
+  </div>
+  <div class="filters__range">
+    <label class="filters__field">
+      <span>Desde</span>
+      <input type="date" [value]="from()" (change)="onFrom($event)" />
+    </label>
+    <label class="filters__field">
+      <span>Hasta</span>
+      <input type="date" [value]="to()" (change)="onTo($event)" />
+    </label>
+    <button type="button" class="btn btn--primary" (click)="load()">
+      <span class="material-symbols-outlined">filter_alt</span> Aplicar
+    </button>
+  </div>
+</section>
+
 @if (summary(); as s) {
+  <p class="period-tag">Mostrando: <strong>{{ periodLabel() }}</strong></p>
   <section class="stat-grid">
     <div class="stat-card stat-card--success">
       <span class="stat-card__icon"><span class="material-symbols-outlined">trending_up</span></span>
-      <span class="stat-card__label">Ingresos totales</span>
+      <span class="stat-card__label">Ingresos brutos</span>
       <span class="stat-card__value">{{ s.totalIncome | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
       <span class="stat-card__hint">{{ s.monthIncome | currency:'MXN':'symbol-narrow':'1.0-0' }} este mes</span>
     </div>

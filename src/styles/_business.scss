@@ -330,6 +330,15 @@
   margin-top: 0.3rem;
 }
 
+.field--error {
+  label { color: vars.$color-error; }
+
+  input, select, textarea {
+    border-color: vars.$color-error !important;
+    &:focus { border-color: vars.$color-error; }
+  }
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

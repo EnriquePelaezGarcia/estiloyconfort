@@ -1,5 +1,66 @@
 @use '../../../../styles/variables' as vars;
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+
+  &__periods { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+  &__range {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: vars.$spacing-sm;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+
+    input {
+      padding: 0.45rem 0.6rem;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-md;
+      font-size: 0.9rem;
+    }
+  }
+}
+
+.chip {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.period-tag {
+  margin: 0 0 vars.$spacing-sm;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+
+  strong { color: vars.$color-primary; }
+}
+
 .breakdown { display: flex; flex-direction: column; gap: vars.$spacing-md; }
 
 .breakdown__row {

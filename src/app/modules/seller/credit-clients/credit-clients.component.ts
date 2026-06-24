@@ -106,6 +106,12 @@ export class CreditClientsComponent implements OnInit {
     if (!client) return;
 
     const raw = this.paymentForm.getRawValue();
+
+    if (client.paymentMethod === 'layaway' && client.paymentAmount === 0 && (raw.amount ?? 0) < 500) {
+      this.notification.error('El primer abono en apartado debe ser mínimo $500');
+      return;
+    }
+
     this.savingPayment.set(true);
 
     this.sellerService

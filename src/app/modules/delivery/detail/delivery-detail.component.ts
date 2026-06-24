@@ -243,6 +243,8 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   }
 
   protected mapsUrl(a: DeliveryAssignment): string {
+    // Prioriza el enlace de Google Maps capturado por el vendedor.
+    if (a.googleMapsUrl) return a.googleMapsUrl;
     if (a.deliveryAddressLat != null && a.deliveryAddressLng != null) {
       return `https://www.google.com/maps/search/?api=1&query=${a.deliveryAddressLat},${a.deliveryAddressLng}`;
     }

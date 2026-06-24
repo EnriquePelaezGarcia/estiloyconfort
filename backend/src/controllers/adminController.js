@@ -91,22 +91,41 @@ const getDashboard = asyncHandler(async (req, res) => {
 
 // ===================== FINANZAS =====================
 
-// GET /api/admin/finances/summary
+// GET /api/admin/finances/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
 const getFinancesSummary = asyncHandler(async (req, res) => {
-  const [[income]] = await pool.query(
+  const { from, to } = req.query;
+
+  // Filtro de período: ingresos por payment_date; costo por order_date del pedido entregado.
+  const incomeConds = [];
+  const incomeParams = [];
+  if (from) { incomeConds.push('payment_date >= ?'); incomeParams.push(from); }
+  if (to) { incomeConds.push('payment_date <= ?'); incomeParams.push(`${to} 23:59:59`); }
+  const incomeWhere = incomeConds.length ? `WHERE ${incomeConds.join(' AND ')}` : '';
+
+  const [[income]] = await pool.execute(
     `SELECT
         COALESCE(SUM(amount), 0) AS totalIncome,
         COALESCE(SUM(CASE WHEN MONTH(payment_date) = MONTH(CURDATE()) AND YEAR(payment_date) = YEAR(CURDATE()) THEN amount ELSE 0 END), 0) AS monthIncome
-     FROM payments`,
+     FROM payments
+     ${incomeWhere}`,
+    incomeParams,
   );
-  // Egreso estimado: costo de producción de los pedidos entregados.
-  const [[cost]] = await pool.query(
+
+  // Egreso estimado: costo de producción de los pedidos entregados (filtrado por fecha del pedido).
+  const costConds = ["o.order_status = 'delivered'"];
+  const costParams = [];
+  if (from) { costConds.push('o.order_date >= ?'); costParams.push(from); }
+  if (to) { costConds.push('o.order_date <= ?'); costParams.push(`${to} 23:59:59`); }
+  const [[cost]] = await pool.execute(
     `SELECT COALESCE(SUM(oi.quantity * p.base_cost), 0) AS totalCost
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      JOIN products p ON p.id = oi.product_id
-     WHERE o.order_status = 'delivered'`,
+     WHERE ${costConds.join(' AND ')}`,
+    costParams,
   );
+
+  // "Por cobrar" es siempre una foto actual de los saldos pendientes (no depende del período).
   const [[pending]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount - payment_amount), 0) AS pendingCollection
      FROM orders WHERE order_status <> 'cancelled' AND payment_status <> 'paid'`,
@@ -150,9 +169,16 @@ const getTransactions = asyncHandler(async (req, res) => {
 
 // GET /api/admin/finances/by-payment-type
 const getByPaymentType = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(
+  const { from, to } = req.query;
+  const conditions = [];
+  const params = [];
+  if (from) { conditions.push('payment_date >= ?'); params.push(from); }
+  if (to) { conditions.push('payment_date <= ?'); params.push(`${to} 23:59:59`); }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const [rows] = await pool.execute(
     `SELECT payment_method, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
-     FROM payments GROUP BY payment_method`,
+     FROM payments ${where} GROUP BY payment_method`,
+    params,
   );
   res.json({
     data: rows.map((r) => ({

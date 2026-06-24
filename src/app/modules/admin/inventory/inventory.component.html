@@ -105,8 +105,8 @@
 
 <!-- ===== Modal ajuste de stock ===== -->
 @if (adjusting(); as product) {
-  <div class="modal-backdrop" (click)="closeAdjust()">
-    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
       <div class="modal__head">
         <h2>Ajustar stock</h2>
         <button type="button" class="icon-btn" (click)="closeAdjust()" aria-label="Cerrar">

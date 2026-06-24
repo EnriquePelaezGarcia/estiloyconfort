@@ -56,8 +56,11 @@ export class AdminService {
   }
 
   // ===== Finanzas (Fase 4) =====
-  getFinancesSummary(): Observable<FinancesSummary> {
-    return this.api.get<FinancesSummary>('/admin/finances/summary');
+  getFinancesSummary(from?: string, to?: string): Observable<FinancesSummary> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    return this.api.get<FinancesSummary>('/admin/finances/summary', params);
   }
 
   getTransactions(from?: string, to?: string): Observable<{ data: Transaction[] }> {
@@ -67,8 +70,11 @@ export class AdminService {
     return this.api.get<{ data: Transaction[] }>('/admin/finances/transactions', params);
   }
 
-  getByPaymentType(): Observable<{ data: PaymentTypeBreakdown[] }> {
-    return this.api.get<{ data: PaymentTypeBreakdown[] }>('/admin/finances/by-payment-type');
+  getByPaymentType(from?: string, to?: string): Observable<{ data: PaymentTypeBreakdown[] }> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    return this.api.get<{ data: PaymentTypeBreakdown[] }>('/admin/finances/by-payment-type', params);
   }
 
   // ===== Pedidos (Fase 4) =====

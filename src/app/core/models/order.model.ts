@@ -44,6 +44,7 @@ export interface Order {
   deliveryAddress?: string | null;
   deliveryAddressLat?: number | null;
   deliveryAddressLng?: number | null;
+  googleMapsUrl?: string | null;
   deliveryType: DeliveryType;
   deliveryPersonId?: number | null;
   deliveryPersonName?: string | null;
@@ -86,6 +87,7 @@ export interface CreateOrderRequest {
   customerEmail?: string | null;
   customerPhone?: string | null;
   deliveryAddress?: string | null;
+  googleMapsUrl?: string | null;
   deliveryType: DeliveryType;
   paymentMethod: PaymentMethod;
   expectedDeliveryDate?: string | null;
@@ -142,6 +144,7 @@ export interface DeliveryAssignment {
   deliveryAddress?: string | null;
   deliveryAddressLat?: number | null;
   deliveryAddressLng?: number | null;
+  googleMapsUrl?: string | null;
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
   totalAmount: number;

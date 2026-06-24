@@ -62,6 +62,9 @@ export class OrderDetailComponent implements OnInit {
   /** ¿El pedido se vendió a Crédito Tienda? */
   protected isCredit = computed(() => this.order()?.paymentMethod === 'store_credit');
 
+  /** ¿El pedido es Apartado? */
+  protected isLayaway = computed(() => this.order()?.paymentMethod === 'layaway');
+
   /** Pago inicial pendiente por cubrir (0 si ya está cubierto o no es crédito). */
   protected downPaymentRemaining = computed(() => {
     const o = this.order();
@@ -99,17 +102,13 @@ export class OrderDetailComponent implements OnInit {
   }
 
   protected openPayment(): void {
-    // En crédito, sugiere el pago inicial pendiente y, si ya se cubrió, la cuota
-    // semanal. El método por defecto es efectivo (válido para abonos).
     let suggested = this.balance();
-    let method: PaymentMethod = this.order()?.paymentMethod ?? 'cash';
     if (this.isCredit()) {
-      method = 'cash';
       suggested = this.downPaymentCovered()
         ? Math.min(this.balance(), this.order()?.weeklyPayment ?? this.balance())
         : this.downPaymentRemaining();
     }
-    this.paymentForm.reset({ amount: suggested, paymentMethod: method });
+    this.paymentForm.reset({ amount: suggested, paymentMethod: 'cash' });
     this.paymentModalOpen.set(true);
   }
 
@@ -121,6 +120,11 @@ export class OrderDetailComponent implements OnInit {
     const order = this.order();
     if (!order) return;
     const { amount, paymentMethod } = this.paymentForm.getRawValue();
+
+    if (this.isLayaway() && order.paymentAmount === 0 && (amount ?? 0) < 500) {
+      this.notification.error('El primer abono en apartado debe ser mínimo $500');
+      return;
+    }
     const previousBalance = this.balance();
     const credit = this.isCredit();
     this.savingPayment.set(true);
@@ -196,6 +200,14 @@ export class OrderDetailComponent implements OnInit {
   protected goBack(): void {
     const base = this.router.url.startsWith('/admin') ? '/admin/pedidos' : '/vendedor/pedidos';
     this.router.navigate([base]);
+  }
+
+  /** Regresa a "Nuevo pedido" con los datos precargados para editar productos. */
+  protected editOrder(): void {
+    const order = this.order();
+    if (!order) return;
+    const base = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/nuevo';
+    this.router.navigate([base], { queryParams: { edit: order.id } });
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

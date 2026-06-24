@@ -80,6 +80,21 @@
   &__amount { font-size: 1.4rem; color: vars.$color-primary; }
 }
 
+.msi-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-primary; }
+}
+
 .credit-plan {
   margin-bottom: vars.$spacing-md;
   padding: vars.$spacing-md;

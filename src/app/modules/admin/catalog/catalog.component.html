@@ -98,8 +98,8 @@
 
 <!-- ===== Modal crear/editar ===== -->
 @if (isModalOpen()) {
-  <div class="modal-backdrop" (click)="closeModal()">
-    <div class="modal modal--lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop">
+    <div class="modal modal--lg">
       <div class="modal__head">
         <h2>{{ isEditMode() ? 'Editar producto' : 'Nuevo producto' }}</h2>
         <button type="button" class="icon-btn" (click)="closeModal()" aria-label="Cerrar">
@@ -291,8 +291,8 @@
 
 <!-- ===== Confirmación eliminar ===== -->
 @if (deleting(); as target) {
-  <div class="modal-backdrop" (click)="cancelDelete()">
-    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
       <div class="modal__body">
         <div class="confirm-icon"><span class="material-symbols-outlined">warning</span></div>
         <h2 class="confirm-title">Desactivar producto</h2>
