@@ -356,6 +356,12 @@
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 .modal {
+  // Bootstrap (cargado global) define `.modal { position: fixed; top:0; left:0; height:100% }`,
+  // lo que clava el panel arriba-izquierda e ignora el centrado flex del backdrop.
+  // Reseteamos esas props para que sea un hijo flex normal y el backdrop lo centre.
+  position: relative;
+  inset: auto;
+  height: auto;
   width: 100%;
   max-width: 480px;
   background: vars.$color-surface;
