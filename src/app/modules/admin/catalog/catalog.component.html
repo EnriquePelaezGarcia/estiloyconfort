@@ -1,0 +1,233 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Catálogo de productos</h1>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <span class="material-symbols-outlined">add</span>
+    Nuevo producto
+  </button>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="search"
+      placeholder="Buscar por nombre, SKU o categoría…"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span><p>Cargando productos…</p></div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>SKU</th>
+          <th>Categoría</th>
+          <th class="num">Precio contado</th>
+          <th class="num">Stock</th>
+          <th>Estado</th>
+          <th class="actions-col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (product of filteredProducts(); track product.id) {
+          <tr>
+            <td data-label="Producto" class="strong">{{ product.name }}</td>
+            <td data-label="SKU" class="muted">{{ product.sku || '—' }}</td>
+            <td data-label="Categoría">{{ product.category_name || '—' }}</td>
+            <td data-label="Precio contado" class="num">{{ money(product.price_cash) }}</td>
+            <td data-label="Stock" class="num">{{ product.stock_quantity }}</td>
+            <td data-label="Estado">
+              <button
+                type="button"
+                class="status"
+                [class.status--active]="product.is_active"
+                (click)="toggleActive(product)"
+                [title]="product.is_active ? 'Desactivar' : 'Activar'"
+              >
+                <span class="status__dot"></span>
+                {{ product.is_active ? 'Activo' : 'Inactivo' }}
+              </button>
+            </td>
+            <td data-label="Acciones" class="actions">
+              <button type="button" class="icon-btn" (click)="openEdit(product)" title="Editar">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button
+                type="button"
+                class="icon-btn icon-btn--danger"
+                (click)="confirmDelete(product)"
+                title="Desactivar"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="7" class="empty">No se encontraron productos.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ===== Modal crear/editar ===== -->
+@if (isModalOpen()) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal modal--lg" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>{{ isEditMode() ? 'Editar producto' : 'Nuevo producto' }}</h2>
+        <button type="button" class="icon-btn" (click)="closeModal()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="save()" novalidate class="modal__body">
+        <div class="field">
+          <label for="name">Nombre del producto</label>
+          <input id="name" type="text" formControlName="name" />
+          @if (form.get('name')?.invalid && form.get('name')?.touched) {
+            <p class="field__error">Ingresa un nombre (mínimo 3 caracteres)</p>
+          }
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="sku">SKU</label>
+            <input id="sku" type="text" formControlName="sku" placeholder="Opcional" />
+          </div>
+          <div class="field">
+            <label for="categoryId">Categoría</label>
+            <select id="categoryId" formControlName="categoryId">
+              <option [ngValue]="null">Sin categoría</option>
+              @for (cat of categories(); track cat.id) {
+                <option [ngValue]="cat.id">{{ cat.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="description">Descripción</label>
+          <textarea id="description" formControlName="description" rows="2"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="materials">Materiales</label>
+          <input id="materials" type="text" formControlName="materials" placeholder="Ej. madera de pino, tela lino" />
+        </div>
+
+        <p class="form-section">Dimensiones y peso</p>
+        <div class="field-grid">
+          <div class="field">
+            <label for="length">Largo (cm)</label>
+            <input id="length" type="number" formControlName="length" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label for="width">Ancho (cm)</label>
+            <input id="width" type="number" formControlName="width" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label for="height">Alto (cm)</label>
+            <input id="height" type="number" formControlName="height" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label for="weight">Peso (kg)</label>
+            <input id="weight" type="number" formControlName="weight" min="0" step="0.01" />
+          </div>
+        </div>
+
+        <p class="form-section">Costos y precios</p>
+        <div class="field-grid">
+          <div class="field">
+            <label for="baseCost">Costo base</label>
+            <input id="baseCost" type="number" formControlName="baseCost" min="0" step="0.01" />
+            @if (form.get('baseCost')?.invalid && form.get('baseCost')?.touched) {
+              <p class="field__error">Requerido</p>
+            }
+          </div>
+          <div class="field">
+            <label for="marginPercentage">Margen (%)</label>
+            <input id="marginPercentage" type="number" formControlName="marginPercentage" min="0" max="99" step="0.01" />
+            @if (form.get('marginPercentage')?.invalid && form.get('marginPercentage')?.touched) {
+              <p class="field__error">0 – 99</p>
+            }
+          </div>
+          <div class="field">
+            <label for="priceCash">Precio contado</label>
+            <input id="priceCash" type="number" formControlName="priceCash" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label for="price6msi">Precio 6 MSI</label>
+            <input id="price6msi" type="number" formControlName="price6msi" min="0" step="0.01" />
+          </div>
+        </div>
+
+        <p class="form-section">Inventario y disponibilidad</p>
+        <div class="field-grid">
+          <div class="field">
+            <label for="stockQuantity">Stock</label>
+            <input id="stockQuantity" type="number" formControlName="stockQuantity" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="stockAlertLevel">Alerta de stock</label>
+            <input id="stockAlertLevel" type="number" formControlName="stockAlertLevel" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="availabilityDays">Días de fabricación</label>
+            <input id="availabilityDays" type="number" formControlName="availabilityDays" min="0" step="1" />
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <label class="checkbox">
+            <input type="checkbox" formControlName="isFeatured" />
+            <span>Producto destacado</span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" formControlName="isActive" />
+            <span>Producto activo</span>
+          </label>
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            @if (saving()) { <span class="spinner spinner--sm"></span> }
+            {{ isEditMode() ? 'Guardar cambios' : 'Crear producto' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Confirmación eliminar ===== -->
+@if (deleting(); as target) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__body">
+        <div class="confirm-icon"><span class="material-symbols-outlined">warning</span></div>
+        <h2 class="confirm-title">Desactivar producto</h2>
+        <p class="confirm-text">
+          ¿Seguro que deseas desactivar <strong>{{ target.name }}</strong>?
+          Dejará de mostrarse en el catálogo público, pero podrás reactivarlo después.
+        </p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="cancelDelete()">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="executeDelete()">Desactivar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

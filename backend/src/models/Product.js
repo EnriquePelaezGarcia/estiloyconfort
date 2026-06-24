@@ -1,8 +1,10 @@
 const { pool } = require('../config/database');
 
 const Product = {
-  async findAll({ categoryId, search, minPrice, maxPrice, featured, page = 1, limit = 12, sort = 'created_at' } = {}) {
-    const conditions = ['p.is_active = TRUE'];
+  async findAll({ categoryId, search, minPrice, maxPrice, featured, includeInactive = false, page = 1, limit = 12, sort = 'created_at' } = {}) {
+    // El panel admin necesita ver también los productos desactivados para poder
+    // reactivarlos; el catálogo público pasa includeInactive = false (por defecto).
+    const conditions = includeInactive ? [] : ['p.is_active = TRUE'];
     const params = [];
 
     if (categoryId) { conditions.push('p.category_id = ?'); params.push(categoryId); }
@@ -43,12 +45,12 @@ const Product = {
     return { data: rows, total, page: safePage, limit: safeLimit, pages: Math.ceil(total / safeLimit) };
   },
 
-  async findById(id) {
+  async findById(id, { includeInactive = false } = {}) {
     const [[product]] = await pool.execute(
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.id = ? AND p.is_active = TRUE`,
+       WHERE p.id = ?${includeInactive ? '' : ' AND p.is_active = TRUE'}`,
       [id]
     );
     if (!product) return null;
@@ -93,7 +95,7 @@ const Product = {
       `INSERT INTO products (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`,
       values
     );
-    return this.findById(result.insertId);
+    return this.findById(result.insertId, { includeInactive: true });
   },
 
   async update(id, data) {
@@ -102,10 +104,11 @@ const Product = {
       'availability_days','base_cost','margin_percentage','price_cash','price_6msi',
       'stock_quantity','stock_alert_level','is_featured','is_active'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
-    if (!entries.length) return this.findById(id);
+    if (!entries.length) return this.findById(id, { includeInactive: true });
     const set = entries.map(([k]) => `${k} = ?`).join(', ');
     await pool.execute(`UPDATE products SET ${set} WHERE id = ?`, [...entries.map(([,v]) => v), id]);
-    return this.findById(id);
+    // includeInactive: tras desactivar (is_active = FALSE) seguimos devolviendo la fila.
+    return this.findById(id, { includeInactive: true });
   },
 
   async delete(id) {

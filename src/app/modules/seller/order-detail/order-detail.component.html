@@ -105,30 +105,32 @@
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
-      <form class="modal__body" [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
-        <div class="field">
-          <label for="amount">Monto a cobrar</label>
-          <input id="amount" type="number" formControlName="amount" min="1" />
-          @if (paymentForm.controls.amount.touched && paymentForm.controls.amount.invalid) {
-            <p class="field__error">Ingresa un monto mayor a 0.</p>
-          }
-        </div>
-        <div class="field">
-          <label for="pm">Método</label>
-          <select id="pm" formControlName="paymentMethod">
-            <option value="cash">Efectivo</option>
-            <option value="card">Tarjeta</option>
-            <option value="msi">Meses sin intereses</option>
-            <option value="store_credit">Crédito tienda</option>
-          </select>
-        </div>
-        <div class="modal__foot">
-          <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>
-          <button type="submit" class="btn btn--success" [disabled]="savingPayment()">
-            @if (savingPayment()) { <span class="spinner spinner--sm"></span> } @else { Registrar }
-          </button>
-        </div>
-      </form>
+      <div class="modal__body" (click)="$event.stopPropagation()">
+        <form [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
+          <div class="field">
+            <label for="amount">Monto a cobrar</label>
+            <input id="amount" type="number" formControlName="amount" min="1" />
+            @if (paymentForm.controls.amount.touched && paymentForm.controls.amount.invalid) {
+              <p class="field__error">Ingresa un monto mayor a 0.</p>
+            }
+          </div>
+          <div class="field">
+            <label for="pm">Método</label>
+            <select id="pm" formControlName="paymentMethod">
+              <option value="cash">Efectivo</option>
+              <option value="card">Tarjeta</option>
+              <option value="msi">Meses sin intereses</option>
+              <option value="store_credit">Crédito tienda</option>
+            </select>
+          </div>
+          <div class="modal__foot">
+            <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>
+            <button type="submit" class="btn btn--success" [disabled]="savingPayment()">
+              @if (savingPayment()) { <span class="spinner spinner--sm"></span> } @else { Registrar }
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 }
@@ -137,7 +139,7 @@
 @if (cancelModalOpen()) {
   <div class="modal-backdrop no-print" (click)="cancelModalOpen.set(false)">
     <div class="modal modal--sm" (click)="$event.stopPropagation()">
-      <div class="modal__body">
+      <div class="modal__body" (click)="$event.stopPropagation()">
         <h2 class="panel__title">¿Cancelar este pedido?</h2>
         <p class="muted">Esta acción marcará el pedido como cancelado.</p>
         <div class="modal__foot">

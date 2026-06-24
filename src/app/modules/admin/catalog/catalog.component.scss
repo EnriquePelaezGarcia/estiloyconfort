@@ -1,0 +1,93 @@
+@use '../../../../styles/variables' as vars;
+
+// ===== Status toggle (activo / inactivo) =====
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+  color: vars.$color-text-secondary;
+  padding: 3px 10px;
+  border-radius: vars.$radius-full;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: vars.$color-text-secondary;
+  }
+
+  &--active {
+    color: vars.$color-success;
+    border-color: rgba(vars.$color-success, 0.4);
+    background: rgba(vars.$color-success, 0.08);
+
+    .status__dot { background: vars.$color-success; }
+  }
+}
+
+// ===== Secciones del formulario =====
+.form-section {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: vars.$color-secondary;
+  margin: vars.$spacing-sm 0 0;
+  padding-top: vars.$spacing-sm;
+  border-top: 1px solid vars.$color-border;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: vars.$spacing-md;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-lg;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  font-size: 0.9rem;
+  cursor: pointer;
+
+  input { width: 18px; height: 18px; accent-color: vars.$color-primary; }
+}
+
+// ===== Confirmación =====
+.confirm-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: vars.$spacing-md;
+
+  .material-symbols-outlined {
+    font-size: 2.5rem;
+    color: vars.$color-error;
+    background: rgba(vars.$color-error, 0.1);
+    border-radius: 50%;
+    padding: vars.$spacing-sm;
+  }
+}
+
+.confirm-title {
+  text-align: center;
+  font-size: 1.2rem;
+  color: vars.$color-primary;
+  margin-bottom: vars.$spacing-sm;
+}
+
+.confirm-text {
+  text-align: center;
+  color: vars.$color-text-secondary;
+  font-size: 0.9rem;
+}

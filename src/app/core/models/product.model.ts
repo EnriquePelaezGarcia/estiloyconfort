@@ -58,6 +58,29 @@ export interface ProductListResponse {
   pages: number;
 }
 
+/** Payload para crear/editar un producto desde el panel admin (Fase 3). */
+export interface ProductPayload {
+  name: string;
+  slug: string;
+  sku: string | null;
+  category_id: number | null;
+  description: string | null;
+  materials: string | null;
+  dimensions_length: number | null;
+  dimensions_width: number | null;
+  dimensions_height: number | null;
+  weight_volumetric: number | null;
+  availability_days: number;
+  base_cost: number;
+  margin_percentage: number;
+  price_cash: number | null;
+  price_6msi: number | null;
+  stock_quantity: number;
+  stock_alert_level: number;
+  is_featured: boolean;
+  is_active?: boolean;
+}
+
 export interface ProductFilters {
   category?: string;
   search?: string;

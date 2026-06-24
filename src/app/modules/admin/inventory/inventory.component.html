@@ -1,0 +1,147 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Inventario</h1>
+    <p class="page-head__sub">Stock actual, alertas y ajuste manual de existencias.</p>
+  </div>
+</header>
+
+<!-- ===== KPIs ===== -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <span class="stat-card__icon material-symbols-outlined">inventory_2</span>
+    <span class="stat-card__label">Productos</span>
+    <span class="stat-card__value">{{ totalProducts() }}</span>
+  </div>
+  <div class="stat-card stat-card--gold">
+    <span class="stat-card__icon material-symbols-outlined">warning</span>
+    <span class="stat-card__label">Stock bajo</span>
+    <span class="stat-card__value">{{ lowStockCount() }}</span>
+  </div>
+  <div class="stat-card stat-card--danger">
+    <span class="stat-card__icon material-symbols-outlined">remove_shopping_cart</span>
+    <span class="stat-card__label">Agotados</span>
+    <span class="stat-card__value">{{ outOfStockCount() }}</span>
+  </div>
+  <div class="stat-card stat-card--success">
+    <span class="stat-card__icon material-symbols-outlined">payments</span>
+    <span class="stat-card__label">Valor de inventario</span>
+    <span class="stat-card__value">{{ money(inventoryValue()) }}</span>
+  </div>
+</div>
+
+<!-- ===== Toolbar ===== -->
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="search"
+      placeholder="Buscar por nombre, SKU o categoría…"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+  </div>
+  <div class="chips">
+    <button type="button" class="chip" [class.chip--active]="filter() === 'all'" (click)="setFilter('all')">
+      Todos
+    </button>
+    <button type="button" class="chip" [class.chip--active]="filter() === 'low'" (click)="setFilter('low')">
+      Stock bajo
+    </button>
+    <button type="button" class="chip" [class.chip--active]="filter() === 'out'" (click)="setFilter('out')">
+      Agotados
+    </button>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span><p>Cargando inventario…</p></div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>SKU</th>
+          <th>Categoría</th>
+          <th class="num">Stock</th>
+          <th class="num">Punto reorden</th>
+          <th>Estado</th>
+          <th class="num">Valor</th>
+          <th class="actions-col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (product of filteredProducts(); track product.id) {
+          <tr>
+            <td data-label="Producto" class="strong">{{ product.name }}</td>
+            <td data-label="SKU" class="muted">{{ product.sku || '—' }}</td>
+            <td data-label="Categoría">{{ product.category_name || '—' }}</td>
+            <td data-label="Stock" class="num">{{ product.stock_quantity }}</td>
+            <td data-label="Punto reorden" class="num">{{ product.stock_alert_level }}</td>
+            <td data-label="Estado">
+              @switch (stockState(product)) {
+                @case ('out') { <span class="badge badge--red">Agotado</span> }
+                @case ('low') { <span class="badge badge--amber">Stock bajo</span> }
+                @default { <span class="badge badge--green">Disponible</span> }
+              }
+            </td>
+            <td data-label="Valor" class="num">{{ money(product.base_cost * product.stock_quantity) }}</td>
+            <td data-label="Acciones" class="actions">
+              <button type="button" class="icon-btn" (click)="openAdjust(product)" title="Ajustar stock">
+                <span class="material-symbols-outlined">tune</span>
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="empty">No hay productos que coincidan con el filtro.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ===== Modal ajuste de stock ===== -->
+@if (adjusting(); as product) {
+  <div class="modal-backdrop" (click)="closeAdjust()">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Ajustar stock</h2>
+        <button type="button" class="icon-btn" (click)="closeAdjust()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="saveAdjust()" novalidate class="modal__body">
+        <p class="adjust-product">{{ product.name }}</p>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="stockQuantity">Stock actual</label>
+            <input id="stockQuantity" type="number" formControlName="stockQuantity" min="0" step="1" />
+            @if (form.get('stockQuantity')?.invalid && form.get('stockQuantity')?.touched) {
+              <p class="field__error">Ingresa un valor válido</p>
+            }
+          </div>
+          <div class="field">
+            <label for="stockAlertLevel">Punto de reorden</label>
+            <input id="stockAlertLevel" type="number" formControlName="stockAlertLevel" min="0" step="1" />
+            @if (form.get('stockAlertLevel')?.invalid && form.get('stockAlertLevel')?.touched) {
+              <p class="field__error">Ingresa un valor válido</p>
+            }
+          </div>
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeAdjust()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            @if (saving()) { <span class="spinner spinner--sm"></span> }
+            Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

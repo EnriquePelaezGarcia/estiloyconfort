@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { Category } from '../models/category.model';
-import { Product, ProductFilters, ProductListResponse } from '../models/product.model';
+import { Product, ProductFilters, ProductListResponse, ProductPayload } from '../models/product.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
@@ -38,5 +38,26 @@ export class ProductService {
     return this.api.get<{ data: Category[] }>('/categories').pipe(
       map(r => r.data)
     );
+  }
+
+  // ===== Administración (Fase 3) =====
+
+  /** Listado para el panel admin: incluye productos inactivos y trae todo el catálogo. */
+  getProductsAdmin(): Observable<Product[]> {
+    return this.api
+      .get<ProductListResponse>('/products', { includeInactive: 'true', limit: '500' })
+      .pipe(map(r => r.data));
+  }
+
+  createProduct(payload: ProductPayload): Observable<Product> {
+    return this.api.post<{ data: Product }>('/products', payload).pipe(map(r => r.data));
+  }
+
+  updateProduct(id: number, payload: Partial<ProductPayload>): Observable<Product> {
+    return this.api.patch<{ data: Product }>(`/products/${id}`, payload).pipe(map(r => r.data));
+  }
+
+  deleteProduct(id: number): Observable<void> {
+    return this.api.delete<void>(`/products/${id}`);
   }
 }

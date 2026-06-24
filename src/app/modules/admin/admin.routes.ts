@@ -21,6 +21,18 @@ export const adminRoutes: Routes = [
         title: 'Usuarios - Panel Admin',
       },
       {
+        path: 'catalogo',
+        loadComponent: () =>
+          import('./catalog/catalog.component').then((m) => m.CatalogComponent),
+        title: 'Catálogo - Panel Admin',
+      },
+      {
+        path: 'inventario',
+        loadComponent: () =>
+          import('./inventory/inventory.component').then((m) => m.InventoryComponent),
+        title: 'Inventario - Panel Admin',
+      },
+      {
         path: 'finanzas',
         loadComponent: () =>
           import('./finances/finances.component').then((m) => m.FinancesComponent),

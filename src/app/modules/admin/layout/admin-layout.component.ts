@@ -25,8 +25,8 @@ export class AdminLayoutComponent {
   protected readonly navItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
     { label: 'Usuarios', icon: 'group', route: 'usuarios' },
-    { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo', soon: true },
-    { label: 'Inventario', icon: 'warehouse', route: 'inventario', soon: true },
+    { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
+    { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
     { label: 'Pedidos', icon: 'local_shipping', route: 'pedidos' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },

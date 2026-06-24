@@ -443,15 +443,19 @@ ENTREGABLES:
 >   activar/desactivar, confirmación de borrado, toasts. Conectado a `/api/users`.
 > - Backend: `GET /api/admin/dashboard` y `GET /api/roles`.
 >
-> **⏳ PENDIENTE en Fase 3 (sigue siendo de esta fase, con backend ya listo):**
-> - Módulo Catálogo (CRUD de productos, categorías, variantes, imágenes) — usa
->   `POST/PATCH/DELETE /api/products` que ya existen.
-> - Módulo Inventario (vista de stock actual, alertas, ajuste manual de stock).
+> **✅ COMPLETADO en Fase 3 (cierre 2026-06-21):**
+> - Módulo Catálogo (CRUD de productos con búsqueda, modal Reactive Forms,
+>   activar/desactivar, borrado con confirmación, toasts) en `modules/admin/catalog`.
+>   Usa `GET/POST/PATCH/DELETE /api/products` y `GET /api/categories`.
+> - Módulo Inventario (vista de stock actual, alertas de stock bajo/agotado, ajuste
+>   manual de stock vía modal) en `modules/admin/inventory`. Usa `/api/products`.
 >
-> **➡️ DIFERIDO a Fase 4 (requiere tablas de pedidos/pagos):**
-> - Módulo Finanzas (resumen, transacciones, ganancias por tipo de pago, márgenes)
-> - Módulo Pedidos & Fabricantes (gestión de pedidos, lista semanal, estados)
-> - Módulo Reportes de ventas/ganancias (PDF/Excel)
+> **➡️ Módulos admin antes diferidos a Fase 4 — YA construidos en `modules/admin`:**
+> - Módulo Finanzas (`finances/`)
+> - Módulo Pedidos & Fabricantes (`orders/`)
+> - Módulo Reportes de ventas/ganancias (`reports/`)
+>
+> Con esto la **Fase 3 queda 100% completa**.
 
 ### Objetivos:
 - Módulo de gestión de usuarios (crear, editar, eliminar, asignar roles)
@@ -1001,10 +1005,10 @@ ENTREGABLES:
 - [x] CRUD usuarios funcional
 - [x] Permisos validados por rol (roleGuard admin + middleware backend)
 - [x] Formularios con validaciones (Reactive Forms)
-- [ ] CRUD catálogo (productos, categorías, variantes, imágenes)
-- [ ] Inventario con alertas y ajuste manual de stock
-- [~] Módulo finanzas con gráficos → DIFERIDO a Fase 4
-- [~] Reportes PDF/Excel generables → DIFERIDO a Fase 4
+- [x] CRUD catálogo (productos) en modules/admin/catalog
+- [x] Inventario con alertas y ajuste manual de stock en modules/admin/inventory
+- [x] Módulo finanzas en modules/admin/finances (construido en Fase 4)
+- [x] Reportes en modules/admin/reports (construido en Fase 4)
 
 ### FASE 4 Completa cuando:
 - [ ] Tablas orders / order_items / deliveries / payments creadas

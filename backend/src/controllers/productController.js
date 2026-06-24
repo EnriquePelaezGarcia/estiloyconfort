@@ -3,13 +3,14 @@ const Product = require('../models/Product');
 const productController = {
   async getAll(req, res, next) {
     try {
-      const { category, search, minPrice, maxPrice, featured, page, limit, sort } = req.query;
+      const { category, search, minPrice, maxPrice, featured, includeInactive, page, limit, sort } = req.query;
       const result = await Product.findAll({
         categoryId: category,
         search,
         minPrice,
         maxPrice,
         featured: featured !== undefined ? featured === 'true' : undefined,
+        includeInactive: includeInactive === 'true',
         page: page || 1,
         limit: limit || 12,
         sort,

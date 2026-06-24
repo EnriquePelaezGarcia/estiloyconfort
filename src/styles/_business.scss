@@ -342,47 +342,87 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(vars.$color-primary-dark, 0.55);
-  display: flex;
+  background: rgba(vars.$color-primary-dark, 0.55) !important;
+  display: flex !important;
   align-items: center;
   justify-content: center;
   padding: vars.$spacing-md;
-  z-index: vars.$z-modal;
+  z-index: 9998 !important;
   animation: fade 0.2s ease;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 .modal {
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
   background: vars.$color-surface;
   border-radius: vars.$radius-lg;
   box-shadow: vars.$shadow-lg;
-  max-height: 90vh;
+  max-height: 85vh;
   overflow-y: auto;
+  z-index: 9999 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  animation: slideUp 0.3s ease;
 
-  &--sm { max-width: 400px; }
-  &--lg { max-width: 760px; }
+  &--sm { max-width: 420px; }
+  &--lg { max-width: 600px; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: vars.$spacing-lg;
-  border-bottom: 1px solid vars.$color-border;
+  padding: vars.$spacing-lg vars.$spacing-lg 0;
+  border-bottom: none;
+  margin-bottom: vars.$spacing-lg;
 
-  h2 { font-size: 1.2rem; color: vars.$color-primary; }
+  h2 { 
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: vars.$color-primary;
+    margin: 0;
+  }
 }
 
-.modal__body { padding: vars.$spacing-lg; }
+.modal__body { 
+  padding: 0 vars.$spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-md;
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$spacing-md;
+  }
+}
 
 .modal__foot {
   display: flex;
   justify-content: flex-end;
-  gap: vars.$spacing-sm;
+  gap: vars.$spacing-md;
   margin-top: vars.$spacing-lg;
+  padding: vars.$spacing-lg;
+  border-top: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+  border-radius: 0 0 vars.$radius-lg vars.$radius-lg;
 }
 
 // ===== Back link =====
