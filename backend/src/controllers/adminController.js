@@ -189,6 +189,139 @@ const getByPaymentType = asyncHandler(async (req, res) => {
   });
 });
 
+// GET /api/admin/finances/detail/:metric?from=YYYY-MM-DD&to=YYYY-MM-DD
+// Detalle por tarjeta del resumen: ingresos, costo, ganancia o por cobrar.
+// Cada fila incluye los datos del cliente y los productos vendidos.
+const getFinancesDetail = asyncHandler(async (req, res) => {
+  const { metric } = req.params;
+  const { from, to } = req.query;
+  const allowed = ['income', 'cost', 'profit', 'pending'];
+  if (!allowed.includes(metric)) {
+    throw new ApiError(400, 'Métrica no válida');
+  }
+
+  let rows = [];
+
+  if (metric === 'income') {
+    const conds = [];
+    const params = [];
+    if (from) { conds.push('p.payment_date >= ?'); params.push(from); }
+    if (to) { conds.push('p.payment_date <= ?'); params.push(`${to} 23:59:59`); }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    const [data] = await pool.execute(
+      `SELECT o.id AS orderId, o.order_number AS orderNumber, o.customer_name AS customerName,
+              o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
+              p.payment_date AS date, p.amount AS amount, p.payment_method AS paymentMethod,
+              u.full_name AS collectedBy
+       FROM payments p
+       JOIN orders o ON o.id = p.order_id
+       LEFT JOIN users u ON u.id = p.collected_by_id
+       ${where}
+       ORDER BY p.payment_date DESC LIMIT 300`,
+      params,
+    );
+    rows = data.map((r) => ({
+      orderId: r.orderId,
+      orderNumber: r.orderNumber,
+      customerName: r.customerName,
+      customerPhone: r.customerPhone,
+      customerEmail: r.customerEmail,
+      date: r.date,
+      amount: Number(r.amount),
+      paymentMethod: r.paymentMethod,
+      collectedBy: r.collectedBy,
+    }));
+  } else if (metric === 'cost') {
+    const conds = ["o.order_status = 'delivered'"];
+    const params = [];
+    if (from) { conds.push('o.order_date >= ?'); params.push(from); }
+    if (to) { conds.push('o.order_date <= ?'); params.push(`${to} 23:59:59`); }
+    const [data] = await pool.execute(
+      `SELECT o.id AS orderId, o.order_number AS orderNumber, o.customer_name AS customerName,
+              o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
+              o.order_date AS date,
+              COALESCE(SUM(oi.quantity * p.base_cost), 0) AS amount
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       JOIN products p ON p.id = oi.product_id
+       WHERE ${conds.join(' AND ')}
+       GROUP BY o.id ORDER BY o.order_date DESC LIMIT 300`,
+      params,
+    );
+    rows = data.map((r) => ({ ...r, amount: Number(r.amount) }));
+  } else if (metric === 'profit') {
+    const conds = ["o.order_status = 'delivered'"];
+    const params = [];
+    if (from) { conds.push('o.order_date >= ?'); params.push(from); }
+    if (to) { conds.push('o.order_date <= ?'); params.push(`${to} 23:59:59`); }
+    const [data] = await pool.execute(
+      `SELECT o.id AS orderId, o.order_number AS orderNumber, o.customer_name AS customerName,
+              o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
+              o.order_date AS date,
+              COALESCE((SELECT SUM(pay.amount) FROM payments pay WHERE pay.order_id = o.id), 0) AS revenue,
+              COALESCE(SUM(oi.quantity * p.base_cost), 0) AS cost
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       JOIN products p ON p.id = oi.product_id
+       WHERE ${conds.join(' AND ')}
+       GROUP BY o.id ORDER BY o.order_date DESC LIMIT 300`,
+      params,
+    );
+    rows = data.map((r) => {
+      const revenue = Number(r.revenue);
+      const cost = Number(r.cost);
+      return { ...r, revenue, cost, amount: revenue - cost };
+    });
+  } else if (metric === 'pending') {
+    // Foto actual de saldos pendientes (no depende del período).
+    const [data] = await pool.query(
+      `SELECT o.id AS orderId, o.order_number AS orderNumber, o.customer_name AS customerName,
+              o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
+              o.order_date AS date, o.total_amount AS totalAmount, o.payment_amount AS paidAmount,
+              (o.total_amount - o.payment_amount) AS balance
+       FROM orders o
+       WHERE o.order_status <> 'cancelled' AND o.payment_status <> 'paid'
+       ORDER BY o.order_date DESC`,
+    );
+    rows = data.map((r) => ({
+      ...r,
+      totalAmount: Number(r.totalAmount),
+      paidAmount: Number(r.paidAmount),
+      balance: Number(r.balance),
+      amount: Number(r.balance),
+    }));
+  }
+
+  // Adjunta los productos vendidos a cada fila.
+  const orderIds = [...new Set(rows.map((r) => r.orderId))];
+  const itemsByOrder = {};
+  if (orderIds.length) {
+    const placeholders = orderIds.map(() => '?').join(',');
+    const [items] = await pool.query(
+      `SELECT oi.order_id AS orderId, oi.product_name AS productName, oi.product_sku AS productSku,
+              oi.quantity AS quantity, oi.unit_price AS unitPrice, p.base_cost AS baseCost
+       FROM order_items oi
+       LEFT JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id IN (${placeholders})
+       ORDER BY oi.id`,
+      orderIds,
+    );
+    for (const it of items) {
+      (itemsByOrder[it.orderId] ||= []).push({
+        productName: it.productName,
+        productSku: it.productSku,
+        quantity: Number(it.quantity),
+        unitPrice: Number(it.unitPrice),
+        baseCost: it.baseCost === null ? null : Number(it.baseCost),
+      });
+    }
+  }
+
+  const data = rows.map((r) => ({ ...r, items: itemsByOrder[r.orderId] || [] }));
+  const total = data.reduce((s, r) => s + r.amount, 0);
+  res.json({ metric, total, data });
+});
+
 // GET /api/admin/finances/margin-analysis
 const getMarginAnalysis = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
@@ -322,6 +455,7 @@ module.exports = {
   getFinancesSummary,
   getTransactions,
   getByPaymentType,
+  getFinancesDetail,
   getMarginAnalysis,
   getOrders,
   getOrder,

@@ -199,6 +199,43 @@ export interface PaymentTypeBreakdown {
   total: number;
 }
 
+/** Métrica de finanzas con vista de detalle. */
+export type FinanceMetric = 'income' | 'cost' | 'profit' | 'pending';
+
+/** Producto vendido dentro de una fila de detalle financiero. */
+export interface FinanceDetailItem {
+  productName: string;
+  productSku: string;
+  quantity: number;
+  unitPrice: number;
+  baseCost: number | null;
+}
+
+/** Fila del detalle financiero: datos del cliente, pedido y productos. */
+export interface FinanceDetailRow {
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  date: string;
+  amount: number;
+  paymentMethod?: PaymentMethod;
+  collectedBy?: string | null;
+  revenue?: number;
+  cost?: number;
+  totalAmount?: number;
+  paidAmount?: number;
+  balance?: number;
+  items: FinanceDetailItem[];
+}
+
+export interface FinanceDetailResponse {
+  metric: FinanceMetric;
+  total: number;
+  data: FinanceDetailRow[];
+}
+
 export interface DeliveryPerson {
   id: number;
   fullName: string;

@@ -10,6 +10,8 @@ import {
 } from '../models/admin.model';
 import {
   DeliveryPerson,
+  FinanceDetailResponse,
+  FinanceMetric,
   FinancesSummary,
   InventoryReportRow,
   Order,
@@ -75,6 +77,18 @@ export class AdminService {
     if (from) params['from'] = from;
     if (to) params['to'] = to;
     return this.api.get<{ data: PaymentTypeBreakdown[] }>('/admin/finances/by-payment-type', params);
+  }
+
+  /** Detalle de una tarjeta del resumen (ingresos, costo, ganancia o por cobrar). */
+  getFinancesDetail(
+    metric: FinanceMetric,
+    from?: string,
+    to?: string,
+  ): Observable<FinanceDetailResponse> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    return this.api.get<FinanceDetailResponse>(`/admin/finances/detail/${metric}`, params);
   }
 
   // ===== Pedidos (Fase 4) =====

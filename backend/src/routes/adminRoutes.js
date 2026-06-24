@@ -20,6 +20,7 @@ router.post('/pricing-config/preview', pricingController.preview);
 router.get('/finances/summary', adminController.getFinancesSummary);
 router.get('/finances/transactions', adminController.getTransactions);
 router.get('/finances/by-payment-type', adminController.getByPaymentType);
+router.get('/finances/detail/:metric', adminController.getFinancesDetail);
 router.get('/finances/margin-analysis', adminController.getMarginAnalysis);
 
 // Pedidos y fabricantes (Fase 4)

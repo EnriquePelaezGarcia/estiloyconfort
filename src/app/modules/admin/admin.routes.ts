@@ -57,6 +57,14 @@ export const adminRoutes: Routes = [
         title: 'Finanzas - Panel Admin',
       },
       {
+        path: 'finanzas/detalle/:metric',
+        loadComponent: () =>
+          import('./finances/finance-detail/finance-detail.component').then(
+            (m) => m.FinanceDetailComponent,
+          ),
+        title: 'Detalle financiero - Panel Admin',
+      },
+      {
         path: 'pedidos',
         loadComponent: () =>
           import('./orders/admin-orders.component').then((m) => m.AdminOrdersComponent),

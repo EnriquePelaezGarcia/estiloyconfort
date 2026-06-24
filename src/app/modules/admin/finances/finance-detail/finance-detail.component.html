@@ -1,0 +1,101 @@
+<header class="page-head">
+  <div class="page-head__left">
+    <a class="back-link" routerLink="/admin/finanzas" [queryParams]="backParams()">
+      <span class="material-symbols-outlined">arrow_back</span> Finanzas
+    </a>
+    <p class="page-head__overline">Detalle financiero</p>
+    <h1 class="page-head__title">
+      <span class="material-symbols-outlined">{{ config().icon }}</span>
+      {{ config().title }}
+    </h1>
+    <p class="period-tag">Período: <strong>{{ rangeLabel() }}</strong></p>
+  </div>
+  <div class="total-box total-box--{{ metric() }}">
+    <span class="total-box__label">{{ config().totalLabel }}</span>
+    <span class="total-box__value">{{ total() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+    <span class="total-box__count">{{ rows().length }} {{ rows().length === 1 ? 'registro' : 'registros' }}</span>
+  </div>
+</header>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div></div>
+} @else if (rows().length === 0) {
+  <div class="panel"><p class="empty">No hay información para este período.</p></div>
+} @else {
+  <div class="detail-list">
+    @for (r of rows(); track r.orderId; let i = $index) {
+      <article class="detail-card">
+        <div class="detail-card__head" (click)="toggle(r.orderId)">
+          <div class="detail-card__client">
+            <span class="detail-card__order">{{ r.orderNumber }}</span>
+            <span class="detail-card__name">{{ r.customerName }}</span>
+            <span class="detail-card__contact">
+              @if (r.customerPhone) {
+                <span><span class="material-symbols-outlined">call</span>{{ r.customerPhone }}</span>
+              }
+              @if (r.customerEmail) {
+                <span><span class="material-symbols-outlined">mail</span>{{ r.customerEmail }}</span>
+              }
+            </span>
+          </div>
+          <div class="detail-card__meta">
+            <span class="detail-card__date">{{ r.date | date:'dd/MM/yyyy' }}</span>
+            @if (metric() === 'income' && r.paymentMethod) {
+              <span class="badge">{{ methodLabel(r.paymentMethod) }}</span>
+            }
+            @if (metric() === 'income' && r.collectedBy) {
+              <span class="detail-card__collected">Cobró: {{ r.collectedBy }}</span>
+            }
+          </div>
+          <div class="detail-card__amount">
+            <span class="detail-card__amount-label">{{ config().amountLabel }}</span>
+            <span class="detail-card__amount-value">{{ r.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          </div>
+          <span class="detail-card__chevron material-symbols-outlined">
+            {{ expanded() === r.orderId ? 'expand_less' : 'expand_more' }}
+          </span>
+        </div>
+
+        @if (metric() === 'profit') {
+          <div class="detail-card__breakdown">
+            <span>Ingreso: <strong>{{ r.revenue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+            <span>Costo: <strong>{{ r.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          </div>
+        }
+        @if (metric() === 'pending') {
+          <div class="detail-card__breakdown">
+            <span>Total: <strong>{{ r.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+            <span>Pagado: <strong>{{ r.paidAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          </div>
+        }
+
+        @if (expanded() === r.orderId) {
+          <div class="detail-card__products">
+            <h3 class="detail-card__products-title">Productos vendidos</h3>
+            @if (r.items.length === 0) {
+              <p class="empty">Sin productos registrados.</p>
+            } @else {
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Producto</th><th>SKU</th><th class="num">Cant.</th><th class="num">Precio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (it of r.items; track $index) {
+                    <tr>
+                      <td>{{ it.productName }}</td>
+                      <td class="muted">{{ it.productSku }}</td>
+                      <td class="num">{{ it.quantity }}</td>
+                      <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        }
+      </article>
+    }
+  </div>
+}

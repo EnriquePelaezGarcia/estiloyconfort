@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import {
@@ -18,7 +19,7 @@ type Period = 'today' | 'month' | 'year' | 'all' | 'custom';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './finances.component.html',
   styleUrl: './finances.component.scss',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, DatePipe, RouterLink],
 })
 export class FinancesComponent implements OnInit {
   private adminService = inject(AdminService);
@@ -33,6 +34,14 @@ export class FinancesComponent implements OnInit {
   protected period = signal<Period>('month');
   protected from = signal('');
   protected to = signal('');
+
+  /** Query params (rango de fechas) que se pasan a la vista de detalle. */
+  protected detailParams = computed(() => {
+    const params: Record<string, string> = {};
+    if (this.from()) params['from'] = this.from();
+    if (this.to()) params['to'] = this.to();
+    return params;
+  });
 
   protected breakdownTotal = computed(() =>
     this.breakdown().reduce((s, b) => s + b.total, 0),

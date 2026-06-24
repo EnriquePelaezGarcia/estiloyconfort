@@ -1,0 +1,168 @@
+@use '../../../../../styles/variables' as vars;
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  margin-bottom: vars.$spacing-lg;
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    .material-symbols-outlined { color: vars.$color-primary; }
+  }
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  text-decoration: none;
+  margin-bottom: 0.4rem;
+  .material-symbols-outlined { font-size: 1.1rem; }
+  &:hover { color: vars.$color-primary; }
+}
+
+.period-tag {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+}
+
+.total-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 200px;
+  padding: vars.$spacing-md vars.$spacing-lg;
+  border-radius: vars.$radius-lg;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  box-shadow: vars.$shadow-sm;
+  border-left: 4px solid vars.$color-primary;
+
+  &--income { border-left-color: vars.$color-success; }
+  &--cost { border-left-color: vars.$color-error; }
+  &--pending { border-left-color: vars.$color-gold; }
+
+  &__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: vars.$color-text-secondary;
+    font-weight: 600;
+  }
+  &__value { font-size: 1.7rem; font-weight: 700; color: vars.$color-primary; line-height: 1.1; }
+  &__count { font-size: 0.8rem; color: vars.$color-text-secondary; }
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.detail-card {
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+  box-shadow: vars.$shadow-sm;
+  overflow: hidden;
+
+  &__head {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr auto auto;
+    align-items: center;
+    gap: vars.$spacing-md;
+    padding: vars.$spacing-md vars.$spacing-lg;
+    cursor: pointer;
+    &:hover { background: rgba(vars.$color-primary, 0.03); }
+  }
+
+  &__client { display: flex; flex-direction: column; gap: 0.15rem; }
+  &__order { font-size: 0.78rem; font-weight: 700; color: vars.$color-primary; }
+  &__name { font-weight: 600; }
+  &__contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: vars.$color-text-secondary;
+    span { display: inline-flex; align-items: center; gap: 0.2rem; }
+    .material-symbols-outlined { font-size: 0.95rem; }
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: vars.$color-text-secondary;
+  }
+  &__date { font-weight: 600; color: vars.$color-text; }
+  &__collected { font-size: 0.78rem; }
+
+  &__amount { text-align: right; display: flex; flex-direction: column; gap: 0.1rem; }
+  &__amount-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: vars.$color-text-secondary;
+  }
+  &__amount-value { font-size: 1.2rem; font-weight: 700; color: vars.$color-primary; }
+
+  &__chevron { color: vars.$color-text-secondary; }
+
+  &__breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$spacing-lg;
+    padding: 0 vars.$spacing-lg vars.$spacing-sm;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+    strong { color: vars.$color-text; }
+  }
+
+  &__products {
+    border-top: 1px solid vars.$color-border;
+    padding: vars.$spacing-md vars.$spacing-lg;
+    background: rgba(vars.$color-primary, 0.02);
+  }
+  &__products-title {
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: vars.$color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+}
+
+.badge {
+  align-self: flex-start;
+  padding: 0.1rem 0.5rem;
+  border-radius: vars.$radius-sm;
+  background: rgba(vars.$color-primary, 0.1);
+  color: vars.$color-primary;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .detail-card__head {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'client chevron'
+      'meta amount';
+  }
+  .detail-card__client { grid-area: client; }
+  .detail-card__meta { grid-area: meta; }
+  .detail-card__amount { grid-area: amount; text-align: left; }
+  .detail-card__chevron { grid-area: chevron; }
+}

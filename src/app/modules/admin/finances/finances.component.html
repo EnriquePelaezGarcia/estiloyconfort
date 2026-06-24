@@ -30,30 +30,34 @@
 @if (summary(); as s) {
   <p class="period-tag">Mostrando: <strong>{{ periodLabel() }}</strong></p>
   <section class="stat-grid">
-    <div class="stat-card stat-card--success">
+    <a class="stat-card stat-card--success" [routerLink]="['detalle', 'income']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">trending_up</span></span>
       <span class="stat-card__label">Ingresos brutos</span>
       <span class="stat-card__value">{{ s.totalIncome | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
       <span class="stat-card__hint">{{ s.monthIncome | currency:'MXN':'symbol-narrow':'1.0-0' }} este mes</span>
-    </div>
-    <div class="stat-card stat-card--danger">
+      <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
+    </a>
+    <a class="stat-card stat-card--danger" [routerLink]="['detalle', 'cost']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">trending_down</span></span>
       <span class="stat-card__label">Costo de producción</span>
       <span class="stat-card__value">{{ s.totalCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
       <span class="stat-card__hint">pedidos entregados</span>
-    </div>
-    <div class="stat-card">
+      <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
+    </a>
+    <a class="stat-card" [routerLink]="['detalle', 'profit']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">savings</span></span>
       <span class="stat-card__label">Ganancia neta</span>
       <span class="stat-card__value">{{ s.netProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
       <span class="stat-card__hint">margen {{ s.margin }}%</span>
-    </div>
-    <div class="stat-card stat-card--gold">
+      <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
+    </a>
+    <a class="stat-card stat-card--gold" [routerLink]="['detalle', 'pending']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">pending</span></span>
       <span class="stat-card__label">Por cobrar</span>
       <span class="stat-card__value">{{ s.pendingCollection | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
       <span class="stat-card__hint">saldos pendientes</span>
-    </div>
+      <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
+    </a>
   </section>
 }
 
