@@ -1,11 +1,15 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { from } from 'rxjs';
 import { concatMap, toArray } from 'rxjs/operators';
 import { ProductService } from '../../../core/services/product.service';
+import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { Product, ProductImage, ProductPayload } from '../../../core/models/product.model';
 import { Category } from '../../../core/models/category.model';
+import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
 function slugify(value: string): string {
   return value
@@ -27,12 +31,27 @@ interface PendingImage {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './catalog.component.html',
   styleUrl: './catalog.component.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
 })
 export class CatalogComponent implements OnInit {
   private productService = inject(ProductService);
+  private pricingService = inject(PricingService);
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
+
+  protected pricingConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
+  private priceInputs = signal<{ baseCost: number | null; margin: number | null }>({ baseCost: null, margin: null });
+
+  /** Precios calculados en vivo a partir del costo y el margen del formulario. */
+  protected computedPrices = computed(() =>
+    PricingService.calculatePrices(this.priceInputs().baseCost, this.priceInputs().margin, this.pricingConfig()),
+  );
+
+  constructor() {
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe((v) => {
+      this.priceInputs.set({ baseCost: v.baseCost ?? null, margin: v.marginPercentage ?? null });
+    });
+  }
 
   protected products = signal<Product[]>([]);
   protected categories = signal<Category[]>([]);
@@ -59,8 +78,6 @@ export class CatalogComponent implements OnInit {
     availabilityDays: [0, [Validators.required, Validators.min(0)]],
     baseCost: [null as number | null, [Validators.required, Validators.min(0)]],
     marginPercentage: [null as number | null, [Validators.required, Validators.min(0), Validators.max(99)]],
-    priceCash: [null as number | null, [Validators.min(0)]],
-    price6msi: [null as number | null, [Validators.min(0)]],
     stockQuantity: [0, [Validators.required, Validators.min(0)]],
     stockAlertLevel: [5, [Validators.required, Validators.min(0)]],
     isFeatured: [false],
@@ -85,6 +102,10 @@ export class CatalogComponent implements OnInit {
     this.productService.getCategories().subscribe({
       next: (cats) => this.categories.set(cats),
       error: () => this.notification.error('No se pudieron cargar las categorías'),
+    });
+    this.pricingService.getConfig().subscribe({
+      next: (items) => this.pricingConfig.set(PricingService.toMap(items)),
+      error: () => {},
     });
     this.loadProducts();
   }
@@ -126,8 +147,6 @@ export class CatalogComponent implements OnInit {
       availabilityDays: 0,
       baseCost: null,
       marginPercentage: null,
-      priceCash: null,
-      price6msi: null,
       stockQuantity: 0,
       stockAlertLevel: 5,
       isFeatured: false,
@@ -152,8 +171,6 @@ export class CatalogComponent implements OnInit {
       availabilityDays: product.availability_days,
       baseCost: product.base_cost,
       marginPercentage: product.margin_percentage,
-      priceCash: product.price_cash,
-      price6msi: product.price_6msi,
       stockQuantity: product.stock_quantity,
       stockAlertLevel: product.stock_alert_level,
       isFeatured: product.is_featured,
@@ -194,8 +211,10 @@ export class CatalogComponent implements OnInit {
       availability_days: raw.availabilityDays ?? 0,
       base_cost: raw.baseCost!,
       margin_percentage: raw.marginPercentage!,
-      price_cash: raw.priceCash ?? null,
-      price_6msi: raw.price6msi ?? null,
+      // El backend recalcula contado y 6 MSI desde las reglas; enviamos el
+      // cálculo en vivo solo como referencia.
+      price_cash: this.computedPrices().price_cash,
+      price_6msi: this.computedPrices().price_6msi,
       stock_quantity: raw.stockQuantity ?? 0,
       stock_alert_level: raw.stockAlertLevel ?? 5,
       is_featured: raw.isFeatured ?? false,

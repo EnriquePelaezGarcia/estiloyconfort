@@ -48,6 +48,50 @@
   gap: vars.$spacing-md;
 }
 
+// ===== Precios calculados (solo lectura) =====
+.price-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-md;
+}
+
+.price-preview__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+
+  &--msi {
+    background: rgba(vars.$color-primary, 0.06);
+    border-color: rgba(vars.$color-primary, 0.25);
+  }
+}
+
+.price-preview__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: vars.$color-text-secondary;
+}
+
+.price-preview__value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: vars.$color-primary;
+}
+
+.price-preview__hint {
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  margin-top: 0.4rem;
+
+  a { color: vars.$color-primary; font-weight: 600; text-decoration: underline; }
+}
+
 .checkbox-row {
   display: flex;
   flex-wrap: wrap;

@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const adminController = require('../controllers/adminController');
+const pricingController = require('../controllers/pricingController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -9,6 +10,11 @@ const router = Router();
 router.use(authenticate, authorize('admin'));
 
 router.get('/dashboard', adminController.getDashboard);
+
+// Reglas de precios (configuración global)
+router.get('/pricing-config', pricingController.getConfig);
+router.put('/pricing-config', pricingController.updateConfig);
+router.post('/pricing-config/preview', pricingController.preview);
 
 // Finanzas (Fase 4)
 router.get('/finances/summary', adminController.getFinancesSummary);

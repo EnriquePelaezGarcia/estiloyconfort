@@ -31,7 +31,8 @@
           <th>Producto</th>
           <th>SKU</th>
           <th>Categoría</th>
-          <th class="num">Precio contado</th>
+          <th class="num">Contado</th>
+          <th class="num">6 MSI</th>
           <th class="num">Stock</th>
           <th>Estado</th>
           <th class="actions-col">Acciones</th>
@@ -43,7 +44,8 @@
             <td data-label="Producto" class="strong">{{ product.name }}</td>
             <td data-label="SKU" class="muted">{{ product.sku || '—' }}</td>
             <td data-label="Categoría">{{ product.category_name || '—' }}</td>
-            <td data-label="Precio contado" class="num">{{ money(product.price_cash) }}</td>
+            <td data-label="Contado" class="num">{{ money(product.price_cash) }}</td>
+            <td data-label="6 MSI" class="num">{{ money(product.price_6msi) }}</td>
             <td data-label="Stock" class="num">{{ product.stock_quantity }}</td>
             <td data-label="Estado">
               <button
@@ -73,7 +75,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="7" class="empty">No se encontraron productos.</td>
+            <td colspan="8" class="empty">No se encontraron productos.</td>
           </tr>
         }
       </tbody>
@@ -148,30 +150,37 @@
         </div>
 
         <p class="form-section">Costos y precios</p>
-        <div class="field-grid">
+        <div class="field-row">
           <div class="field">
-            <label for="baseCost">Costo base</label>
+            <label for="baseCost">Costo prov.</label>
             <input id="baseCost" type="number" formControlName="baseCost" min="0" step="0.01" />
             @if (form.get('baseCost')?.invalid && form.get('baseCost')?.touched) {
               <p class="field__error">Requerido</p>
             }
           </div>
           <div class="field">
-            <label for="marginPercentage">Margen (%)</label>
+            <label for="marginPercentage">% Ganancia</label>
             <input id="marginPercentage" type="number" formControlName="marginPercentage" min="0" max="99" step="0.01" />
             @if (form.get('marginPercentage')?.invalid && form.get('marginPercentage')?.touched) {
               <p class="field__error">0 – 99</p>
             }
           </div>
-          <div class="field">
-            <label for="priceCash">Precio contado</label>
-            <input id="priceCash" type="number" formControlName="priceCash" min="0" step="0.01" />
+        </div>
+
+        <div class="price-preview">
+          <div class="price-preview__item">
+            <span class="price-preview__label">Precio de contado</span>
+            <span class="price-preview__value">{{ money(computedPrices().price_cash) }}</span>
           </div>
-          <div class="field">
-            <label for="price6msi">Precio 6 MSI</label>
-            <input id="price6msi" type="number" formControlName="price6msi" min="0" step="0.01" />
+          <div class="price-preview__item price-preview__item--msi">
+            <span class="price-preview__label">Precio a 6 MSI</span>
+            <span class="price-preview__value">{{ money(computedPrices().price_6msi) }}</span>
           </div>
         </div>
+        <p class="price-preview__hint">
+          Se calculan automáticamente con las
+          <a routerLink="/admin/reglas-precios">reglas de precios</a>.
+        </p>
 
         <p class="form-section">Inventario y disponibilidad</p>
         <div class="field-grid">

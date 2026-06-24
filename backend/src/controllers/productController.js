@@ -2,6 +2,22 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../config/database');
 const Product = require('../models/Product');
+const PricingConfig = require('../models/PricingConfig');
+const { calculatePrices } = require('../utils/pricingCalculator');
+
+/**
+ * Recalcula price_cash y price_6msi a partir de base_cost + margin_percentage
+ * usando las reglas de precios vigentes. Es la fuente de verdad: los precios
+ * enviados por el cliente se ignoran para mantener el catálogo consistente.
+ */
+async function withCalculatedPrices(data, fallback = {}) {
+  const baseCost = data.base_cost ?? fallback.base_cost;
+  const margin = data.margin_percentage ?? fallback.margin_percentage;
+  if (baseCost === undefined || margin === undefined) return data;
+  const config = await PricingConfig.getMap();
+  const { price_cash, price_6msi } = calculatePrices(baseCost, margin, config);
+  return { ...data, price_cash, price_6msi };
+}
 
 const productController = {
   async getAll(req, res, next) {
@@ -43,14 +59,22 @@ const productController = {
 
   async create(req, res, next) {
     try {
-      const product = await Product.create(req.body);
+      const data = await withCalculatedPrices(req.body);
+      const product = await Product.create(data);
       res.status(201).json({ data: product, message: 'Producto creado exitosamente' });
     } catch (err) { next(err); }
   },
 
   async update(req, res, next) {
     try {
-      const product = await Product.update(req.params.id, req.body);
+      // Si cambian costo o margen (o cualquiera de ellos), recalculamos precios.
+      // Tomamos el producto actual como fallback para el parámetro no enviado.
+      let data = req.body;
+      if (req.body.base_cost !== undefined || req.body.margin_percentage !== undefined) {
+        const current = await Product.findById(req.params.id, { includeInactive: true });
+        data = await withCalculatedPrices(req.body, current || {});
+      }
+      const product = await Product.update(req.params.id, data);
       if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
       res.json({ data: product, message: 'Producto actualizado' });
     } catch (err) { next(err); }

@@ -1,0 +1,86 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Reglas de precios</h1>
+  </div>
+</header>
+
+<p class="intro">
+  Estos parámetros se aplican a todo el catálogo. Al guardar un producto, el
+  <strong>precio de contado</strong> y el <strong>precio a 6 MSI</strong> se calculan
+  automáticamente a partir del costo del proveedor y el % de ganancia.
+</p>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span><p>Cargando reglas…</p></div>
+} @else {
+  <div class="grid">
+    <!-- ===== Parámetros ===== -->
+    <section class="card">
+      <h2 class="card__title">Parámetros globales</h2>
+
+      <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+        <div class="field">
+          <label for="iva">{{ itemMeta('iva')?.label ?? 'IVA' }} (%)</label>
+          <input id="iva" type="number" formControlName="iva" min="0" max="100" step="0.0001" />
+          <p class="field__hint">{{ itemMeta('iva')?.description }}</p>
+        </div>
+
+        <div class="field">
+          <label for="card">{{ itemMeta('card_commission')?.label ?? 'Comisión tarjeta' }} (%)</label>
+          <input id="card" type="number" formControlName="card_commission" min="0" max="100" step="0.0001" />
+          <p class="field__hint">{{ itemMeta('card_commission')?.description }}</p>
+        </div>
+
+        <div class="field">
+          <label for="msi">{{ itemMeta('msi_commission')?.label ?? 'Comisión 6 MSI' }} (%)</label>
+          <input id="msi" type="number" formControlName="msi_commission" min="0" max="100" step="0.0001" />
+          <p class="field__hint">{{ itemMeta('msi_commission')?.description }}</p>
+        </div>
+
+        <div class="field">
+          <label for="round">{{ itemMeta('rounding_step')?.label ?? 'Redondeo' }} ($)</label>
+          <input id="round" type="number" formControlName="rounding_step" min="1" step="1" />
+          <p class="field__hint">{{ itemMeta('rounding_step')?.description }}</p>
+        </div>
+
+        <div class="card__foot">
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            @if (saving()) { <span class="spinner spinner--sm"></span> }
+            Guardar cambios
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===== Simulador ===== -->
+    <section class="card">
+      <h2 class="card__title">Simulador</h2>
+      <p class="card__subtitle">Prueba cómo quedarían los precios con estas reglas.</p>
+
+      <form [formGroup]="simForm" novalidate>
+        <div class="field-row">
+          <div class="field">
+            <label for="simCost">Costo prov.</label>
+            <input id="simCost" type="number" formControlName="baseCost" min="0" step="0.01" />
+          </div>
+          <div class="field">
+            <label for="simMargin">% Ganancia</label>
+            <input id="simMargin" type="number" formControlName="margin" min="0" max="99" step="0.01" />
+          </div>
+        </div>
+      </form>
+
+      <div class="result">
+        <div class="result__item">
+          <span class="result__label">Precio de contado</span>
+          <span class="result__value">{{ money(simResult().price_cash) }}</span>
+        </div>
+        <div class="result__item result__item--msi">
+          <span class="result__label">Precio a 6 MSI</span>
+          <span class="result__value">{{ money(simResult().price_6msi) }}</span>
+        </div>
+      </div>
+    </section>
+  </div>
+}

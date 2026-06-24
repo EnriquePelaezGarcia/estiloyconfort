@@ -33,6 +33,12 @@ export const adminRoutes: Routes = [
         title: 'Inventario - Panel Admin',
       },
       {
+        path: 'reglas-precios',
+        loadComponent: () =>
+          import('./pricing/pricing.component').then((m) => m.PricingComponent),
+        title: 'Reglas de precios - Panel Admin',
+      },
+      {
         path: 'finanzas',
         loadComponent: () =>
           import('./finances/finances.component').then((m) => m.FinancesComponent),

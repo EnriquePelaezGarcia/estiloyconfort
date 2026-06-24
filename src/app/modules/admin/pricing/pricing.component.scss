@@ -1,0 +1,90 @@
+@use '../../../../styles/variables' as vars;
+
+// page-head, btn, field, state y spinner provienen del SCSS global (_business.scss).
+
+.intro {
+  color: vars.$color-text-secondary;
+  font-size: 0.9rem;
+  max-width: 720px;
+  margin-bottom: vars.$spacing-lg;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: vars.$spacing-lg;
+  align-items: start;
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+  box-shadow: vars.$shadow-sm;
+  padding: vars.$spacing-lg;
+}
+
+.card__title {
+  font-size: 1.1rem;
+  color: vars.$color-primary;
+  margin-bottom: vars.$spacing-md;
+}
+
+.card__subtitle {
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+  margin-top: -#{vars.$spacing-sm};
+  margin-bottom: vars.$spacing-md;
+}
+
+.card__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: vars.$spacing-md;
+}
+
+.field__hint {
+  font-size: 0.76rem;
+  color: vars.$color-text-secondary;
+  margin-top: 0.3rem;
+}
+
+.result {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-md;
+  margin-top: vars.$spacing-sm;
+}
+
+.result__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+
+  &--msi {
+    background: rgba(vars.$color-primary, 0.06);
+    border-color: rgba(vars.$color-primary, 0.25);
+  }
+}
+
+.result__label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: vars.$color-text-secondary;
+}
+
+.result__value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: vars.$color-primary;
+}
