@@ -21,6 +21,12 @@ export const sellerRoutes: Routes = [
         title: 'Nuevo pedido - Vendedor',
       },
       {
+        path: 'catalogo',
+        loadComponent: () =>
+          import('../admin/catalog/catalog.component').then((m) => m.CatalogComponent),
+        title: 'Catálogo - Vendedor',
+      },
+      {
         path: 'pedidos',
         loadComponent: () =>
           import('./orders/seller-orders.component').then((m) => m.SellerOrdersComponent),

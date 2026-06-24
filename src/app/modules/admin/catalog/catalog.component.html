@@ -3,10 +3,12 @@
     <span class="page-head__overline">Administración</span>
     <h1 class="page-head__title">Catálogo de productos</h1>
   </div>
-  <button type="button" class="btn btn--primary" (click)="openCreate()">
-    <span class="material-symbols-outlined">add</span>
-    Nuevo producto
-  </button>
+  @if (canManage()) {
+    <button type="button" class="btn btn--primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span>
+      Nuevo producto
+    </button>
+  }
 </header>
 
 <div class="toolbar">
@@ -35,7 +37,9 @@
           <th class="num">6 MSI</th>
           <th class="num">Stock</th>
           <th>Estado</th>
-          <th class="actions-col">Acciones</th>
+          @if (canManage()) {
+            <th class="actions-col">Acciones</th>
+          }
         </tr>
       </thead>
       <tbody>
@@ -48,34 +52,43 @@
             <td data-label="6 MSI" class="num">{{ money(product.price_6msi) }}</td>
             <td data-label="Stock" class="num">{{ product.stock_quantity }}</td>
             <td data-label="Estado">
-              <button
-                type="button"
-                class="status"
-                [class.status--active]="product.is_active"
-                (click)="toggleActive(product)"
-                [title]="product.is_active ? 'Desactivar' : 'Activar'"
-              >
-                <span class="status__dot"></span>
-                {{ product.is_active ? 'Activo' : 'Inactivo' }}
-              </button>
+              @if (canManage()) {
+                <button
+                  type="button"
+                  class="status"
+                  [class.status--active]="product.is_active"
+                  (click)="toggleActive(product)"
+                  [title]="product.is_active ? 'Desactivar' : 'Activar'"
+                >
+                  <span class="status__dot"></span>
+                  {{ product.is_active ? 'Activo' : 'Inactivo' }}
+                </button>
+              } @else {
+                <span class="status" [class.status--active]="product.is_active">
+                  <span class="status__dot"></span>
+                  {{ product.is_active ? 'Activo' : 'Inactivo' }}
+                </span>
+              }
             </td>
-            <td data-label="Acciones" class="actions">
-              <button type="button" class="icon-btn" (click)="openEdit(product)" title="Editar">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
-              <button
-                type="button"
-                class="icon-btn icon-btn--danger"
-                (click)="confirmDelete(product)"
-                title="Desactivar"
-              >
-                <span class="material-symbols-outlined">delete</span>
-              </button>
-            </td>
+            @if (canManage()) {
+              <td data-label="Acciones" class="actions">
+                <button type="button" class="icon-btn" (click)="openEdit(product)" title="Editar">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn icon-btn--danger"
+                  (click)="confirmDelete(product)"
+                  title="Desactivar"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </td>
+            }
           </tr>
         } @empty {
           <tr>
-            <td colspan="8" class="empty">No se encontraron productos.</td>
+            <td [attr.colspan]="canManage() ? 8 : 7" class="empty">No se encontraron productos.</td>
           </tr>
         }
       </tbody>

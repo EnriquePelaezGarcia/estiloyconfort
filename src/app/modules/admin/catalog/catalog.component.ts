@@ -7,6 +7,7 @@ import { concatMap, toArray } from 'rxjs/operators';
 import { ProductService } from '../../../core/services/product.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Product, ProductImage, ProductPayload } from '../../../core/models/product.model';
 import { Category } from '../../../core/models/category.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
@@ -37,7 +38,12 @@ export class CatalogComponent implements OnInit {
   private productService = inject(ProductService);
   private pricingService = inject(PricingService);
   private notification = inject(NotificationService);
+  private auth = inject(AuthService);
   private fb = inject(FormBuilder);
+
+  /** Solo el administrador puede crear, editar o eliminar productos.
+   *  El vendedor accede al mismo catálogo en modo de solo lectura. */
+  protected canManage = computed(() => this.auth.userRole() === 'admin');
 
   protected pricingConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
   private priceInputs = signal<{ baseCost: number | null; margin: number | null }>({ baseCost: null, margin: null });
