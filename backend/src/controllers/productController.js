@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const { pool } = require('../config/database');
 const Product = require('../models/Product');
 
 const productController = {
@@ -60,10 +63,55 @@ const productController = {
     } catch (err) { next(err); }
   },
 
+  // ===== Imágenes =====
+
   async addImage(req, res, next) {
     try {
-      const id = await Product.addImage(req.params.id, req.body);
-      res.status(201).json({ data: { id }, message: 'Imagen agregada' });
+      if (!req.file) {
+        return res.status(400).json({ message: 'Se requiere un archivo de imagen' });
+      }
+
+      const [[{ cnt }]] = await pool.execute(
+        'SELECT COUNT(*) AS cnt FROM product_images WHERE product_id = ?',
+        [req.params.id]
+      );
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const image_url = `${baseUrl}/uploads/products/${req.file.filename}`;
+
+      const image = await Product.addImage(req.params.id, {
+        image_url,
+        alt_text: req.body.alt_text || '',
+        is_primary: cnt === 0,
+        order_display: cnt,
+      });
+
+      res.status(201).json({ data: image, message: 'Imagen agregada' });
+    } catch (err) { next(err); }
+  },
+
+  async deleteImage(req, res, next) {
+    try {
+      const image = await Product.deleteImage(req.params.id, req.params.imageId);
+      if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
+
+      // Eliminar archivo físico (best-effort)
+      try {
+        const url = new URL(image.image_url);
+        const filename = path.basename(url.pathname);
+        const filePath = path.join(__dirname, '../../uploads/products', filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (_) {}
+
+      res.json({ message: 'Imagen eliminada' });
+    } catch (err) { next(err); }
+  },
+
+  async setPrimaryImage(req, res, next) {
+    try {
+      const image = await Product.setPrimaryImage(req.params.id, req.params.imageId);
+      if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
+      res.json({ data: image, message: 'Imagen principal actualizada' });
     } catch (err) { next(err); }
   },
 };

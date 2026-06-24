@@ -200,6 +200,61 @@
           </label>
         </div>
 
+        <p class="form-section">Imágenes del producto</p>
+        <div class="image-grid">
+          @for (img of productImages(); track img.id) {
+            <div class="image-card" [class.image-card--primary]="img.is_primary">
+              <img [src]="img.image_url" [alt]="img.alt_text" loading="lazy" />
+              <div class="image-card__overlay">
+                @if (!img.is_primary) {
+                  <button
+                    type="button"
+                    class="img-action-btn"
+                    (click)="setPrimaryImage(img.id)"
+                    title="Establecer como principal"
+                  >
+                    <span class="material-symbols-outlined">star</span>
+                  </button>
+                } @else {
+                  <span class="img-primary-badge" title="Imagen principal">
+                    <span class="material-symbols-outlined">star</span>
+                  </span>
+                }
+                <button
+                  type="button"
+                  class="img-action-btn img-action-btn--danger"
+                  (click)="deleteImage(img.id)"
+                  title="Eliminar imagen"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            </div>
+          }
+
+          @for (item of pendingImages(); track $index) {
+            <div class="image-card image-card--pending">
+              <img [src]="item.preview" alt="Nueva imagen" />
+              <div class="image-card__overlay">
+                <button
+                  type="button"
+                  class="img-action-btn img-action-btn--danger"
+                  (click)="removePending($index)"
+                  title="Quitar"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+          }
+
+          <label class="image-add-btn">
+            <span class="material-symbols-outlined">add_photo_alternate</span>
+            <span>Agregar</span>
+            <input type="file" accept="image/*" multiple (change)="onFilesSelected($event)" />
+          </label>
+        </div>
+
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="closeModal()">Cancelar</button>
           <button type="submit" class="btn btn--primary" [disabled]="saving()">

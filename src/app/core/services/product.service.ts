@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { Category } from '../models/category.model';
-import { Product, ProductFilters, ProductListResponse, ProductPayload } from '../models/product.model';
+import { Product, ProductFilters, ProductImage, ProductListResponse, ProductPayload } from '../models/product.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
@@ -59,5 +59,26 @@ export class ProductService {
 
   deleteProduct(id: number): Observable<void> {
     return this.api.delete<void>(`/products/${id}`);
+  }
+
+  // ===== Imágenes =====
+
+  uploadProductImage(productId: number, file: File, altText?: string): Observable<ProductImage> {
+    const fd = new FormData();
+    fd.append('image', file);
+    if (altText) fd.append('alt_text', altText);
+    return this.api
+      .postFormData<{ data: ProductImage }>(`/products/${productId}/images`, fd)
+      .pipe(map(r => r.data));
+  }
+
+  deleteProductImage(productId: number, imageId: number): Observable<void> {
+    return this.api.delete<void>(`/products/${productId}/images/${imageId}`);
+  }
+
+  setPrimaryImage(productId: number, imageId: number): Observable<ProductImage> {
+    return this.api
+      .patch<{ data: ProductImage }>(`/products/${productId}/images/${imageId}`, { is_primary: true })
+      .pipe(map(r => r.data));
   }
 }

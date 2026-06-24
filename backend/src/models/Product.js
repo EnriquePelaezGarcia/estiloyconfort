@@ -123,7 +123,28 @@ const Product = {
       'INSERT INTO product_images (product_id, image_url, alt_text, is_primary, order_display) VALUES (?,?,?,?,?)',
       [productId, image_url, alt_text || '', is_primary ? 1 : 0, order_display || 0]
     );
-    return res.insertId;
+    const [[image]] = await pool.execute('SELECT * FROM product_images WHERE id = ?', [res.insertId]);
+    return image;
+  },
+
+  async deleteImage(productId, imageId) {
+    const [[image]] = await pool.execute(
+      'SELECT * FROM product_images WHERE id = ? AND product_id = ?',
+      [imageId, productId]
+    );
+    if (!image) return null;
+    await pool.execute('DELETE FROM product_images WHERE id = ? AND product_id = ?', [imageId, productId]);
+    return image;
+  },
+
+  async setPrimaryImage(productId, imageId) {
+    await pool.execute('UPDATE product_images SET is_primary = FALSE WHERE product_id = ?', [productId]);
+    await pool.execute(
+      'UPDATE product_images SET is_primary = TRUE WHERE id = ? AND product_id = ?',
+      [imageId, productId]
+    );
+    const [[image]] = await pool.execute('SELECT * FROM product_images WHERE id = ?', [imageId]);
+    return image || null;
   },
 };
 

@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const env = require('./config/environment');
 const corsMiddleware = require('./config/cors');
@@ -11,6 +12,9 @@ const app = express();
 app.use(corsMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Archivos estáticos (imágenes subidas)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rutas de la API bajo /api
 app.use('/api', apiRoutes);

@@ -1,19 +1,25 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { from } from 'rxjs';
+import { concatMap, toArray } from 'rxjs/operators';
 import { ProductService } from '../../../core/services/product.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { Product, ProductPayload } from '../../../core/models/product.model';
+import { Product, ProductImage, ProductPayload } from '../../../core/models/product.model';
 import { Category } from '../../../core/models/category.model';
 
-/** Genera un slug URL-friendly a partir del nombre del producto. */
 function slugify(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // quita acentos
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 200);
+}
+
+interface PendingImage {
+  file: File;
+  preview: string;
 }
 
 @Component({
@@ -34,10 +40,11 @@ export class CatalogComponent implements OnInit {
   protected saving = signal(false);
   protected search = signal('');
 
-  /** Producto en edición (null = creando). undefined = modal cerrado. */
   protected editing = signal<Product | null | undefined>(undefined);
-  /** Producto marcado para eliminar (confirmación). */
   protected deleting = signal<Product | null>(null);
+
+  protected productImages = signal<ProductImage[]>([]);
+  protected pendingImages = signal<PendingImage[]>([]);
 
   protected form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(3)]],
@@ -104,6 +111,8 @@ export class CatalogComponent implements OnInit {
   // ===== Modal =====
   protected openCreate(): void {
     this.editing.set(null);
+    this.productImages.set([]);
+    this.pendingImages.set([]);
     this.form.reset({
       name: '',
       sku: '',
@@ -128,6 +137,8 @@ export class CatalogComponent implements OnInit {
 
   protected openEdit(product: Product): void {
     this.editing.set(product);
+    this.pendingImages.set([]);
+    this.productImages.set(product.images ?? []);
     this.form.reset({
       name: product.name,
       sku: product.sku ?? '',
@@ -148,10 +159,19 @@ export class CatalogComponent implements OnInit {
       isFeatured: product.is_featured,
       isActive: product.is_active,
     });
+
+    if (!product.images) {
+      this.productService.getProduct(product.id).subscribe({
+        next: (full) => this.productImages.set(full.images ?? []),
+        error: () => {},
+      });
+    }
   }
 
   protected closeModal(): void {
     this.editing.set(undefined);
+    this.productImages.set([]);
+    this.pendingImages.set([]);
   }
 
   protected save(): void {
@@ -198,6 +218,25 @@ export class CatalogComponent implements OnInit {
   }
 
   private onSaved(product: Product, message: string): void {
+    const pending = this.pendingImages();
+    if (!pending.length) {
+      this.finishSave(product, message);
+      return;
+    }
+
+    from(pending.map((p) => p.file)).pipe(
+      concatMap((file) => this.productService.uploadProductImage(product.id, file)),
+      toArray(),
+    ).subscribe({
+      next: () => this.finishSave(product, message),
+      error: () => {
+        this.notification.error('El producto se guardó, pero algunas imágenes no se subieron');
+        this.finishSave(product, message);
+      },
+    });
+  }
+
+  private finishSave(product: Product, message: string): void {
     this.products.update((list) => {
       const idx = list.findIndex((p) => p.id === product.id);
       if (idx === -1) return [product, ...list];
@@ -213,6 +252,51 @@ export class CatalogComponent implements OnInit {
   private onError(err: { error?: { message?: string } }): void {
     this.saving.set(false);
     this.notification.error(err?.error?.message ?? 'Ocurrió un error al guardar');
+  }
+
+  // ===== Imágenes =====
+  protected onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    if (!files.length) return;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.pendingImages.update((list) => [
+          ...list,
+          { file, preview: e.target!.result as string },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    input.value = '';
+  }
+
+  protected removePending(index: number): void {
+    this.pendingImages.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  protected deleteImage(imageId: number): void {
+    const product = this.editing();
+    if (!product) return;
+    this.productService.deleteProductImage(product.id, imageId).subscribe({
+      next: () => this.productImages.update((list) => list.filter((img) => img.id !== imageId)),
+      error: () => this.notification.error('No se pudo eliminar la imagen'),
+    });
+  }
+
+  protected setPrimaryImage(imageId: number): void {
+    const product = this.editing();
+    if (!product) return;
+    this.productService.setPrimaryImage(product.id, imageId).subscribe({
+      next: () =>
+        this.productImages.update((list) =>
+          list.map((img) => ({ ...img, is_primary: img.id === imageId })),
+        ),
+      error: () => this.notification.error('No se pudo establecer como imagen principal'),
+    });
   }
 
   // ===== Activar / desactivar =====
@@ -240,7 +324,6 @@ export class CatalogComponent implements OnInit {
     if (!product) return;
     this.productService.deleteProduct(product.id).subscribe({
       next: () => {
-        // El backend hace borrado lógico (is_active = FALSE): reflejamos el estado.
         this.products.update((list) =>
           list.map((p) => (p.id === product.id ? { ...p, is_active: false } : p)),
         );
