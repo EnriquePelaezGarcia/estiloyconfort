@@ -58,15 +58,14 @@
           </select>
         </div>
         <div class="field">
-          <label for="paymentMethod">Método de pago</label>
+          <label for="paymentMethod">Condición de venta</label>
           <select id="paymentMethod" formControlName="paymentMethod">
-            <option value="cash">Efectivo</option>
-            <option value="card">Tarjeta</option>
-            <option value="transfer">Transferencia</option>
+            <option value="cash">Contado</option>
             <option value="msi">Meses sin intereses</option>
             <option value="store_credit">Crédito tienda</option>
             <option value="layaway">Apartado</option>
           </select>
+          <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
         </div>
       </div>
       <div class="field-row">

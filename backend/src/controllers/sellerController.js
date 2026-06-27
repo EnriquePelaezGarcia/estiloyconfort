@@ -89,9 +89,13 @@ const sellerController = {
 
   // POST /api/seller/payments
   registerPayment: asyncHandler(async (req, res) => {
-    const { orderId, amount } = req.body;
-    if (!orderId || !amount || Number(amount) <= 0) {
-      throw ApiError.badRequest('orderId y amount (mayor a 0) son obligatorios');
+    const { orderId, amount, payments } = req.body;
+    const lines = Array.isArray(payments) ? payments : null;
+    const totalAmount = lines
+      ? lines.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      : Number(amount);
+    if (!orderId || !(totalAmount > 0)) {
+      throw ApiError.badRequest('orderId y al menos un cobro con monto mayor a 0 son obligatorios');
     }
     const order = await Order.findById(orderId);
     if (!order) throw ApiError.notFound('Pedido no encontrado');

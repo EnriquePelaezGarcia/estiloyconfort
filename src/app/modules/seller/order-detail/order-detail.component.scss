@@ -120,6 +120,42 @@
   }
 }
 
+// ===== Modal de cobro con split =====
+.pay-balance,
+.pay-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+
+  .strong { font-weight: 700; }
+}
+
+.pay-total {
+  margin: 12px 0;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 1rem;
+}
+
+.pay-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pay-line {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+
+  .field { margin: 0; }
+
+  .icon-btn--danger { margin-bottom: 4px; }
+}
+
 @media print {
   .no-print { display: none !important; }
   .detail-grid { grid-template-columns: 1fr; }

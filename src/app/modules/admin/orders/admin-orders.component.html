@@ -38,7 +38,7 @@
       <thead>
         <tr>
           <th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>Pago</th><th class="num">Total</th>
-          <th>Estado</th><th>Repartidor</th><th></th>
+          <th>Estado</th><th>Repartidor</th><th class="actions-col"></th>
         </tr>
       </thead>
       <tbody>
@@ -58,6 +58,14 @@
             </td>
             <td data-label="Repartidor" class="muted">{{ o.deliveryPersonName ?? '—' }}</td>
             <td class="actions">
+              <button
+                type="button"
+                class="icon-btn"
+                (click)="viewDetail(o.id)"
+                aria-label="Ver detalle"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+              </button>
               <button
                 type="button"
                 class="icon-btn"

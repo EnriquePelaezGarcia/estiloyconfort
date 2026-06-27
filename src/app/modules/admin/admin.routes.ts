@@ -71,6 +71,12 @@ export const adminRoutes: Routes = [
         title: 'Pedidos - Panel Admin',
       },
       {
+        path: 'pedidos/:id',
+        loadComponent: () =>
+          import('../seller/order-detail/order-detail.component').then((m) => m.OrderDetailComponent),
+        title: 'Detalle de pedido - Panel Admin',
+      },
+      {
         path: 'fabricante',
         loadComponent: () =>
           import('./manufacturing/manufacturing.component').then((m) => m.ManufacturingComponent),

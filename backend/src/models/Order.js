@@ -25,6 +25,18 @@ function mapItem(row) {
   };
 }
 
+/**
+ * Precio unitario autoritativo según la condición de venta (esquema):
+ *   - 'msi'  → price_6msi del catálogo (si está definido).
+ *   - resto  → price_cash (Contado, Crédito Tienda y Apartado parten del contado).
+ * El Crédito Tienda recalcula su total con interés a partir de este precio base.
+ */
+function unitPriceForScheme(product, paymentMethod) {
+  const msi = Number(product.price_6msi);
+  if (paymentMethod === 'msi' && msi > 0) return msi;
+  return Number(product.price_cash);
+}
+
 function parseJson(value) {
   if (!value) return null;
   if (typeof value === 'object') return value;
@@ -141,12 +153,15 @@ const Order = {
       const orderNumber = await this.generateOrderNumber();
       const items = Array.isArray(data.items) ? data.items : [];
 
+      // El esquema de venta determina qué precio del catálogo se aplica.
+      const paymentMethod = data.paymentMethod ?? 'cash';
+
       // Resuelve precios/snapshots desde la tabla products (fuente de verdad) y valida stock.
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
         const [[product]] = await conn.execute(
-          'SELECT id, name, sku, price_cash, stock_quantity FROM products WHERE id = ?', [it.productId],
+          'SELECT id, name, sku, price_cash, price_6msi, stock_quantity FROM products WHERE id = ?', [it.productId],
         );
         if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
         const qty = Math.max(1, Number(it.quantity) || 1);
@@ -157,7 +172,8 @@ const Order = {
           stockErr.statusCode = 400;
           throw stockErr;
         }
-        const unitPrice = it.unitPrice != null ? Number(it.unitPrice) : Number(product.price_cash);
+        // Precio autoritativo por esquema: MSI usa price_6msi; Contado/Crédito/Apartado usan price_cash.
+        const unitPrice = unitPriceForScheme(product, paymentMethod);
         const subtotal = unitPrice * qty;
         total += subtotal;
         resolvedItems.push({
@@ -173,7 +189,6 @@ const Order = {
 
       // Para "Crédito Tienda" el total es precio con interés y se guarda el desglose.
       // Para "Apartado" el total es precio de contado; si vence el plazo se recalcula.
-      const paymentMethod = data.paymentMethod ?? 'cash';
       let totalAmount = total;
       let cashTotal = null;
       let downPayment = null;
@@ -301,11 +316,13 @@ const Order = {
 
       // 2. Resolver los nuevos items y validar stock (ya restaurado).
       const items = Array.isArray(data.items) ? data.items : [];
+      // El esquema de venta determina qué precio del catálogo se aplica.
+      const paymentMethod = data.paymentMethod ?? existing.paymentMethod ?? 'cash';
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
         const [[product]] = await conn.execute(
-          'SELECT id, name, sku, price_cash, stock_quantity FROM products WHERE id = ?', [it.productId],
+          'SELECT id, name, sku, price_cash, price_6msi, stock_quantity FROM products WHERE id = ?', [it.productId],
         );
         if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
         const qty = Math.max(1, Number(it.quantity) || 1);
@@ -316,7 +333,8 @@ const Order = {
           stockErr.statusCode = 400;
           throw stockErr;
         }
-        const unitPrice = it.unitPrice != null ? Number(it.unitPrice) : Number(product.price_cash);
+        // Precio autoritativo por esquema: MSI usa price_6msi; Contado/Crédito/Apartado usan price_cash.
+        const unitPrice = unitPriceForScheme(product, paymentMethod);
         const subtotal = unitPrice * qty;
         total += subtotal;
         resolvedItems.push({
@@ -331,7 +349,6 @@ const Order = {
       }
 
       // 3. Recalcular totales y desglose según el método de pago.
-      const paymentMethod = data.paymentMethod ?? existing.paymentMethod ?? 'cash';
       let totalAmount = total;
       let cashTotal = null;
       let downPayment = null;

@@ -109,7 +109,7 @@
         @if (o.customerPhone) { <div><dt>Teléfono</dt><dd>{{ o.customerPhone }}</dd></div> }
         @if (o.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ o.deliveryAddress }}</dd></div> }
         <div><dt>Envío</dt><dd>{{ deliveryLabel(o.deliveryType) }}</dd></div>
-        <div><dt>Método de pago</dt><dd>{{ methodLabel(o.paymentMethod) }}</dd></div>
+        <div><dt>Condición de venta</dt><dd>{{ schemeLabel(o.paymentMethod) }}</dd></div>
         <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
         @if (o.expectedDeliveryDate) { <div><dt>Entrega estimada</dt><dd>{{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}</dd></div> }
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
@@ -139,7 +139,7 @@
       <div class="abono-ticket__row"><span>Folio venta</span><span>{{ r.orderNumber }}</span></div>
       <div class="abono-ticket__row"><span>Cliente</span><span>{{ r.customerName }}</span></div>
       <div class="abono-ticket__row"><span>Fecha</span><span>{{ r.date | date:'dd/MM/yyyy HH:mm' }}</span></div>
-      <div class="abono-ticket__row"><span>Método</span><span>{{ methodLabel(r.paymentMethod) }}</span></div>
+      <div class="abono-ticket__row"><span>Método</span><span>{{ r.methodLabel }}</span></div>
       <hr />
       <div class="abono-ticket__row"><span>Saldo anterior</span><span>{{ r.previousBalance | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
       <div class="abono-ticket__row abono-ticket__row--amount"><span>Abono</span><span>{{ r.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
@@ -163,36 +163,57 @@
       </div>
       <div class="modal__body">
         <form [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
-          <div class="field">
-            <label for="amount">Monto a cobrar</label>
-            <input id="amount" type="number" formControlName="amount" min="1" />
-            @if (paymentForm.controls.amount.touched && paymentForm.controls.amount.invalid) {
-              <p class="field__error">Ingresa un monto mayor a 0.</p>
+          <p class="pay-balance">
+            <span>Saldo pendiente</span>
+            <span class="strong">{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </p>
+
+          <div class="pay-lines" formArrayName="lines">
+            @for (line of paymentLines.controls; track $index; let i = $index) {
+              <div class="pay-line" [formGroupName]="i">
+                <div class="field">
+                  <label [for]="'pm-' + i">Medio</label>
+                  <select [id]="'pm-' + i" formControlName="paymentMethod">
+                    @for (inst of allowedInstruments(); track inst) {
+                      <option [value]="inst">{{ instrumentLabel(inst) }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field">
+                  <label [for]="'amt-' + i">Monto</label>
+                  <input [id]="'amt-' + i" type="number" formControlName="amount" min="1" />
+                </div>
+                <button
+                  type="button"
+                  class="icon-btn icon-btn--danger"
+                  (click)="removeLine(i)"
+                  [disabled]="paymentLines.length === 1"
+                  aria-label="Quitar línea"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
             }
           </div>
-          <div class="field">
-            <label for="pm">Método</label>
-            @if (isCredit() || isLayaway()) {
-              <select id="pm" formControlName="paymentMethod">
-                <option value="cash">Efectivo</option>
-                <option value="transfer">Transferencia bancaria</option>
-              </select>
-              <p class="field__hint">
-                @if (isCredit()) { Los abonos del crédito sólo se reciben en efectivo o transferencia. }
-                @else { Los abonos de apartado sólo se reciben en efectivo o transferencia. }
-              </p>
-            } @else {
-              <select id="pm" formControlName="paymentMethod">
-                <option value="cash">Efectivo</option>
-                <option value="card">Tarjeta</option>
-                <option value="msi">Meses sin intereses</option>
-                <option value="transfer">Transferencia bancaria</option>
-              </select>
-            }
-          </div>
+
+          <button type="button" class="btn btn--ghost btn--sm" (click)="addLine()">
+            <span class="material-symbols-outlined">add</span> Agregar medio de pago
+          </button>
+
+          @if (isCredit() || isLayaway()) {
+            <p class="field__hint">
+              Los abonos de {{ isCredit() ? 'crédito' : 'apartado' }} sólo se reciben en efectivo o transferencia.
+            </p>
+          }
+
+          <p class="pay-total">
+            <span>Total a cobrar</span>
+            <span class="strong">{{ payTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </p>
+
           <div class="modal__foot">
             <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>
-            <button type="submit" class="btn btn--success" [disabled]="savingPayment()">
+            <button type="submit" class="btn btn--success" [disabled]="savingPayment() || paymentLines.invalid || payTotal() <= 0">
               @if (savingPayment()) { <span class="spinner spinner--sm"></span> } @else { Registrar }
             </button>
           </div>

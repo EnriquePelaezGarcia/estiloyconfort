@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import {
@@ -26,6 +27,7 @@ import {
 export class AdminOrdersComponent implements OnInit {
   private adminService = inject(AdminService);
   private notification = inject(NotificationService);
+  private router = inject(Router);
 
   protected orders = signal<Order[]>([]);
   protected loading = signal(true);
@@ -128,6 +130,10 @@ export class AdminOrdersComponent implements OnInit {
         this.notification.error(err?.error?.message ?? 'No se pudo asignar');
       },
     });
+  }
+
+  protected viewDetail(id: number): void {
+    this.router.navigate(['/admin/pedidos', id]);
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

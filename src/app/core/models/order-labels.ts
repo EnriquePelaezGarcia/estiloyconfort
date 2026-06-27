@@ -2,8 +2,10 @@ import {
   DeliveryStatus,
   DeliveryType,
   OrderStatus,
+  PaymentInstrument,
   PaymentMethod,
   PaymentStatus,
+  SaleScheme,
 } from './order.model';
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -44,6 +46,22 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   store_credit: 'Crédito tienda',
   transfer: 'Transferencia',
   layaway: 'Apartado',
+};
+
+/** Etiquetas de la condición de venta (nivel pedido). */
+export const SALE_SCHEME_LABELS: Record<SaleScheme, string> = {
+  cash: 'Contado',
+  msi: 'Meses sin intereses',
+  store_credit: 'Crédito tienda',
+  layaway: 'Apartado',
+};
+
+/** Etiquetas del instrumento de cobro (nivel pago). */
+export const PAYMENT_INSTRUMENT_LABELS: Record<PaymentInstrument, string> = {
+  cash: 'Efectivo',
+  card: 'Tarjeta',
+  transfer: 'Transferencia',
+  msi: 'Tarjeta a MSI',
 };
 
 export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {

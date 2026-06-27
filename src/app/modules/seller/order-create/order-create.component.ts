@@ -6,7 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { CreateOrderRequest, InventoryItem } from '../../../core/models/order.model';
+import { CreateOrderRequest, InventoryItem, SaleScheme } from '../../../core/models/order.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
 interface CartLine {
@@ -44,7 +44,7 @@ export class OrderCreateComponent implements OnInit {
     deliveryAddress: [''],
     googleMapsUrl: [''],
     deliveryType: ['standard' as 'standard' | 'with_installation', Validators.required],
-    paymentMethod: ['cash' as 'cash' | 'card' | 'msi' | 'store_credit' | 'layaway' | 'transfer', Validators.required],
+    paymentMethod: ['cash' as SaleScheme, Validators.required],
     expectedDeliveryDate: [''],
     notes: [''],
   });

@@ -6,7 +6,19 @@ export type OrderStatus =
   | 'delivered'
   | 'cancelled';
 
+/**
+ * Superset histórico (etiquetas y reportes). Se mantiene por compatibilidad,
+ * pero conceptualmente se divide en dos:
+ *   - SaleScheme: condición de venta a nivel pedido.
+ *   - PaymentInstrument: medio de cobro de cada pago (puede ser mixto).
+ */
 export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit' | 'transfer' | 'layaway';
+
+/** Condición de venta del pedido (qué precio aplica y qué reglas de cobro). */
+export type SaleScheme = 'cash' | 'msi' | 'store_credit' | 'layaway';
+
+/** Instrumento con el que se recibe cada cobro. */
+export type PaymentInstrument = 'cash' | 'card' | 'transfer' | 'msi';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -27,7 +39,7 @@ export interface OrderItem {
 export interface OrderPayment {
   id: number;
   amount: number;
-  paymentMethod: PaymentMethod;
+  paymentMethod: PaymentInstrument;
   paymentDate: string;
   collectedById?: number | null;
   notes?: string | null;
@@ -48,7 +60,7 @@ export interface Order {
   deliveryType: DeliveryType;
   deliveryPersonId?: number | null;
   deliveryPersonName?: string | null;
-  paymentMethod: PaymentMethod;
+  paymentMethod: SaleScheme;
   paymentStatus: PaymentStatus;
   paymentAmount: number;
   orderStatus: OrderStatus;
@@ -89,7 +101,7 @@ export interface CreateOrderRequest {
   deliveryAddress?: string | null;
   googleMapsUrl?: string | null;
   deliveryType: DeliveryType;
-  paymentMethod: PaymentMethod;
+  paymentMethod: SaleScheme;
   expectedDeliveryDate?: string | null;
   notes?: string | null;
   items: Array<{

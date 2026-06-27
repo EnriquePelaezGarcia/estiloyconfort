@@ -7,6 +7,7 @@ import {
   InventoryItem,
   Order,
   Paginated,
+  PaymentInstrument,
   SellerDashboard,
 } from '../models/order.model';
 import { CreditConfig } from '../models/pricing-config.model';
@@ -39,8 +40,11 @@ export class SellerService {
     return this.api.delete<{ message: string }>(`/seller/orders/${id}`);
   }
 
-  registerPayment(orderId: number, amount: number, paymentMethod: string): Observable<unknown> {
-    return this.api.post('/seller/payments', { orderId, amount, paymentMethod });
+  registerPayment(
+    orderId: number,
+    payments: Array<{ amount: number; paymentMethod: PaymentInstrument }>,
+  ): Observable<unknown> {
+    return this.api.post('/seller/payments', { orderId, payments });
   }
 
   /** Parámetros del crédito en tienda para simular el plan en el POS. */
