@@ -80,6 +80,11 @@
                 <span class="material-symbols-outlined">phone</span>{{ client.customerPhone }}
               </span>
             }
+            @if (client.sellerName) {
+              <span class="client-card__seller">
+                <span class="material-symbols-outlined">person</span>{{ client.sellerName }}
+              </span>
+            }
           </div>
           <div class="client-card__badges">
             @if (client.paymentMethod === 'store_credit') {

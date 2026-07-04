@@ -43,8 +43,9 @@ const sellerController = {
 
   // GET /api/seller/orders
   list: asyncHandler(async (req, res) => {
-    const { status, page, limit } = req.query;
-    const result = await Order.findAll({ status, sellerId: req.user.id, page, limit });
+    const { status, scope, page, limit } = req.query;
+    const sellerId = scope === 'all' ? undefined : req.user.id;
+    const result = await Order.findAll({ status, sellerId, page, limit });
     res.json(result);
   }),
 
@@ -52,7 +53,6 @@ const sellerController = {
   getOne: asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
-    if (order.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
     res.json({ data: order });
   }),
 

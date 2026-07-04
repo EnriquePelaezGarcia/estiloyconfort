@@ -1,7 +1,7 @@
 <header class="page-head">
   <div>
     <p class="page-head__overline">Vendedor</p>
-    <h1 class="page-head__title">Mis pedidos</h1>
+    <h1 class="page-head__title">Todos los pedidos</h1>
   </div>
   <a class="btn btn--primary" routerLink="../nuevo">
     <span class="material-symbols-outlined">add_shopping_cart</span>
@@ -40,7 +40,7 @@
     <table class="table table--cards">
       <thead>
         <tr>
-          <th>Pedido</th><th>Cliente</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th>Fecha</th><th></th>
+          <th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th>Fecha</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -48,6 +48,7 @@
           <tr>
             <td data-label="Pedido" class="strong">{{ o.orderNumber }}</td>
             <td data-label="Cliente">{{ o.customerName }}</td>
+            <td data-label="Vendedor" class="muted">{{ o.sellerName ?? '—' }}</td>
             <td data-label="Estado"><span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span></td>
             <td data-label="Pago"><span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span></td>
             <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>

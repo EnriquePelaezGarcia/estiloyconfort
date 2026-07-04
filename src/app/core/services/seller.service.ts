@@ -20,8 +20,11 @@ export class SellerService {
     return this.api.get<SellerDashboard>('/seller/dashboard');
   }
 
-  getOrders(status?: string): Observable<Paginated<Order>> {
-    return this.api.get<Paginated<Order>>('/seller/orders', status ? { status } : undefined);
+  getOrders(status?: string, scope?: 'all'): Observable<Paginated<Order>> {
+    const params: Record<string, string> = {};
+    if (status) params['status'] = status;
+    if (scope) params['scope'] = scope;
+    return this.api.get<Paginated<Order>>('/seller/orders', Object.keys(params).length ? params : undefined);
   }
 
   getOrder(id: number): Observable<{ data: Order }> {

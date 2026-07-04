@@ -61,7 +61,7 @@ export class SellerOrdersComponent implements OnInit {
 
   protected load(): void {
     this.loading.set(true);
-    this.sellerService.getOrders(this.statusFilter() || undefined).subscribe({
+    this.sellerService.getOrders(this.statusFilter() || undefined, 'all').subscribe({
       next: (res) => {
         this.orders.set(res.data);
         this.loading.set(false);

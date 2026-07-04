@@ -195,6 +195,17 @@
     .material-symbols-outlined { font-size: 0.9rem; }
   }
 
+  &__seller {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: vars.$color-text-secondary;
+    font-style: italic;
+
+    .material-symbols-outlined { font-size: 0.85rem; }
+  }
+
   &__badges {
     display: flex;
     gap: 0.4rem;
