@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
@@ -39,7 +40,7 @@ interface AbonoReceipt {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-detail.component.html',
   styleUrl: './order-detail.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective],
 })
 export class OrderDetailComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -173,7 +174,11 @@ export class OrderDetailComponent implements OnInit {
   }
 
   protected removeLine(index: number): void {
-    if (this.paymentLines.length > 1) this.paymentLines.removeAt(index);
+    if (this.paymentLines.length > 1) {
+      this.paymentLines.removeAt(index);
+    } else {
+      this.paymentLines.at(0).get('amount')?.setValue(null);
+    }
   }
 
   protected instrumentLabel(i: PaymentInstrument): string {

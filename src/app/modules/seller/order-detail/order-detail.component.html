@@ -201,13 +201,12 @@
                 </div>
                 <div class="field">
                   <label [for]="'amt-' + i">Monto</label>
-                  <input [id]="'amt-' + i" type="number" formControlName="amount" min="1" />
+                  <input [id]="'amt-' + i" type="text" inputmode="decimal" appCurrencyInput formControlName="amount" />
                 </div>
                 <button
                   type="button"
                   class="icon-btn icon-btn--danger"
                   (click)="removeLine(i)"
-                  [disabled]="paymentLines.length === 1"
                   aria-label="Quitar línea"
                 >
                   <span class="material-symbols-outlined">delete</span>
