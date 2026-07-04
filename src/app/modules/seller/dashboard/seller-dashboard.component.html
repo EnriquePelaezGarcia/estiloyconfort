@@ -17,7 +17,7 @@
       <span class="stat-card__icon"><span class="material-symbols-outlined">today</span></span>
       <span class="stat-card__label">Pedidos hoy</span>
       <span class="stat-card__value">{{ s.todayOrders }}</span>
-      <span class="stat-card__hint">{{ s.todayAmount | currency:'MXN':'symbol-narrow':'1.0-0' }} vendidos hoy</span>
+      <span class="stat-card__hint">{{ s.todayAmount | currency:'MXN':'symbol-narrow':'1.2-2' }} vendidos hoy</span>
     </div>
     <div class="stat-card stat-card--gold">
       <span class="stat-card__icon"><span class="material-symbols-outlined">pending_actions</span></span>
@@ -34,7 +34,7 @@
     <div class="stat-card">
       <span class="stat-card__icon"><span class="material-symbols-outlined">payments</span></span>
       <span class="stat-card__label">Venta total</span>
-      <span class="stat-card__value">{{ s.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__value">{{ s.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       <span class="stat-card__hint">histórico</span>
     </div>
   </section>
@@ -58,7 +58,7 @@
                 <td data-label="Cliente">{{ o.customer_name }}</td>
                 <td data-label="Estado"><span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span></td>
                 <td data-label="Pago"><span class="badge" [class]="payTone(o.payment_status)">{{ payLabel(o.payment_status) }}</span></td>
-                <td data-label="Total" class="num">{{ o.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                <td data-label="Total" class="num">{{ o.total_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                 <td data-label="Fecha" class="muted">{{ o.order_date | date:'dd/MM/yyyy' }}</td>
               </tr>
             }

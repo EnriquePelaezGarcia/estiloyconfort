@@ -49,6 +49,38 @@
         />
         <p class="field__hint">Pega el enlace de Google Maps; el repartidor podrá abrirlo con un clic.</p>
       </div>
+      <div class="field">
+        <label for="shippingCp">Código postal de entrega</label>
+        <input
+          id="shippingCp"
+          type="text"
+          inputmode="numeric"
+          maxlength="5"
+          autocomplete="off"
+          placeholder="72000"
+          [value]="shippingCp()"
+          (input)="onShippingCpInput($event)"
+        />
+        <p class="field__hint">Ingresa el CP para calcular el costo de envío automáticamente.</p>
+
+        @if (shippingQuote(); as quote) {
+          <div class="shipping-badge">
+            <span class="material-symbols-outlined">local_shipping</span>
+            <div class="shipping-badge__info">
+              <span class="shipping-badge__zone">{{ quote.zone }} · CP {{ shippingCp() }}</span>
+              <span class="shipping-badge__label">{{ quote.label }}</span>
+            </div>
+            @if (quote.isFree) {
+              <span class="shipping-badge__price shipping-badge__price--free">GRATIS</span>
+            } @else {
+              <span class="shipping-badge__price">{{ quote.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            }
+          </div>
+        }
+        @if (shippingCp().length === 5 && !shippingQuote()) {
+          <p class="field__error">CP fuera de la zona de cobertura.</p>
+        }
+      </div>
       <div class="field-row">
         <div class="field">
           <label for="deliveryType">Tipo de envío</label>
@@ -100,7 +132,7 @@
                 <span class="result__name">{{ p.name }}</span>
                 <span class="result__sku">{{ p.sku }} · Stock: {{ p.stock_quantity }}</span>
               </span>
-              <span class="result__price">{{ unitPrice(p) | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="result__price">{{ unitPrice(p) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
               <span class="material-symbols-outlined">add_circle</span>
             </button>
           } @empty {
@@ -119,7 +151,7 @@
           <div class="cart-line">
             <div class="cart-line__info">
               <span class="cart-line__name">{{ l.product.name }}</span>
-              <span class="cart-line__price">{{ unitPrice(l.product) | currency:'MXN':'symbol-narrow':'1.0-0' }} c/u</span>
+              <span class="cart-line__price">{{ unitPrice(l.product) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
             </div>
             <div class="qty">
               <button type="button" class="icon-btn" (click)="changeQty(l.product.id, -1)" aria-label="Quitar uno">
@@ -130,17 +162,39 @@
                 <span class="material-symbols-outlined">add</span>
               </button>
             </div>
-            <span class="cart-line__subtotal">{{ unitPrice(l.product) * l.quantity | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="cart-line__subtotal">{{ unitPrice(l.product) * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(l.product.id)" aria-label="Eliminar">
               <span class="material-symbols-outlined">delete</span>
             </button>
           </div>
         }
 
-        <div class="cart-total">
-          <span>{{ isMsi() ? 'Total a 6 MSI' : 'Total' }}</span>
-          <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-        </div>
+        @if (shippingQuote(); as shipping) {
+          <div class="cart-total cart-total--sub">
+            <span>{{ isMsi() ? 'Subtotal a 6 MSI' : 'Subtotal productos' }}</span>
+            <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="shipping-row">
+            <span class="shipping-row__label">
+              <span class="material-symbols-outlined">local_shipping</span>
+              Envío · {{ shipping.zone }}
+            </span>
+            @if (shipping.isFree) {
+              <span class="shipping-row__free">GRATIS</span>
+            } @else {
+              <span class="shipping-row__price">{{ shipping.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            }
+          </div>
+          <div class="grand-total">
+            <span>Total a pagar</span>
+            <span class="grand-total__amount">{{ grandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        } @else {
+          <div class="cart-total">
+            <span>{{ isMsi() ? 'Total a 6 MSI' : 'Total' }}</span>
+            <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
         @if (isMsi()) {
           <p class="msi-note">
             <span class="material-symbols-outlined">credit_card</span>
@@ -156,7 +210,7 @@
           </h3>
           <div class="credit-plan__row credit-plan__row--highlight">
             <span>Precio de contado</span>
-            <span class="strong">{{ total() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="strong">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
           <div class="credit-plan__row">
             <span>Abono inicial mínimo</span>
@@ -188,15 +242,15 @@
             </h3>
             <div class="credit-plan__row">
               <span>Precio a crédito</span>
-              <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
             <div class="credit-plan__row credit-plan__row--highlight">
               <span>Pago inicial</span>
-              <span class="strong">{{ credit.downPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="strong">{{ credit.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
             <div class="credit-plan__row">
               <span>{{ credit.weeks }} cuotas semanales de</span>
-              <span class="strong">{{ credit.weeklyPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="strong">{{ credit.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
             <p class="credit-plan__note">
               El mueble no se envía hasta cubrir el pago inicial. Los abonos semanales

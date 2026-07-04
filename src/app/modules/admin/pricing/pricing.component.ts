@@ -92,9 +92,10 @@ export class PricingComponent implements OnInit {
     return this.items().find((i) => i.config_key === key);
   }
 
-  protected money(value: number | null): string {
+  protected money(value: number | string | null): string {
     if (value === null || value === undefined) return '—';
-    return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    const num = Number(value);
+    return isNaN(num) ? '—' : num.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
   protected save(): void {

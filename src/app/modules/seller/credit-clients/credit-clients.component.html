@@ -47,7 +47,7 @@
   <div class="summary-bar__item">
     <span class="summary-bar__label">Saldo total por cobrar</span>
     <span class="summary-bar__value summary-bar__value--accent">
-      {{ totalBalance() | currency:'MXN':'symbol-narrow':'1.0-0' }}
+      {{ totalBalance() | currency:'MXN':'symbol-narrow':'1.2-2' }}
     </span>
   </div>
   @if (overdueCount() > 0) {
@@ -105,15 +105,15 @@
         <div class="client-card__amounts">
           <div class="amount-col">
             <span class="amount-col__label">Total</span>
-            <span class="amount-col__value">{{ client.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="amount-col__value">{{ client.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
           <div class="amount-col">
             <span class="amount-col__label">Pagado</span>
-            <span class="amount-col__value amount-col__value--paid">{{ client.paymentAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="amount-col__value amount-col__value--paid">{{ client.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
           <div class="amount-col">
             <span class="amount-col__label">Saldo</span>
-            <span class="amount-col__value amount-col__value--balance">{{ client.balance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="amount-col__value amount-col__value--balance">{{ client.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
         </div>
 
@@ -123,7 +123,7 @@
             @if (client.weeklyPayment) {
               <span>
                 <span class="material-symbols-outlined">calendar_today</span>
-                Cuota semanal: <b>{{ client.weeklyPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</b>
+                Cuota semanal: <b>{{ client.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</b>
               </span>
               @if (nextWeeklyDate(client); as nextDate) {
                 <span>Próximo abono: <b>{{ nextDate }}</b></span>
@@ -190,7 +190,7 @@
 
       <div class="modal__balance">
         <span>Saldo pendiente:</span>
-        <span class="modal__balance-amount">{{ client.balance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+        <span class="modal__balance-amount">{{ client.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       </div>
 
       @if (client.paymentMethod === 'layaway' && client.paymentAmount === 0) {

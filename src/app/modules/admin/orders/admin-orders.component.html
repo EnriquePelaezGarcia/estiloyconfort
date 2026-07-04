@@ -48,7 +48,7 @@
             <td data-label="Cliente">{{ o.customerName }}</td>
             <td data-label="Vendedor" class="muted">{{ o.sellerName ?? '—' }}</td>
             <td data-label="Pago"><span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span></td>
-            <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Estado">
               <select class="status-select" [value]="o.orderStatus" (change)="changeStatus(o, $event)">
                 @for (s of allStatuses; track s) {

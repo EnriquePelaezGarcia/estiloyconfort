@@ -130,9 +130,10 @@ export class CatalogComponent implements OnInit {
     });
   }
 
-  protected money(value: number | null): string {
+  protected money(value: number | string | null): string {
     if (value === null || value === undefined) return '—';
-    return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    const num = Number(value);
+    return isNaN(num) ? '—' : num.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
   // ===== Modal =====
@@ -221,6 +222,7 @@ export class CatalogComponent implements OnInit {
       // cálculo en vivo solo como referencia.
       price_cash: this.computedPrices().price_cash,
       price_6msi: this.computedPrices().price_6msi,
+      price_credit: this.computedPrices().price_credit,
       stock_quantity: raw.stockQuantity ?? 0,
       stock_alert_level: raw.stockAlertLevel ?? 5,
       is_featured: raw.isFeatured ?? false,

@@ -44,7 +44,7 @@
     <article class="kpi">
       <span class="kpi__icon material-symbols-outlined">savings</span>
       <div class="kpi__body">
-        <span class="kpi__value">{{ s.products.inventoryValue | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}</span>
+        <span class="kpi__value">{{ s.products.inventoryValue | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
         <span class="kpi__label">Valor de inventario</span>
         <span class="kpi__meta">al costo base</span>
       </div>
@@ -114,7 +114,7 @@
             <tr>
               <td>{{ p.name }}</td>
               <td class="muted">{{ p.category_name ?? '—' }}</td>
-              <td class="num">{{ p.price_cash | currency: 'MXN' : 'symbol-narrow' }}</td>
+              <td class="num">{{ p.price_cash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
               <td class="num">{{ p.stock_quantity }}</td>
             </tr>
           }

@@ -81,8 +81,8 @@
               <td data-label="SKU" class="muted">{{ p.sku ?? '—' }}</td>
               <td data-label="Fabricante">{{ p.manufacturerName ?? '—' }}</td>
               <td data-label="Categoría" class="muted">{{ p.categoryName ?? '—' }}</td>
-              <td data-label="Costo" class="num">{{ p.baseCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-              <td data-label="Precio" class="num">{{ p.priceCash | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              <td data-label="Costo" class="num">{{ p.baseCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+              <td data-label="Precio" class="num">{{ p.priceCash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
               <td data-label="Stock" class="num">{{ p.stockQuantity }}</td>
             </tr>
           }

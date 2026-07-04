@@ -21,6 +21,12 @@ export const sellerRoutes: Routes = [
         title: 'Nuevo pedido - Vendedor',
       },
       {
+        path: 'cotizar-envio',
+        loadComponent: () =>
+          import('./shipping-quote/shipping-quote.component').then((m) => m.ShippingQuoteComponent),
+        title: 'Cotizar envío - Vendedor',
+      },
+      {
         path: 'catalogo',
         loadComponent: () =>
           import('../admin/catalog/catalog.component').then((m) => m.CatalogComponent),

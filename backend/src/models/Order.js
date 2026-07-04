@@ -71,6 +71,8 @@ function mapOrder(row) {
     orderDate: row.order_date,
     expectedDeliveryDate: row.expected_delivery_date,
     totalAmount: Number(row.total_amount),
+    shippingCost: row.shipping_cost != null ? Number(row.shipping_cost) : 0,
+    shippingPostalCode: row.shipping_postal_code ?? null,
     cashTotal: row.cash_total != null ? Number(row.cash_total) : null,
     downPayment: row.down_payment != null ? Number(row.down_payment) : null,
     weeklyPayment: row.weekly_payment != null ? Number(row.weekly_payment) : null,
@@ -214,14 +216,19 @@ const Order = {
         layawayDeadline = deadline.toISOString().slice(0, 10);
       }
 
+      // El costo de envío se suma al total a pagar de cualquier esquema de venta.
+      const shippingCost = Math.max(0, Number(data.shippingCost) || 0);
+      const shippingPostalCode = data.shippingPostalCode ?? null;
+      totalAmount += shippingCost;
+
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
            delivery_address, delivery_address_lat, delivery_address_lng, google_maps_url,
            delivery_type, payment_method, payment_status, payment_amount, order_status,
-           expected_delivery_date, total_amount, cash_total, down_payment,
-           weekly_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           expected_delivery_date, total_amount, shipping_cost, shipping_postal_code,
+           cash_total, down_payment, weekly_payment, credit_weeks, layaway_deadline, notes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -229,7 +236,8 @@ const Order = {
           data.googleMapsUrl ?? null,
           data.deliveryType ?? 'standard', paymentMethod,
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
-          totalAmount, cashTotal, downPayment, weeklyPayment, creditWeeks,
+          totalAmount, shippingCost, shippingPostalCode,
+          cashTotal, downPayment, weeklyPayment, creditWeeks,
           layawayDeadline, data.notes ?? null,
         ],
       );
@@ -378,6 +386,15 @@ const Order = {
         }
       }
 
+      // Costo de envío: se conserva el del pedido si no viene en la edición.
+      const shippingCost = data.shippingCost !== undefined
+        ? Math.max(0, Number(data.shippingCost) || 0)
+        : Number(existing.shippingCost) || 0;
+      const shippingPostalCode = data.shippingPostalCode !== undefined
+        ? data.shippingPostalCode
+        : existing.shippingPostalCode;
+      totalAmount += shippingCost;
+
       // 4. Reemplazar los items y descontar el nuevo stock.
       await conn.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
       for (const it of resolvedItems) {
@@ -407,7 +424,8 @@ const Order = {
            customer_name = ?, customer_email = ?, customer_phone = ?,
            delivery_address = ?, google_maps_url = ?, delivery_type = ?,
            payment_method = ?, payment_status = ?, expected_delivery_date = ?, notes = ?,
-           total_amount = ?, cash_total = ?, down_payment = ?,
+           total_amount = ?, shipping_cost = ?, shipping_postal_code = ?,
+           cash_total = ?, down_payment = ?,
            weekly_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
         [
@@ -420,7 +438,8 @@ const Order = {
           paymentMethod, paymentStatus,
           data.expectedDeliveryDate !== undefined ? data.expectedDeliveryDate : existing.expectedDeliveryDate,
           data.notes !== undefined ? data.notes : existing.notes,
-          totalAmount, cashTotal, downPayment, weeklyPayment, creditWeeks, layawayDeadline,
+          totalAmount, shippingCost, shippingPostalCode,
+          cashTotal, downPayment, weeklyPayment, creditWeeks, layawayDeadline,
           id,
         ],
       );

@@ -87,8 +87,10 @@ export class InventoryComponent implements OnInit {
     return 'ok';
   }
 
-  protected money(value: number): string {
-    return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  protected money(value: number | string | null): string {
+    if (value === null || value === undefined) return '—';
+    const num = Number(value);
+    return isNaN(num) ? '—' : num.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
   protected setFilter(filter: StockFilter): void {

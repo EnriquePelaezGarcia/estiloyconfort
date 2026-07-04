@@ -51,7 +51,7 @@
 // ===== Precios calculados (solo lectura) =====
 .price-preview {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: vars.$spacing-md;
 }
 
@@ -67,6 +67,11 @@
   &--msi {
     background: rgba(vars.$color-primary, 0.06);
     border-color: rgba(vars.$color-primary, 0.25);
+  }
+
+  &--credit {
+    background: rgba(vars.$color-success, 0.06);
+    border-color: rgba(vars.$color-success, 0.25);
   }
 }
 

@@ -15,8 +15,8 @@ async function withCalculatedPrices(data, fallback = {}) {
   const margin = data.margin_percentage ?? fallback.margin_percentage;
   if (baseCost === undefined || margin === undefined) return data;
   const config = await PricingConfig.getMap();
-  const { price_cash, price_6msi } = calculatePrices(baseCost, margin, config);
-  return { ...data, price_cash, price_6msi };
+  const { price_cash, price_6msi, price_credit } = calculatePrices(baseCost, margin, config);
+  return { ...data, price_cash, price_6msi, price_credit };
 }
 
 const productController = {

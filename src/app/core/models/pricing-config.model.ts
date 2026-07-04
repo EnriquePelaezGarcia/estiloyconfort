@@ -33,6 +33,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
 export interface CalculatedPrices {
   price_cash: number | null;
   price_6msi: number | null;
+  price_credit: number | null;
 }
 
 /** Desglose del plan de financiamiento "Crédito Tienda". */

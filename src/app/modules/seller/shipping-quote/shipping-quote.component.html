@@ -1,0 +1,84 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Logística</p>
+    <h1 class="page-head__title">Cotizar envío — Puebla</h1>
+    <p class="page-head__sub">Ingresa el código postal de entrega para conocer el costo del envío.</p>
+  </div>
+</header>
+
+<div class="quote-grid">
+  <div class="panel">
+    <h2 class="panel__title">Código postal de entrega</h2>
+    <div class="field">
+      <label for="cp">CP (5 dígitos)</label>
+      <input
+        id="cp"
+        type="text"
+        inputmode="numeric"
+        maxlength="5"
+        placeholder="72000"
+        autocomplete="off"
+        [value]="cp()"
+        (input)="onCpInput($event)"
+      />
+    </div>
+
+    @if (loading()) {
+      <div class="state"><div class="spinner"></div></div>
+    } @else if (quote(); as q) {
+      <div class="result-card" [attr.data-tier]="priceTier(q.price)">
+        <span class="material-symbols-outlined result-card__icon">local_shipping</span>
+        <div class="result-card__info">
+          <span class="result-card__zone">{{ q.zone }} · CP {{ q.cp }}</span>
+          <span class="result-card__label">{{ q.label }}</span>
+        </div>
+        @if (q.isFree) {
+          <span class="result-card__price result-card__price--free">GRATIS</span>
+        } @else {
+          <span class="result-card__price">{{ q.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        }
+      </div>
+    } @else if (outOfRange()) {
+      <div class="result-card result-card--empty">
+        <span class="material-symbols-outlined result-card__icon">wrong_location</span>
+        <div class="result-card__info">
+          <span class="result-card__zone">CP fuera de cobertura</span>
+          <span class="result-card__label">No hay tarifa registrada para el CP {{ cp() }}.</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="panel">
+    <h2 class="panel__title">Tarifas por zona</h2>
+    <table class="rates">
+      <thead>
+        <tr>
+          <th>Rango CP</th>
+          <th>Zona</th>
+          <th class="rates__price-col">Precio</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of rates(); track r.id) {
+          <tr [attr.data-tier]="priceTier(r.price)">
+            <td>{{ r.rangeStart }}–{{ r.rangeEnd }}</td>
+            <td>
+              <span class="rates__zone">{{ r.zone }}</span>
+              <span class="rates__label">{{ r.label }}</span>
+            </td>
+            <td class="rates__price-col">
+              @if (r.price === 0) {
+                <span class="rates__free">GRATIS</span>
+              } @else {
+                {{ r.price | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="3" class="empty">Sin tarifas cargadas.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

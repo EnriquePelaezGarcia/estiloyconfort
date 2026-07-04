@@ -39,6 +39,7 @@ export interface Product {
   price_with_iva: number;
   price_cash: number;
   price_6msi: number;
+  price_credit: number | null;
   stock_quantity: number;
   stock_alert_level: number;
   is_active: boolean;
@@ -75,6 +76,7 @@ export interface ProductPayload {
   margin_percentage: number;
   price_cash: number | null;
   price_6msi: number | null;
+  price_credit: number | null;
   stock_quantity: number;
   stock_alert_level: number;
   is_featured: boolean;

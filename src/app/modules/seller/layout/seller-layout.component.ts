@@ -15,6 +15,7 @@ export class SellerLayoutComponent {
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Resumen', icon: 'dashboard', route: 'resumen' },
     { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo' },
+    { label: 'Cotizar envío', icon: 'local_shipping', route: 'cotizar-envio' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     { label: 'Mis pedidos', icon: 'receipt_long', route: 'pedidos' },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },

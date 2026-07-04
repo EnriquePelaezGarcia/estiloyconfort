@@ -31,7 +31,7 @@
             <td data-label="Orden" class="strong">{{ o.poNumber }}</td>
             <td data-label="Fabricante">{{ o.manufacturerName ?? '—' }}</td>
             <td data-label="Items" class="num">{{ o.itemCount ?? 0 }}</td>
-            <td data-label="Total" class="num">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            <td data-label="Total" class="num">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
             <td data-label="Estado">
               <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
@@ -77,8 +77,8 @@
                             </span>
                           </td>
                           <td class="num">{{ it.quantity }}</td>
-                          <td class="num">{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-                          <td class="num">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                          <td class="num">{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                          <td class="num">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                         </tr>
                       }
                     </tbody>
@@ -189,7 +189,7 @@
         </div>
 
         <div class="modal__foot">
-          <span class="form-total">Total: <strong>{{ formTotal() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          <span class="form-total">Total: <strong>{{ formTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
           <button type="button" class="btn btn--ghost" (click)="closeCreate()">Cancelar</button>
           <button type="submit" class="btn btn--primary" [disabled]="saving()">
             {{ saving() ? 'Guardando…' : 'Crear orden' }}

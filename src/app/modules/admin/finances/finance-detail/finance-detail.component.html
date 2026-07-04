@@ -12,7 +12,7 @@
   </div>
   <div class="total-box total-box--{{ metric() }}">
     <span class="total-box__label">{{ config().totalLabel }}</span>
-    <span class="total-box__value">{{ total() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+    <span class="total-box__value">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
     <span class="total-box__count">{{ rows().length }} {{ rows().length === 1 ? 'registro' : 'registros' }}</span>
   </div>
 </header>
@@ -49,7 +49,7 @@
           </div>
           <div class="detail-card__amount">
             <span class="detail-card__amount-label">{{ config().amountLabel }}</span>
-            <span class="detail-card__amount-value">{{ r.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="detail-card__amount-value">{{ r.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
           <span class="detail-card__chevron material-symbols-outlined">
             {{ expanded() === r.orderId ? 'expand_less' : 'expand_more' }}
@@ -58,14 +58,14 @@
 
         @if (metric() === 'profit') {
           <div class="detail-card__breakdown">
-            <span>Ingreso: <strong>{{ r.revenue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
-            <span>Costo: <strong>{{ r.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+            <span>Ingreso: <strong>{{ r.revenue | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
+            <span>Costo: <strong>{{ r.cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
           </div>
         }
         @if (metric() === 'pending') {
           <div class="detail-card__breakdown">
-            <span>Total: <strong>{{ r.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
-            <span>Pagado: <strong>{{ r.paidAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+            <span>Total: <strong>{{ r.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
+            <span>Pagado: <strong>{{ r.paidAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
           </div>
         }
 
@@ -87,7 +87,7 @@
                       <td>{{ it.productName }}</td>
                       <td class="muted">{{ it.productSku }}</td>
                       <td class="num">{{ it.quantity }}</td>
-                      <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                      <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                     </tr>
                   }
                 </tbody>

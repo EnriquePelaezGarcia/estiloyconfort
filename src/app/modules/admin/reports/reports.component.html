@@ -45,7 +45,7 @@
       </div>
       <div class="stat-card stat-card--success">
         <span class="stat-card__label">Ingresos</span>
-        <span class="stat-card__value">{{ sum.revenue | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+        <span class="stat-card__value">{{ sum.revenue | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       </div>
     </section>
   }
@@ -70,7 +70,7 @@
               <td data-label="Vendedor" class="muted">{{ r.seller ?? '—' }}</td>
               <td data-label="Estado"><span class="badge" [class]="statusTone(r.order_status)">{{ statusLabel(r.order_status) }}</span></td>
               <td data-label="Pago">{{ payLabel(r.payment_status) }}</td>
-              <td data-label="Total" class="num strong">{{ r.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              <td data-label="Total" class="num strong">{{ r.total_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
               <td data-label="Fecha" class="muted">{{ r.order_date | date:'dd/MM/yyyy' }}</td>
             </tr>
           }
@@ -94,9 +94,9 @@
               <td data-label="Producto">{{ r.name }}</td>
               <td data-label="Categoría" class="muted">{{ r.category ?? '—' }}</td>
               <td data-label="Stock" class="num" [class.low]="r.stock_quantity <= r.stock_alert_level">{{ r.stock_quantity }}</td>
-              <td data-label="Costo" class="num">{{ r.base_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-              <td data-label="Precio" class="num">{{ r.price_cash | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-              <td data-label="Valor stock" class="num strong">{{ r.stock_value | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              <td data-label="Costo" class="num">{{ r.base_cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+              <td data-label="Precio" class="num">{{ r.price_cash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+              <td data-label="Valor stock" class="num strong">{{ r.stock_value | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             </tr>
           }
         </tbody>

@@ -92,7 +92,7 @@ const Product = {
   async create(data) {
     const fields = ['name','slug','sku','category_id','manufacturer_id','description','materials',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
-      'availability_days','base_cost','margin_percentage','price_cash','price_6msi',
+      'availability_days','base_cost','margin_percentage','price_cash','price_6msi','price_credit',
       'stock_quantity','stock_alert_level','is_featured'];
     const values = fields.map(f => data[f] ?? null);
     const [result] = await pool.execute(
@@ -105,7 +105,7 @@ const Product = {
   async update(id, data) {
     const allowed = ['name','slug','sku','category_id','manufacturer_id','description','materials',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
-      'availability_days','base_cost','margin_percentage','price_cash','price_6msi',
+      'availability_days','base_cost','margin_percentage','price_cash','price_6msi','price_credit',
       'stock_quantity','stock_alert_level','is_featured','is_active'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
     if (!entries.length) return this.findById(id, { includeInactive: true });

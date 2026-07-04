@@ -80,6 +80,100 @@
   &__amount { font-size: 1.4rem; color: vars.$color-primary; }
 }
 
+// ===== Envío: badge en "Entrega y pago" =====
+.shipping-badge {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin-top: vars.$spacing-sm;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-success;
+  border-radius: vars.$radius-md;
+  background: color-mix(in srgb, vars.$color-success 8%, white);
+  animation: shipping-fade-in 0.2s ease;
+
+  .material-symbols-outlined { color: vars.$color-success; }
+
+  &__info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  &__zone { font-size: 0.875rem; font-weight: 600; color: vars.$color-text; }
+  &__label { font-size: 0.75rem; color: vars.$color-text-secondary; }
+
+  &__price {
+    font-size: 1rem;
+    font-weight: 700;
+    color: vars.$color-text;
+    white-space: nowrap;
+
+    &--free {
+      color: vars.$color-success;
+      font-size: 0.8rem;
+      border: 1px solid vars.$color-success;
+      padding: 2px 8px;
+      border-radius: vars.$radius-full;
+    }
+  }
+}
+
+// ===== Envío: desglose en el carrito =====
+.cart-total--sub {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  padding-bottom: vars.$spacing-sm;
+  margin-bottom: 0;
+
+  .cart-total__amount { font-size: 1.1rem; }
+}
+
+.shipping-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: vars.$spacing-sm 0;
+  border-top: 1px dashed vars.$color-border;
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-xs;
+    font-size: 0.875rem;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+  }
+
+  &__free {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: vars.$color-success;
+    background: color-mix(in srgb, vars.$color-success 10%, white);
+    padding: 2px 8px;
+    border-radius: vars.$radius-full;
+  }
+
+  &__price { font-weight: 600; color: vars.$color-text; }
+}
+
+.grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: vars.$spacing-md 0 vars.$spacing-sm;
+  margin: vars.$spacing-xs 0 vars.$spacing-md;
+  border-top: 2px solid vars.$color-primary;
+  font-weight: 700;
+
+  &__amount {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: vars.$color-primary;
+  }
+}
+
+@keyframes shipping-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .msi-note {
   display: flex;
   align-items: center;

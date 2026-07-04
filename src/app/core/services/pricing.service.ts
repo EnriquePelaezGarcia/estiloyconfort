@@ -48,7 +48,7 @@ export class PricingService {
     const D = Number(marginPct) / 100;
 
     if (!Number.isFinite(C) || C <= 0 || !Number.isFinite(D) || D >= 1 || D < 0) {
-      return { price_cash: null, price_6msi: null };
+      return { price_cash: null, price_6msi: null, price_credit: null };
     }
 
     const iva = config.iva / 100;
@@ -62,14 +62,20 @@ export class PricingService {
     const cashDenom = 1 - card;
     const msiDenom = 1 - card - msi;
     if (cashDenom <= 0 || msiDenom <= 0) {
-      return { price_cash: null, price_6msi: null };
+      return { price_cash: null, price_6msi: null, price_credit: null };
     }
 
     const ceilTo = (value: number, s: number) => Math.ceil(value / s) * s;
 
+    const priceCash = ceilTo(I / cashDenom, step);
+    const interest = config.credit_interest / 100;
+
     return {
-      price_cash: ceilTo(I / cashDenom, step),
+      price_cash: priceCash,
       price_6msi: ceilTo(I / msiDenom, step),
+      price_credit: Number.isFinite(interest) && interest >= 0
+        ? ceilTo(priceCash * (1 + interest), step)
+        : null,
     };
   }
 

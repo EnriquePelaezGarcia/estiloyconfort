@@ -33,28 +33,28 @@
     <a class="stat-card stat-card--success" [routerLink]="['detalle', 'income']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">trending_up</span></span>
       <span class="stat-card__label">Ingresos brutos</span>
-      <span class="stat-card__value">{{ s.totalIncome | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
-      <span class="stat-card__hint">{{ s.monthIncome | currency:'MXN':'symbol-narrow':'1.0-0' }} este mes</span>
+      <span class="stat-card__value">{{ s.totalIncome | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      <span class="stat-card__hint">{{ s.monthIncome | currency:'MXN':'symbol-narrow':'1.2-2' }} este mes</span>
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
     <a class="stat-card stat-card--danger" [routerLink]="['detalle', 'cost']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">trending_down</span></span>
       <span class="stat-card__label">Costo de producción</span>
-      <span class="stat-card__value">{{ s.totalCost | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__value">{{ s.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       <span class="stat-card__hint">pedidos entregados</span>
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
     <a class="stat-card" [routerLink]="['detalle', 'profit']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">savings</span></span>
       <span class="stat-card__label">Ganancia neta</span>
-      <span class="stat-card__value">{{ s.netProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__value">{{ s.netProfit | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       <span class="stat-card__hint">margen {{ s.margin }}%</span>
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
     <a class="stat-card stat-card--gold" [routerLink]="['detalle', 'pending']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">pending</span></span>
       <span class="stat-card__label">Por cobrar</span>
-      <span class="stat-card__value">{{ s.pendingCollection | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="stat-card__value">{{ s.pendingCollection | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       <span class="stat-card__hint">saldos pendientes</span>
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
@@ -74,7 +74,7 @@
             <div class="breakdown__fill" [style.width.%]="percent(b.total)"></div>
           </div>
           <span class="breakdown__value">
-            {{ b.total | currency:'MXN':'symbol-narrow':'1.0-0' }} ({{ percent(b.total) }}%)
+            {{ b.total | currency:'MXN':'symbol-narrow':'1.2-2' }} ({{ percent(b.total) }}%)
           </span>
         </div>
       }
@@ -102,7 +102,7 @@
               <td data-label="Cliente">{{ t.customer_name }}</td>
               <td data-label="Método">{{ methodLabel(t.payment_method) }}</td>
               <td data-label="Cobró" class="muted">{{ t.collected_by ?? '—' }}</td>
-              <td data-label="Monto" class="num strong">{{ t.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              <td data-label="Monto" class="num strong">{{ t.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             </tr>
           }
         </tbody>

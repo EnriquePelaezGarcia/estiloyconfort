@@ -27,6 +27,18 @@
       font-weight: 700;
       color: vars.$color-error;
     }
+
+    &--ship {
+      color: vars.$color-text-secondary;
+
+      span:first-child {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+
+        .material-symbols-outlined { font-size: 1.05rem; }
+      }
+    }
   }
 
   &__amount { font-weight: 700; color: vars.$color-primary; }
@@ -137,6 +149,20 @@
   padding-top: 10px;
   border-top: 1px solid #e5e7eb;
   font-size: 1rem;
+}
+
+.pay-balance--ship {
+  margin-bottom: 6px;
+  color: vars.$color-text-secondary;
+  font-size: 0.82rem;
+
+  span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+
+    .material-symbols-outlined { font-size: 1rem; }
+  }
 }
 
 .pay-lines {

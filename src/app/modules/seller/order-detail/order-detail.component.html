@@ -50,8 +50,8 @@
                   <span class="muted"> · {{ it.productSku }}</span>
                 </td>
                 <td class="num">{{ it.quantity }}</td>
-                <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-                <td class="num strong">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                <td class="num strong">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
               </tr>
             }
           </tbody>
@@ -61,7 +61,18 @@
       <div class="totals">
         @if (isCredit() && o.cashTotal != null) {
           <div class="totals__row"><span>Subtotal contado</span><span>{{ o.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
-          <div class="totals__row"><span>Interés crédito</span><span>{{ (o.totalAmount - o.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+          <div class="totals__row"><span>Interés crédito</span><span>{{ (o.totalAmount - shippingCost() - o.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        } @else if (shippingCost() > 0) {
+          <div class="totals__row"><span>Subtotal productos</span><span>{{ productsSubtotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        }
+        @if (shippingCost() > 0) {
+          <div class="totals__row totals__row--ship">
+            <span>
+              <span class="material-symbols-outlined">local_shipping</span>
+              Envío@if (o.shippingPostalCode) { · CP {{ o.shippingPostalCode }} }
+            </span>
+            <span>{{ shippingCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
         }
         <div class="totals__row"><span>{{ isCredit() ? 'Precio a crédito' : 'Total' }}</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         <div class="totals__row"><span>Pagado</span><span>{{ o.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
@@ -70,12 +81,12 @@
 
       @if (isCredit()) {
         <div class="credit-box">
-          <div class="credit-box__row"><span>Pago inicial</span><span class="strong">{{ o.downPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span></div>
-          <div class="credit-box__row"><span>{{ o.creditWeeks }} cuotas semanales</span><span class="strong">{{ o.weeklyPayment | currency:'MXN':'symbol-narrow':'1.0-0' }}</span></div>
+          <div class="credit-box__row"><span>Pago inicial</span><span class="strong">{{ o.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+          <div class="credit-box__row"><span>{{ o.creditWeeks }} cuotas semanales</span><span class="strong">{{ o.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
           @if (!downPaymentCovered()) {
             <p class="credit-box__warn">
               <span class="material-symbols-outlined">lock</span>
-              Falta {{ downPaymentRemaining() | currency:'MXN':'symbol-narrow':'1.0-0' }} del pago inicial.
+              Falta {{ downPaymentRemaining() | currency:'MXN':'symbol-narrow':'1.2-2' }} del pago inicial.
               El mueble no puede enviarse hasta cubrirlo.
             </p>
           } @else {
@@ -122,7 +133,7 @@
           @for (p of o.payments; track p.id) {
             <li>
               <span>{{ p.paymentDate | date:'dd/MM/yyyy' }} · {{ methodLabel(p.paymentMethod) }}</span>
-              <span class="strong">{{ p.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              <span class="strong">{{ p.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </li>
           }
         </ul>
@@ -163,6 +174,15 @@
       </div>
       <div class="modal__body">
         <form [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
+          @if (shippingCost() > 0) {
+            <p class="pay-balance pay-balance--ship">
+              <span>
+                <span class="material-symbols-outlined">local_shipping</span>
+                Incluye envío@if (order()?.shippingPostalCode; as cp) { · CP {{ cp }} }
+              </span>
+              <span>{{ shippingCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </p>
+          }
           <p class="pay-balance">
             <span>Saldo pendiente</span>
             <span class="strong">{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>

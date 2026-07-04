@@ -22,7 +22,7 @@ const ceilTo = (value, step) => {
  * @param {number} marginPct Margen de ganancia deseado en porcentaje (D)
  * @param {{iva:number, card_commission:number, msi_commission:number, rounding_step:number}} config
  *        Parámetros globales expresados como porcentajes (rounding_step en pesos).
- * @returns {{ price_cash: number|null, price_6msi: number|null }}
+ * @returns {{ price_cash: number|null, price_6msi: number|null, price_credit: number|null }}
  */
 function calculatePrices(baseCost, marginPct, config) {
   const C = Number(baseCost);
@@ -30,12 +30,13 @@ function calculatePrices(baseCost, marginPct, config) {
 
   // Sin costo válido o margen >= 100% el cálculo no tiene sentido.
   if (!Number.isFinite(C) || C <= 0 || !Number.isFinite(D) || D >= 1 || D < 0) {
-    return { price_cash: null, price_6msi: null };
+    return { price_cash: null, price_6msi: null, price_credit: null };
   }
 
   const iva = Number(config.iva) / 100;
   const card = Number(config.card_commission) / 100;
   const msi = Number(config.msi_commission) / 100;
+  const interest = Number(config.credit_interest) / 100;
   const step = Number(config.rounding_step) || 10;
 
   const E = C / (1 - D);
@@ -44,12 +45,17 @@ function calculatePrices(baseCost, marginPct, config) {
   const cashDenom = 1 - card;
   const msiDenom = 1 - card - msi;
   if (cashDenom <= 0 || msiDenom <= 0) {
-    return { price_cash: null, price_6msi: null };
+    return { price_cash: null, price_6msi: null, price_credit: null };
   }
 
+  const priceCash = ceilTo(I / cashDenom, step);
+
   return {
-    price_cash: ceilTo(I / cashDenom, step),
+    price_cash: priceCash,
     price_6msi: ceilTo(I / msiDenom, step),
+    price_credit: Number.isFinite(interest) && interest >= 0
+      ? ceilTo(priceCash * (1 + interest), step)
+      : null,
   };
 }
 

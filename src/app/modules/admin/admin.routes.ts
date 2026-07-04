@@ -51,6 +51,14 @@ export const adminRoutes: Routes = [
         title: 'Venta - Panel Admin',
       },
       {
+        path: 'cotizar-envio',
+        loadComponent: () =>
+          import('../seller/shipping-quote/shipping-quote.component').then(
+            (m) => m.ShippingQuoteComponent,
+          ),
+        title: 'Cotizar envío - Panel Admin',
+      },
+      {
         path: 'finanzas',
         loadComponent: () =>
           import('./finances/finances.component').then((m) => m.FinancesComponent),

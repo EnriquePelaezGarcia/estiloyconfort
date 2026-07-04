@@ -50,7 +50,7 @@
             <td data-label="Cliente">{{ o.customerName }}</td>
             <td data-label="Estado"><span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span></td>
             <td data-label="Pago"><span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span></td>
-            <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+            <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
             <td class="actions">
               <a class="icon-btn" [routerLink]="[o.id]" aria-label="Ver detalle">

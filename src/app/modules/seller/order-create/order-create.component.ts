@@ -6,7 +6,9 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ShippingService } from '../../../core/services/shipping.service';
 import { CreateOrderRequest, InventoryItem, SaleScheme } from '../../../core/models/order.model';
+import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
 interface CartLine {
@@ -24,6 +26,7 @@ interface CartLine {
 export class OrderCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
   private notification = inject(NotificationService);
+  private shippingService = inject(ShippingService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -36,6 +39,12 @@ export class OrderCreateComponent implements OnInit {
   /** Id del pedido cuando se entra en modo edición (?edit=ID); null al crear. */
   protected editId = signal<number | null>(null);
   protected isEditing = computed(() => this.editId() !== null);
+
+  /** CP de entrega y cotización de envío en vivo. */
+  protected shippingCp = signal<string>('');
+  protected shippingQuote = signal<ShippingQuote | null>(null);
+  protected shippingCost = computed(() => this.shippingQuote()?.price ?? 0);
+  protected grandTotal = computed(() => this.total() + this.shippingCost());
 
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
@@ -129,6 +138,12 @@ export class OrderCreateComponent implements OnInit {
             : '',
           notes: data.notes ?? '',
         });
+        // Precargar el CP de envío y recotizar para mostrar el desglose.
+        if (data.shippingPostalCode) {
+          const cp = String(data.shippingPostalCode).replace(/\D/g, '').slice(0, 5);
+          this.shippingCp.set(cp);
+          if (cp.length === 5) this.fetchShippingQuote(cp);
+        }
         this.lines.set(
           (data.items ?? []).map((it) => ({
             product: {
@@ -161,6 +176,24 @@ export class OrderCreateComponent implements OnInit {
 
   protected onSearchInput(event: Event): void {
     this.searchProducts((event.target as HTMLInputElement).value);
+  }
+
+  /** Filtra a 5 dígitos y cotiza el envío cuando el CP está completo. */
+  protected onShippingCpInput(event: Event): void {
+    const cp = (event.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 5);
+    this.shippingCp.set(cp);
+    if (cp.length === 5) {
+      this.fetchShippingQuote(cp);
+    } else {
+      this.shippingQuote.set(null);
+    }
+  }
+
+  private fetchShippingQuote(cp: string): void {
+    this.shippingService.quoteByPostalCode(cp).subscribe({
+      next: (q) => this.shippingQuote.set(q),
+      error: () => this.shippingQuote.set(null),
+    });
   }
 
   protected addProduct(product: InventoryItem): void {
@@ -209,6 +242,8 @@ export class OrderCreateComponent implements OnInit {
       paymentMethod: raw.paymentMethod!,
       expectedDeliveryDate: raw.expectedDeliveryDate || null,
       notes: raw.notes || null,
+      shippingCost: this.shippingCost() || null,
+      shippingPostalCode: this.shippingCp() || null,
       items: this.lines().map((l) => ({
         productId: l.product.id,
         quantity: l.quantity,

@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS products (
   price_with_iva             DECIMAL(12,2)  GENERATED ALWAYS AS (ROUND(base_cost / (1 - margin_percentage / 100) * 1.16, 2)) STORED,
   price_cash                 DECIMAL(12,2),
   price_6msi                 DECIMAL(12,2),
+  price_credit               DECIMAL(12,2),
   stock_quantity             INT            DEFAULT 0,
   stock_alert_level          INT            DEFAULT 5,
   is_active                  BOOLEAN        DEFAULT TRUE,

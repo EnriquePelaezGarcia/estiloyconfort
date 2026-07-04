@@ -35,6 +35,7 @@
           <th>Categoría</th>
           <th class="num">Contado</th>
           <th class="num">6 MSI</th>
+          <th class="num">Créd. Tienda</th>
           <th class="num">Stock</th>
           <th>Estado</th>
           @if (canManage()) {
@@ -50,6 +51,7 @@
             <td data-label="Categoría">{{ product.category_name || '—' }}</td>
             <td data-label="Contado" class="num">{{ money(product.price_cash) }}</td>
             <td data-label="6 MSI" class="num">{{ money(product.price_6msi) }}</td>
+            <td data-label="Créd. Tienda" class="num">{{ money(product.price_credit) }}</td>
             <td data-label="Stock" class="num">{{ product.stock_quantity }}</td>
             <td data-label="Estado">
               @if (canManage()) {
@@ -88,7 +90,7 @@
           </tr>
         } @empty {
           <tr>
-            <td [attr.colspan]="canManage() ? 8 : 7" class="empty">No se encontraron productos.</td>
+            <td [attr.colspan]="canManage() ? 9 : 8" class="empty">No se encontraron productos.</td>
           </tr>
         }
       </tbody>
@@ -188,6 +190,10 @@
           <div class="price-preview__item price-preview__item--msi">
             <span class="price-preview__label">Precio a 6 MSI</span>
             <span class="price-preview__value">{{ money(computedPrices().price_6msi) }}</span>
+          </div>
+          <div class="price-preview__item price-preview__item--credit">
+            <span class="price-preview__label">Crédito Tienda</span>
+            <span class="price-preview__value">{{ money(computedPrices().price_credit) }}</span>
           </div>
         </div>
         <p class="price-preview__hint">

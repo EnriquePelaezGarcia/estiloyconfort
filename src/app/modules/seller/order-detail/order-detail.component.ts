@@ -65,6 +65,15 @@ export class OrderDetailComponent implements OnInit {
     return o ? Math.max(0, o.totalAmount - o.paymentAmount) : 0;
   });
 
+  /** Costo de envío del pedido (ya incluido en totalAmount). */
+  protected shippingCost = computed(() => this.order()?.shippingCost ?? 0);
+
+  /** Subtotal de productos: total menos el envío (para Contado/MSI). */
+  protected productsSubtotal = computed(() => {
+    const o = this.order();
+    return o ? Math.max(0, o.totalAmount - this.shippingCost()) : 0;
+  });
+
   /** ¿El pedido se vendió a Crédito Tienda? */
   protected isCredit = computed(() => this.order()?.paymentMethod === 'store_credit');
 

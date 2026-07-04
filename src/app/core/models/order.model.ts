@@ -75,6 +75,10 @@ export interface Order {
   weeklyPayment?: number | null;
   /** Número de abonos semanales del crédito. */
   creditWeeks?: number | null;
+  /** Costo de envío cobrado en el pedido. */
+  shippingCost?: number | null;
+  /** Código postal de entrega usado para cotizar el envío. */
+  shippingPostalCode?: string | null;
   /** Fecha límite para pagar en apartado al precio de contado. */
   layawayDeadline?: string | null;
   /** TRUE cuando el precio de contado del apartado fue reemplazado por precio crédito. */
@@ -104,6 +108,8 @@ export interface CreateOrderRequest {
   paymentMethod: SaleScheme;
   expectedDeliveryDate?: string | null;
   notes?: string | null;
+  shippingCost?: number | null;
+  shippingPostalCode?: string | null;
   items: Array<{
     productId: number;
     quantity: number;
