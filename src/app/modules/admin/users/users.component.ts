@@ -48,6 +48,9 @@ export class UsersComponent implements OnInit {
   protected isModalOpen = computed(() => this.editing() !== undefined);
   protected isEditMode = computed(() => !!this.editing());
 
+  /** El rol 'visitor' es el acceso anónimo por defecto; no se asigna manualmente. */
+  protected assignableRoles = computed(() => this.roles().filter((r) => r.name !== 'visitor'));
+
   protected filteredUsers = computed(() => {
     const term = this.search().trim().toLowerCase();
     if (!term) return this.users();
@@ -89,7 +92,6 @@ export class UsersComponent implements OnInit {
   protected openCreate(): void {
     this.editing.set(null);
     this.form.reset({ isActive: true, roleId: null });
-    this.form.controls.email.enable();
     this.form.controls.password.addValidators(Validators.required);
     this.form.controls.password.updateValueAndValidity();
   }
@@ -104,7 +106,6 @@ export class UsersComponent implements OnInit {
       roleId: this.roles().find((r) => r.name === user.role)?.id ?? null,
       isActive: user.isActive,
     });
-    this.form.controls.email.disable();
     this.form.controls.password.clearValidators();
     this.form.controls.password.updateValueAndValidity();
   }
@@ -124,6 +125,7 @@ export class UsersComponent implements OnInit {
     const target = this.editing();
     if (target) {
       const payload: UpdateUserRequest = {
+        email: raw.email!,
         fullName: raw.fullName!,
         phone: raw.phone || null,
         roleId: raw.roleId!,

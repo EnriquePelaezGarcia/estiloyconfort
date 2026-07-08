@@ -4,9 +4,6 @@ const { calculateCredit } = require('../utils/pricingCalculator');
 
 const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
 
-// Para Crédito Tienda y Apartado no se permite envío hasta cubrir el pago completo/inicial.
-const SHIPPING_STATUSES = ['ready', 'in_delivery', 'delivered'];
-
 const LAYAWAY_MIN_DEPOSIT = 500;
 const LAYAWAY_MONTHS = 3;
 
@@ -454,40 +451,10 @@ const Order = {
     }
   },
 
-  /**
-   * Verifica que pedidos a Crédito Tienda/Apartado tengan cubierto el pago
-   * inicial antes de avanzar a un estado de envío.
-   * Para Apartado el mueble solo se entrega cuando está totalmente pagado.
-   */
-  assertInitialPaymentCovered(order, targetStatus) {
-    if (!order) return;
-    if (!SHIPPING_STATUSES.includes(targetStatus)) return;
-    if (order.paymentMethod === 'store_credit') {
-      const down = Number(order.downPayment) || 0;
-      if (Number(order.paymentAmount) + 1e-6 < down) {
-        const err = new Error(
-          'No se puede avanzar el pedido: falta cubrir el pago inicial del crédito en tienda',
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-    } else if (order.paymentMethod === 'layaway') {
-      const total = Number(order.totalAmount) || 0;
-      if (Number(order.paymentAmount) + 1e-6 < total) {
-        const err = new Error(
-          'No se puede enviar el pedido en apartado: debe estar totalmente liquidado',
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-    }
-  },
-
   async updateStatus(id, status) {
     if (!ORDER_STATUSES.includes(status)) throw new Error('Estado inválido');
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
-    this.assertInitialPaymentCovered(order, status);
     await pool.execute('UPDATE orders SET order_status = ? WHERE id = ?', [status, id]);
     return this.findById(id);
   },
@@ -495,7 +462,6 @@ const Order = {
   async assignDeliveryPerson(id, deliveryPersonId, assignmentDate) {
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
-    this.assertInitialPaymentCovered(order, 'in_delivery');
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();

@@ -11,18 +11,24 @@ import {
 } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
+import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { DeliveryService } from '../../../core/services/delivery.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { DeliveryAssignment, PaymentMethod, PaymentStatus } from '../../../core/models/order.model';
-import { PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../../core/models/order-labels';
+import { DeliveryAssignment, PaymentInstrument, PaymentStatus } from '../../../core/models/order.model';
+import {
+  PAYMENT_INSTRUMENT_LABELS,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_TONE,
+} from '../../../core/models/order-labels';
 
 @Component({
   selector: 'app-delivery-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './delivery-detail.component.html',
   styleUrl: './delivery-detail.component.scss',
-  imports: [CurrencyPipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, ReactiveFormsModule, CurrencyInputDirective],
 })
 export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   private deliveryService = inject(DeliveryService);
@@ -54,10 +60,49 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
     () => this.hasSignature() && !!this.photoData() && this.assignment()?.deliveryStatus !== 'completed',
   );
 
-  protected paymentForm = this.fb.group({
-    amount: [0, [Validators.required, Validators.min(1)]],
-    paymentMethod: ['cash' as PaymentMethod, Validators.required],
+  /** ¿La venta fue a Crédito Tienda? */
+  protected isCredit = computed(() => this.assignment()?.paymentMethod === 'store_credit');
+
+  /** ¿La venta fue Apartado? */
+  protected isLayaway = computed(() => this.assignment()?.paymentMethod === 'layaway');
+
+  /** Instrumentos de cobro permitidos según la condición de venta del pedido. */
+  protected allowedInstruments = computed<PaymentInstrument[]>(() => {
+    switch (this.assignment()?.paymentMethod) {
+      case 'msi':
+        return ['msi', 'cash', 'transfer'];
+      case 'store_credit':
+      case 'layaway':
+        return ['cash', 'transfer'];
+      default: // 'cash' = Contado
+        return ['cash', 'card', 'transfer'];
+    }
   });
+
+  /** Cobro dividido: una o varias líneas (instrumento + monto) que suman el total. */
+  protected paymentForm = this.fb.group({
+    lines: this.fb.array([this.buildLine()]),
+  });
+
+  protected get paymentLines() {
+    return this.paymentForm.controls.lines;
+  }
+
+  private linesValue = toSignal(this.paymentLines.valueChanges, {
+    initialValue: this.paymentLines.value,
+  });
+
+  /** Suma de todas las líneas del cobro actual. */
+  protected payTotal = computed(() =>
+    this.linesValue().reduce((sum, l) => sum + (Number(l.amount) || 0), 0),
+  );
+
+  private buildLine(amount = 0, instrument: PaymentInstrument = 'cash') {
+    return this.fb.group({
+      paymentMethod: [instrument, Validators.required],
+      amount: [amount, [Validators.required, Validators.min(1)]],
+    });
+  }
 
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
@@ -76,6 +121,9 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
         this.assignment.set(res.data);
         this.photoData.set(res.data.photoUrl ?? null);
         this.loading.set(false);
+        // El toggle de loading destruye y recrea el <canvas>; hay que reenganchar el contexto.
+        this.ctx = null;
+        this.hasSignature.set(false);
         // Espera al render para enganchar el canvas.
         setTimeout(() => {
           this.initCanvas();
@@ -215,8 +263,27 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   }
 
   protected openPayment(): void {
-    this.paymentForm.reset({ amount: this.balance(), paymentMethod: this.assignment()?.paymentMethod ?? 'cash' });
+    this.paymentLines.clear();
+    this.paymentLines.push(this.buildLine(this.balance(), this.allowedInstruments()[0]));
     this.paymentModalOpen.set(true);
+  }
+
+  /** Agrega una línea de cobro con el saldo aún por cubrir como sugerencia. */
+  protected addLine(): void {
+    const remaining = Math.max(0, this.balance() - this.payTotal());
+    this.paymentLines.push(this.buildLine(remaining, this.allowedInstruments()[0]));
+  }
+
+  protected removeLine(index: number): void {
+    if (this.paymentLines.length > 1) {
+      this.paymentLines.removeAt(index);
+    } else {
+      this.paymentLines.at(0).get('amount')?.setValue(null);
+    }
+  }
+
+  protected instrumentLabel(i: PaymentInstrument): string {
+    return PAYMENT_INSTRUMENT_LABELS[i];
   }
 
   protected submitPayment(): void {
@@ -226,9 +293,24 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
     }
     const a = this.assignment();
     if (!a) return;
-    const { amount, paymentMethod } = this.paymentForm.getRawValue();
+
+    const lines = this.paymentLines.getRawValue().map((l) => ({
+      amount: Number(l.amount),
+      paymentMethod: l.paymentMethod as PaymentInstrument,
+    }));
+    const amountTotal = lines.reduce((sum, l) => sum + l.amount, 0);
+
+    if (amountTotal <= 0) {
+      this.notification.error('Agrega al menos un cobro con monto mayor a 0');
+      return;
+    }
+    if (this.isLayaway() && a.paymentAmount === 0 && amountTotal < 500) {
+      this.notification.error('El primer abono en apartado debe ser mínimo $500');
+      return;
+    }
+
     this.savingPayment.set(true);
-    this.deliveryService.registerPayment(a.id, amount!, paymentMethod!).subscribe({
+    this.deliveryService.registerPayment(a.id, lines).subscribe({
       next: () => {
         this.notification.success('Cobro registrado');
         this.savingPayment.set(false);

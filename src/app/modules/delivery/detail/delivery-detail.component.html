@@ -136,22 +136,56 @@
         </button>
       </div>
       <form class="modal__body" [formGroup]="paymentForm" (ngSubmit)="submitPayment()">
-        <div class="field">
-          <label for="amount">Monto</label>
-          <input id="amount" type="number" formControlName="amount" min="1" />
+        <p class="pay-balance">
+          <span>Saldo pendiente</span>
+          <span class="strong">{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </p>
+
+        <div class="pay-lines" formArrayName="lines">
+          @for (line of paymentLines.controls; track $index; let i = $index) {
+            <div class="pay-line" [formGroupName]="i">
+              <div class="field">
+                <label [for]="'pm-' + i">Medio</label>
+                <select [id]="'pm-' + i" formControlName="paymentMethod">
+                  @for (inst of allowedInstruments(); track inst) {
+                    <option [value]="inst">{{ instrumentLabel(inst) }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label [for]="'amt-' + i">Monto</label>
+                <input [id]="'amt-' + i" type="text" inputmode="decimal" appCurrencyInput formControlName="amount" />
+              </div>
+              <button
+                type="button"
+                class="icon-btn icon-btn--danger"
+                (click)="removeLine(i)"
+                aria-label="Quitar línea"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
         </div>
-        <div class="field">
-          <label for="pm">Método</label>
-          <select id="pm" formControlName="paymentMethod">
-            <option value="cash">Efectivo</option>
-            <option value="card">Tarjeta</option>
-            <option value="msi">Meses sin intereses</option>
-            <option value="store_credit">Crédito tienda</option>
-          </select>
-        </div>
+
+        <button type="button" class="btn btn--ghost btn--sm" (click)="addLine()">
+          <span class="material-symbols-outlined">add</span> Agregar medio de pago
+        </button>
+
+        @if (isCredit() || isLayaway()) {
+          <p class="field__hint">
+            Los abonos de {{ isCredit() ? 'crédito' : 'apartado' }} sólo se reciben en efectivo o transferencia.
+          </p>
+        }
+
+        <p class="pay-total">
+          <span>Total a cobrar</span>
+          <span class="strong">{{ payTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </p>
+
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="paymentModalOpen.set(false)">Cancelar</button>
-          <button type="submit" class="btn btn--success" [disabled]="savingPayment()">
+          <button type="submit" class="btn btn--success" [disabled]="savingPayment() || paymentLines.invalid || payTotal() <= 0">
             @if (savingPayment()) { <span class="spinner spinner--sm"></span> } @else { Registrar }
           </button>
         </div>

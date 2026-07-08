@@ -54,6 +54,7 @@ export interface CreateUserRequest {
 
 /** Payload para editar un usuario existente. */
 export interface UpdateUserRequest {
+  email?: string;
   fullName?: string;
   phone?: string | null;
   roleId?: number;

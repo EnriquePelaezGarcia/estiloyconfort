@@ -50,9 +50,9 @@
             <td data-label="Pago"><span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span></td>
             <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Estado">
-              <select class="status-select" [value]="o.orderStatus" (change)="changeStatus(o, $event)">
+              <select class="status-select" (change)="changeStatus(o, $event)">
                 @for (s of allStatuses; track s) {
-                  <option [value]="s">{{ statusLabel(s) }}</option>
+                  <option [value]="s" [selected]="s === o.orderStatus">{{ statusLabel(s) }}</option>
                 }
               </select>
             </td>

@@ -70,8 +70,8 @@ const User = {
   },
 
   async update(id, fields) {
-    const allowed = ['full_name', 'phone', 'role_id', 'is_active'];
-    const map = { fullName: 'full_name', phone: 'phone', roleId: 'role_id', isActive: 'is_active' };
+    const allowed = ['email', 'full_name', 'phone', 'role_id', 'is_active'];
+    const map = { email: 'email', fullName: 'full_name', phone: 'phone', roleId: 'role_id', isActive: 'is_active' };
     const sets = [];
     const params = { id };
 

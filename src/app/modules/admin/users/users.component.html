@@ -113,7 +113,7 @@
             <label for="roleId">Rol</label>
             <select id="roleId" formControlName="roleId">
               <option [ngValue]="null" disabled>Selecciona…</option>
-              @for (role of roles(); track role.id) {
+              @for (role of assignableRoles(); track role.id) {
                 <option [ngValue]="role.id">{{ roleLabel(role.name) }}</option>
               }
             </select>

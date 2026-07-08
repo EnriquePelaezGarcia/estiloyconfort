@@ -53,16 +53,21 @@ const deliveryController = {
   }),
 
   // PATCH /api/delivery/assignments/:id/payment — registra cobro en la entrega
+  // Acepta `{ payments: [{amount, paymentMethod}] }` (cobro dividido) o `{ amount, paymentMethod }`.
   registerPayment: asyncHandler(async (req, res) => {
-    const { amount } = req.body;
-    if (!amount || Number(amount) <= 0) throw ApiError.badRequest('amount (mayor a 0) es obligatorio');
+    const { amount, payments } = req.body;
+    const lines = Array.isArray(payments) ? payments : null;
+    const totalAmount = lines
+      ? lines.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      : Number(amount);
+    if (!(totalAmount > 0)) throw ApiError.badRequest('Al menos un cobro con monto mayor a 0 es obligatorio');
 
     const delivery = await Delivery.findById(req.params.id);
     if (!delivery) throw ApiError.notFound('Entrega no encontrada');
     if (delivery.deliveryPersonId !== req.user.id) throw ApiError.forbidden('Entrega no asignada a ti');
 
     const result = await Payment.create(
-      { orderId: delivery.orderId, amount, paymentMethod: req.body.paymentMethod, notes: 'Cobro en entrega' },
+      { orderId: delivery.orderId, amount, payments, notes: 'Cobro en entrega' },
       req.user.id,
     );
     res.status(201).json({ data: result, message: 'Cobro registrado' });

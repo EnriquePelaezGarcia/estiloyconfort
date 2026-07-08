@@ -1,7 +1,7 @@
 import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, map, tap, throwError } from 'rxjs';
 import { ApiService } from '../services/api.service';
 import { AuthResponse, LoginRequest } from '../models/auth.model';
 import { User, UserRole } from '../models/user.model';
@@ -68,6 +68,16 @@ export class AuthService {
   getRefreshToken(): string | null {
     if (!this.isBrowser) return null;
     return localStorage.getItem(REFRESH_KEY);
+  }
+
+  /** Renueva el access token usando el refresh token guardado (sesión persistente entre pestañas/dispositivos). */
+  refreshSession(): Observable<string> {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) return throwError(() => new Error('No hay refresh token'));
+    return this.api.post<AuthResponse>('/auth/refresh', { refreshToken }).pipe(
+      tap((res) => this.storeSession(res)),
+      map((res) => res.accessToken),
+    );
   }
 
   private storeSession(res: AuthResponse): void {

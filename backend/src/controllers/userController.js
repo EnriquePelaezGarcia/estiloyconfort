@@ -66,7 +66,16 @@ const update = asyncHandler(async (req, res) => {
     if (!role) throw ApiError.badRequest('Rol inválido');
   }
 
+  let email;
+  if (req.body.email !== undefined) {
+    email = req.body.email.trim().toLowerCase();
+    if (email !== existing.email && (await User.existsByEmail(email))) {
+      throw ApiError.conflict('El email ya está registrado');
+    }
+  }
+
   const updated = await User.update(id, {
+    email,
     fullName: req.body.fullName,
     phone: req.body.phone,
     roleId: req.body.roleId,

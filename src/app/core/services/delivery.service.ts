@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { DeliveryAssignment, DeliveryStatus } from '../models/order.model';
+import { DeliveryAssignment, DeliveryStatus, PaymentInstrument } from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
 export class DeliveryService {
@@ -32,7 +32,10 @@ export class DeliveryService {
     return this.api.post<{ data: DeliveryAssignment }>(`/delivery/assignments/${id}/proof`, proof);
   }
 
-  registerPayment(id: number, amount: number, paymentMethod: string): Observable<unknown> {
-    return this.api.patch(`/delivery/assignments/${id}/payment`, { amount, paymentMethod });
+  registerPayment(
+    id: number,
+    payments: Array<{ amount: number; paymentMethod: PaymentInstrument }>,
+  ): Observable<unknown> {
+    return this.api.patch(`/delivery/assignments/${id}/payment`, { payments });
   }
 }
