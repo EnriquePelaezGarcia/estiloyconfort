@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { Order, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
+import { DeliveryPerson, Order, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
@@ -16,7 +17,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './seller-orders.component.html',
   styleUrl: './seller-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, RouterLink],
+  imports: [CurrencyPipe, DatePipe, RouterLink, FormsModule],
 })
 export class SellerOrdersComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -25,6 +26,11 @@ export class SellerOrdersComponent implements OnInit {
   protected orders = signal<Order[]>([]);
   protected loading = signal(true);
   protected statusFilter = signal('');
+  protected deliveryPeople = signal<DeliveryPerson[]>([]);
+
+  /** Pedido seleccionado para asignar repartidor. */
+  protected assigning = signal<Order | null>(null);
+  protected selectedDeliveryPerson = signal<number | null>(null);
 
   /** Pestaña activa: pedidos en curso vs. finalizados. */
   protected tab = signal<'activos' | 'historial'>('activos');
@@ -57,6 +63,9 @@ export class SellerOrdersComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.sellerService.getDeliveryPeople().subscribe({
+      next: (res) => this.deliveryPeople.set(res.data),
+    });
   }
 
   protected load(): void {
@@ -80,6 +89,30 @@ export class SellerOrdersComponent implements OnInit {
 
   protected setTab(tab: 'activos' | 'historial'): void {
     this.tab.set(tab);
+  }
+
+  protected openAssign(order: Order): void {
+    this.assigning.set(order);
+    this.selectedDeliveryPerson.set(order.deliveryPersonId ?? null);
+  }
+
+  protected confirmAssign(): void {
+    const order = this.assigning();
+    const personId = this.selectedDeliveryPerson();
+    if (!order || !personId) {
+      this.notification.error('Selecciona un repartidor');
+      return;
+    }
+    this.sellerService.assignDelivery(order.id, personId).subscribe({
+      next: (res) => {
+        this.orders.update((list) => list.map((o) => (o.id === order.id ? res.data : o)));
+        this.notification.success('Repartidor asignado');
+        this.assigning.set(null);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.notification.error(err?.error?.message ?? 'No se pudo asignar');
+      },
+    });
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

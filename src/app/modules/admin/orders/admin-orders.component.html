@@ -63,8 +63,9 @@
                 class="icon-btn"
                 (click)="viewDetail(o.id)"
                 aria-label="Ver detalle"
+                title="Ver detalle"
               >
-                <span class="material-symbols-outlined">open_in_new</span>
+                <span class="material-symbols-outlined">visibility</span>
               </button>
               <button
                 type="button"
@@ -72,6 +73,7 @@
                 (click)="openAssign(o)"
                 [disabled]="o.orderStatus === 'cancelled'"
                 aria-label="Asignar repartidor"
+                title="Asignar repartidor"
               >
                 <span class="material-symbols-outlined">assignment_ind</span>
               </button>

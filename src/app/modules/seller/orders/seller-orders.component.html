@@ -54,13 +54,56 @@
             <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
             <td class="actions">
-              <a class="icon-btn" [routerLink]="[o.id]" aria-label="Ver detalle">
+              <a class="icon-btn" [routerLink]="[o.id]" aria-label="Ver detalle" title="Ver detalle">
                 <span class="material-symbols-outlined">visibility</span>
               </a>
+              <button
+                type="button"
+                class="icon-btn"
+                (click)="openAssign(o)"
+                [disabled]="o.orderStatus === 'cancelled'"
+                aria-label="Asignar repartidor"
+                title="Asignar repartidor"
+              >
+                <span class="material-symbols-outlined">assignment_ind</span>
+              </button>
             </td>
           </tr>
         }
       </tbody>
     </table>
+  </div>
+}
+
+<!-- ===== Modal: asignar repartidor ===== -->
+@if (assigning(); as order) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Asignar repartidor</h2>
+        <button type="button" class="icon-btn" (click)="assigning.set(null)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="muted">Pedido <strong>{{ order.orderNumber }}</strong> — {{ order.customerName }}</p>
+        <div class="field">
+          <label for="dp">Repartidor</label>
+          <select id="dp" [ngModel]="selectedDeliveryPerson()" (ngModelChange)="selectedDeliveryPerson.set($event)">
+            <option [ngValue]="null" disabled>Selecciona un repartidor</option>
+            @for (p of deliveryPeople(); track p.id) {
+              <option [ngValue]="p.id">{{ p.fullName }}</option>
+            }
+          </select>
+        </div>
+        @if (deliveryPeople().length === 0) {
+          <p class="field__error">No hay repartidores activos registrados.</p>
+        }
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="assigning.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--primary" (click)="confirmAssign()">Asignar</button>
+        </div>
+      </div>
+    </div>
   </div>
 }

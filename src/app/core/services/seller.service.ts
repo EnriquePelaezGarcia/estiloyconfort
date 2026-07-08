@@ -4,6 +4,7 @@ import { ApiService } from './api.service';
 import {
   CreateOrderRequest,
   CreditClient,
+  DeliveryPerson,
   InventoryItem,
   Order,
   Paginated,
@@ -41,6 +42,21 @@ export class SellerService {
 
   cancelOrder(id: number): Observable<{ message: string }> {
     return this.api.delete<{ message: string }>(`/seller/orders/${id}`);
+  }
+
+  assignDelivery(
+    id: number,
+    deliveryPersonId: number,
+    assignmentDate?: string,
+  ): Observable<{ data: Order }> {
+    return this.api.patch<{ data: Order }>(`/seller/orders/${id}/assign`, {
+      deliveryPersonId,
+      assignmentDate,
+    });
+  }
+
+  getDeliveryPeople(): Observable<{ data: DeliveryPerson[] }> {
+    return this.api.get<{ data: DeliveryPerson[] }>('/seller/delivery-people');
   }
 
   registerPayment(
