@@ -52,6 +52,16 @@
       Agotados
     </button>
   </div>
+  <button
+    type="button"
+    class="btn btn--ghost btn--labels"
+    (click)="printFilteredLabels()"
+    [disabled]="printingLabels()"
+    title="Imprime una etiqueta QR por cada producto visible"
+  >
+    <span class="material-symbols-outlined">qr_code_2</span>
+    Imprimir etiquetas
+  </button>
 </div>
 
 @if (loading()) {
@@ -90,6 +100,9 @@
             <td data-label="Acciones" class="actions">
               <button type="button" class="icon-btn" (click)="openAdjust(product)" title="Ajustar stock">
                 <span class="material-symbols-outlined">tune</span>
+              </button>
+              <button type="button" class="icon-btn" (click)="openLabels(product)" title="Imprimir etiquetas QR">
+                <span class="material-symbols-outlined">qr_code_2</span>
               </button>
             </td>
           </tr>
@@ -139,6 +152,46 @@
           <button type="submit" class="btn btn--primary" [disabled]="saving()">
             @if (saving()) { <span class="spinner spinner--sm"></span> }
             Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal etiquetas QR ===== -->
+@if (labeling(); as product) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Imprimir etiquetas QR</h2>
+        <button type="button" class="icon-btn" (click)="closeLabels()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form [formGroup]="labelForm" (ngSubmit)="printLabels()" novalidate class="modal__body">
+        <div class="label-preview">
+          <span class="material-symbols-outlined label-preview__qr">qr_code_2</span>
+          <div class="label-preview__text">
+            <p class="label-preview__name">{{ product.name }}</p>
+            <p class="label-preview__sku">{{ product.sku }}</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="labelCopies">Número de etiquetas</label>
+          <input id="labelCopies" type="number" formControlName="copies" min="1" max="100" step="1" />
+          @if (labelForm.get('copies')?.invalid && labelForm.get('copies')?.touched) {
+            <p class="field__error">Ingresa entre 1 y 100 etiquetas</p>
+          }
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeLabels()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="printingLabels()">
+            @if (printingLabels()) { <span class="spinner spinner--sm"></span> }
+            Imprimir
           </button>
         </div>
       </form>

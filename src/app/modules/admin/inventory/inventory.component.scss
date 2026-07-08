@@ -34,3 +34,47 @@
   font-weight: 600;
   color: vars.$color-primary;
 }
+
+// ===== Etiquetas QR =====
+.btn--labels {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+
+  .material-symbols-outlined { font-size: 1.15rem; }
+}
+
+.label-preview {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px dashed vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  &__qr {
+    font-size: 3rem;
+    color: vars.$color-text;
+    flex-shrink: 0;
+  }
+
+  &__text { min-width: 0; }
+
+  &__name {
+    font-weight: 700;
+    font-size: 0.92rem;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+
+  &__sku {
+    margin-top: 0.2rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: vars.$color-text-secondary;
+  }
+}

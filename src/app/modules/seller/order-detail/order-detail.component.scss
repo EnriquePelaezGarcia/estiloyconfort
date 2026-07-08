@@ -76,6 +76,12 @@
   }
 }
 
+.payments__collector {
+  display: block;
+  font-size: 0.76rem;
+  color: vars.$color-text-secondary;
+}
+
 .credit-box {
   margin: vars.$spacing-md 0;
   padding: vars.$spacing-md;

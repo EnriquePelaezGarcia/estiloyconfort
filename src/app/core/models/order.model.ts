@@ -42,6 +42,7 @@ export interface OrderPayment {
   paymentMethod: PaymentInstrument;
   paymentDate: string;
   collectedById?: number | null;
+  collectedByName?: string | null;
   notes?: string | null;
 }
 

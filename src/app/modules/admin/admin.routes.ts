@@ -42,7 +42,7 @@ export const adminRoutes: Routes = [
         path: 'punto-venta',
         loadComponent: () =>
           import('../seller/order-create/order-create.component').then((m) => m.OrderCreateComponent),
-        title: 'Punto de venta - Panel Admin',
+        title: 'Nuevo pedido - Panel Admin',
       },
       {
         path: 'punto-venta/:id',
@@ -76,7 +76,7 @@ export const adminRoutes: Routes = [
         path: 'pedidos',
         loadComponent: () =>
           import('./orders/admin-orders.component').then((m) => m.AdminOrdersComponent),
-        title: 'Pedidos - Panel Admin',
+        title: 'Todos los pedidos - Panel Admin',
       },
       {
         path: 'pedidos/:id',

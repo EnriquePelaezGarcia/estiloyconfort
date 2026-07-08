@@ -132,7 +132,12 @@
         <ul class="payments">
           @for (p of o.payments; track p.id) {
             <li>
-              <span>{{ p.paymentDate | date:'dd/MM/yyyy' }} · {{ methodLabel(p.paymentMethod) }}</span>
+              <span>
+                {{ p.paymentDate | date:'dd/MM/yyyy' }} · {{ methodLabel(p.paymentMethod) }}
+                @if (p.collectedByName) {
+                  <span class="payments__collector">Registró: {{ p.collectedByName }}</span>
+                }
+              </span>
               <span class="strong">{{ p.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </li>
           }

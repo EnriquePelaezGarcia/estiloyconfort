@@ -129,12 +129,16 @@ const Order = {
       'SELECT * FROM order_items WHERE order_id = ? ORDER BY id', [id],
     );
     const [payments] = await pool.execute(
-      'SELECT * FROM payments WHERE order_id = ? ORDER BY payment_date', [id],
+      `SELECT p.*, u.full_name AS collected_by_name
+       FROM payments p
+       LEFT JOIN users u ON u.id = p.collected_by_id
+       WHERE p.order_id = ? ORDER BY p.payment_date`, [id],
     );
     order.items = items.map(mapItem);
     order.payments = payments.map((p) => ({
       id: p.id, amount: Number(p.amount), paymentMethod: p.payment_method,
-      paymentDate: p.payment_date, collectedById: p.collected_by_id, notes: p.notes,
+      paymentDate: p.payment_date, collectedById: p.collected_by_id,
+      collectedByName: p.collected_by_name ?? null, notes: p.notes,
     }));
     return order;
   },

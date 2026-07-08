@@ -99,7 +99,8 @@ const sellerController = {
     }
     const order = await Order.findById(orderId);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
-    if (order.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
+    // Cualquier vendedor o admin puede cobrar un pedido, aunque no sea suyo;
+    // el pago queda registrado a su nombre vía collected_by_id.
     const result = await Payment.create(req.body, req.user.id);
     res.status(201).json({ data: result, message: 'Pago registrado' });
   }),

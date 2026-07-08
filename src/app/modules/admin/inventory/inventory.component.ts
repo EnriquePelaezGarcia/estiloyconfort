@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ProductService } from '../../../core/services/product.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { LabelPrintService } from '../../../core/services/label-print.service';
 import { Product } from '../../../core/models/product.model';
 
 type StockState = 'ok' | 'low' | 'out';
@@ -17,6 +18,7 @@ type StockFilter = 'all' | 'low' | 'out';
 export class InventoryComponent implements OnInit {
   private productService = inject(ProductService);
   private notification = inject(NotificationService);
+  private labelPrint = inject(LabelPrintService);
   private fb = inject(FormBuilder);
 
   protected products = signal<Product[]>([]);
@@ -28,9 +30,17 @@ export class InventoryComponent implements OnInit {
   /** Producto cuyo stock se está ajustando (null = modal cerrado). */
   protected adjusting = signal<Product | null>(null);
 
+  /** Producto del que se imprimirán etiquetas QR (null = modal cerrado). */
+  protected labeling = signal<Product | null>(null);
+  protected printingLabels = signal(false);
+
   protected form = this.fb.group({
     stockQuantity: [0, [Validators.required, Validators.min(0)]],
     stockAlertLevel: [5, [Validators.required, Validators.min(0)]],
+  });
+
+  protected labelForm = this.fb.group({
+    copies: [1, [Validators.required, Validators.min(1), Validators.max(100)]],
   });
 
   // ===== KPIs =====
@@ -95,6 +105,51 @@ export class InventoryComponent implements OnInit {
 
   protected setFilter(filter: StockFilter): void {
     this.filter.set(filter);
+  }
+
+  // ===== Etiquetas QR =====
+  protected openLabels(product: Product): void {
+    if (!product.sku) {
+      this.notification.error('El producto no tiene SKU; asígnale uno en el catálogo para etiquetarlo');
+      return;
+    }
+    this.labeling.set(product);
+    this.labelForm.reset({ copies: 1 });
+  }
+
+  protected closeLabels(): void {
+    this.labeling.set(null);
+  }
+
+  protected printLabels(): void {
+    const product = this.labeling();
+    if (!product || this.labelForm.invalid) {
+      this.labelForm.markAllAsTouched();
+      return;
+    }
+    const copies = this.labelForm.getRawValue().copies ?? 1;
+    this.printingLabels.set(true);
+    this.labelPrint
+      .print([{ name: product.name, sku: product.sku!, copies }])
+      .then(() => this.closeLabels())
+      .catch(() => this.notification.error('No se pudieron generar las etiquetas'))
+      .finally(() => this.printingLabels.set(false));
+  }
+
+  /** Imprime una etiqueta por cada producto visible en el filtro actual. */
+  protected printFilteredLabels(): void {
+    const items = this.filteredProducts()
+      .filter((p) => !!p.sku)
+      .map((p) => ({ name: p.name, sku: p.sku!, copies: 1 }));
+    if (items.length === 0) {
+      this.notification.error('No hay productos con SKU en el filtro actual');
+      return;
+    }
+    this.printingLabels.set(true);
+    this.labelPrint
+      .print(items)
+      .catch(() => this.notification.error('No se pudieron generar las etiquetas'))
+      .finally(() => this.printingLabels.set(false));
   }
 
   // ===== Ajuste de stock =====
