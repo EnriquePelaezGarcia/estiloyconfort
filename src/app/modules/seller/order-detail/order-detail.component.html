@@ -25,6 +25,11 @@
           <span class="material-symbols-outlined">edit</span> Editar pedido
         </button>
       }
+      @if (canRemoveAssembly()) {
+        <button type="button" class="btn btn--ghost" (click)="assemblyModalOpen.set(true)">
+          <span class="material-symbols-outlined">handyman</span> Quitar armado
+        </button>
+      }
       @if (o.orderStatus !== 'cancelled' && o.orderStatus !== 'delivered') {
         <button type="button" class="btn btn--danger" (click)="cancelModalOpen.set(true)">
           <span class="material-symbols-outlined">cancel</span> Cancelar
@@ -61,8 +66,8 @@
       <div class="totals">
         @if (isCredit() && o.cashTotal != null) {
           <div class="totals__row"><span>Subtotal contado</span><span>{{ o.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
-          <div class="totals__row"><span>Interés crédito</span><span>{{ (o.totalAmount - shippingCost() - o.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
-        } @else if (shippingCost() > 0) {
+          <div class="totals__row"><span>Interés crédito</span><span>{{ (o.totalAmount - shippingCost() - assemblyCost() - o.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        } @else if (shippingCost() > 0 || assemblyCost() > 0) {
           <div class="totals__row"><span>Subtotal productos</span><span>{{ productsSubtotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         }
         @if (shippingCost() > 0) {
@@ -72,6 +77,15 @@
               Envío@if (o.shippingPostalCode) { · CP {{ o.shippingPostalCode }} }
             </span>
             <span>{{ shippingCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
+        @if (o.assemblyService) {
+          <div class="totals__row totals__row--ship">
+            <span>
+              <span class="material-symbols-outlined">handyman</span>
+              Servicio de armado (piso {{ o.assemblyFloors ?? 0 }})
+            </span>
+            <span>{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
         }
         <div class="totals__row"><span>{{ isCredit() ? 'Precio a crédito' : 'Total' }}</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
@@ -120,6 +134,9 @@
         @if (o.customerPhone) { <div><dt>Teléfono</dt><dd>{{ o.customerPhone }}</dd></div> }
         @if (o.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ o.deliveryAddress }}</dd></div> }
         <div><dt>Envío</dt><dd>{{ deliveryLabel(o.deliveryType) }}</dd></div>
+        @if (o.assemblyService) {
+          <div><dt>Armado</dt><dd>Piso {{ o.assemblyFloors ?? 0 }} · {{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
+        }
         <div><dt>Condición de venta</dt><dd>{{ schemeLabel(o.paymentMethod) }}</dd></div>
         <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
         @if (o.expectedDeliveryDate) { <div><dt>Entrega estimada</dt><dd>{{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}</dd></div> }
@@ -242,6 +259,29 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: quitar servicio de armado (solo admin) ===== -->
+@if (assemblyModalOpen()) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">¿Quitar el servicio de armado?</h2>
+        <p class="muted">
+          Se descontarán {{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }} del total del pedido.
+          @if ((order()?.paymentAmount ?? 0) > 0) {
+            Si el cliente ya pagó de más, se indicará el monto a reembolsar.
+          }
+        </p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="assemblyModalOpen.set(false)">No</button>
+          <button type="button" class="btn btn--danger" [disabled]="removingAssembly()" (click)="confirmRemoveAssembly()">
+            @if (removingAssembly()) { <span class="spinner spinner--sm"></span> } @else { Sí, quitar armado }
+          </button>
+        </div>
       </div>
     </div>
   </div>

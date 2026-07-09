@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import {
+  AssemblyRates,
   CreateOrderRequest,
   CreditClient,
   DeliveryPerson,
@@ -69,6 +70,11 @@ export class SellerService {
   /** Parámetros del crédito en tienda para simular el plan en el POS. */
   getCreditConfig(): Observable<{ data: CreditConfig }> {
     return this.api.get<{ data: CreditConfig }>('/seller/credit-config');
+  }
+
+  /** Tarifas vigentes del servicio de armado para cotizar en el POS. */
+  getAssemblyRates(): Observable<{ data: AssemblyRates }> {
+    return this.api.get<{ data: AssemblyRates }>('/seller/assembly-rates');
   }
 
   searchInventory(search?: string): Observable<{ data: InventoryItem[] }> {

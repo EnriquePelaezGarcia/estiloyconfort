@@ -55,6 +55,8 @@ export class OrderDetailComponent implements OnInit {
   protected paymentModalOpen = signal(false);
   protected cancelModalOpen = signal(false);
   protected savingPayment = signal(false);
+  protected assemblyModalOpen = signal(false);
+  protected removingAssembly = signal(false);
 
   /** Controla qué se imprime: el ticket de venta o el ticket de abono. */
   protected printMode = signal<'order' | 'abono' | null>(null);
@@ -69,10 +71,26 @@ export class OrderDetailComponent implements OnInit {
   /** Costo de envío del pedido (ya incluido en totalAmount). */
   protected shippingCost = computed(() => this.order()?.shippingCost ?? 0);
 
-  /** Subtotal de productos: total menos el envío (para Contado/MSI). */
+  /** Costo del servicio de armado (ya incluido en totalAmount). */
+  protected assemblyCost = computed(() =>
+    this.order()?.assemblyService ? (this.order()?.assemblyCost ?? 0) : 0,
+  );
+
+  /** Subtotal de productos: total menos envío y armado (para Contado/MSI). */
   protected productsSubtotal = computed(() => {
     const o = this.order();
-    return o ? Math.max(0, o.totalAmount - this.shippingCost()) : 0;
+    return o ? Math.max(0, o.totalAmount - this.shippingCost() - this.assemblyCost()) : 0;
+  });
+
+  /** El admin puede quitar el armado mientras el pedido no esté entregado/cancelado. */
+  protected canRemoveAssembly = computed(() => {
+    const o = this.order();
+    return (
+      this.isAdmin &&
+      !!o?.assemblyService &&
+      o.orderStatus !== 'delivered' &&
+      o.orderStatus !== 'cancelled'
+    );
   });
 
   /** ¿El pedido se vendió a Crédito Tienda? */
@@ -136,7 +154,7 @@ export class OrderDetailComponent implements OnInit {
     this.load(id);
   }
 
-  private get isAdmin(): boolean {
+  protected get isAdmin(): boolean {
     return this.router.url.startsWith('/admin');
   }
 
@@ -234,6 +252,30 @@ export class OrderDetailComponent implements OnInit {
       error: (err: { error?: { message?: string } }) => {
         this.savingPayment.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo registrar el pago');
+      },
+    });
+  }
+
+  /** Quita el servicio de armado del pedido (solo admin). */
+  protected confirmRemoveAssembly(): void {
+    const order = this.order();
+    if (!order) return;
+    this.removingAssembly.set(true);
+    this.adminService.removeAssembly(order.id).subscribe({
+      next: (res) => {
+        this.removingAssembly.set(false);
+        this.assemblyModalOpen.set(false);
+        if (res.data.refundDue > 0) {
+          this.notification.info(res.message);
+        } else {
+          this.notification.success(res.message);
+        }
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.removingAssembly.set(false);
+        this.assemblyModalOpen.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo quitar el armado');
       },
     });
   }

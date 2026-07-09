@@ -34,6 +34,18 @@ function unitPriceForScheme(product, paymentMethod) {
   return Number(product.price_cash);
 }
 
+/**
+ * Costo del servicio de armado: tarifa base (planta baja) + tarifa lineal
+ * por piso. Un solo cargo por pedido sin importar el número de muebles;
+ * con o sin elevador se cobra igual.
+ */
+function computeAssemblyCost(floors, configMap) {
+  const base = Math.max(0, Number(configMap.assembly_base) || 0);
+  const perFloor = Math.max(0, Number(configMap.assembly_per_floor) || 0);
+  const n = Math.max(0, Math.trunc(Number(floors)) || 0);
+  return Math.round((base + n * perFloor) * 100) / 100;
+}
+
 function parseJson(value) {
   if (!value) return null;
   if (typeof value === 'object') return value;
@@ -70,6 +82,9 @@ function mapOrder(row) {
     totalAmount: Number(row.total_amount),
     shippingCost: row.shipping_cost != null ? Number(row.shipping_cost) : 0,
     shippingPostalCode: row.shipping_postal_code ?? null,
+    assemblyService: !!row.assembly_service,
+    assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
+    assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
     cashTotal: row.cash_total != null ? Number(row.cash_total) : null,
     downPayment: row.down_payment != null ? Number(row.down_payment) : null,
     weeklyPayment: row.weekly_payment != null ? Number(row.weekly_payment) : null,
@@ -222,22 +237,36 @@ const Order = {
       const shippingPostalCode = data.shippingPostalCode ?? null;
       totalAmount += shippingCost;
 
+      // Servicio de armado: el servidor calcula el costo con las tarifas
+      // vigentes (snapshot en el pedido); el cliente solo manda flag + pisos.
+      const assemblyService = !!data.assemblyService;
+      const assemblyFloors = assemblyService ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0) : 0;
+      let assemblyCost = 0;
+      if (assemblyService) {
+        const config = await PricingConfig.getMap();
+        assemblyCost = computeAssemblyCost(assemblyFloors, config);
+        totalAmount += assemblyCost;
+      }
+      const deliveryType = assemblyService ? 'with_installation' : 'standard';
+
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
            delivery_address, delivery_address_lat, delivery_address_lng, google_maps_url,
            delivery_type, payment_method, payment_status, payment_amount, order_status,
            expected_delivery_date, total_amount, shipping_cost, shipping_postal_code,
+           assembly_service, assembly_floors, assembly_cost,
            cash_total, down_payment, weekly_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
           data.deliveryAddressLat ?? null, data.deliveryAddressLng ?? null,
           data.googleMapsUrl ?? null,
-          data.deliveryType ?? 'standard', paymentMethod,
+          deliveryType, paymentMethod,
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
           totalAmount, shippingCost, shippingPostalCode,
+          assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
           cashTotal, downPayment, weeklyPayment, creditWeeks,
           layawayDeadline, data.notes ?? null,
         ],
@@ -396,6 +425,24 @@ const Order = {
         : existing.shippingPostalCode;
       totalAmount += shippingCost;
 
+      // Servicio de armado: si la edición lo modifica se recalcula con las
+      // tarifas vigentes; si no viene en la edición se conserva el snapshot.
+      let assemblyService = !!existing.assemblyService;
+      let assemblyFloors = Number(existing.assemblyFloors) || 0;
+      let assemblyCost = Number(existing.assemblyCost) || 0;
+      if (data.assemblyService !== undefined) {
+        assemblyService = !!data.assemblyService;
+        assemblyFloors = assemblyService ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0) : 0;
+        if (assemblyService) {
+          const config = await PricingConfig.getMap();
+          assemblyCost = computeAssemblyCost(assemblyFloors, config);
+        } else {
+          assemblyCost = 0;
+        }
+      }
+      totalAmount += assemblyCost;
+      const deliveryType = assemblyService ? 'with_installation' : 'standard';
+
       // 4. Reemplazar los items y descontar el nuevo stock.
       await conn.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
       for (const it of resolvedItems) {
@@ -426,6 +473,7 @@ const Order = {
            delivery_address = ?, google_maps_url = ?, delivery_type = ?,
            payment_method = ?, payment_status = ?, expected_delivery_date = ?, notes = ?,
            total_amount = ?, shipping_cost = ?, shipping_postal_code = ?,
+           assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
            cash_total = ?, down_payment = ?,
            weekly_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
@@ -435,11 +483,12 @@ const Order = {
           data.customerPhone !== undefined ? data.customerPhone : existing.customerPhone,
           data.deliveryAddress !== undefined ? data.deliveryAddress : existing.deliveryAddress,
           data.googleMapsUrl !== undefined ? data.googleMapsUrl : existing.googleMapsUrl,
-          data.deliveryType ?? existing.deliveryType,
+          deliveryType,
           paymentMethod, paymentStatus,
           data.expectedDeliveryDate !== undefined ? data.expectedDeliveryDate : existing.expectedDeliveryDate,
           data.notes !== undefined ? data.notes : existing.notes,
           totalAmount, shippingCost, shippingPostalCode,
+          assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
           cashTotal, downPayment, weeklyPayment, creditWeeks, layawayDeadline,
           id,
         ],
@@ -453,6 +502,64 @@ const Order = {
     } finally {
       conn.release();
     }
+  },
+
+  /**
+   * Quita el servicio de armado de un pedido (acción exclusiva del admin,
+   * p. ej. cuando el cliente lo cancela en la puerta). Resta el costo del
+   * total, sincroniza delivery_type y recalcula el estado de pago. Si el
+   * pedido ya tenía pagado más que el nuevo total, devuelve `refundDue`
+   * (el reembolso en efectivo lo gestiona el humano) y deja nota automática.
+   */
+  async removeAssembly(id) {
+    const existing = await this.findById(id);
+    if (!existing) {
+      const err = new Error('Pedido no encontrado');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (!existing.assemblyService) {
+      const err = new Error('El pedido no tiene servicio de armado');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (['delivered', 'cancelled'].includes(existing.orderStatus)) {
+      const err = new Error('No se puede quitar el armado de un pedido entregado o cancelado');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const assemblyCost = Number(existing.assemblyCost) || 0;
+    const newTotal = Math.max(0, Number(existing.totalAmount) - assemblyCost);
+    const paid = Number(existing.paymentAmount) || 0;
+    const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+    const refundDue = Math.max(0, Math.round((paid - newTotal) * 100) / 100);
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    let note = `[${stamp}] Servicio de armado cancelado por admin (-$${assemblyCost.toFixed(2)}).`;
+    if (refundDue > 0) note += ` Reembolso pendiente al cliente: $${refundDue.toFixed(2)}.`;
+    const notes = existing.notes ? `${existing.notes}\n${note}` : note;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        `UPDATE orders SET
+           assembly_service = 0, assembly_floors = 0, assembly_cost = 0,
+           delivery_type = 'standard', total_amount = ?, payment_status = ?, notes = ?
+         WHERE id = ?`,
+        [newTotal, paymentStatus, notes, id],
+      );
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+    const order = await this.findById(id);
+    return { order, refundDue };
   },
 
   async updateStatus(id, status) {

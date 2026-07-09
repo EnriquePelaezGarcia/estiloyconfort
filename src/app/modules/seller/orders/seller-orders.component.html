@@ -46,7 +46,10 @@
       <tbody>
         @for (o of visibleOrders(); track o.id) {
           <tr>
-            <td data-label="Pedido" class="strong">{{ o.orderNumber }}</td>
+            <td data-label="Pedido" class="strong">
+              {{ o.orderNumber }}
+              @if (o.assemblyService) { <span class="badge badge--purple">Armado</span> }
+            </td>
             <td data-label="Cliente">{{ o.customerName }}</td>
             <td data-label="Vendedor" class="muted">{{ o.sellerName ?? '—' }}</td>
             <td data-label="Estado"><span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span></td>

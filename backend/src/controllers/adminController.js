@@ -450,6 +450,20 @@ const getInventoryReport = asyncHandler(async (req, res) => {
   res.json({ data: rows });
 });
 
+// DELETE /api/admin/orders/:id/assembly — quita el servicio de armado (solo admin)
+// Caso de uso: el cliente cancela el armado en la puerta; el repartidor avisa
+// y el admin lo aplica. Recalcula total y estado de pago; devuelve refundDue
+// si el pedido ya tenía pagado más que el nuevo total.
+const removeAssembly = asyncHandler(async (req, res) => {
+  const { order, refundDue } = await Order.removeAssembly(req.params.id);
+  res.json({
+    data: { order, refundDue },
+    message: refundDue > 0
+      ? `Armado cancelado. Reembolso pendiente al cliente: $${refundDue.toFixed(2)}`
+      : 'Armado cancelado',
+  });
+});
+
 module.exports = {
   getDashboard,
   getFinancesSummary,
@@ -461,6 +475,7 @@ module.exports = {
   getOrder,
   updateOrderStatus,
   assignDelivery,
+  removeAssembly,
   getDeliveryPeople,
   getWeeklyList,
   getSalesReport,

@@ -8,6 +8,8 @@ const ALLOWED_KEYS = [
   'credit_interest',
   'credit_initial_pct',
   'credit_weeks',
+  'assembly_base',
+  'assembly_per_floor',
 ];
 
 const PricingConfig = {
@@ -33,6 +35,8 @@ const PricingConfig = {
       credit_interest: 22,
       credit_initial_pct: 35,
       credit_weeks: 12,
+      assembly_base: 150,
+      assembly_per_floor: 50,
     };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;

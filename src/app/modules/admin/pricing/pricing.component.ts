@@ -33,6 +33,8 @@ export class PricingComponent implements OnInit {
     credit_interest: [DEFAULT_PRICING_CONFIG.credit_interest, [Validators.required, Validators.min(0), Validators.max(100)]],
     credit_initial_pct: [DEFAULT_PRICING_CONFIG.credit_initial_pct, [Validators.required, Validators.min(1), Validators.max(99)]],
     credit_weeks: [DEFAULT_PRICING_CONFIG.credit_weeks, [Validators.required, Validators.min(1), Validators.max(104)]],
+    assembly_base: [DEFAULT_PRICING_CONFIG.assembly_base, [Validators.required, Validators.min(0)]],
+    assembly_per_floor: [DEFAULT_PRICING_CONFIG.assembly_per_floor, [Validators.required, Validators.min(0)]],
   });
 
   // ===== Simulador en vivo =====
@@ -65,6 +67,8 @@ export class PricingComponent implements OnInit {
         credit_interest: v.credit_interest ?? DEFAULT_PRICING_CONFIG.credit_interest,
         credit_initial_pct: v.credit_initial_pct ?? DEFAULT_PRICING_CONFIG.credit_initial_pct,
         credit_weeks: v.credit_weeks ?? DEFAULT_PRICING_CONFIG.credit_weeks,
+        assembly_base: v.assembly_base ?? DEFAULT_PRICING_CONFIG.assembly_base,
+        assembly_per_floor: v.assembly_per_floor ?? DEFAULT_PRICING_CONFIG.assembly_per_floor,
       });
     });
 

@@ -1,0 +1,117 @@
+@use '../../../../styles/variables' as vars;
+
+.period-tabs {
+  display: flex;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+}
+
+.period-tab {
+  padding: 0.45rem 1.1rem;
+  border: 1px solid vars.$color-border;
+  border-radius: 999px;
+  background: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: white;
+  }
+}
+
+.range {
+  margin: 0 0 vars.$spacing-md;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: vars.$spacing-md;
+  margin-bottom: vars.$spacing-lg;
+
+  @media (max-width: vars.$bp-tablet) { grid-template-columns: 1fr; }
+}
+
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: 12px;
+  background: white;
+
+  &__label {
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__value {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+
+  &--money {
+    border-color: vars.$color-primary;
+    background: color-mix(in srgb, vars.$color-primary 8%, white);
+
+    .summary-card__value { color: vars.$color-primary; }
+  }
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-md;
+}
+
+.ecard {
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: 12px;
+  background: white;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  &__order { font-weight: 700; }
+
+  &__date {
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__customer {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  &__address {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: vars.$spacing-sm;
+  }
+
+  &__amount {
+    font-weight: 700;
+    color: vars.$color-primary;
+
+    &--zero { color: vars.$color-text-secondary; }
+  }
+}

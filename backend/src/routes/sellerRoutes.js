@@ -13,6 +13,7 @@ router.use(authenticate, authorize('seller', 'admin'));
 router.get('/dashboard', sellerController.dashboard);
 router.get('/inventory', sellerController.inventory);
 router.get('/credit-config', sellerController.creditConfig);
+router.get('/assembly-rates', sellerController.assemblyRates);
 router.post('/credit-quote', sellerController.creditQuote);
 router.get('/orders', sellerController.list);
 router.get('/orders/:id', sellerController.getOne);

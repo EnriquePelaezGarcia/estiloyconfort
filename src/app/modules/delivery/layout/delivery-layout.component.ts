@@ -15,5 +15,6 @@ export class DeliveryLayoutComponent {
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Entregas de hoy', icon: 'local_shipping', route: 'entregas' },
     { label: 'Historial', icon: 'history', route: 'historial' },
+    { label: 'Mis ganancias', icon: 'payments', route: 'ganancias' },
   ];
 }

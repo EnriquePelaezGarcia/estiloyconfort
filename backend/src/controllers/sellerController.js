@@ -118,6 +118,17 @@ const sellerController = {
     });
   }),
 
+  // GET /api/seller/assembly-rates — tarifas vigentes del servicio de armado (para cotizar en el POS)
+  assemblyRates: asyncHandler(async (req, res) => {
+    const config = await PricingConfig.getMap();
+    res.json({
+      data: {
+        base: Number(config.assembly_base),
+        perFloor: Number(config.assembly_per_floor),
+      },
+    });
+  }),
+
   // POST /api/seller/credit-quote — simula el plan de crédito para un total
   creditQuote: asyncHandler(async (req, res) => {
     const { amount } = req.body;

@@ -26,6 +26,9 @@
 
         <div class="dcard__meta">
           <span class="badge" [class]="payTone(a.paymentStatus)">Pago: {{ payLabel(a.paymentStatus) }}</span>
+          @if (a.assemblyService) {
+            <span class="badge badge--purple">Armado · Piso {{ a.assemblyFloors ?? 0 }}</span>
+          }
           @if (pendingBalance(a) > 0) {
             <span class="dcard__balance">Por cobrar: {{ pendingBalance(a) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           }

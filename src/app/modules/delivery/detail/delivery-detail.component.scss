@@ -161,3 +161,40 @@
 
   .icon-btn--danger { margin-bottom: 4px; }
 }
+
+// ===== Servicio de armado =====
+.assembly-banner {
+  display: flex;
+  gap: vars.$spacing-sm;
+  align-items: flex-start;
+  margin-top: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-primary;
+  border-radius: 10px;
+  background: color-mix(in srgb, vars.$color-primary 8%, white);
+
+  > .material-symbols-outlined {
+    color: vars.$color-primary;
+    font-size: 1.6rem;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title {
+    font-weight: 700;
+    color: vars.$color-primary;
+  }
+
+  &__detail {
+    font-weight: 600;
+  }
+
+  &__note {
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+  }
+}

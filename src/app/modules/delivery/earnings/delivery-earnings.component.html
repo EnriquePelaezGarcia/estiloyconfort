@@ -1,0 +1,71 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Repartidor</p>
+    <h1 class="page-head__title">Mis ganancias</h1>
+  </div>
+</header>
+
+<div class="period-tabs">
+  @for (p of periods; track p.value) {
+    <button
+      type="button"
+      class="period-tab"
+      [class.period-tab--active]="period() === p.value"
+      (click)="setPeriod(p.value)"
+    >
+      {{ p.label }}
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando ganancias…</p></div>
+} @else if (earnings(); as e) {
+  <p class="range">
+    Del {{ e.from | date:'dd/MM/yyyy' }} al {{ e.to | date:'dd/MM/yyyy' }}
+  </p>
+
+  <div class="summary">
+    <div class="summary-card">
+      <span class="summary-card__label">Entregas completadas</span>
+      <span class="summary-card__value">{{ e.summary.deliveredCount }}</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-card__label">Con armado</span>
+      <span class="summary-card__value">{{ e.summary.assemblyCount }}</span>
+    </div>
+    <div class="summary-card summary-card--money">
+      <span class="summary-card__label">Acumulado por armados</span>
+      <span class="summary-card__value">{{ e.summary.assemblyTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+  </div>
+
+  @if (e.deliveries.length === 0) {
+    <div class="state">
+      <span class="material-symbols-outlined" style="font-size:2.5rem">payments</span>
+      <p>No tienes entregas completadas en este periodo.</p>
+    </div>
+  } @else {
+    <div class="cards">
+      @for (d of e.deliveries; track d.id) {
+        <article class="ecard">
+          <div class="ecard__head">
+            <span class="ecard__order">{{ d.orderNumber }}</span>
+            <span class="ecard__date">{{ d.deliveredAt | date:'dd/MM/yyyy HH:mm' }}</span>
+          </div>
+          <p class="ecard__customer">{{ d.customerName }}</p>
+          @if (d.deliveryAddress) { <p class="ecard__address">{{ d.deliveryAddress }}</p> }
+          <div class="ecard__foot">
+            @if (d.assemblyService) {
+              <span class="badge badge--purple">Armado · Piso {{ d.assemblyFloors }}</span>
+              <span class="ecard__amount">{{ d.assemblyCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            } @else {
+              <span class="badge badge--gray">Sin armado</span>
+              <span class="ecard__amount ecard__amount--zero">$0.00</span>
+            }
+          </div>
+        </article>
+      }
+    </div>
+  }
+}

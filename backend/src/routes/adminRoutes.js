@@ -29,6 +29,7 @@ router.get('/orders/weekly-list', adminController.getWeeklyList);
 router.get('/orders/:id', adminController.getOrder);
 router.patch('/orders/:id/status', adminController.updateOrderStatus);
 router.patch('/orders/:id/assign', adminController.assignDelivery);
+router.delete('/orders/:id/assembly', adminController.removeAssembly);
 router.get('/delivery-people', adminController.getDeliveryPeople);
 
 // Reportes (Fase 4)

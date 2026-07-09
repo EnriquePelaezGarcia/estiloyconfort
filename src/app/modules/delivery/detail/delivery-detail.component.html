@@ -41,6 +41,21 @@
           @if (balance() > 0) { <div><dt>Por cobrar</dt><dd class="balance">{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div> }
         </dl>
 
+        @if (a.assemblyService) {
+          <div class="assembly-banner">
+            <span class="material-symbols-outlined">handyman</span>
+            <div class="assembly-banner__info">
+              <span class="assembly-banner__title">Incluye servicio de armado</span>
+              <span class="assembly-banner__detail">
+                Piso {{ a.assemblyFloors ?? 0 }} · {{ a.assemblyCost | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              </span>
+              <span class="assembly-banner__note">
+                Subir el mueble y armarlo en el domicilio. Si el cliente cancela el armado, avisa al admin.
+              </span>
+            </div>
+          </div>
+        }
+
         @if (a.items && a.items.length) {
           <h3 class="info-subtitle">Productos</h3>
           <ul class="items">

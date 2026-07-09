@@ -24,13 +24,17 @@ function mapDelivery(row) {
     paymentMethod: row.payment_method,
     totalAmount: row.total_amount != null ? Number(row.total_amount) : null,
     paymentAmount: row.payment_amount != null ? Number(row.payment_amount) : null,
+    assemblyService: !!row.assembly_service,
+    assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
+    assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
   };
 }
 
 const BASE_SELECT = `
   SELECT dv.*, o.order_number, o.customer_name, o.customer_phone, o.delivery_address,
          o.delivery_address_lat, o.delivery_address_lng, o.google_maps_url, o.payment_status,
-         o.payment_method, o.total_amount, o.payment_amount
+         o.payment_method, o.total_amount, o.payment_amount,
+         o.assembly_service, o.assembly_floors, o.assembly_cost
   FROM deliveries dv
   JOIN orders o ON o.id = dv.order_id
 `;
@@ -78,6 +82,49 @@ const Delivery = {
       if (d) await pool.execute("UPDATE orders SET order_status = 'delivered' WHERE id = ?", [d.order_id]);
     }
     return this.findById(id);
+  },
+
+  /**
+   * Entregas completadas del repartidor en un rango de fechas, con el monto
+   * de armado de cada una y el resumen del periodo. El 100% del cobro de
+   * armado corresponde al repartidor encargado de la entrega.
+   */
+  async earningsByPerson(deliveryPersonId, { from, to }) {
+    const [rows] = await pool.execute(
+      `SELECT dv.id, dv.order_id, dv.delivered_at,
+              o.order_number, o.customer_name, o.delivery_address,
+              o.assembly_service, o.assembly_floors, o.assembly_cost
+       FROM deliveries dv
+       JOIN orders o ON o.id = dv.order_id
+       WHERE dv.delivery_person_id = ?
+         AND dv.delivery_status = 'completed'
+         AND dv.delivered_at >= ?
+         AND dv.delivered_at < DATE_ADD(?, INTERVAL 1 DAY)
+       ORDER BY dv.delivered_at DESC`,
+      [deliveryPersonId, from, to],
+    );
+    const deliveries = rows.map((r) => ({
+      id: r.id,
+      orderId: r.order_id,
+      orderNumber: r.order_number,
+      customerName: r.customer_name,
+      deliveryAddress: r.delivery_address,
+      deliveredAt: r.delivered_at,
+      assemblyService: !!r.assembly_service,
+      assemblyFloors: r.assembly_floors != null ? Number(r.assembly_floors) : 0,
+      assemblyCost: r.assembly_cost != null ? Number(r.assembly_cost) : 0,
+    }));
+    const assemblyTotal = deliveries.reduce((sum, d) => sum + d.assemblyCost, 0);
+    return {
+      from,
+      to,
+      deliveries,
+      summary: {
+        deliveredCount: deliveries.length,
+        assemblyCount: deliveries.filter((d) => d.assemblyService).length,
+        assemblyTotal: Math.round(assemblyTotal * 100) / 100,
+      },
+    };
   },
 
   async saveProof(id, { signatureImageUrl, photoUrl, notes }) {

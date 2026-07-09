@@ -1,13 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ShippingService } from '../../../core/services/shipping.service';
-import { CreateOrderRequest, InventoryItem, SaleScheme } from '../../../core/models/order.model';
+import { AssemblyRates, CreateOrderRequest, InventoryItem, SaleScheme } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
@@ -44,7 +44,7 @@ export class OrderCreateComponent implements OnInit {
   protected shippingCp = signal<string>('');
   protected shippingQuote = signal<ShippingQuote | null>(null);
   protected shippingCost = computed(() => this.shippingQuote()?.price ?? 0);
-  protected grandTotal = computed(() => this.total() + this.shippingCost());
+  protected grandTotal = computed(() => this.total() + this.shippingCost() + this.assemblyCost());
 
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
@@ -52,10 +52,28 @@ export class OrderCreateComponent implements OnInit {
     customerPhone: [''],
     deliveryAddress: [''],
     googleMapsUrl: [''],
-    deliveryType: ['standard' as 'standard' | 'with_installation', Validators.required],
+    assemblyService: [false],
+    assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     expectedDeliveryDate: [''],
     notes: [''],
+  });
+
+  /** Tarifas vigentes del servicio de armado (el servidor recalcula al guardar). */
+  protected assemblyRates = signal<AssemblyRates | null>(null);
+  private assemblyServiceSig = toSignal(this.form.controls.assemblyService.valueChanges, {
+    initialValue: this.form.controls.assemblyService.value,
+  });
+  private assemblyFloorsSig = toSignal(this.form.controls.assemblyFloors.valueChanges, {
+    initialValue: this.form.controls.assemblyFloors.value,
+  });
+  protected hasAssembly = computed(() => !!this.assemblyServiceSig());
+  protected assemblyFloorsValue = computed(() => Math.max(0, Math.trunc(Number(this.assemblyFloorsSig())) || 0));
+  /** Costo estimado del armado: tarifa base + pisos × tarifa por piso. */
+  protected assemblyCost = computed(() => {
+    const rates = this.assemblyRates();
+    if (!this.hasAssembly() || !rates) return 0;
+    return rates.base + this.assemblyFloorsValue() * rates.perFloor;
   });
 
   /** Método de pago seleccionado, como signal para reaccionar en la plantilla. */
@@ -97,8 +115,28 @@ export class OrderCreateComponent implements OnInit {
     this.isCredit() ? PricingService.calculateCredit(this.total(), this.creditConfig()) : null,
   );
 
+  constructor() {
+    // El campo de pisos solo aplica cuando el pedido incluye armado.
+    this.form.controls.assemblyService.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((enabled) => {
+        const floors = this.form.controls.assemblyFloors;
+        if (enabled) {
+          floors.enable();
+        } else {
+          floors.setValue(0);
+          floors.disable();
+        }
+      });
+  }
+
   ngOnInit(): void {
     this.searchProducts('');
+
+    this.sellerService.getAssemblyRates().subscribe({
+      next: ({ data }) => this.assemblyRates.set(data),
+      error: () => {},
+    });
 
     // Modo edición: ?edit=ID precarga los datos del pedido en el formulario.
     const editParam = this.route.snapshot.queryParamMap.get('edit');
@@ -131,7 +169,8 @@ export class OrderCreateComponent implements OnInit {
           customerPhone: data.customerPhone ?? '',
           deliveryAddress: data.deliveryAddress ?? '',
           googleMapsUrl: data.googleMapsUrl ?? '',
-          deliveryType: data.deliveryType ?? 'standard',
+          assemblyService: !!data.assemblyService,
+          assemblyFloors: data.assemblyFloors ?? 0,
           paymentMethod: data.paymentMethod ?? 'cash',
           expectedDeliveryDate: data.expectedDeliveryDate
             ? String(data.expectedDeliveryDate).slice(0, 10)
@@ -238,12 +277,15 @@ export class OrderCreateComponent implements OnInit {
       customerPhone: raw.customerPhone || null,
       deliveryAddress: raw.deliveryAddress || null,
       googleMapsUrl: raw.googleMapsUrl || null,
-      deliveryType: raw.deliveryType!,
+      deliveryType: raw.assemblyService ? 'with_installation' : 'standard',
       paymentMethod: raw.paymentMethod!,
       expectedDeliveryDate: raw.expectedDeliveryDate || null,
       notes: raw.notes || null,
       shippingCost: this.shippingCost() || null,
       shippingPostalCode: this.shippingCp() || null,
+      // El servidor calcula el costo del armado con las tarifas vigentes.
+      assemblyService: !!raw.assemblyService,
+      assemblyFloors: this.assemblyFloorsValue(),
       items: this.lines().map((l) => ({
         productId: l.product.id,
         quantity: l.quantity,

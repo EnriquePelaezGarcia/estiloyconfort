@@ -240,3 +240,21 @@
 
   .strong { font-weight: 700; }
 }
+
+// ===== Servicio de armado =====
+.assembly-field {
+  .assembly-check {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    cursor: pointer;
+    font-weight: 600;
+
+    input[type='checkbox'] {
+      width: 1.05rem;
+      height: 1.05rem;
+      accent-color: vars.$color-primary;
+      cursor: pointer;
+    }
+  }
+}

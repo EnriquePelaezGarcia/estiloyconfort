@@ -64,6 +64,20 @@
           <p class="field__hint">{{ itemMeta('credit_weeks')?.description }}</p>
         </div>
 
+        <p class="form-section">Servicio de armado</p>
+
+        <div class="field">
+          <label for="assemblyBase">{{ itemMeta('assembly_base')?.label ?? 'Armado: tarifa base' }} ($)</label>
+          <input id="assemblyBase" type="number" formControlName="assembly_base" min="0" step="1" />
+          <p class="field__hint">{{ itemMeta('assembly_base')?.description }}</p>
+        </div>
+
+        <div class="field">
+          <label for="assemblyPerFloor">{{ itemMeta('assembly_per_floor')?.label ?? 'Armado: costo por piso' }} ($)</label>
+          <input id="assemblyPerFloor" type="number" formControlName="assembly_per_floor" min="0" step="1" />
+          <p class="field__hint">{{ itemMeta('assembly_per_floor')?.description }}</p>
+        </div>
+
         <div class="card__foot">
           <button type="submit" class="btn btn--primary" [disabled]="saving()">
             @if (saving()) { <span class="spinner spinner--sm"></span> }

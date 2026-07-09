@@ -15,7 +15,9 @@ export type PricingConfigKey =
   | 'rounding_step'
   | 'credit_interest'
   | 'credit_initial_pct'
-  | 'credit_weeks';
+  | 'credit_weeks'
+  | 'assembly_base'
+  | 'assembly_per_floor';
 
 /** Mapa key -> valor usado por el calculador de precios. */
 export type PricingConfigMap = Record<PricingConfigKey, number>;
@@ -28,6 +30,8 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   credit_interest: 22,
   credit_initial_pct: 35,
   credit_weeks: 12,
+  assembly_base: 150,
+  assembly_per_floor: 50,
 };
 
 export interface CalculatedPrices {

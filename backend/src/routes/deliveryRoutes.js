@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate, authorize('delivery_person', 'admin'));
 
 router.get('/assignments', deliveryController.assignments);
+router.get('/earnings', deliveryController.earnings);
 router.get('/assignments/:id', deliveryController.getOne);
 router.patch('/assignments/:id/status', deliveryController.updateStatus);
 router.post('/assignments/:id/proof', deliveryController.saveProof);

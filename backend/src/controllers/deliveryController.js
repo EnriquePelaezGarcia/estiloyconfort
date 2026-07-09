@@ -52,6 +52,41 @@ const deliveryController = {
     res.json({ data: updated, message: 'Evidencia guardada' });
   }),
 
+  // GET /api/delivery/earnings?period=day|week|month&date=YYYY-MM-DD
+  // Entregas completadas del repartidor autenticado y acumulado de armados del periodo.
+  earnings: asyncHandler(async (req, res) => {
+    const period = ['day', 'week', 'month'].includes(req.query.period) ? req.query.period : 'day';
+    const ref = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+      ? new Date(`${req.query.date}T00:00:00`)
+      : new Date();
+
+    const fmt = (d) => {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+
+    let from;
+    let to;
+    if (period === 'day') {
+      from = to = fmt(ref);
+    } else if (period === 'week') {
+      // Semana lunes-domingo que contiene la fecha de referencia.
+      const day = (ref.getDay() + 6) % 7; // 0 = lunes
+      const start = new Date(ref);
+      start.setDate(ref.getDate() - day);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      from = fmt(start);
+      to = fmt(end);
+    } else {
+      from = fmt(new Date(ref.getFullYear(), ref.getMonth(), 1));
+      to = fmt(new Date(ref.getFullYear(), ref.getMonth() + 1, 0));
+    }
+
+    const result = await Delivery.earningsByPerson(req.user.id, { from, to });
+    res.json({ data: { period, ...result } });
+  }),
+
   // PATCH /api/delivery/assignments/:id/payment — registra cobro en la entrega
   // Acepta `{ payments: [{amount, paymentMethod}] }` (cobro dividido) o `{ amount, paymentMethod }`.
   registerPayment: asyncHandler(async (req, res) => {

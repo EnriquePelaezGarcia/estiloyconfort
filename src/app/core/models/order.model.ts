@@ -80,6 +80,12 @@ export interface Order {
   shippingCost?: number | null;
   /** Código postal de entrega usado para cotizar el envío. */
   shippingPostalCode?: string | null;
+  /** TRUE si el pedido incluye servicio de armado (subida por pisos + armado). */
+  assemblyService?: boolean;
+  /** Piso de entrega (0 = planta baja, solo tarifa base). */
+  assemblyFloors?: number;
+  /** Costo del armado cobrado en el pedido (snapshot de la tarifa vigente). */
+  assemblyCost?: number;
   /** Fecha límite para pagar en apartado al precio de contado. */
   layawayDeadline?: string | null;
   /** TRUE cuando el precio de contado del apartado fue reemplazado por precio crédito. */
@@ -111,6 +117,9 @@ export interface CreateOrderRequest {
   notes?: string | null;
   shippingCost?: number | null;
   shippingPostalCode?: string | null;
+  /** El servidor calcula el costo del armado con las tarifas vigentes; solo se envía flag + pisos. */
+  assemblyService?: boolean;
+  assemblyFloors?: number;
   items: Array<{
     productId: number;
     quantity: number;
@@ -168,7 +177,44 @@ export interface DeliveryAssignment {
   paymentMethod: PaymentMethod;
   totalAmount: number;
   paymentAmount: number;
+  assemblyService?: boolean;
+  assemblyFloors?: number;
+  assemblyCost?: number;
   items?: Array<{ id: number; productName: string; productSku: string; quantity: number }>;
+}
+
+/** Tarifas vigentes del servicio de armado. */
+export interface AssemblyRates {
+  base: number;
+  perFloor: number;
+}
+
+/** Entrega completada con su monto de armado (pantalla de ganancias del repartidor). */
+export interface EarningsDelivery {
+  id: number;
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  deliveryAddress?: string | null;
+  deliveredAt: string;
+  assemblyService: boolean;
+  assemblyFloors: number;
+  assemblyCost: number;
+}
+
+export type EarningsPeriod = 'day' | 'week' | 'month';
+
+/** Respuesta de GET /delivery/earnings. */
+export interface DeliveryEarnings {
+  period: EarningsPeriod;
+  from: string;
+  to: string;
+  deliveries: EarningsDelivery[];
+  summary: {
+    deliveredCount: number;
+    assemblyCount: number;
+    assemblyTotal: number;
+  };
 }
 
 export interface WeeklyListRow {

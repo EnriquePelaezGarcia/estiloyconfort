@@ -26,6 +26,14 @@ export const deliveryRoutes: Routes = [
         title: 'Historial - Repartidor',
       },
       {
+        path: 'ganancias',
+        loadComponent: () =>
+          import('./earnings/delivery-earnings.component').then(
+            (m) => m.DeliveryEarningsComponent,
+          ),
+        title: 'Mis ganancias - Repartidor',
+      },
+      {
         path: 'entregas/:id',
         loadComponent: () =>
           import('./detail/delivery-detail.component').then((m) => m.DeliveryDetailComponent),

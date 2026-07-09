@@ -119,6 +119,15 @@ export class AdminService {
     return this.api.get<{ data: DeliveryPerson[] }>('/admin/delivery-people');
   }
 
+  /** Quita el servicio de armado de un pedido (acción exclusiva del admin). */
+  removeAssembly(
+    id: number,
+  ): Observable<{ data: { order: Order; refundDue: number }; message: string }> {
+    return this.api.delete<{ data: { order: Order; refundDue: number }; message: string }>(
+      `/admin/orders/${id}/assembly`,
+    );
+  }
+
   // ===== Reportes (Fase 4) =====
   getSalesReport(
     from?: string,

@@ -1,7 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { DeliveryAssignment, DeliveryStatus, PaymentInstrument } from '../models/order.model';
+import {
+  DeliveryAssignment,
+  DeliveryEarnings,
+  DeliveryStatus,
+  EarningsPeriod,
+  PaymentInstrument,
+} from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
 export class DeliveryService {
@@ -30,6 +36,13 @@ export class DeliveryService {
     proof: { signatureImageUrl?: string; photoUrl?: string; notes?: string },
   ): Observable<{ data: DeliveryAssignment }> {
     return this.api.post<{ data: DeliveryAssignment }>(`/delivery/assignments/${id}/proof`, proof);
+  }
+
+  /** Entregas completadas y acumulado de armados del repartidor autenticado. */
+  getEarnings(period: EarningsPeriod, date?: string): Observable<{ data: DeliveryEarnings }> {
+    const params: Record<string, string> = { period };
+    if (date) params['date'] = date;
+    return this.api.get<{ data: DeliveryEarnings }>('/delivery/earnings', params);
   }
 
   registerPayment(
