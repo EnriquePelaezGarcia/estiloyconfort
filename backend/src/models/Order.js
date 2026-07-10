@@ -7,6 +7,14 @@ const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'deliv
 const LAYAWAY_MIN_DEPOSIT = 500;
 const LAYAWAY_MONTHS = 3;
 
+// Materiales permitidos para el mueble (ENUM en BD).
+const MATERIALS = ['MDF', 'Melamina'];
+
+/** Normaliza el material al ENUM de la BD; cualquier otro valor se descarta. */
+function sanitizeMaterial(value) {
+  return MATERIALS.includes(value) ? value : null;
+}
+
 function mapItem(row) {
   return {
     id: row.id,
@@ -85,6 +93,11 @@ function mapOrder(row) {
     assemblyService: !!row.assembly_service,
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
+    material: row.material ?? null,
+    color: row.color ?? null,
+    notasFabricante: row.notas_fabricante ?? null,
+    notasPedido: row.notas_pedido ?? null,
+    instruccionesEntrega: row.instrucciones_entrega ?? null,
     cashTotal: row.cash_total != null ? Number(row.cash_total) : null,
     downPayment: row.down_payment != null ? Number(row.down_payment) : null,
     weeklyPayment: row.weekly_payment != null ? Number(row.weekly_payment) : null,
@@ -256,8 +269,9 @@ const Order = {
            delivery_type, payment_method, payment_status, payment_amount, order_status,
            expected_delivery_date, total_amount, shipping_cost, shipping_postal_code,
            assembly_service, assembly_floors, assembly_cost,
+           material, color, notas_fabricante, notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -267,6 +281,9 @@ const Order = {
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
           totalAmount, shippingCost, shippingPostalCode,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
+          sanitizeMaterial(data.material), data.color ?? 'blanco',
+          data.notasFabricante ?? null, data.notasPedido ?? null,
+          data.instruccionesEntrega ?? null,
           cashTotal, downPayment, weeklyPayment, creditWeeks,
           layawayDeadline, data.notes ?? null,
         ],
@@ -314,11 +331,17 @@ const Order = {
       googleMapsUrl: 'google_maps_url',
       deliveryType: 'delivery_type', paymentMethod: 'payment_method',
       expectedDeliveryDate: 'expected_delivery_date', notes: 'notes',
+      material: 'material', color: 'color',
+      notasFabricante: 'notas_fabricante', notasPedido: 'notas_pedido',
+      instruccionesEntrega: 'instrucciones_entrega',
     };
     const sets = [];
     const params = [];
     for (const [key, col] of Object.entries(allowed)) {
-      if (data[key] !== undefined) { sets.push(`${col} = ?`); params.push(data[key]); }
+      if (data[key] !== undefined) {
+        sets.push(`${col} = ?`);
+        params.push(key === 'material' ? sanitizeMaterial(data[key]) : data[key]);
+      }
     }
     if (!sets.length) return this.findById(id);
     params.push(id);
@@ -474,6 +497,8 @@ const Order = {
            payment_method = ?, payment_status = ?, expected_delivery_date = ?, notes = ?,
            total_amount = ?, shipping_cost = ?, shipping_postal_code = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
+           material = ?, color = ?, notas_fabricante = ?, notas_pedido = ?,
+           instrucciones_entrega = ?,
            cash_total = ?, down_payment = ?,
            weekly_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
@@ -489,6 +514,11 @@ const Order = {
           data.notes !== undefined ? data.notes : existing.notes,
           totalAmount, shippingCost, shippingPostalCode,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
+          data.material !== undefined ? sanitizeMaterial(data.material) : existing.material,
+          data.color !== undefined ? data.color : existing.color,
+          data.notasFabricante !== undefined ? data.notasFabricante : existing.notasFabricante,
+          data.notasPedido !== undefined ? data.notasPedido : existing.notasPedido,
+          data.instruccionesEntrega !== undefined ? data.instruccionesEntrega : existing.instruccionesEntrega,
           cashTotal, downPayment, weeklyPayment, creditWeeks, layawayDeadline,
           id,
         ],

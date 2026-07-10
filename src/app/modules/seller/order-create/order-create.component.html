@@ -26,31 +26,80 @@
             <p class="field__error">Ingresa un correo válido.</p>
           }
         </div>
-        <div class="field">
-          <label for="customerPhone">Teléfono</label>
+        <div class="field" [class.field--error]="form.controls.customerPhone.touched && form.controls.customerPhone.invalid">
+          <label for="customerPhone">Teléfono *</label>
           <input id="customerPhone" type="tel" formControlName="customerPhone" placeholder="2221234567" />
+          @if (form.controls.customerPhone.touched && form.controls.customerPhone.invalid) {
+            <p class="field__error">Ingresa el teléfono del cliente.</p>
+          }
         </div>
       </div>
     </div>
 
     <div class="panel">
-      <h2 class="panel__title">Entrega y pago</h2>
+      <h2 class="panel__title">Detalles del pedido</h2>
       <div class="field">
-        <label for="deliveryAddress">Dirección de entrega</label>
+        <label for="paymentMethod">Condición de venta *</label>
+        <select id="paymentMethod" formControlName="paymentMethod">
+          <option value="cash">Contado</option>
+          <option value="msi">Meses sin intereses</option>
+          <option value="store_credit">Crédito tienda</option>
+          <option value="layaway">Apartado</option>
+        </select>
+        <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="material">Material *</label>
+          <select id="material" formControlName="material">
+            <option value="MDF">MDF</option>
+            <option value="Melamina">Melamina</option>
+          </select>
+        </div>
+        <div class="field" [class.field--error]="form.controls.color.touched && form.controls.color.invalid">
+          <label for="color">Color / Acabado *</label>
+          <input
+            id="color"
+            type="text"
+            formControlName="color"
+            placeholder="Ej. Blanco, Chocolate, Vetado Nogal, Gris texturizado..."
+          />
+          @if (form.controls.color.touched && form.controls.color.invalid) {
+            <p class="field__error">Ingresa el color o acabado.</p>
+          }
+        </div>
+      </div>
+      <div class="field">
+        <label for="notasFabricante">Notas para el Fabricante</label>
+        <textarea
+          id="notasFabricante"
+          formControlName="notasFabricante"
+          placeholder="Ej. Solicitar repuestos de herrajes, detalles de empaque especial..."
+        ></textarea>
+      </div>
+      <div class="field">
+        <label for="deliveryPersonId">Asignar repartidor</label>
+        <select id="deliveryPersonId" formControlName="deliveryPersonId">
+          <option [ngValue]="null">Sin asignar</option>
+          @for (dp of deliveryPeople(); track dp.id) {
+            <option [ngValue]="dp.id">{{ dp.fullName }}</option>
+          }
+        </select>
+        <p class="field__hint">Opcional. Al asignarlo, el pedido pasa a "En entrega" y aparece en las entregas del repartidor.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel__title">Datos de entrega</h2>
+      <div class="field" [class.field--error]="form.controls.deliveryAddress.touched && form.controls.deliveryAddress.invalid">
+        <label for="deliveryAddress">Dirección de entrega *</label>
         <textarea id="deliveryAddress" formControlName="deliveryAddress" placeholder="Calle, número, colonia, ciudad"></textarea>
+        @if (form.controls.deliveryAddress.touched && form.controls.deliveryAddress.invalid) {
+          <p class="field__error">Ingresa la dirección de entrega.</p>
+        }
       </div>
-      <div class="field">
-        <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
-        <input
-          id="googleMapsUrl"
-          type="url"
-          formControlName="googleMapsUrl"
-          placeholder="https://maps.google.com/?q=..."
-        />
-        <p class="field__hint">Pega el enlace de Google Maps; el repartidor podrá abrirlo con un clic.</p>
-      </div>
-      <div class="field">
-        <label for="shippingCp">Código postal de entrega</label>
+      <div class="field" [class.field--error]="submitAttempted() && shippingCp().length !== 5">
+        <label for="shippingCp">Código postal de entrega *</label>
         <input
           id="shippingCp"
           type="text"
@@ -62,6 +111,9 @@
           (input)="onShippingCpInput($event)"
         />
         <p class="field__hint">Ingresa el CP para calcular el costo de envío automáticamente.</p>
+        @if (submitAttempted() && shippingCp().length !== 5) {
+          <p class="field__error">Ingresa el código postal de entrega (5 dígitos).</p>
+        }
 
         @if (shippingQuote(); as quote) {
           <div class="shipping-badge">
@@ -80,6 +132,25 @@
         @if (shippingCp().length === 5 && !shippingQuote()) {
           <p class="field__error">CP fuera de la zona de cobertura.</p>
         }
+      </div>
+      <div class="field">
+        <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
+        <input
+          id="googleMapsUrl"
+          type="url"
+          formControlName="googleMapsUrl"
+          placeholder="https://maps.google.com/?q=..."
+        />
+        <p class="field__hint">Pega el enlace de Google Maps; el repartidor podrá abrirlo con un clic.</p>
+      </div>
+      <div class="field">
+        <label for="instruccionesEntrega">Instrucciones de Entrega</label>
+        <textarea
+          id="instruccionesEntrega"
+          formControlName="instruccionesEntrega"
+          placeholder="Ej. Casa azul frente al parque, entregar de 6 a 12 am, dejar en portería..."
+        ></textarea>
+        <p class="field__hint">Referencias de fachada, navegación y horarios para el repartidor.</p>
       </div>
       <div class="field assembly-field">
         <label class="assembly-check">
@@ -108,25 +179,18 @@
       </div>
       <div class="field-row">
         <div class="field">
-          <label for="paymentMethod">Condición de venta</label>
-          <select id="paymentMethod" formControlName="paymentMethod">
-            <option value="cash">Contado</option>
-            <option value="msi">Meses sin intereses</option>
-            <option value="store_credit">Crédito tienda</option>
-            <option value="layaway">Apartado</option>
-          </select>
-          <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
           <label for="expectedDeliveryDate">Fecha estimada de entrega</label>
           <input id="expectedDeliveryDate" type="date" formControlName="expectedDeliveryDate" />
         </div>
       </div>
       <div class="field">
-        <label for="notes">Notas</label>
-        <textarea id="notes" formControlName="notes" placeholder="Observaciones del pedido"></textarea>
+        <label for="notasPedido">Notas del Pedido</label>
+        <textarea
+          id="notasPedido"
+          formControlName="notasPedido"
+          placeholder="Ej. Dejar 2 manijas de repuesto, llevarse la basura del empaque..."
+        ></textarea>
+        <p class="field__hint">Este texto se imprimirá en el ticket.</p>
       </div>
     </div>
   </div>

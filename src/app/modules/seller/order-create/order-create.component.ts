@@ -7,7 +7,7 @@ import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ShippingService } from '../../../core/services/shipping.service';
-import { AssemblyRates, CreateOrderRequest, InventoryItem, SaleScheme } from '../../../core/models/order.model';
+import { AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem, ProductMaterial, SaleScheme } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
@@ -40,6 +40,9 @@ export class OrderCreateComponent implements OnInit {
   protected editId = signal<number | null>(null);
   protected isEditing = computed(() => this.editId() !== null);
 
+  /** Marca que ya se intentó enviar, para resaltar el CP obligatorio. */
+  protected submitAttempted = signal(false);
+
   /** CP de entrega y cotización de envío en vivo. */
   protected shippingCp = signal<string>('');
   protected shippingQuote = signal<ShippingQuote | null>(null);
@@ -49,15 +52,26 @@ export class OrderCreateComponent implements OnInit {
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
     customerEmail: ['', [Validators.email]],
-    customerPhone: [''],
-    deliveryAddress: [''],
+    customerPhone: ['', Validators.required],
+    deliveryAddress: ['', Validators.required],
     googleMapsUrl: [''],
     assemblyService: [false],
     assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     expectedDeliveryDate: [''],
-    notes: [''],
+    // Especificaciones del producto y logística de entrega.
+    material: ['MDF' as ProductMaterial, Validators.required],
+    color: ['blanco', Validators.required],
+    notasFabricante: [''],
+    notasPedido: [''],
+    instruccionesEntrega: [''],
+    deliveryPersonId: [null as number | null],
   });
+
+  /** Repartidores disponibles para asignar el pedido (opcional). */
+  protected deliveryPeople = signal<DeliveryPerson[]>([]);
+  /** Repartidor ya asignado al entrar en modo edición, para no re-asignar sin cambios. */
+  private initialDeliveryPersonId: number | null = null;
 
   /** Tarifas vigentes del servicio de armado (el servidor recalcula al guardar). */
   protected assemblyRates = signal<AssemblyRates | null>(null);
@@ -138,6 +152,11 @@ export class OrderCreateComponent implements OnInit {
       error: () => {},
     });
 
+    this.sellerService.getDeliveryPeople().subscribe({
+      next: ({ data }) => this.deliveryPeople.set(data),
+      error: () => {},
+    });
+
     // Modo edición: ?edit=ID precarga los datos del pedido en el formulario.
     const editParam = this.route.snapshot.queryParamMap.get('edit');
     if (editParam) {
@@ -175,8 +194,14 @@ export class OrderCreateComponent implements OnInit {
           expectedDeliveryDate: data.expectedDeliveryDate
             ? String(data.expectedDeliveryDate).slice(0, 10)
             : '',
-          notes: data.notes ?? '',
+          material: data.material ?? 'MDF',
+          color: data.color ?? 'blanco',
+          notasFabricante: data.notasFabricante ?? '',
+          notasPedido: data.notasPedido ?? '',
+          instruccionesEntrega: data.instruccionesEntrega ?? '',
+          deliveryPersonId: data.deliveryPersonId ?? null,
         });
+        this.initialDeliveryPersonId = data.deliveryPersonId ?? null;
         // Precargar el CP de envío y recotizar para mostrar el desglose.
         if (data.shippingPostalCode) {
           const cp = String(data.shippingPostalCode).replace(/\D/g, '').slice(0, 5);
@@ -261,9 +286,14 @@ export class OrderCreateComponent implements OnInit {
   }
 
   protected submit(): void {
+    this.submitAttempted.set(true);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.notification.error('Revisa los campos marcados en rojo antes de continuar');
+      return;
+    }
+    if (this.shippingCp().length !== 5) {
+      this.notification.error('Ingresa el código postal de entrega (5 dígitos)');
       return;
     }
     if (this.lines().length === 0) {
@@ -280,12 +310,16 @@ export class OrderCreateComponent implements OnInit {
       deliveryType: raw.assemblyService ? 'with_installation' : 'standard',
       paymentMethod: raw.paymentMethod!,
       expectedDeliveryDate: raw.expectedDeliveryDate || null,
-      notes: raw.notes || null,
       shippingCost: this.shippingCost() || null,
       shippingPostalCode: this.shippingCp() || null,
       // El servidor calcula el costo del armado con las tarifas vigentes.
       assemblyService: !!raw.assemblyService,
       assemblyFloors: this.assemblyFloorsValue(),
+      material: raw.material ?? null,
+      color: raw.color?.trim() || 'blanco',
+      notasFabricante: raw.notasFabricante?.trim() || null,
+      notasPedido: raw.notasPedido?.trim() || null,
+      instruccionesEntrega: raw.instruccionesEntrega?.trim() || null,
       items: this.lines().map((l) => ({
         productId: l.product.id,
         quantity: l.quantity,
@@ -300,8 +334,10 @@ export class OrderCreateComponent implements OnInit {
     if (editId !== null) {
       this.sellerService.updateOrder(editId, payload).subscribe({
         next: (res) => {
-          this.notification.success('Pedido actualizado');
-          this.router.navigate([detailBase, res.data.id]);
+          this.assignDeliveryIfNeeded(res.data.id, () => {
+            this.notification.success('Pedido actualizado');
+            this.router.navigate([detailBase, res.data.id]);
+          });
         },
         error: (err: { error?: { message?: string } }) => {
           this.saving.set(false);
@@ -313,12 +349,34 @@ export class OrderCreateComponent implements OnInit {
 
     this.sellerService.createOrder(payload).subscribe({
       next: (res) => {
-        this.notification.success(`Pedido ${res.data.orderNumber} creado`);
-        this.router.navigate([detailBase, res.data.id]);
+        this.assignDeliveryIfNeeded(res.data.id, () => {
+          this.notification.success(`Pedido ${res.data.orderNumber} creado`);
+          this.router.navigate([detailBase, res.data.id]);
+        });
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo crear el pedido');
+      },
+    });
+  }
+
+  /**
+   * Asigna el repartidor seleccionado después de guardar el pedido.
+   * Solo llama al endpoint si se eligió uno distinto al ya asignado;
+   * si la asignación falla, el pedido queda guardado y se avisa.
+   */
+  private assignDeliveryIfNeeded(orderId: number, done: () => void): void {
+    const selected = this.form.controls.deliveryPersonId.value;
+    if (!selected || selected === this.initialDeliveryPersonId) {
+      done();
+      return;
+    }
+    this.sellerService.assignDelivery(orderId, selected).subscribe({
+      next: done,
+      error: () => {
+        this.notification.error('El pedido se guardó, pero no se pudo asignar el repartidor');
+        done();
       },
     });
   }

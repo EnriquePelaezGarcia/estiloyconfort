@@ -141,6 +141,11 @@
         <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
         @if (o.expectedDeliveryDate) { <div><dt>Entrega estimada</dt><dd>{{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}</dd></div> }
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
+        @if (o.material) { <div><dt>Material</dt><dd>{{ o.material }}</dd></div> }
+        @if (o.color) { <div><dt>Color / Acabado</dt><dd>{{ o.color }}</dd></div> }
+        @if (o.notasFabricante) { <div class="no-print"><dt>Notas fabricante</dt><dd>{{ o.notasFabricante }}</dd></div> }
+        @if (o.notasPedido) { <div><dt>Notas del pedido</dt><dd>{{ o.notasPedido }}</dd></div> }
+        @if (o.instruccionesEntrega) { <div class="no-print"><dt>Instrucciones de entrega</dt><dd>{{ o.instruccionesEntrega }}</dd></div> }
         @if (o.notes) { <div><dt>Notas</dt><dd>{{ o.notes }}</dd></div> }
       </dl>
 

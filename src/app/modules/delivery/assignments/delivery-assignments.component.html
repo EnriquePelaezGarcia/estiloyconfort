@@ -23,6 +23,12 @@
 
         <h2 class="dcard__customer">{{ a.customerName }}</h2>
         @if (a.deliveryAddress) { <p class="dcard__address">{{ a.deliveryAddress }}</p> }
+        @if (a.instruccionesEntrega) {
+          <p class="dcard__instructions">
+            <span class="material-symbols-outlined">signpost</span>
+            {{ a.instruccionesEntrega }}
+          </p>
+        }
 
         <div class="dcard__meta">
           <span class="badge" [class]="payTone(a.paymentStatus)">Pago: {{ payLabel(a.paymentStatus) }}</span>

@@ -21,6 +21,8 @@ export type SaleScheme = 'cash' | 'msi' | 'store_credit' | 'layaway';
 export type PaymentInstrument = 'cash' | 'card' | 'transfer' | 'msi';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
+/** Material del mueble (mismo ENUM en orders y products). */
+export type ProductMaterial = 'MDF' | 'Melamina';
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 export interface OrderItem {
@@ -86,6 +88,16 @@ export interface Order {
   assemblyFloors?: number;
   /** Costo del armado cobrado en el pedido (snapshot de la tarifa vigente). */
   assemblyCost?: number;
+  /** Material del mueble (MDF o Melamina). */
+  material?: ProductMaterial | null;
+  /** Color de pintura (MDF) o acabado/veta (Melamina). */
+  color?: string | null;
+  /** Especificaciones para quien surte o almacena el producto terminado. */
+  notasFabricante?: string | null;
+  /** Notas del pedido; se imprimen en el ticket del cliente. */
+  notasPedido?: string | null;
+  /** Referencias de fachada, navegación y horarios para el repartidor. */
+  instruccionesEntrega?: string | null;
   /** Fecha límite para pagar en apartado al precio de contado. */
   layawayDeadline?: string | null;
   /** TRUE cuando el precio de contado del apartado fue reemplazado por precio crédito. */
@@ -120,6 +132,11 @@ export interface CreateOrderRequest {
   /** El servidor calcula el costo del armado con las tarifas vigentes; solo se envía flag + pisos. */
   assemblyService?: boolean;
   assemblyFloors?: number;
+  material?: ProductMaterial | null;
+  color?: string | null;
+  notasFabricante?: string | null;
+  notasPedido?: string | null;
+  instruccionesEntrega?: string | null;
   items: Array<{
     productId: number;
     quantity: number;
@@ -180,6 +197,11 @@ export interface DeliveryAssignment {
   assemblyService?: boolean;
   assemblyFloors?: number;
   assemblyCost?: number;
+  material?: ProductMaterial | null;
+  color?: string | null;
+  notasFabricante?: string | null;
+  notasPedido?: string | null;
+  instruccionesEntrega?: string | null;
   items?: Array<{ id: number; productName: string; productSku: string; quantity: number }>;
 }
 
@@ -234,6 +256,9 @@ export interface ManufacturerOrder {
   order_status: OrderStatus;
   expected_delivery_date: string | null;
   created_at: string;
+  material?: ProductMaterial | null;
+  color?: string | null;
+  notas_fabricante?: string | null;
   items: Array<{ id: number; productName: string; productSku: string; quantity: number; isReady: boolean }>;
 }
 

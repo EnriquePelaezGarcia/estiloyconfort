@@ -29,6 +29,19 @@
           </div>
         </div>
 
+        @if (o.material || o.color) {
+          <div class="order__specs">
+            @if (o.material) { <span class="badge badge--blue">{{ o.material }}</span> }
+            @if (o.color) { <span class="badge">Color: {{ o.color }}</span> }
+          </div>
+        }
+        @if (o.notas_fabricante) {
+          <p class="order__notes">
+            <span class="material-symbols-outlined">sticky_note_2</span>
+            {{ o.notas_fabricante }}
+          </p>
+        }
+
         @if (o.order_status === 'pending') {
           <button type="button" class="btn btn--ghost order__start" (click)="startFabrication(o)">
             <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación

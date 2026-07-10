@@ -44,7 +44,8 @@ const manufacturerController = {
   orders: asyncHandler(async (req, res) => {
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
     const [orders] = await pool.execute(
-      `SELECT id, order_number, customer_name, order_status, expected_delivery_date, created_at
+      `SELECT id, order_number, customer_name, order_status, expected_delivery_date, created_at,
+              material, color, notas_fabricante
        FROM orders WHERE order_status IN (${placeholders})
        ORDER BY expected_delivery_date IS NULL, expected_delivery_date ASC, created_at ASC`,
       FABRICATION_STATUSES,

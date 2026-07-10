@@ -21,6 +21,22 @@
   &__customer { font-size: 1.1rem; color: vars.$color-text; }
   &__address { font-size: 0.85rem; color: vars.$color-text-secondary; }
 
+  // Instrucciones de entrega, truncadas; el texto completo vive en el detalle.
+  &__instructions {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 0.82rem;
+    color: vars.$color-primary;
+
+    .material-symbols-outlined {
+      font-size: 1rem;
+      vertical-align: text-bottom;
+      margin-right: 0.25rem;
+    }
+  }
+
   &__meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.3rem; }
   &__balance { font-weight: 700; color: vars.$color-error; font-size: 0.85rem; }
 

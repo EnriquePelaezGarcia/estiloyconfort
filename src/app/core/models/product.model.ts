@@ -1,3 +1,5 @@
+import { ProductMaterial } from './order.model';
+
 export interface ProductVariant {
   id: number;
   product_id: number;
@@ -28,6 +30,10 @@ export interface Product {
   category_slug: string | null;
   description: string | null;
   materials: string | null;
+  /** Material del mueble (MDF o Melamina). */
+  material: ProductMaterial | null;
+  /** Color de pintura (MDF) o acabado/veta (Melamina). */
+  color: string | null;
   dimensions_length: number | null;
   dimensions_width: number | null;
   dimensions_height: number | null;
@@ -67,6 +73,8 @@ export interface ProductPayload {
   category_id: number | null;
   description: string | null;
   materials: string | null;
+  material: ProductMaterial | null;
+  color: string | null;
   dimensions_length: number | null;
   dimensions_width: number | null;
   dimensions_height: number | null;

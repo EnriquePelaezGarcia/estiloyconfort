@@ -144,6 +144,26 @@
           <input id="materials" type="text" formControlName="materials" placeholder="Ej. madera de pino, tela lino" />
         </div>
 
+        <div class="field-row">
+          <div class="field">
+            <label for="material">Material</label>
+            <select id="material" formControlName="material">
+              <option [ngValue]="null">Selecciona…</option>
+              <option value="MDF">MDF</option>
+              <option value="Melamina">Melamina</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="color">Color / Acabado</label>
+            <input
+              id="color"
+              type="text"
+              formControlName="color"
+              placeholder="Ej. Blanco, Chocolate, Vetado Nogal, Gris texturizado..."
+            />
+          </div>
+        </div>
+
         <p class="form-section">Dimensiones y peso</p>
         <div class="field-grid">
           <div class="field">

@@ -198,3 +198,46 @@
     color: vars.$color-text-secondary;
   }
 }
+
+// ===== Instrucciones de entrega (dato clave de navegación) =====
+.delivery-instructions {
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid vars.$color-primary;
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, vars.$color-primary 8%, white);
+  font-weight: 600;
+}
+
+// ===== Notas del pedido / fabricante =====
+.note-banner {
+  display: flex;
+  gap: vars.$spacing-sm;
+  align-items: flex-start;
+  margin-top: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: 10px;
+  background: vars.$color-bg;
+
+  > .material-symbols-outlined {
+    color: vars.$color-text-secondary;
+    font-size: 1.4rem;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title {
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+
+  &__text {
+    font-size: 0.88rem;
+    color: vars.$color-text-secondary;
+    white-space: pre-line;
+  }
+}

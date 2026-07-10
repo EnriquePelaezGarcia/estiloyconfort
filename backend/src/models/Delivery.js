@@ -27,6 +27,12 @@ function mapDelivery(row) {
     assemblyService: !!row.assembly_service,
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
+    // Especificaciones y notas visibles para el repartidor.
+    material: row.material ?? null,
+    color: row.color ?? null,
+    notasFabricante: row.notas_fabricante ?? null,
+    notasPedido: row.notas_pedido ?? null,
+    instruccionesEntrega: row.instrucciones_entrega ?? null,
   };
 }
 
@@ -34,7 +40,8 @@ const BASE_SELECT = `
   SELECT dv.*, o.order_number, o.customer_name, o.customer_phone, o.delivery_address,
          o.delivery_address_lat, o.delivery_address_lng, o.google_maps_url, o.payment_status,
          o.payment_method, o.total_amount, o.payment_amount,
-         o.assembly_service, o.assembly_floors, o.assembly_cost
+         o.assembly_service, o.assembly_floors, o.assembly_cost,
+         o.material, o.color, o.notas_fabricante, o.notas_pedido, o.instrucciones_entrega
   FROM deliveries dv
   JOIN orders o ON o.id = dv.order_id
 `;

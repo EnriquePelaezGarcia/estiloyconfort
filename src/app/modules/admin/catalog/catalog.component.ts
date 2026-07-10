@@ -9,6 +9,7 @@ import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Product, ProductImage, ProductPayload } from '../../../core/models/product.model';
+import { ProductMaterial } from '../../../core/models/order.model';
 import { Category } from '../../../core/models/category.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
@@ -77,6 +78,8 @@ export class CatalogComponent implements OnInit {
     categoryId: [null as number | null],
     description: [''],
     materials: [''],
+    material: [null as ProductMaterial | null],
+    color: ['blanco'],
     length: [null as number | null, [Validators.min(0)]],
     width: [null as number | null, [Validators.min(0)]],
     height: [null as number | null, [Validators.min(0)]],
@@ -147,6 +150,8 @@ export class CatalogComponent implements OnInit {
       categoryId: null,
       description: '',
       materials: '',
+      material: null,
+      color: 'blanco',
       length: null,
       width: null,
       height: null,
@@ -171,6 +176,8 @@ export class CatalogComponent implements OnInit {
       categoryId: product.category_id,
       description: product.description ?? '',
       materials: product.materials ?? '',
+      material: product.material ?? null,
+      color: product.color ?? 'blanco',
       length: product.dimensions_length,
       width: product.dimensions_width,
       height: product.dimensions_height,
@@ -211,6 +218,8 @@ export class CatalogComponent implements OnInit {
       category_id: raw.categoryId ?? null,
       description: raw.description?.trim() || null,
       materials: raw.materials?.trim() || null,
+      material: raw.material ?? null,
+      color: raw.color?.trim() || 'blanco',
       dimensions_length: raw.length ?? null,
       dimensions_width: raw.width ?? null,
       dimensions_height: raw.height ?? null,
