@@ -6,8 +6,10 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { AdminService } from '../../../core/services/admin.service';
+import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { Order, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
+import { Order, OrderItem, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
+import { ManufacturerUser } from '../../../core/models/manufacturing.model';
 import {
   DELIVERY_TYPE_LABELS,
   ORDER_STATUS_LABELS,
@@ -45,6 +47,7 @@ interface AbonoReceipt {
 export class OrderDetailComponent implements OnInit {
   private sellerService = inject(SellerService);
   private adminService = inject(AdminService);
+  private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -57,6 +60,11 @@ export class OrderDetailComponent implements OnInit {
   protected savingPayment = signal(false);
   protected assemblyModalOpen = signal(false);
   protected removingAssembly = signal(false);
+
+  /** Fabricantes disponibles para asignar a items de fabricación (solo admin). */
+  protected manufacturers = signal<ManufacturerUser[]>([]);
+  /** Ids de items con una asignación de fabricante en curso. */
+  protected assigningManufacturer = signal<Set<number>>(new Set());
 
   /** Controla qué se imprime: el ticket de venta o el ticket de abono. */
   protected printMode = signal<'order' | 'abono' | null>(null);
@@ -109,7 +117,25 @@ export class OrderDetailComponent implements OnInit {
   /** El pago inicial del crédito ya quedó cubierto. */
   protected downPaymentCovered = computed(() => this.downPaymentRemaining() <= 0);
 
-  protected canEdit = computed(() => this.order()?.orderStatus === 'pending');
+  /**
+   * pending → editable libre. fabricating/ready → editable solo si tiene al
+   * menos un item de stock (los de fabricación no admiten cambio). El resto
+   * de estados no se pueden editar. Mismas reglas para vendedor y admin (D5).
+   */
+  protected canEdit = computed(() => {
+    const o = this.order();
+    if (!o) return false;
+    if (o.orderStatus === 'pending') return true;
+    if (o.orderStatus === 'fabricating' || o.orderStatus === 'ready') {
+      return (o.items ?? []).some((it) => !it.requiresFabrication);
+    }
+    return false;
+  });
+
+  /** Solo pending puede editarse sin confirmación previa. */
+  protected needsEditConfirm = computed(() => this.order()?.orderStatus !== 'pending');
+
+  protected editConfirmOpen = signal(false);
 
   /** Instrumentos de cobro permitidos según la condición de venta del pedido. */
   protected allowedInstruments = computed<PaymentInstrument[]>(() => {
@@ -152,6 +178,12 @@ export class OrderDetailComponent implements OnInit {
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.load(id);
+    if (this.isAdmin) {
+      this.manufacturingService.getManufacturerUsers().subscribe({
+        next: (res) => this.manufacturers.set(res.data),
+        error: () => {},
+      });
+    }
   }
 
   protected get isAdmin(): boolean {
@@ -169,6 +201,37 @@ export class OrderDetailComponent implements OnInit {
       error: () => {
         this.loading.set(false);
         this.notification.error('No se pudo cargar el pedido');
+      },
+    });
+  }
+
+  protected onAssignManufacturer(it: OrderItem, event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    const manufacturerUserId = raw ? Number(raw) : null;
+    const itemId = it.id!;
+
+    this.assigningManufacturer.update((set) => new Set(set).add(itemId));
+    this.manufacturingService.assignOrderItemManufacturer(itemId, manufacturerUserId).subscribe({
+      next: () => {
+        this.order.update((o) =>
+          o
+            ? { ...o, items: (o.items ?? []).map((i) => (i.id === itemId ? { ...i, manufacturerUserId } : i)) }
+            : o,
+        );
+        this.assigningManufacturer.update((set) => {
+          const next = new Set(set);
+          next.delete(itemId);
+          return next;
+        });
+        this.notification.success(manufacturerUserId ? 'Fabricante asignado' : 'Fabricante quitado');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.assigningManufacturer.update((set) => {
+          const next = new Set(set);
+          next.delete(itemId);
+          return next;
+        });
+        this.notification.error(err?.error?.message ?? 'No se pudo asignar el fabricante');
       },
     });
   }
@@ -328,8 +391,22 @@ export class OrderDetailComponent implements OnInit {
     this.router.navigate([base]);
   }
 
+  /** Botón "Editar pedido": pide confirmación previa si el pedido ya no está pendiente. */
+  protected onEditClick(): void {
+    if (this.needsEditConfirm()) {
+      this.editConfirmOpen.set(true);
+      return;
+    }
+    this.editOrder();
+  }
+
+  protected confirmEdit(): void {
+    this.editConfirmOpen.set(false);
+    this.editOrder();
+  }
+
   /** Regresa a "Nuevo pedido" con los datos precargados para editar productos. */
-  protected editOrder(): void {
+  private editOrder(): void {
     const order = this.order();
     if (!order) return;
     const base = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/nuevo';

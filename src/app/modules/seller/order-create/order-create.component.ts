@@ -7,13 +7,22 @@ import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ShippingService } from '../../../core/services/shipping.service';
-import { AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem, ProductMaterial, SaleScheme } from '../../../core/models/order.model';
+import { AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem, OrderItem, OrderStatus, ProductMaterial, SaleScheme } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
 interface CartLine {
   product: InventoryItem;
   quantity: number;
+  /** ¿Se fabrica sobre pedido? Heurística por defecto, corregible por el vendedor (D3). */
+  requiresFabrication: boolean;
+}
+
+/** Resumen del cambio de producto para el diálogo de confirmación (D en edición no-pendiente). */
+interface ChangeSummary {
+  removed: OrderItem[];
+  added: CartLine[];
+  diff: number;
 }
 
 @Component({
@@ -39,6 +48,53 @@ export class OrderCreateComponent implements OnInit {
   /** Id del pedido cuando se entra en modo edición (?edit=ID); null al crear. */
   protected editId = signal<number | null>(null);
   protected isEditing = computed(() => this.editId() !== null);
+
+  /** Estado y datos originales del pedido en edición (para restringir el cambio). */
+  protected orderStatus = signal<OrderStatus | null>(null);
+  protected originalPaymentAmount = signal(0);
+  protected originalItems = signal<OrderItem[]>([]);
+  /** Un pedido ya cobrado (no pendiente) solo admite cambiar stock por stock. */
+  protected isRestrictedEdit = computed(
+    () => this.isEditing() && this.orderStatus() !== null && this.orderStatus() !== 'pending',
+  );
+
+  /** Resultados del buscador visibles: en edición restringida, solo con stock disponible. */
+  protected availableSearchResults = computed(() =>
+    this.isRestrictedEdit()
+      ? this.searchResults().filter((p) => p.stock_quantity > 0)
+      : this.searchResults(),
+  );
+
+  /** ¿El carrito tiene algún mueble que se fabrica sobre pedido? */
+  protected hasFabricationLines = computed(() => this.lines().some((l) => l.requiresFabrication));
+
+  /**
+   * No se puede asignar repartidor mientras el pedido tenga muebles sobre
+   * pedido sin fabricar: el fabricante debe marcarlos listos primero
+   * (order_status 'ready'). Un pedido nuevo siempre nace 'pending'.
+   */
+  protected deliveryAssignmentBlocked = computed(() => {
+    if (!this.hasFabricationLines()) return false;
+    const status = this.orderStatus();
+    return status !== 'ready' && status !== 'in_delivery' && status !== 'delivered';
+  });
+
+  protected confirmDialogOpen = signal(false);
+
+  /** Resumen del cambio de producto para el diálogo de confirmación. */
+  protected changeSummary = computed<ChangeSummary | null>(() => {
+    if (!this.isRestrictedEdit()) return null;
+    const oldStock = this.originalItems().filter((it) => !it.requiresFabrication);
+    const newStockLines = this.lines().filter((l) => !l.requiresFabrication);
+    const removed = oldStock.filter(
+      (oi) => !newStockLines.some((l) => l.product.id === oi.productId),
+    );
+    const added = newStockLines.filter(
+      (l) => !oldStock.some((oi) => oi.productId === l.product.id),
+    );
+    const diff = this.grandTotal() - this.originalPaymentAmount();
+    return { removed, added, diff };
+  });
 
   /** Marca que ya se intentó enviar, para resaltar el CP obligatorio. */
   protected submitAttempted = signal(false);
@@ -182,6 +238,9 @@ export class OrderCreateComponent implements OnInit {
     this.sellerService.getOrder(id).subscribe({
       next: ({ data }) => {
         this.editId.set(data.id);
+        this.orderStatus.set(data.orderStatus);
+        this.originalPaymentAmount.set(data.paymentAmount);
+        this.originalItems.set(data.items ?? []);
         this.form.patchValue({
           customerName: data.customerName ?? '',
           customerEmail: data.customerEmail ?? '',
@@ -220,6 +279,7 @@ export class OrderCreateComponent implements OnInit {
               availability_days: 0,
             },
             quantity: it.quantity,
+            requiresFabrication: !!it.requiresFabrication,
           })),
         );
       },
@@ -260,29 +320,57 @@ export class OrderCreateComponent implements OnInit {
     });
   }
 
+  /** Heurística por defecto (D3): sin stock suficiente o con notas de fabricante → fabricación. */
+  private heuristicFabrication(product: InventoryItem): boolean {
+    return product.stock_quantity < 1 || !!this.form.controls.notasFabricante.value?.trim();
+  }
+
+  /** ¿Se puede modificar (cantidad/quitar/checkbox) esta línea del carrito? */
+  protected canEditLine(line: CartLine): boolean {
+    return !this.isRestrictedEdit() || !line.requiresFabrication;
+  }
+
   protected addProduct(product: InventoryItem): void {
+    if (this.isRestrictedEdit() && product.stock_quantity <= 0) return;
     this.lines.update((lines) => {
       const existing = lines.find((l) => l.product.id === product.id);
       if (existing) {
+        if (!this.canEditLine(existing)) return lines;
         return lines.map((l) =>
           l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l,
         );
       }
-      return [...lines, { product, quantity: 1 }];
+      return [
+        ...lines,
+        { product, quantity: 1, requiresFabrication: this.isRestrictedEdit() ? false : this.heuristicFabrication(product) },
+      ];
     });
   }
 
   protected changeQty(productId: number, delta: number): void {
     this.lines.update((lines) =>
-      lines
-        .map((l) =>
-          l.product.id === productId ? { ...l, quantity: Math.max(1, l.quantity + delta) } : l,
-        ),
+      lines.map((l) =>
+        l.product.id === productId && this.canEditLine(l)
+          ? { ...l, quantity: Math.max(1, l.quantity + delta) }
+          : l,
+      ),
     );
   }
 
   protected removeLine(productId: number): void {
-    this.lines.update((lines) => lines.filter((l) => l.product.id !== productId));
+    this.lines.update((lines) =>
+      lines.filter((l) => l.product.id !== productId || !this.canEditLine(l)),
+    );
+  }
+
+  /** Corrección manual del checkbox "Se fabrica sobre pedido" (D3). Bloqueado en edición restringida. */
+  protected toggleFabrication(productId: number): void {
+    if (this.isRestrictedEdit()) return;
+    this.lines.update((lines) =>
+      lines.map((l) =>
+        l.product.id === productId ? { ...l, requiresFabrication: !l.requiresFabrication } : l,
+      ),
+    );
   }
 
   protected submit(): void {
@@ -324,9 +412,37 @@ export class OrderCreateComponent implements OnInit {
         productId: l.product.id,
         quantity: l.quantity,
         unitPrice: this.unitPrice(l.product),
+        requiresFabrication: l.requiresFabrication,
       })),
     };
 
+    // Pedido ya cobrado: pedir confirmación con el resumen del cambio antes de guardar.
+    if (this.isRestrictedEdit()) {
+      this.pendingPayload = payload;
+      this.confirmDialogOpen.set(true);
+      return;
+    }
+
+    this.savePayload(payload);
+  }
+
+  protected removedNames(summary: ChangeSummary): string {
+    return summary.removed.map((r) => r.productName).join(', ');
+  }
+
+  protected addedNames(summary: ChangeSummary): string {
+    return summary.added.map((a) => a.product.name).join(', ');
+  }
+
+  /** Confirma el cambio de producto desde el diálogo de resumen (edición restringida). */
+  protected confirmChange(): void {
+    this.confirmDialogOpen.set(false);
+    if (this.pendingPayload) this.savePayload(this.pendingPayload);
+  }
+
+  private pendingPayload: CreateOrderRequest | null = null;
+
+  private savePayload(payload: CreateOrderRequest): void {
     const detailBase = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/pedidos';
     const editId = this.editId();
     this.saving.set(true);
@@ -368,7 +484,7 @@ export class OrderCreateComponent implements OnInit {
    */
   private assignDeliveryIfNeeded(orderId: number, done: () => void): void {
     const selected = this.form.controls.deliveryPersonId.value;
-    if (!selected || selected === this.initialDeliveryPersonId) {
+    if (this.deliveryAssignmentBlocked() || !selected || selected === this.initialDeliveryPersonId) {
       done();
       return;
     }

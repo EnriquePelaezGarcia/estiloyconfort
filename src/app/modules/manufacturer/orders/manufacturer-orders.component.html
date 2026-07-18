@@ -17,59 +17,70 @@
     @for (o of orders(); track o.id) {
       <article class="panel order">
         <div class="order__head">
-          <div>
-            <span class="order__number">{{ o.order_number }}</span>
-            <span class="order__customer">{{ o.customer_name }}</span>
-          </div>
-          <div class="order__meta">
-            <span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span>
-            @if (o.expected_delivery_date) {
-              <span class="order__date">Entrega: {{ o.expected_delivery_date | date:'dd/MM/yyyy' }}</span>
-            }
-          </div>
+          <span class="order__status-label">Estatus del pedido:</span>
+          <span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span>
+          @if (o.expected_delivery_date) {
+            <span class="order__date">Entrega: {{ o.expected_delivery_date | date:'dd/MM/yyyy' }}</span>
+          }
         </div>
 
-        @if (o.material || o.color) {
-          <div class="order__specs">
-            @if (o.material) { <span class="badge badge--blue">{{ o.material }}</span> }
-            @if (o.color) { <span class="badge">Color: {{ o.color }}</span> }
+        <dl class="order__fields">
+          <div class="field">
+            <dt class="field__label">Número de pedido</dt>
+            <dd class="field__value">{{ o.order_number }}</dd>
           </div>
-        }
-        @if (o.notas_fabricante) {
-          <p class="order__notes">
-            <span class="material-symbols-outlined">sticky_note_2</span>
-            {{ o.notas_fabricante }}
-          </p>
-        }
+
+          @for (it of o.items; track it.id) {
+            <div class="field">
+              <dt class="field__label">Nombre del producto</dt>
+              <dd class="field__value field__value--product">
+                <label class="field__check">
+                  <input
+                    type="checkbox"
+                    [checked]="it.isReady"
+                    (change)="toggleItem(o, it.id, ($any($event.target).checked))"
+                  />
+                  <span [class.field__value--done]="it.isReady">{{ it.productName }}</span>
+                </label>
+                <span class="order__status-label">Estado del producto:</span>
+                @if (it.isReady) {
+                  <span class="badge badge--green">Listo</span>
+                } @else {
+                  <span class="badge badge--amber">Por fabricar</span>
+                }
+              </dd>
+              <dd class="field__qty-line">
+                <span class="order__status-label">Piezas a fabricar:</span>
+                <span class="field__qty">{{ it.quantity }}</span>
+              </dd>
+            </div>
+          }
+
+          @if (o.material) {
+            <div class="field">
+              <dt class="field__label">Material</dt>
+              <dd class="field__value">{{ o.material }}</dd>
+            </div>
+          }
+          @if (o.color) {
+            <div class="field">
+              <dt class="field__label">Color/Acabado</dt>
+              <dd class="field__value">{{ o.color }}</dd>
+            </div>
+          }
+          @if (o.notas_fabricante) {
+            <div class="field">
+              <dt class="field__label">Notas fabricante</dt>
+              <dd class="field__value">{{ o.notas_fabricante }}</dd>
+            </div>
+          }
+        </dl>
 
         @if (o.order_status === 'pending') {
           <button type="button" class="btn btn--ghost order__start" (click)="startFabrication(o)">
             <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación
           </button>
         }
-
-        <ul class="item-list">
-          @for (it of o.items; track it.id) {
-            <li class="item" [class.item--ready]="it.isReady">
-              <label class="item__check">
-                <input
-                  type="checkbox"
-                  [checked]="it.isReady"
-                  (change)="toggleItem(o, it.id, ($any($event.target).checked))"
-                />
-                <span class="item__info">
-                  <span class="item__name">{{ it.productName }}</span>
-                  <span class="item__sku">{{ it.productSku }} · x{{ it.quantity }}</span>
-                </span>
-              </label>
-              @if (it.isReady) {
-                <span class="badge badge--green">Listo</span>
-              } @else {
-                <span class="badge badge--amber">Pendiente</span>
-              }
-            </li>
-          }
-        </ul>
       </article>
     }
   </div>

@@ -27,7 +27,20 @@ function mapItem(row) {
     unitPrice: Number(row.unit_price),
     subtotal: Number(row.subtotal),
     isReady: !!row.is_ready,
+    requiresFabrication: !!row.requires_fabrication,
+    manufacturerUserId: row.manufacturer_user_id ?? null,
   };
+}
+
+/**
+ * Heurística por defecto de `requires_fabrication` cuando el payload no la
+ * trae (clientes viejos): fabricación si no había stock suficiente o si el
+ * pedido lleva especificaciones personalizadas capturadas por el vendedor.
+ */
+function defaultRequiresFabrication(product, qty, orderData) {
+  const noStock = Number(product.stock_quantity) < qty;
+  const hasCustomSpecs = !!(orderData?.notasFabricante);
+  return noStock || hasCustomSpecs;
 }
 
 /**
@@ -196,7 +209,11 @@ const Order = {
         );
         if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
         const qty = Math.max(1, Number(it.quantity) || 1);
-        if (Number(product.stock_quantity) < qty) {
+        const requiresFabrication = it.requiresFabrication !== undefined
+          ? !!it.requiresFabrication
+          : defaultRequiresFabrication(product, qty, data);
+        // Los items que se fabrican sobre pedido no salen del inventario físico.
+        if (!requiresFabrication && Number(product.stock_quantity) < qty) {
           const stockErr = new Error(
             `Stock insuficiente para "${product.name}". Disponible: ${product.stock_quantity}`,
           );
@@ -215,6 +232,7 @@ const Order = {
           variantSelections: it.variantSelections ?? null,
           unitPrice,
           subtotal,
+          requiresFabrication,
         });
       }
 
@@ -293,19 +311,21 @@ const Order = {
       for (const it of resolvedItems) {
         await conn.execute(
           `INSERT INTO order_items
-            (order_id, product_id, product_name, product_sku, quantity, variant_selections, unit_price, subtotal)
-           VALUES (?,?,?,?,?,?,?,?)`,
+            (order_id, product_id, product_name, product_sku, quantity, variant_selections, unit_price, subtotal, requires_fabrication)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
           [
             orderId, it.productId, it.productName, it.productSku, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
-            it.unitPrice, it.subtotal,
+            it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
         );
-        // Descontar stock del producto dentro de la misma transacción.
-        await conn.execute(
-          'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-          [it.quantity, it.productId],
-        );
+        // Descontar stock solo de items de almacén; los de fabricación no salen del inventario.
+        if (!it.requiresFabrication) {
+          await conn.execute(
+            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+            [it.quantity, it.productId],
+          );
+        }
       }
 
       await conn.commit();
@@ -362,12 +382,13 @@ const Order = {
     try {
       await conn.beginTransaction();
 
-      // 1. Devolver al inventario el stock de los items actuales.
+      // 1. Devolver al inventario el stock de los items actuales (solo los de almacén;
+      // los de fabricación nunca salieron del inventario físico).
       const [oldItems] = await conn.execute(
-        'SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id],
+        'SELECT product_id, quantity, requires_fabrication FROM order_items WHERE order_id = ?', [id],
       );
       for (const it of oldItems) {
-        if (it.product_id != null) {
+        if (it.product_id != null && !it.requires_fabrication) {
           await conn.execute(
             'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
             [it.quantity, it.product_id],
@@ -387,7 +408,11 @@ const Order = {
         );
         if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
         const qty = Math.max(1, Number(it.quantity) || 1);
-        if (Number(product.stock_quantity) < qty) {
+        const requiresFabrication = it.requiresFabrication !== undefined
+          ? !!it.requiresFabrication
+          : defaultRequiresFabrication(product, qty, data);
+        // Los items que se fabrican sobre pedido no salen del inventario físico.
+        if (!requiresFabrication && Number(product.stock_quantity) < qty) {
           const stockErr = new Error(
             `Stock insuficiente para "${product.name}". Disponible: ${product.stock_quantity}`,
           );
@@ -406,6 +431,7 @@ const Order = {
           variantSelections: it.variantSelections ?? null,
           unitPrice,
           subtotal,
+          requiresFabrication,
         });
       }
 
@@ -471,18 +497,20 @@ const Order = {
       for (const it of resolvedItems) {
         await conn.execute(
           `INSERT INTO order_items
-            (order_id, product_id, product_name, product_sku, quantity, variant_selections, unit_price, subtotal)
-           VALUES (?,?,?,?,?,?,?,?)`,
+            (order_id, product_id, product_name, product_sku, quantity, variant_selections, unit_price, subtotal, requires_fabrication)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
           [
             id, it.productId, it.productName, it.productSku, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
-            it.unitPrice, it.subtotal,
+            it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
         );
-        await conn.execute(
-          'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-          [it.quantity, it.productId],
-        );
+        if (!it.requiresFabrication) {
+          await conn.execute(
+            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+            [it.quantity, it.productId],
+          );
+        }
       }
 
       // 5. Recalcular el estado de pago contra el nuevo total.
@@ -603,6 +631,19 @@ const Order = {
   async assignDeliveryPerson(id, deliveryPersonId, assignmentDate) {
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
+    // Si el pedido tiene muebles sobre pedido, no se puede asignar repartidor
+    // hasta que el fabricante los marque listos (order_status pasa a 'ready').
+    const hasPendingFabrication = (order.items ?? []).some((it) => it.requiresFabrication)
+      && order.orderStatus !== 'ready'
+      && order.orderStatus !== 'in_delivery'
+      && order.orderStatus !== 'delivered';
+    if (hasPendingFabrication) {
+      const err = new Error(
+        'No se puede asignar repartidor: el pedido tiene muebles sobre pedido pendientes de fabricación',
+      );
+      err.statusCode = 400;
+      throw err;
+    }
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -629,18 +670,21 @@ const Order = {
 
   async remove(id) {
     const [items] = await pool.execute(
-      'SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id],
+      'SELECT product_id, quantity, requires_fabrication FROM order_items WHERE order_id = ?', [id],
     );
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE id = ?", [id]);
-      // Devolver stock al cancelar el pedido.
+      // Devolver stock al cancelar el pedido (solo items de almacén; los de
+      // fabricación nunca salieron del inventario físico).
       for (const item of items) {
-        await conn.execute(
-          'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-          [item.quantity, item.product_id],
-        );
+        if (!item.requires_fabrication) {
+          await conn.execute(
+            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+            [item.quantity, item.product_id],
+          );
+        }
       }
       await conn.commit();
     } catch (err) {

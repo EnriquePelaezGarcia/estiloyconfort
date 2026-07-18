@@ -5,6 +5,13 @@
   </div>
 </header>
 
+@if (isRestrictedEdit()) {
+  <div class="banner banner--warn">
+    <span class="material-symbols-outlined">info</span>
+    Este pedido ya fue cobrado. Solo puedes cambiar muebles de stock por otros muebles de stock.
+  </div>
+}
+
 <form [formGroup]="form" (ngSubmit)="submit()" class="order-grid">
 
   <!-- ===== Columna izquierda: datos ===== -->
@@ -79,13 +86,17 @@
       </div>
       <div class="field">
         <label for="deliveryPersonId">Asignar repartidor</label>
-        <select id="deliveryPersonId" formControlName="deliveryPersonId">
+        <select id="deliveryPersonId" formControlName="deliveryPersonId" [disabled]="deliveryAssignmentBlocked()">
           <option [ngValue]="null">Sin asignar</option>
           @for (dp of deliveryPeople(); track dp.id) {
             <option [ngValue]="dp.id">{{ dp.fullName }}</option>
           }
         </select>
-        <p class="field__hint">Opcional. Al asignarlo, el pedido pasa a "En entrega" y aparece en las entregas del repartidor.</p>
+        @if (deliveryAssignmentBlocked()) {
+          <p class="field__hint">No disponible: el pedido tiene muebles sobre pedido. Podrás asignar repartidor hasta que el fabricante los marque listos.</p>
+        } @else {
+          <p class="field__hint">Opcional. Al asignarlo, el pedido pasa a "En entrega" y aparece en las entregas del repartidor.</p>
+        }
       </div>
     </div>
 
@@ -208,7 +219,7 @@
         @if (searching()) {
           <div class="state"><div class="spinner"></div></div>
         } @else {
-          @for (p of searchResults(); track p.id) {
+          @for (p of availableSearchResults(); track p.id) {
             <button type="button" class="result" (click)="addProduct(p)">
               <span class="result__info">
                 <span class="result__name">{{ p.name }}</span>
@@ -230,24 +241,37 @@
         <p class="empty">Agrega productos desde el buscador.</p>
       } @else {
         @for (l of lines(); track l.product.id) {
-          <div class="cart-line">
+          <div class="cart-line" [class.cart-line--locked]="!canEditLine(l)">
             <div class="cart-line__info">
               <span class="cart-line__name">{{ l.product.name }}</span>
               <span class="cart-line__price">{{ unitPrice(l.product) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
+              <label class="cart-line__fabrication">
+                <input
+                  type="checkbox"
+                  [checked]="l.requiresFabrication"
+                  [disabled]="isRestrictedEdit()"
+                  (change)="toggleFabrication(l.product.id)"
+                />
+                Se fabrica sobre pedido
+              </label>
             </div>
             <div class="qty">
-              <button type="button" class="icon-btn" (click)="changeQty(l.product.id, -1)" aria-label="Quitar uno">
+              <button type="button" class="icon-btn" [disabled]="!canEditLine(l)" (click)="changeQty(l.product.id, -1)" aria-label="Quitar uno">
                 <span class="material-symbols-outlined">remove</span>
               </button>
               <span class="qty__value">{{ l.quantity }}</span>
-              <button type="button" class="icon-btn" (click)="changeQty(l.product.id, 1)" aria-label="Agregar uno">
+              <button type="button" class="icon-btn" [disabled]="!canEditLine(l)" (click)="changeQty(l.product.id, 1)" aria-label="Agregar uno">
                 <span class="material-symbols-outlined">add</span>
               </button>
             </div>
             <span class="cart-line__subtotal">{{ unitPrice(l.product) * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(l.product.id)" aria-label="Eliminar">
-              <span class="material-symbols-outlined">delete</span>
-            </button>
+            @if (canEditLine(l)) {
+              <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(l.product.id)" aria-label="Eliminar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            } @else {
+              <span class="material-symbols-outlined cart-line__lock-icon" title="Mueble en fabricación, no se puede quitar">lock</span>
+            }
           </div>
         }
 
@@ -355,6 +379,14 @@
         }
       }
 
+      @if (isRestrictedEdit() && changeSummary(); as summary) {
+        @if (summary.diff > 0) {
+          <p class="field__hint">Se cobrará la diferencia: {{ summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }}.</p>
+        } @else if (summary.diff < 0) {
+          <p class="field__hint">El cliente tiene un saldo a favor de {{ -summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }} — se anotará en el pedido.</p>
+        }
+      }
+
       <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
         @if (saving()) {
           <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
@@ -367,3 +399,30 @@
   </div>
 
 </form>
+
+@if (confirmDialogOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Confirmar cambio de producto</h2>
+        @if (changeSummary(); as summary) {
+          @if (summary.removed.length) {
+            <p class="muted">Se quita: {{ removedNames(summary) }}</p>
+          }
+          @if (summary.added.length) {
+            <p class="muted">Se agrega: {{ addedNames(summary) }}</p>
+          }
+          @if (summary.diff > 0) {
+            <p class="strong">Se cobrará la diferencia: {{ summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
+          } @else if (summary.diff < 0) {
+            <p class="strong">El cliente tiene un saldo a favor de {{ -summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }} — se anotará en el pedido.</p>
+          }
+        }
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="confirmDialogOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--primary" (click)="confirmChange()">Confirmar cambio</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

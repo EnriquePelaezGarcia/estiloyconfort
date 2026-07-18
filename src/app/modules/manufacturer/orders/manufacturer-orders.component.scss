@@ -5,60 +5,92 @@
 .order {
   &__head {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: vars.$spacing-md;
+    gap: vars.$spacing-sm;
     flex-wrap: wrap;
-    margin-bottom: vars.$spacing-sm;
+    margin-bottom: vars.$spacing-md;
   }
-  &__number { font-weight: 700; color: vars.$color-primary; margin-right: 0.5rem; }
-  &__customer { color: vars.$color-text-secondary; }
-  &__meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; }
   &__date { font-size: 0.8rem; color: vars.$color-text-secondary; }
-  &__start { margin-bottom: vars.$spacing-sm; }
+  &__start { margin-top: vars.$spacing-sm; width: 100%; justify-content: center; }
 
-  // Material y color/acabado del mueble.
-  &__specs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: vars.$spacing-sm;
+  &__status-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: vars.$color-text-secondary;
   }
 
-  // Notas dirigidas al fabricante (repuestos, empaque especial…).
-  &__notes {
+  &__fields {
     display: flex;
-    align-items: flex-start;
-    gap: 0.4rem;
-    padding: 0.6rem vars.$spacing-sm;
-    margin-bottom: vars.$spacing-sm;
-    border-radius: vars.$radius-md;
-    background: vars.$color-bg;
-    font-size: 0.85rem;
-    color: vars.$color-text-secondary;
-
-    .material-symbols-outlined { font-size: 1.1rem; }
+    flex-direction: column;
+    gap: vars.$spacing-md;
+    margin: 0;
   }
 }
 
-.item-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+// Fila "etiqueta arriba, valor abajo": pensado para leerse rápido en pantalla
+// de celular, sin depender de columnas lado a lado que se aprietan en móvil.
+.field {
+  padding-bottom: vars.$spacing-sm;
+  border-bottom: 1px solid vars.$color-border;
 
-.item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: vars.$spacing-sm;
-  padding: 0.6rem vars.$spacing-sm;
-  border-radius: vars.$radius-md;
-  transition: background vars.$transition-fast;
+  &:last-child { border-bottom: none; padding-bottom: 0; }
 
-  &:hover { background: vars.$color-bg; }
-  &--ready .item__name { text-decoration: line-through; color: vars.$color-text-secondary; }
+  &__label {
+    margin: 0 0 0.15rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: vars.$color-text-secondary;
+  }
 
-  &__check { display: flex; align-items: center; gap: vars.$spacing-sm; cursor: pointer; flex: 1; }
-  &__info { display: flex; flex-direction: column; }
-  &__name { font-weight: 600; font-size: 0.9rem; }
-  &__sku { font-size: 0.78rem; color: vars.$color-text-secondary; }
+  &__value {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: vars.$color-text;
 
-  input { width: 20px; height: 20px; accent-color: vars.$color-success; }
+    &--product {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    &--done {
+      text-decoration: line-through;
+      color: vars.$color-text-secondary;
+    }
+  }
+
+  &__check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+
+    input {
+      width: 22px;
+      height: 22px;
+      accent-color: vars.$color-success;
+      flex-shrink: 0;
+    }
+  }
+
+  &__qty {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: vars.$color-text;
+  }
+
+  &__qty-line {
+    margin: 0.35rem 0 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
 }

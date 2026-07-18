@@ -31,6 +31,9 @@ router.patch('/orders/:id/status', adminController.updateOrderStatus);
 router.patch('/orders/:id/assign', adminController.assignDelivery);
 router.delete('/orders/:id/assembly', adminController.removeAssembly);
 router.get('/delivery-people', adminController.getDeliveryPeople);
+router.get('/manufacturer-users', adminController.getManufacturerUsers);
+router.get('/factory-order-items', adminController.getFactoryOrderItems);
+router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);
 
 // Reportes (Fase 4)
 router.get('/reports/sales', adminController.getSalesReport);

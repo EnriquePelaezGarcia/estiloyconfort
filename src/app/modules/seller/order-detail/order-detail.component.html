@@ -21,9 +21,11 @@
         <span class="material-symbols-outlined">print</span> Ticket
       </button>
       @if (canEdit()) {
-        <button type="button" class="btn btn--ghost" (click)="editOrder()">
+        <button type="button" class="btn btn--ghost" (click)="onEditClick()">
           <span class="material-symbols-outlined">edit</span> Editar pedido
         </button>
+      } @else if (o.orderStatus === 'fabricating' || o.orderStatus === 'ready') {
+        <span class="muted">Mueble en fabricación sobre pedido — no admite cambios</span>
       }
       @if (canRemoveAssembly()) {
         <button type="button" class="btn btn--ghost" (click)="assemblyModalOpen.set(true)">
@@ -45,7 +47,10 @@
       <div class="table-wrap">
         <table class="table">
           <thead>
-            <tr><th>Producto</th><th class="num">Cantidad</th><th class="num">P. unitario</th><th class="num">Subtotal</th></tr>
+            <tr>
+              <th>Producto</th><th class="num">Cantidad</th><th class="num">P. unitario</th><th class="num">Subtotal</th>
+              @if (isAdmin) { <th>Fabricante</th> }
+            </tr>
           </thead>
           <tbody>
             @for (it of o.items; track it.id) {
@@ -57,6 +62,20 @@
                 <td class="num">{{ it.quantity }}</td>
                 <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                 <td class="num strong">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                @if (isAdmin) {
+                  <td data-label="Fabricante">
+                    @if (it.requiresFabrication) {
+                      <select (change)="onAssignManufacturer(it, $event)" [disabled]="assigningManufacturer().has(it.id!)">
+                        <option value="" [selected]="it.manufacturerUserId === null || it.manufacturerUserId === undefined">Sin asignar</option>
+                        @for (m of manufacturers(); track m.id) {
+                          <option [value]="m.id" [selected]="it.manufacturerUserId === m.id">{{ m.fullName }}</option>
+                        }
+                      </select>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                }
               </tr>
             }
           </tbody>
@@ -286,6 +305,22 @@
           <button type="button" class="btn btn--danger" [disabled]="removingAssembly()" (click)="confirmRemoveAssembly()">
             @if (removingAssembly()) { <span class="spinner spinner--sm"></span> } @else { Sí, quitar armado }
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: confirmar edición de pedido ya cobrado ===== -->
+@if (editConfirmOpen()) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">¿Continuar con el cambio?</h2>
+        <p class="muted">Este pedido ya está cobrado/en proceso.</p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="editConfirmOpen.set(false)">No</button>
+          <button type="button" class="btn btn--primary" (click)="confirmEdit()">Sí, continuar</button>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 <div class="section-head">
-  <p class="muted">Productos pendientes de fabricar, agregados desde los pedidos de clientes activos.</p>
+  <p class="muted">Items de fabricación pendientes de los pedidos de clientes activos. Asigna un fabricante a cada uno para que le aparezca en su portal.</p>
   @if (!loading() && rows().length > 0) {
     <button type="button" class="btn btn--ghost no-print" (click)="print()">
       <span class="material-symbols-outlined">print</span> Imprimir
@@ -12,35 +12,51 @@
 } @else if (rows().length === 0) {
   <div class="state">
     <span class="material-symbols-outlined" style="font-size:2.5rem">check_circle</span>
-    <p>No hay productos pendientes de fabricación.</p>
+    <p>No hay items pendientes de fabricación.</p>
   </div>
 } @else {
   <div class="table-wrap">
     <table class="table table--cards">
       <thead>
         <tr>
-          <th>SKU</th><th>Producto</th><th class="num">Cantidad total</th>
-          <th class="num">Líneas pend.</th><th class="num">Listas</th>
+          <th>Pedido</th><th>Cliente</th><th>Producto</th><th class="num">Cantidad</th>
+          <th>Estado</th><th>Fabricante asignado</th>
         </tr>
       </thead>
       <tbody>
-        @for (r of rows(); track r.productSku) {
-          <tr>
-            <td data-label="SKU" class="strong">{{ r.productSku }}</td>
-            <td data-label="Producto">{{ r.productName }}</td>
-            <td data-label="Cantidad total" class="num strong">{{ r.totalQuantity }}</td>
-            <td data-label="Pendientes" class="num">{{ r.pendingLines }}</td>
-            <td data-label="Listas" class="num muted">{{ r.readyLines }}</td>
-          </tr>
+        @for (g of groups(); track g.orderId) {
+          @for (r of g.items; track r.itemId; let first = $first) {
+            <tr>
+              @if (first) {
+                <td data-label="Pedido" [attr.rowspan]="g.items.length">
+                  <a class="strong order-link" [routerLink]="['/admin/pedidos', g.orderId]">{{ g.orderNumber }}</a>
+                </td>
+                <td data-label="Cliente" [attr.rowspan]="g.items.length">{{ g.customerName }}</td>
+              }
+              <td data-label="Producto">
+                {{ r.productName }}
+                <span class="muted"> · {{ r.productSku }}</span>
+              </td>
+              <td data-label="Cantidad" class="num">{{ r.quantity }}</td>
+              <td data-label="Estado">
+                @if (r.isReady) {
+                  <span class="badge badge--green">Listo</span>
+                } @else {
+                  <span class="badge badge--amber">Pendiente</span>
+                }
+              </td>
+              <td data-label="Fabricante asignado">
+                <select (change)="onAssignChange(r, $event)" [disabled]="assigning().has(r.itemId)">
+                  <option value="" [selected]="r.manufacturerUserId === null">Sin asignar</option>
+                  @for (m of manufacturers(); track m.id) {
+                    <option [value]="m.id" [selected]="r.manufacturerUserId === m.id">{{ m.fullName }}</option>
+                  }
+                </select>
+              </td>
+            </tr>
+          }
         }
       </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="2" class="strong">Total de unidades</td>
-          <td class="num strong">{{ totalUnits() }}</td>
-          <td colspan="2"></td>
-        </tr>
-      </tfoot>
     </table>
   </div>
 }

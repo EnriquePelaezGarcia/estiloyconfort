@@ -65,15 +65,27 @@ export interface PurchaseOrderInput {
   items: PurchaseOrderItem[];
 }
 
-/** Fila de la lista de producción (pedidos a fábrica). */
-export interface ProductionRow {
-  productId: number | null;
+/** Usuario con rol fabricante (login real), candidato para asignar items. */
+export interface ManufacturerUser {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+/** Item de fabricación pendiente de un pedido, con su fabricante asignado (si lo tiene). */
+export interface FactoryOrderItemRow {
+  itemId: number;
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  orderStatus: string;
+  expectedDeliveryDate: string | null;
   productName: string;
   productSku: string | null;
-  totalQuantity: number;
-  pendingLines: number;
-  readyLines: number;
-  lineCount: number;
+  quantity: number;
+  isReady: boolean;
+  manufacturerUserId: number | null;
+  manufacturerUserName: string | null;
 }
 
 /** Producto del catálogo agrupado por fabricante. */

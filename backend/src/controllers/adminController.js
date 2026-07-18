@@ -389,6 +389,72 @@ const getDeliveryPeople = asyncHandler(async (req, res) => {
   res.json({ data: rows });
 });
 
+// GET /api/admin/manufacturer-users — usuarios con rol fabricante activos (para asignar items)
+const getManufacturerUsers = asyncHandler(async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT u.id, u.full_name AS fullName, u.email
+     FROM users u JOIN roles r ON r.id = u.role_id
+     WHERE r.name = 'manufacturer' AND u.is_active = TRUE
+     ORDER BY u.full_name`,
+  );
+  res.json({ data: rows });
+});
+
+// GET /api/admin/factory-order-items — items de fabricación pendientes, por pedido,
+// con el fabricante que tiene asignado cada uno (o null si aún no se asigna).
+const getFactoryOrderItems = asyncHandler(async (req, res) => {
+  const [rows] = await pool.execute(
+    `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
+            o.expected_delivery_date, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
+            oi.manufacturer_user_id, u.full_name AS manufacturer_user_name
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     LEFT JOIN users u ON u.id = oi.manufacturer_user_id
+     WHERE o.order_status IN ('pending','fabricating') AND oi.requires_fabrication = 1
+     ORDER BY o.expected_delivery_date IS NULL, o.expected_delivery_date ASC, o.created_at ASC`,
+  );
+  res.json({
+    data: rows.map((r) => ({
+      itemId: r.item_id,
+      orderId: r.order_id,
+      orderNumber: r.order_number,
+      customerName: r.customer_name,
+      orderStatus: r.order_status,
+      expectedDeliveryDate: r.expected_delivery_date,
+      productName: r.product_name,
+      productSku: r.product_sku,
+      quantity: r.quantity,
+      isReady: !!r.is_ready,
+      manufacturerUserId: r.manufacturer_user_id ?? null,
+      manufacturerUserName: r.manufacturer_user_name ?? null,
+    })),
+  });
+});
+
+// PATCH /api/admin/order-items/:id/manufacturer — asigna (o quita, con null) el
+// fabricante responsable de un item. Solo aplica a items que requieren fabricación.
+const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
+  const { manufacturerUserId } = req.body;
+  const [[item]] = await pool.execute(
+    'SELECT id, requires_fabrication FROM order_items WHERE id = ?', [req.params.id],
+  );
+  if (!item) throw ApiError.notFound('Item no encontrado');
+  if (!item.requires_fabrication) throw ApiError.badRequest('Este item no requiere fabricación');
+
+  let value = null;
+  if (manufacturerUserId) {
+    const [[user]] = await pool.execute(
+      `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id
+       WHERE u.id = ? AND r.name = 'manufacturer' AND u.is_active = TRUE`,
+      [manufacturerUserId],
+    );
+    if (!user) throw ApiError.badRequest('Fabricante inválido');
+    value = user.id;
+  }
+  await pool.execute('UPDATE order_items SET manufacturer_user_id = ? WHERE id = ?', [value, req.params.id]);
+  res.json({ message: value ? 'Fabricante asignado' : 'Fabricante quitado' });
+});
+
 // GET /api/admin/orders/weekly-list — lista semanal para fabricantes
 const getWeeklyList = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
@@ -396,7 +462,7 @@ const getWeeklyList = asyncHandler(async (req, res) => {
             COUNT(DISTINCT oi.order_id) AS order_count
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
-     WHERE o.order_status IN ('pending','fabricating')
+     WHERE o.order_status IN ('pending','fabricating') AND oi.requires_fabrication = 1
      GROUP BY oi.product_name, oi.product_sku
      ORDER BY oi.product_name`,
   );
@@ -477,6 +543,9 @@ module.exports = {
   assignDelivery,
   removeAssembly,
   getDeliveryPeople,
+  getManufacturerUsers,
+  getFactoryOrderItems,
+  assignOrderItemManufacturer,
   getWeeklyList,
   getSalesReport,
   getInventoryReport,

@@ -2,10 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import {
+  FactoryOrderItemRow,
   Manufacturer,
   ManufacturerCatalogProduct,
   ManufacturerInput,
-  ProductionRow,
+  ManufacturerUser,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderStatus,
@@ -66,9 +67,22 @@ export class ManufacturingService {
     );
   }
 
-  // ── Pedidos a fábrica (lista de producción) ───────────────────────────────
-  getProductionList(): Observable<{ data: ProductionRow[] }> {
-    return this.api.get<{ data: ProductionRow[] }>('/manufacturing/production-list');
+  // ── Pedidos a fábrica: items por fabricar + asignación de fabricante ──────
+  getFactoryOrderItems(): Observable<{ data: FactoryOrderItemRow[] }> {
+    return this.api.get<{ data: FactoryOrderItemRow[] }>('/admin/factory-order-items');
+  }
+
+  getManufacturerUsers(): Observable<{ data: ManufacturerUser[] }> {
+    return this.api.get<{ data: ManufacturerUser[] }>('/admin/manufacturer-users');
+  }
+
+  assignOrderItemManufacturer(
+    itemId: number,
+    manufacturerUserId: number | null,
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(`/admin/order-items/${itemId}/manufacturer`, {
+      manufacturerUserId,
+    });
   }
 
   // ── Catálogo por fabricante ───────────────────────────────────────────────

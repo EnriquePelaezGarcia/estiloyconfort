@@ -1,5 +1,23 @@
 @use '../../../../styles/variables' as vars;
 
+.banner {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  font-size: 0.85rem;
+
+  &--warn {
+    border: 1px solid vars.$color-gold;
+    background: color-mix(in srgb, vars.$color-gold 10%, white);
+    color: vars.$color-text;
+
+    .material-symbols-outlined { color: vars.$color-gold; }
+  }
+}
+
 .order-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -59,6 +77,27 @@
   &__name { font-weight: 600; font-size: 0.88rem; }
   &__price { font-size: 0.78rem; color: vars.$color-text-secondary; }
   &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }
+
+  &__fabrication {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    input[type='checkbox'] { accent-color: vars.$color-primary; cursor: pointer; }
+  }
+
+  &__lock-icon {
+    font-size: 1.1rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &--locked {
+    opacity: 0.7;
+  }
 }
 
 .qty {

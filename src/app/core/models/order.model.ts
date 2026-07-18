@@ -36,6 +36,10 @@ export interface OrderItem {
   unitPrice: number;
   subtotal?: number;
   isReady?: boolean;
+  /** TRUE si el mueble se fabrica sobre pedido (no admite cambio en pedidos ya cobrados). */
+  requiresFabrication?: boolean;
+  /** Id del usuario (rol fabricante) asignado por el admin a este item, si ya se asignó. */
+  manufacturerUserId?: number | null;
 }
 
 export interface OrderPayment {
@@ -142,6 +146,7 @@ export interface CreateOrderRequest {
     quantity: number;
     unitPrice: number;
     variantSelections?: Record<string, string> | null;
+    requiresFabrication?: boolean;
   }>;
 }
 

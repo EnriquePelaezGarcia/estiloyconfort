@@ -20,9 +20,6 @@ router.post('/purchase-orders', manufacturingController.createPurchaseOrder);
 router.get('/purchase-orders/:id', manufacturingController.getPurchaseOrder);
 router.patch('/purchase-orders/:id/status', manufacturingController.updatePurchaseOrderStatus);
 
-// Pedidos a fábrica (lista de producción)
-router.get('/production-list', manufacturingController.productionList);
-
 // Catálogo por fabricante
 router.get('/catalog', manufacturingController.catalogByManufacturer);
 

@@ -2,8 +2,6 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { pool } = require('../config/database');
 
-// Estados de pedido de cliente que aún requieren fabricación (lista de producción).
-const FABRICATION_STATUSES = ['pending', 'fabricating'];
 const PO_STATUSES = ['draft', 'sent', 'in_production', 'received', 'cancelled'];
 
 // Genera un consecutivo OC-000001 a partir del total de órdenes de compra.
@@ -233,36 +231,6 @@ const manufacturingController = {
       [req.params.id],
     );
     res.json({ data: mapPo(row), message: 'Estatus actualizado' });
-  }),
-
-  // ─── PEDIDOS A FÁBRICA (lista de producción) ─────────────────────────────────
-  // GET /api/manufacturing/production-list
-  productionList: asyncHandler(async (req, res) => {
-    const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
-    const [rows] = await pool.execute(
-      `SELECT oi.product_id, oi.product_name, oi.product_sku,
-              SUM(oi.quantity) AS total_quantity,
-              SUM(oi.is_ready = FALSE) AS pending_lines,
-              SUM(oi.is_ready = TRUE) AS ready_lines,
-              COUNT(*) AS line_count
-       FROM order_items oi
-       JOIN orders o ON o.id = oi.order_id
-       WHERE o.order_status IN (${placeholders})
-       GROUP BY oi.product_id, oi.product_name, oi.product_sku
-       ORDER BY oi.product_name`,
-      FABRICATION_STATUSES,
-    );
-    res.json({
-      data: rows.map((r) => ({
-        productId: r.product_id,
-        productName: r.product_name,
-        productSku: r.product_sku,
-        totalQuantity: Number(r.total_quantity),
-        pendingLines: Number(r.pending_lines),
-        readyLines: Number(r.ready_lines),
-        lineCount: Number(r.line_count),
-      })),
-    });
   }),
 
   // ─── CATÁLOGO POR FABRICANTE ─────────────────────────────────────────────────

@@ -8,3 +8,16 @@
   gap: vars.$spacing-sm;
   margin-bottom: vars.$spacing-md;
 }
+
+.order-link {
+  color: vars.$color-primary;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.table--cards td[rowspan] {
+  vertical-align: top;
+  border-right: 1px solid vars.$color-border;
+}
