@@ -19,7 +19,7 @@
     <table class="table table--cards">
       <thead>
         <tr>
-          <th>Pedido</th><th>Cliente</th><th>Producto</th><th class="num">Cantidad</th>
+          <th>Pedido</th><th>Cliente</th><th>Entrega a tienda</th><th>Producto</th><th class="num">Cantidad</th>
           <th>Estado</th><th>Fabricante asignado</th>
         </tr>
       </thead>
@@ -32,6 +32,15 @@
                   <a class="strong order-link" [routerLink]="['/admin/pedidos', g.orderId]">{{ g.orderNumber }}</a>
                 </td>
                 <td data-label="Cliente" [attr.rowspan]="g.items.length">{{ g.customerName }}</td>
+                <td data-label="Entrega a tienda" [attr.rowspan]="g.items.length">
+                  <input
+                    type="date"
+                    class="due-date-input"
+                    [value]="g.manufacturerDueDate ?? ''"
+                    [disabled]="savingDueDate().has(g.orderId)"
+                    (change)="onDueDateChange(g, $event)"
+                  />
+                </td>
               }
               <td data-label="Producto">
                 {{ r.productName }}

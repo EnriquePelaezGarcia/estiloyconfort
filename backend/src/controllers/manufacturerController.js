@@ -61,10 +61,10 @@ const manufacturerController = {
 
     const orderIds = [...new Set(items.map((it) => it.order_id))];
     const [orders] = await pool.query(
-      `SELECT id, order_number, customer_name, order_status, expected_delivery_date, created_at,
-              material, color, notas_fabricante
+      `SELECT id, order_number, customer_name, order_status, expected_delivery_date,
+              manufacturer_due_date, created_at, material, color, notas_fabricante
        FROM orders WHERE id IN (?)
-       ORDER BY expected_delivery_date IS NULL, expected_delivery_date ASC, created_at ASC`,
+       ORDER BY manufacturer_due_date IS NULL, manufacturer_due_date ASC, created_at ASC`,
       [orderIds],
     );
     const byOrder = new Map(orders.map((o) => [o.id, { ...o, items: [] }]));

@@ -10,6 +10,7 @@ export interface FactoryOrderGroup {
   orderNumber: string;
   customerName: string;
   expectedDeliveryDate: string | null;
+  manufacturerDueDate: string | null;
   items: FactoryOrderItemRow[];
 }
 
@@ -29,6 +30,8 @@ export class FactoryOrdersComponent implements OnInit {
   protected loading = signal(true);
   /** Ids de items con una asignación en curso, para deshabilitar su selector. */
   protected assigning = signal<Set<number>>(new Set());
+  /** Ids de pedidos con la fecha de entrega del fabricante en proceso de guardado. */
+  protected savingDueDate = signal<Set<number>>(new Set());
 
   /** Agrupa los items planos por pedido, para que cada pedido aparezca una sola vez. */
   protected groups = computed<FactoryOrderGroup[]>(() => {
@@ -41,6 +44,7 @@ export class FactoryOrdersComponent implements OnInit {
           orderNumber: r.orderNumber,
           customerName: r.customerName,
           expectedDeliveryDate: r.expectedDeliveryDate,
+          manufacturerDueDate: r.manufacturerDueDate,
           items: [],
         };
         map.set(r.orderId, group);
@@ -97,6 +101,34 @@ export class FactoryOrdersComponent implements OnInit {
           return next;
         });
         this.notification.error(err?.error?.message ?? 'No se pudo asignar el fabricante');
+      },
+    });
+  }
+
+  protected onDueDateChange(group: FactoryOrderGroup, event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const manufacturerDueDate = raw ? raw : null;
+
+    this.savingDueDate.update((set) => new Set(set).add(group.orderId));
+    this.manufacturingService.updateManufacturerDueDate(group.orderId, manufacturerDueDate).subscribe({
+      next: () => {
+        this.rows.update((rows) =>
+          rows.map((r) => (r.orderId === group.orderId ? { ...r, manufacturerDueDate } : r)),
+        );
+        this.savingDueDate.update((set) => {
+          const next = new Set(set);
+          next.delete(group.orderId);
+          return next;
+        });
+        this.notification.success('Fecha de entrega del fabricante actualizada');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingDueDate.update((set) => {
+          const next = new Set(set);
+          next.delete(group.orderId);
+          return next;
+        });
+        this.notification.error(err?.error?.message ?? 'No se pudo actualizar la fecha');
       },
     });
   }

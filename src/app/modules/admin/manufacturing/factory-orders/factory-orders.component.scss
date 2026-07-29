@@ -21,3 +21,10 @@
   vertical-align: top;
   border-right: 1px solid vars.$color-border;
 }
+
+.due-date-input {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}

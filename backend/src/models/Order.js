@@ -100,6 +100,7 @@ function mapOrder(row) {
     orderStatus: row.order_status,
     orderDate: row.order_date,
     expectedDeliveryDate: row.expected_delivery_date,
+    manufacturerDueDate: row.manufacturer_due_date ?? null,
     totalAmount: Number(row.total_amount),
     shippingCost: row.shipping_cost != null ? Number(row.shipping_cost) : 0,
     shippingPostalCode: row.shipping_postal_code ?? null,

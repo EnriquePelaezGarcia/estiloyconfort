@@ -73,6 +73,8 @@ export interface Order {
   orderStatus: OrderStatus;
   orderDate: string;
   expectedDeliveryDate?: string | null;
+  /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega (la asigna el admin). */
+  manufacturerDueDate?: string | null;
   totalAmount: number;
   /** Total de contado (base del crédito, sin interés). Sólo en pedidos a crédito. */
   cashTotal?: number | null;
@@ -260,6 +262,8 @@ export interface ManufacturerOrder {
   customer_name: string;
   order_status: OrderStatus;
   expected_delivery_date: string | null;
+  /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. */
+  manufacturer_due_date: string | null;
   created_at: string;
   material?: ProductMaterial | null;
   color?: string | null;

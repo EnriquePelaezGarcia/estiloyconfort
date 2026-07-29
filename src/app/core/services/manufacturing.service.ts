@@ -85,6 +85,16 @@ export class ManufacturingService {
     });
   }
 
+  /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. Solo admin. */
+  updateManufacturerDueDate(
+    orderId: number,
+    manufacturerDueDate: string | null,
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(`/admin/orders/${orderId}/manufacturer-due-date`, {
+      manufacturerDueDate,
+    });
+  }
+
   // ── Catálogo por fabricante ───────────────────────────────────────────────
   getCatalog(manufacturerId?: number): Observable<{ data: ManufacturerCatalogProduct[] }> {
     const params = manufacturerId ? { manufacturerId: String(manufacturerId) } : undefined;

@@ -33,6 +33,7 @@ router.delete('/orders/:id/assembly', adminController.removeAssembly);
 router.get('/delivery-people', adminController.getDeliveryPeople);
 router.get('/manufacturer-users', adminController.getManufacturerUsers);
 router.get('/factory-order-items', adminController.getFactoryOrderItems);
+router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);
 router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);
 
 // Reportes (Fase 4)

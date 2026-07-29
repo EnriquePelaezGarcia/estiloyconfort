@@ -405,13 +405,13 @@ const getManufacturerUsers = asyncHandler(async (req, res) => {
 const getFactoryOrderItems = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
-            o.expected_delivery_date, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
-            oi.manufacturer_user_id, u.full_name AS manufacturer_user_name
+            o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
+            oi.quantity, oi.is_ready, oi.manufacturer_user_id, u.full_name AS manufacturer_user_name
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      LEFT JOIN users u ON u.id = oi.manufacturer_user_id
      WHERE o.order_status IN ('pending','fabricating') AND oi.requires_fabrication = 1
-     ORDER BY o.expected_delivery_date IS NULL, o.expected_delivery_date ASC, o.created_at ASC`,
+     ORDER BY o.manufacturer_due_date IS NULL, o.manufacturer_due_date ASC, o.created_at ASC`,
   );
   res.json({
     data: rows.map((r) => ({
@@ -421,6 +421,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
       customerName: r.customer_name,
       orderStatus: r.order_status,
       expectedDeliveryDate: r.expected_delivery_date,
+      manufacturerDueDate: r.manufacturer_due_date,
       productName: r.product_name,
       productSku: r.product_sku,
       quantity: r.quantity,
@@ -429,6 +430,19 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
       manufacturerUserName: r.manufacturer_user_name ?? null,
     })),
   });
+});
+
+// PATCH /api/admin/orders/:id/manufacturer-due-date — fecha en la que el fabricante
+// debe entregar el pedido a la tienda/bodega. Solo el admin la edita, y se puede
+// editar aunque el pedido ya esté en fabricación (atrasos o adelantos).
+const updateManufacturerDueDate = asyncHandler(async (req, res) => {
+  const { manufacturerDueDate } = req.body;
+  const [result] = await pool.execute(
+    'UPDATE orders SET manufacturer_due_date = ? WHERE id = ?',
+    [manufacturerDueDate ?? null, req.params.id],
+  );
+  if (result.affectedRows === 0) throw ApiError.notFound('Pedido no encontrado');
+  res.json({ message: 'Fecha de entrega del fabricante actualizada' });
 });
 
 // PATCH /api/admin/order-items/:id/manufacturer — asigna (o quita, con null) el
@@ -545,6 +559,7 @@ module.exports = {
   getDeliveryPeople,
   getManufacturerUsers,
   getFactoryOrderItems,
+  updateManufacturerDueDate,
   assignOrderItemManufacturer,
   getWeeklyList,
   getSalesReport,

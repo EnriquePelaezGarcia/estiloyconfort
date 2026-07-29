@@ -80,6 +80,8 @@ export interface FactoryOrderItemRow {
   customerName: string;
   orderStatus: string;
   expectedDeliveryDate: string | null;
+  /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. */
+  manufacturerDueDate: string | null;
   productName: string;
   productSku: string | null;
   quantity: number;

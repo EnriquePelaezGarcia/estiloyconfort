@@ -19,8 +19,14 @@
         <div class="order__head">
           <span class="order__status-label">Estatus del pedido:</span>
           <span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span>
-          @if (o.expected_delivery_date) {
-            <span class="order__date">Entrega: {{ o.expected_delivery_date | date:'dd/MM/yyyy' }}</span>
+        </div>
+
+        <div class="order__due-date">
+          <span class="order__status-label">Fecha de entrega a la tienda:</span>
+          @if (o.manufacturer_due_date) {
+            <span class="badge badge--blue">{{ o.manufacturer_due_date | date:'dd/MM/yyyy' }}</span>
+          } @else {
+            <span class="muted">Sin definir</span>
           }
         </div>
 
