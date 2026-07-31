@@ -235,35 +235,47 @@ const manufacturingController = {
 
   // ─── CATÁLOGO POR FABRICANTE ─────────────────────────────────────────────────
   // GET /api/manufacturing/catalog?manufacturerId=
+  // Un mismo producto se le compra a varios proveedores, así que aparece una vez
+  // bajo CADA uno, con el costo específico de ese proveedor (no el costo base).
   catalogByManufacturer: asyncHandler(async (req, res) => {
     const { manufacturerId } = req.query;
-    const conditions = ['p.is_active = TRUE'];
+    const conditions = ['p.is_active = TRUE', 'pmp.is_active = TRUE'];
     const params = [];
-    if (manufacturerId) { conditions.push('p.manufacturer_id = ?'); params.push(Number(manufacturerId)); }
+    if (manufacturerId) { conditions.push('pmp.manufacturer_id = ?'); params.push(Number(manufacturerId)); }
     const where = `WHERE ${conditions.join(' AND ')}`;
     const [rows] = await pool.execute(
-      `SELECT p.id, p.name, p.sku, p.base_cost, p.price_cash, p.stock_quantity,
-              p.manufacturer_id, m.name AS manufacturer_name,
+      `SELECT p.id, p.name, p.sku, p.price_cash, p.stock_quantity, p.base_cost,
+              pmp.cost AS supplier_cost,
+              pmp.manufacturer_id, m.name AS manufacturer_name,
               c.name AS category_name
        FROM products p
-       LEFT JOIN manufacturers m ON m.id = p.manufacturer_id
+       JOIN product_manufacturer_prices pmp ON pmp.product_id = p.id
+       JOIN manufacturers m ON m.id = pmp.manufacturer_id
        LEFT JOIN categories c ON c.id = p.category_id
        ${where}
-       ORDER BY m.name IS NULL, m.name, p.name`,
+       ORDER BY m.name, p.name`,
       params,
     );
     res.json({
-      data: rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        sku: r.sku,
-        baseCost: r.base_cost != null ? Number(r.base_cost) : null,
-        priceCash: r.price_cash != null ? Number(r.price_cash) : null,
-        stockQuantity: Number(r.stock_quantity),
-        manufacturerId: r.manufacturer_id ?? null,
-        manufacturerName: r.manufacturer_name ?? null,
-        categoryName: r.category_name ?? null,
-      })),
+      data: rows.map((r) => {
+        const cost = Number(r.supplier_cost);
+        const priceCash = r.price_cash != null ? Number(r.price_cash) : null;
+        return {
+          id: r.id,
+          name: r.name,
+          sku: r.sku,
+          // El costo de ESTE proveedor, no el costo base del producto.
+          baseCost: cost,
+          priceCash,
+          // El costo base es el más alto; marcamos a quién le corresponde.
+          isBaseCost: r.base_cost != null && cost === Number(r.base_cost),
+          unitMargin: priceCash !== null ? Math.round((priceCash - cost) * 100) / 100 : null,
+          stockQuantity: Number(r.stock_quantity),
+          manufacturerId: r.manufacturer_id,
+          manufacturerName: r.manufacturer_name,
+          categoryName: r.category_name ?? null,
+        };
+      }),
     });
   }),
 };

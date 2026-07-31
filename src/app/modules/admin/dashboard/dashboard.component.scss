@@ -157,6 +157,54 @@
   &:hover { color: vars.$color-primary; }
 }
 
+// ===== Pendientes de atención =====
+.attention-card {
+  margin-bottom: vars.$spacing-lg;
+}
+
+.attention-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.attention-item {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-md;
+  padding: vars.$spacing-sm;
+  border-radius: vars.$radius-md;
+  border: 1px solid vars.$color-border;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover { border-color: vars.$color-primary; background: rgba(vars.$color-primary, 0.04); }
+
+  &--alert {
+    border-color: rgba(vars.$color-error, 0.4);
+    .attention-item__icon { background: rgba(vars.$color-error, 0.12); color: vars.$color-error; }
+  }
+
+  &__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: vars.$radius-md;
+    background: rgba(vars.$color-primary, 0.08);
+    color: vars.$color-primary;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+
+  &__body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  &__value { font-family: vars.$font-headline; font-size: 1.15rem; font-weight: 700; }
+  &__label { font-size: 0.82rem; color: vars.$color-text-secondary; }
+  &__arrow { color: vars.$color-text-secondary; }
+}
+
 // ===== Role list =====
 .role-list {
   list-style: none;

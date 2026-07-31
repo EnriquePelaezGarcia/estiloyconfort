@@ -85,6 +85,21 @@ export class ManufacturingService {
     });
   }
 
+  /**
+   * Asigna el PROVEEDOR comercial que surte un item y congela su costo.
+   * No confundir con assignOrderItemManufacturer, que asigna al operario que
+   * arma el mueble.
+   */
+  assignOrderItemSupplier(
+    itemId: number,
+    manufacturerId: number | null,
+  ): Observable<{ data: { supplierId: number | null; supplierName: string | null; unitCost: number | null; unitProfit: number | null }; message: string }> {
+    return this.api.patch<{
+      data: { supplierId: number | null; supplierName: string | null; unitCost: number | null; unitProfit: number | null };
+      message: string;
+    }>(`/admin/order-items/${itemId}/supplier`, { manufacturerId });
+  }
+
   /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. Solo admin. */
   updateManufacturerDueDate(
     orderId: number,

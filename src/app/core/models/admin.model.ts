@@ -20,6 +20,8 @@ export interface DashboardStats {
     inventoryValue: number;
   };
   categories: number;
+  /** Muebles sobre pedido (requires_fabrication) sin fabricante asignado. */
+  unassignedFabricationItems: number;
   recentProducts: RecentProduct[];
   lowStockProducts: LowStockProduct[];
 }

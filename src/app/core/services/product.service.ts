@@ -3,7 +3,14 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { Category } from '../models/category.model';
-import { Product, ProductFilters, ProductImage, ProductListResponse, ProductPayload } from '../models/product.model';
+import {
+  Product,
+  ProductFilters,
+  ProductImage,
+  ProductListResponse,
+  ProductManufacturerPricesResponse,
+  ProductPayload,
+} from '../models/product.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
@@ -80,5 +87,37 @@ export class ProductService {
     return this.api
       .patch<{ data: ProductImage }>(`/products/${productId}/images/${imageId}`, { is_primary: true })
       .pipe(map(r => r.data));
+  }
+
+  // ===== Costos por proveedor comercial =====
+
+  getManufacturerPrices(productId: number): Observable<ProductManufacturerPricesResponse> {
+    return this.api.get<ProductManufacturerPricesResponse>(
+      `/products/${productId}/manufacturer-prices`,
+    );
+  }
+
+  /**
+   * Fija el costo de un proveedor. El backend recalcula el costo base (el
+   * máximo de todos los proveedores) y reprecia el producto.
+   */
+  setManufacturerPrice(
+    productId: number,
+    manufacturerId: number,
+    cost: number,
+  ): Observable<ProductManufacturerPricesResponse> {
+    return this.api.put<ProductManufacturerPricesResponse>(
+      `/products/${productId}/manufacturer-prices/${manufacturerId}`,
+      { cost },
+    );
+  }
+
+  removeManufacturerPrice(
+    productId: number,
+    manufacturerId: number,
+  ): Observable<ProductManufacturerPricesResponse> {
+    return this.api.delete<ProductManufacturerPricesResponse>(
+      `/products/${productId}/manufacturer-prices/${manufacturerId}`,
+    );
   }
 }

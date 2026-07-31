@@ -1,9 +1,12 @@
 const { pool } = require('../config/database');
 
+// Las comisiones se guardan como BASE; las netas se derivan multiplicando por
+// (1 + IVA), porque la terminal cobra IVA sobre su propia comisión. Guardar
+// ambas como campos editables dejaría el sistema inconsistente al cambiar tarifa.
 const ALLOWED_KEYS = [
   'iva',
-  'card_commission',
-  'msi_commission',
+  'card_commission_base',
+  'msi_commission_base',
   'rounding_step',
   'credit_interest',
   'credit_initial_pct',
@@ -29,8 +32,8 @@ const PricingConfig = {
     const rows = await this.findAll();
     const map = {
       iva: 16,
-      card_commission: 3.2364,
-      msi_commission: 8.9204,
+      card_commission_base: 2.79,
+      msi_commission_base: 7.69,
       rounding_step: 10,
       credit_interest: 22,
       credit_initial_pct: 35,

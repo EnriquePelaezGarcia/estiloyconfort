@@ -35,6 +35,8 @@ router.get('/manufacturer-users', adminController.getManufacturerUsers);
 router.get('/factory-order-items', adminController.getFactoryOrderItems);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);
 router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);
+// Proveedor comercial que surte el item (distinto del operario de arriba).
+router.patch('/order-items/:id/supplier', adminController.assignOrderItemSupplier);
 
 // Reportes (Fase 4)
 router.get('/reports/sales', adminController.getSalesReport);

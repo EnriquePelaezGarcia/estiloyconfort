@@ -28,8 +28,10 @@ export class FactoryOrdersComponent implements OnInit {
   protected rows = signal<FactoryOrderItemRow[]>([]);
   protected manufacturers = signal<ManufacturerUser[]>([]);
   protected loading = signal(true);
-  /** Ids de items con una asignación en curso, para deshabilitar su selector. */
+  /** Ids de items con una asignación de operario en curso. */
   protected assigning = signal<Set<number>>(new Set());
+  /** Ids de items con una asignación de proveedor en curso. */
+  protected assigningSupplier = signal<Set<number>>(new Set());
   /** Ids de pedidos con la fecha de entrega del fabricante en proceso de guardado. */
   protected savingDueDate = signal<Set<number>>(new Set());
 
@@ -103,6 +105,43 @@ export class FactoryOrdersComponent implements OnInit {
         this.notification.error(err?.error?.message ?? 'No se pudo asignar el fabricante');
       },
     });
+  }
+
+  /**
+   * Asigna el proveedor comercial que surte el item. Nada se asigna solo: el
+   * admin decide caso por caso, y al guardarse queda congelado el costo con el
+   * que se calculará la utilidad real de esa venta.
+   */
+  protected onSupplierChange(row: FactoryOrderItemRow, event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    const manufacturerId = raw ? Number(raw) : null;
+
+    this.assigningSupplier.update((set) => new Set(set).add(row.itemId));
+    const release = () =>
+      this.assigningSupplier.update((set) => {
+        const next = new Set(set);
+        next.delete(row.itemId);
+        return next;
+      });
+
+    this.manufacturingService.assignOrderItemSupplier(row.itemId, manufacturerId).subscribe({
+      next: (res) => {
+        this.rows.update((rows) =>
+          rows.map((r) => (r.itemId === row.itemId ? { ...r, ...res.data } : r)),
+        );
+        release();
+        this.notification.success(res.message);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        release();
+        this.notification.error(err?.error?.message ?? 'No se pudo asignar el proveedor');
+      },
+    });
+  }
+
+  protected money(value: number | null): string {
+    if (value === null || value === undefined) return '—';
+    return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
   protected onDueDateChange(group: FactoryOrderGroup, event: Event): void {

@@ -242,3 +242,111 @@
   color: vars.$color-text-secondary;
   font-size: 0.9rem;
 }
+
+// ===== Costos por fabricante =====
+.costs__hint,
+.costs__empty {
+  margin: 0 0 vars.$spacing-md;
+  font-size: 0.82rem;
+  color: vars.$color-text-secondary;
+}
+
+.costs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: vars.$spacing-sm;
+  overflow-x: auto;
+}
+
+.costs__head,
+.costs__row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1.4fr) minmax(7rem, 1fr) repeat(4, minmax(5.5rem, 0.9fr));
+  gap: vars.$spacing-sm;
+  align-items: center;
+  min-width: 44rem;
+}
+
+.costs__head {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: vars.$color-text-secondary;
+}
+
+.costs__row {
+  padding: 0.4rem vars.$spacing-sm;
+  border-radius: vars.$radius-sm;
+  border: 1px solid transparent;
+
+  &--base {
+    background: rgba(vars.$color-primary, 0.06);
+    border-color: rgba(vars.$color-primary, 0.25);
+  }
+}
+
+.costs__name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.costs__badge {
+  padding: 0.05rem 0.4rem;
+  border-radius: vars.$radius-sm;
+  background: vars.$color-primary;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.costs__input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  font-size: 0.88rem;
+}
+
+.costs__profit {
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  color: vars.$color-text-secondary;
+}
+
+.costs__base {
+  margin: 0 0 vars.$spacing-lg;
+  font-size: 0.86rem;
+  color: vars.$color-text;
+}
+
+// ===== Margen vs precio final =====
+.mode-toggle {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: vars.$spacing-md;
+}
+
+.mode-toggle__btn {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  background: vars.$color-bg;
+  color: vars.$color-text-secondary;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}

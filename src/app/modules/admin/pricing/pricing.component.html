@@ -27,15 +27,33 @@
         </div>
 
         <div class="field">
-          <label for="card">{{ itemMeta('card_commission')?.label ?? 'Comisión tarjeta' }} (%)</label>
-          <input id="card" type="number" formControlName="card_commission" min="0" max="100" step="0.0001" />
-          <p class="field__hint">{{ itemMeta('card_commission')?.description }}</p>
+          <label for="card">{{ itemMeta('card_commission_base')?.label ?? 'Comisión tarjeta (base)' }} (%)</label>
+          <input id="card" type="number" formControlName="card_commission_base" min="0" max="100" step="0.0001" />
+          <p class="field__hint">{{ itemMeta('card_commission_base')?.description }}</p>
         </div>
 
         <div class="field">
-          <label for="msi">{{ itemMeta('msi_commission')?.label ?? 'Comisión 6 MSI' }} (%)</label>
-          <input id="msi" type="number" formControlName="msi_commission" min="0" max="100" step="0.0001" />
-          <p class="field__hint">{{ itemMeta('msi_commission')?.description }}</p>
+          <label for="msi">{{ itemMeta('msi_commission_base')?.label ?? 'Comisión 6 MSI (base)' }} (%)</label>
+          <input id="msi" type="number" formControlName="msi_commission_base" min="0" max="100" step="0.0001" />
+          <p class="field__hint">{{ itemMeta('msi_commission_base')?.description }}</p>
+        </div>
+
+        <div class="derived">
+          <p class="derived__title">Comisiones netas (calculadas)</p>
+          <p class="derived__hint">
+            La terminal cobra IVA sobre su propia comisión, así que la neta es
+            base × (1 + IVA). Son las que se absorben en el precio de venta.
+          </p>
+          <dl class="derived__list">
+            <div>
+              <dt>Tarjeta neta</dt>
+              <dd>{{ netCommissions().card }}</dd>
+            </div>
+            <div>
+              <dt>6 MSI neta</dt>
+              <dd>{{ netCommissions().msi }}</dd>
+            </div>
+          </dl>
         </div>
 
         <div class="field">

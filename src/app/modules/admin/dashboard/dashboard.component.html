@@ -51,6 +51,43 @@
     </article>
   </section>
 
+  <!-- ===== Pendientes de atención ===== -->
+  <section class="card attention-card">
+    <div class="card__head">
+      <h2 class="card__title">Pendientes de atención</h2>
+    </div>
+    <ul class="attention-list">
+      <li>
+        <a
+          class="attention-item"
+          [class.attention-item--alert]="s.unassignedFabricationItems > 0"
+          routerLink="../fabricante/pedidos-fabrica"
+        >
+          <span class="material-symbols-outlined attention-item__icon">precision_manufacturing</span>
+          <div class="attention-item__body">
+            <span class="attention-item__value">{{ s.unassignedFabricationItems }}</span>
+            <span class="attention-item__label">Muebles sobre pedido sin fabricante asignado</span>
+          </div>
+          <span class="material-symbols-outlined attention-item__arrow">chevron_right</span>
+        </a>
+      </li>
+      <li>
+        <a
+          class="attention-item"
+          [class.attention-item--alert]="s.products.lowStock + s.products.outOfStock > 0"
+          routerLink="../inventario"
+        >
+          <span class="material-symbols-outlined attention-item__icon">inventory_2</span>
+          <div class="attention-item__body">
+            <span class="attention-item__value">{{ s.products.lowStock + s.products.outOfStock }}</span>
+            <span class="attention-item__label">Productos en bajo stock o agotados</span>
+          </div>
+          <span class="material-symbols-outlined attention-item__arrow">chevron_right</span>
+        </a>
+      </li>
+    </ul>
+  </section>
+
   <div class="dash-cols">
 
     <!-- ===== Usuarios por rol ===== -->

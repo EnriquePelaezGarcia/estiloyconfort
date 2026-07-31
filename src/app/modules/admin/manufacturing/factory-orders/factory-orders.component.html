@@ -20,7 +20,7 @@
       <thead>
         <tr>
           <th>Pedido</th><th>Cliente</th><th>Entrega a tienda</th><th>Producto</th><th class="num">Cantidad</th>
-          <th>Estado</th><th>Fabricante asignado</th>
+          <th>Estado</th><th>Fabricante (taller)</th><th>Proveedor</th><th class="num">Utilidad</th>
         </tr>
       </thead>
       <tbody>
@@ -54,13 +54,38 @@
                   <span class="badge badge--amber">Pendiente</span>
                 }
               </td>
-              <td data-label="Fabricante asignado">
+              <td data-label="Fabricante (taller)">
                 <select (change)="onAssignChange(r, $event)" [disabled]="assigning().has(r.itemId)">
                   <option value="" [selected]="r.manufacturerUserId === null">Sin asignar</option>
                   @for (m of manufacturers(); track m.id) {
                     <option [value]="m.id" [selected]="r.manufacturerUserId === m.id">{{ m.fullName }}</option>
                   }
                 </select>
+              </td>
+              <td data-label="Proveedor">
+                @if (r.supplierOptions.length) {
+                  <select
+                    (change)="onSupplierChange(r, $event)"
+                    [disabled]="assigningSupplier().has(r.itemId)"
+                  >
+                    <option value="" [selected]="r.supplierId === null">Sin asignar</option>
+                    @for (s of r.supplierOptions; track s.manufacturerId) {
+                      <option [value]="s.manufacturerId" [selected]="r.supplierId === s.manufacturerId">
+                        {{ s.manufacturerName }} — {{ money(s.cost) }}
+                      </option>
+                    }
+                  </select>
+                } @else {
+                  <span class="muted">Sin costos capturados</span>
+                }
+              </td>
+              <td data-label="Utilidad" class="num">
+                @if (r.unitProfit !== null) {
+                  {{ money(r.unitProfit) }}
+                  <span class="muted"> c/u</span>
+                } @else {
+                  <span class="muted">—</span>
+                }
               </td>
             </tr>
           }

@@ -2,21 +2,54 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../config/database');
 const Product = require('../models/Product');
+const ProductManufacturerPrice = require('../models/ProductManufacturerPrice');
 const PricingConfig = require('../models/PricingConfig');
-const { calculatePrices } = require('../utils/pricingCalculator');
+const { calculatePrices, profitByCost, marginFromCashPrice } = require('../utils/pricingCalculator');
+const { withCalculatedPrices } = require('../utils/productPricing');
 
 /**
- * Recalcula price_cash y price_6msi a partir de base_cost + margin_percentage
- * usando las reglas de precios vigentes. Es la fuente de verdad: los precios
- * enviados por el cliente se ignoran para mantener el catálogo consistente.
+ * Arma la respuesta de costos por proveedor de un producto: a cada costo le
+ * calcula la utilidad que deja en cada modalidad de pago, contra el precio de
+ * venta vigente. El proveedor cuyo costo es el máximo es el que define el
+ * precio (base_cost), y se marca con isBaseCost.
  */
-async function withCalculatedPrices(data, fallback = {}) {
-  const baseCost = data.base_cost ?? fallback.base_cost;
-  const margin = data.margin_percentage ?? fallback.margin_percentage;
-  if (baseCost === undefined || margin === undefined) return data;
-  const config = await PricingConfig.getMap();
-  const { price_cash, price_6msi, price_credit } = calculatePrices(baseCost, margin, config);
-  return { ...data, price_cash, price_6msi, price_credit };
+async function manufacturerPricesPayload(productId) {
+  const [[product]] = await pool.execute(
+    'SELECT base_cost, margin_percentage, price_cash FROM products WHERE id = ?',
+    [productId],
+  );
+  if (!product) return null;
+
+  const [costs, config] = await Promise.all([
+    ProductManufacturerPrice.findByProduct(productId),
+    PricingConfig.getMap(),
+  ]);
+
+  const baseCost = Number(product.base_cost);
+  const prices = calculatePrices(baseCost, product.margin_percentage, config);
+  const maxCost = costs.length ? Math.max(...costs.filter((c) => c.isActive).map((c) => c.cost)) : null;
+
+  return {
+    data: costs.map((c) => {
+      const profit = profitByCost(c.cost, prices, config);
+      return {
+        manufacturerId: c.manufacturerId,
+        manufacturerName: c.manufacturerName,
+        cost: c.cost,
+        isActive: c.isActive,
+        isBaseCost: c.isActive && c.cost === maxCost,
+        utilidadEfectivo: profit?.cash ?? null,
+        utilidadTarjeta: profit?.card ?? null,
+        utilidadMsi: profit?.msi ?? null,
+        utilidadCredito: profit?.credit ?? null,
+        marginPct: profit?.marginPct ?? null,
+      };
+    }),
+    baseCost,
+    priceCash: prices.price_cash,
+    price6msi: prices.price_6msi,
+    priceCredit: prices.price_credit,
+  };
 }
 
 const productController = {
@@ -136,6 +169,72 @@ const productController = {
       const image = await Product.setPrimaryImage(req.params.id, req.params.imageId);
       if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
       res.json({ data: image, message: 'Imagen principal actualizada' });
+    } catch (err) { next(err); }
+  },
+
+  // ===== Costos por proveedor =====
+
+  async getManufacturerPrices(req, res, next) {
+    try {
+      const payload = await manufacturerPricesPayload(req.params.id);
+      if (!payload) return res.status(404).json({ message: 'Producto no encontrado' });
+      res.json(payload);
+    } catch (err) { next(err); }
+  },
+
+  async setManufacturerPrice(req, res, next) {
+    try {
+      const { id, manufacturerId } = req.params;
+      const cost = Number(req.body.cost);
+      if (!Number.isFinite(cost) || cost <= 0) {
+        return res.status(400).json({ message: 'El costo debe ser un número mayor que cero' });
+      }
+
+      const [[product]] = await pool.execute('SELECT id FROM products WHERE id = ?', [id]);
+      if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
+
+      const [[manufacturer]] = await pool.execute(
+        'SELECT id FROM manufacturers WHERE id = ? AND is_active = TRUE',
+        [manufacturerId],
+      );
+      if (!manufacturer) return res.status(404).json({ message: 'Fabricante no encontrado o inactivo' });
+
+      await ProductManufacturerPrice.upsert(id, manufacturerId, cost);
+      const payload = await manufacturerPricesPayload(id);
+      res.json({ ...payload, message: 'Costo actualizado' });
+    } catch (err) { next(err); }
+  },
+
+  async removeManufacturerPrice(req, res, next) {
+    try {
+      const { id, manufacturerId } = req.params;
+      const result = await ProductManufacturerPrice.remove(id, manufacturerId);
+      if (result === null) {
+        return res.status(404).json({ message: 'Ese fabricante no tiene costo registrado para este producto' });
+      }
+      const payload = await manufacturerPricesPayload(id);
+      res.json({ ...payload, message: 'Fabricante quitado del producto' });
+    } catch (err) { next(err); }
+  },
+
+  /**
+   * Modo inverso: dado el precio de contado deseado, devuelve el margen que lo
+   * produce. Es como se usa la calculadora en la práctica — se elige un precio
+   * comercial bonito y se ajusta el margen hasta aterrizar ahí.
+   */
+  async marginForPrice(req, res, next) {
+    try {
+      const baseCost = Number(req.query.baseCost);
+      const cashPrice = Number(req.query.cashPrice);
+      const config = await PricingConfig.getMap();
+      const result = marginFromCashPrice(baseCost, cashPrice, config);
+      if (!result) {
+        return res.status(400).json({
+          message: 'No hay un margen válido para ese costo y precio. Revisa que el precio sea mayor que el costo.',
+        });
+      }
+      const prices = calculatePrices(baseCost, result.marginPercentage, config);
+      res.json({ ...result, prices });
     } catch (err) { next(err); }
   },
 };

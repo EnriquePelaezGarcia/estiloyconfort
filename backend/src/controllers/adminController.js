@@ -2,6 +2,7 @@ const { pool } = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const Order = require('../models/Order');
+const ProductManufacturerPrice = require('../models/ProductManufacturerPrice');
 
 /**
  * GET /api/admin/dashboard  (solo admin)
@@ -65,6 +66,16 @@ const getDashboard = asyncHandler(async (req, res) => {
      FROM orders`,
   );
 
+  // Muebles sobre pedido cuyo fabricante aún no ha sido asignado por el admin.
+  const [[unassigned]] = await pool.query(
+    `SELECT COUNT(*) AS n
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     WHERE o.order_status IN ('pending','fabricating')
+       AND oi.requires_fabrication = 1
+       AND oi.manufacturer_user_id IS NULL`,
+  );
+
   res.json({
     users: {
       total: Number(userStats.totalUsers) || 0,
@@ -84,6 +95,7 @@ const getDashboard = asyncHandler(async (req, res) => {
       monthRevenue: Number(orderStats.monthRevenue) || 0,
     },
     categories: Number(totalCategories) || 0,
+    unassignedFabricationItems: Number(unassigned.n) || 0,
     recentProducts,
     lowStockProducts,
   });
@@ -323,13 +335,20 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
 });
 
 // GET /api/admin/finances/margin-analysis
+//
+// La utilidad realizada usa el costo CONGELADO en el pedido (oi.unit_cost), no
+// el costo actual del producto: así un cambio de precio del proveedor no
+// reescribe la ganancia histórica. Para pedidos anteriores a la migración, o
+// items a los que el admin aún no asignó proveedor, se cae a p.base_cost como
+// aproximación, y esas unidades se reportan aparte.
 const getMarginAnalysis = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT p.id, p.name, p.sku, p.base_cost, p.price_cash,
             ROUND((p.price_cash - p.base_cost), 2) AS unit_margin,
             ROUND(((p.price_cash - p.base_cost) / NULLIF(p.price_cash, 0)) * 100, 2) AS margin_pct,
             COALESCE(SUM(oi.quantity), 0) AS units_sold,
-            COALESCE(SUM(oi.quantity * (p.price_cash - p.base_cost)), 0) AS total_margin
+            COALESCE(SUM(oi.quantity * (oi.unit_price - COALESCE(oi.unit_cost, p.base_cost))), 0) AS total_margin,
+            COALESCE(SUM(CASE WHEN oi.unit_cost IS NULL THEN oi.quantity ELSE 0 END), 0) AS units_unassigned
      FROM products p
      LEFT JOIN order_items oi ON oi.product_id = p.id
      LEFT JOIN orders o ON o.id = oi.order_id AND o.order_status <> 'cancelled'
@@ -338,12 +357,54 @@ const getMarginAnalysis = asyncHandler(async (req, res) => {
      ORDER BY total_margin DESC
      LIMIT 50`,
   );
+
+  // Desglose por proveedor: qué costo tiene registrado cada uno, qué utilidad
+  // deja y cuántas piezas surtió realmente.
+  const productIds = rows.map((r) => r.id);
+  const byProduct = new Map();
+  if (productIds.length) {
+    const [breakdown] = await pool.query(
+      `SELECT pmp.product_id, pmp.manufacturer_id, m.name AS manufacturer_name, pmp.cost,
+              p.price_cash,
+              COALESCE(SUM(oi.quantity), 0) AS units_sold,
+              COALESCE(SUM(oi.quantity * (oi.unit_price - oi.unit_cost)), 0) AS realized_margin
+         FROM product_manufacturer_prices pmp
+         JOIN manufacturers m ON m.id = pmp.manufacturer_id
+         JOIN products p ON p.id = pmp.product_id
+         LEFT JOIN order_items oi
+                ON oi.product_id = pmp.product_id
+               AND oi.manufacturer_id = pmp.manufacturer_id
+         LEFT JOIN orders o ON o.id = oi.order_id AND o.order_status <> 'cancelled'
+        WHERE pmp.product_id IN (?) AND pmp.is_active = TRUE
+        GROUP BY pmp.product_id, pmp.manufacturer_id
+        ORDER BY m.name`,
+      [productIds],
+    );
+    for (const b of breakdown) {
+      if (!byProduct.has(b.product_id)) byProduct.set(b.product_id, []);
+      const cost = Number(b.cost);
+      const priceCash = Number(b.price_cash);
+      byProduct.get(b.product_id).push({
+        manufacturerId: b.manufacturer_id,
+        manufacturerName: b.manufacturer_name,
+        cost,
+        unitMargin: Math.round((priceCash - cost) * 100) / 100,
+        marginPct: priceCash > 0 ? Math.round(((priceCash - cost) / priceCash) * 10000) / 100 : 0,
+        unitsSold: Number(b.units_sold),
+        realizedMargin: Number(b.realized_margin),
+      });
+    }
+  }
+
   res.json({
     data: rows.map((r) => ({
       id: r.id, name: r.name, sku: r.sku,
       baseCost: Number(r.base_cost), priceCash: Number(r.price_cash),
       unitMargin: Number(r.unit_margin), marginPct: Number(r.margin_pct),
       unitsSold: Number(r.units_sold), totalMargin: Number(r.total_margin),
+      /** Piezas vendidas sin proveedor asignado: su utilidad es aproximada. */
+      unitsUnassigned: Number(r.units_unassigned),
+      byManufacturer: byProduct.get(r.id) ?? [],
     })),
   });
 });
@@ -406,29 +467,65 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
             o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
-            oi.quantity, oi.is_ready, oi.manufacturer_user_id, u.full_name AS manufacturer_user_name
+            oi.quantity, oi.is_ready, oi.manufacturer_user_id, u.full_name AS manufacturer_user_name,
+            oi.product_id, oi.unit_price, oi.unit_cost,
+            oi.manufacturer_id AS supplier_id, m.name AS supplier_name
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      LEFT JOIN users u ON u.id = oi.manufacturer_user_id
+     LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
      WHERE o.order_status IN ('pending','fabricating') AND oi.requires_fabrication = 1
      ORDER BY o.manufacturer_due_date IS NULL, o.manufacturer_due_date ASC, o.created_at ASC`,
   );
+
+  // Opciones de proveedor por producto: solo los que tienen costo registrado.
+  const productIds = [...new Set(rows.map((r) => r.product_id).filter(Boolean))];
+  const optionsByProduct = new Map();
+  if (productIds.length) {
+    const [costs] = await pool.query(
+      `SELECT pmp.product_id, pmp.manufacturer_id, pmp.cost, m.name
+         FROM product_manufacturer_prices pmp
+         JOIN manufacturers m ON m.id = pmp.manufacturer_id
+        WHERE pmp.product_id IN (?) AND pmp.is_active = TRUE AND m.is_active = TRUE
+        ORDER BY m.name`,
+      [productIds],
+    );
+    for (const c of costs) {
+      if (!optionsByProduct.has(c.product_id)) optionsByProduct.set(c.product_id, []);
+      optionsByProduct.get(c.product_id).push({
+        manufacturerId: c.manufacturer_id,
+        manufacturerName: c.name,
+        cost: Number(c.cost),
+      });
+    }
+  }
+
   res.json({
-    data: rows.map((r) => ({
-      itemId: r.item_id,
-      orderId: r.order_id,
-      orderNumber: r.order_number,
-      customerName: r.customer_name,
-      orderStatus: r.order_status,
-      expectedDeliveryDate: r.expected_delivery_date,
-      manufacturerDueDate: r.manufacturer_due_date,
-      productName: r.product_name,
-      productSku: r.product_sku,
-      quantity: r.quantity,
-      isReady: !!r.is_ready,
-      manufacturerUserId: r.manufacturer_user_id ?? null,
-      manufacturerUserName: r.manufacturer_user_name ?? null,
-    })),
+    data: rows.map((r) => {
+      const unitCost = r.unit_cost != null ? Number(r.unit_cost) : null;
+      return {
+        itemId: r.item_id,
+        orderId: r.order_id,
+        orderNumber: r.order_number,
+        customerName: r.customer_name,
+        orderStatus: r.order_status,
+        expectedDeliveryDate: r.expected_delivery_date,
+        manufacturerDueDate: r.manufacturer_due_date,
+        productId: r.product_id ?? null,
+        productName: r.product_name,
+        productSku: r.product_sku,
+        quantity: r.quantity,
+        isReady: !!r.is_ready,
+        manufacturerUserId: r.manufacturer_user_id ?? null,
+        manufacturerUserName: r.manufacturer_user_name ?? null,
+        // Proveedor comercial: quién surte la pieza. Distinto del operario.
+        supplierId: r.supplier_id ?? null,
+        supplierName: r.supplier_name ?? null,
+        unitCost,
+        unitProfit: unitCost !== null ? Number(r.unit_price) - unitCost : null,
+        supplierOptions: optionsByProduct.get(r.product_id) ?? [],
+      };
+    }),
   });
 });
 
@@ -467,6 +564,58 @@ const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   }
   await pool.execute('UPDATE order_items SET manufacturer_user_id = ? WHERE id = ?', [value, req.params.id]);
   res.json({ message: value ? 'Fabricante asignado' : 'Fabricante quitado' });
+});
+
+// PATCH /api/admin/order-items/:id/supplier — asigna (o quita, con null) el
+// PROVEEDOR COMERCIAL que surte un item, y congela su costo.
+//
+// No confundir con assignOrderItemManufacturer, que asigna al OPERARIO que arma
+// el mueble. Aquí se trata de a quién se le compra.
+//
+// Nada se asigna solo: el admin decide caso por caso, y aplica tanto a items que
+// se fabrican como a los que salen de bodega.
+const assignOrderItemSupplier = asyncHandler(async (req, res) => {
+  const { manufacturerId } = req.body;
+  const [[item]] = await pool.execute(
+    'SELECT id, product_id, unit_price FROM order_items WHERE id = ?', [req.params.id],
+  );
+  if (!item) throw ApiError.notFound('Item no encontrado');
+
+  if (!manufacturerId) {
+    await pool.execute(
+      'UPDATE order_items SET manufacturer_id = NULL, unit_cost = NULL WHERE id = ?',
+      [req.params.id],
+    );
+    return res.json({ data: { supplierId: null, supplierName: null, unitCost: null, unitProfit: null },
+      message: 'Proveedor quitado' });
+  }
+
+  const [[supplier]] = await pool.execute(
+    'SELECT id, name FROM manufacturers WHERE id = ? AND is_active = TRUE',
+    [manufacturerId],
+  );
+  if (!supplier) throw ApiError.badRequest('Proveedor inválido');
+
+  const cost = await ProductManufacturerPrice.findCost(item.product_id, manufacturerId);
+  if (cost === null) {
+    throw ApiError.badRequest('Ese fabricante no tiene costo registrado para este producto');
+  }
+
+  // El costo se congela aquí: si mañana sube, este pedido conserva su utilidad real.
+  await pool.execute(
+    'UPDATE order_items SET manufacturer_id = ?, unit_cost = ? WHERE id = ?',
+    [supplier.id, cost, req.params.id],
+  );
+
+  res.json({
+    data: {
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      unitCost: cost,
+      unitProfit: Number(item.unit_price) - cost,
+    },
+    message: 'Proveedor asignado',
+  });
 });
 
 // GET /api/admin/orders/weekly-list — lista semanal para fabricantes
@@ -561,6 +710,7 @@ module.exports = {
   getFactoryOrderItems,
   updateManufacturerDueDate,
   assignOrderItemManufacturer,
+  assignOrderItemSupplier,
   getWeeklyList,
   getSalesReport,
   getInventoryReport,

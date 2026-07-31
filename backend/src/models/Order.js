@@ -115,6 +115,8 @@ function mapOrder(row) {
     cashTotal: row.cash_total != null ? Number(row.cash_total) : null,
     downPayment: row.down_payment != null ? Number(row.down_payment) : null,
     weeklyPayment: row.weekly_payment != null ? Number(row.weekly_payment) : null,
+    /** Último abono, ajustado para que el total cobrado cuadre exacto. */
+    lastPayment: row.last_payment != null ? Number(row.last_payment) : null,
     creditWeeks: row.credit_weeks != null ? Number(row.credit_weeks) : null,
     layawayDeadline: row.layaway_deadline ?? null,
     layawayConverted: !!row.layaway_converted,
@@ -243,6 +245,7 @@ const Order = {
       let cashTotal = null;
       let downPayment = null;
       let weeklyPayment = null;
+      let lastPayment = null;
       let creditWeeks = null;
       let layawayDeadline = null;
 
@@ -254,6 +257,7 @@ const Order = {
         cashTotal = credit.cashTotal;
         downPayment = credit.downPayment;
         weeklyPayment = credit.weeklyPayment;
+        lastPayment = credit.lastPayment;
         creditWeeks = credit.weeks;
       } else if (paymentMethod === 'layaway') {
         // Precio de contado durante 3 meses; el cliente abona lo que pueda (mín. $500 inicial).
@@ -289,8 +293,8 @@ const Order = {
            expected_delivery_date, total_amount, shipping_cost, shipping_postal_code,
            assembly_service, assembly_floors, assembly_cost,
            material, color, notas_fabricante, notas_pedido, instrucciones_entrega,
-           cash_total, down_payment, weekly_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -303,7 +307,7 @@ const Order = {
           sanitizeMaterial(data.material), data.color ?? 'blanco',
           data.notasFabricante ?? null, data.notasPedido ?? null,
           data.instruccionesEntrega ?? null,
-          cashTotal, downPayment, weeklyPayment, creditWeeks,
+          cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks,
           layawayDeadline, data.notes ?? null,
         ],
       );
@@ -441,6 +445,7 @@ const Order = {
       let cashTotal = null;
       let downPayment = null;
       let weeklyPayment = null;
+      let lastPayment = null;
       let creditWeeks = null;
       let layawayDeadline = null;
 
@@ -452,6 +457,7 @@ const Order = {
         cashTotal = credit.cashTotal;
         downPayment = credit.downPayment;
         weeklyPayment = credit.weeklyPayment;
+        lastPayment = credit.lastPayment;
         creditWeeks = credit.weeks;
       } else if (paymentMethod === 'layaway') {
         cashTotal = total;
@@ -529,7 +535,7 @@ const Order = {
            material = ?, color = ?, notas_fabricante = ?, notas_pedido = ?,
            instrucciones_entrega = ?,
            cash_total = ?, down_payment = ?,
-           weekly_payment = ?, credit_weeks = ?, layaway_deadline = ?
+           weekly_payment = ?, last_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
         [
           data.customerName ?? existing.customerName,
@@ -548,7 +554,7 @@ const Order = {
           data.notasFabricante !== undefined ? data.notasFabricante : existing.notasFabricante,
           data.notasPedido !== undefined ? data.notasPedido : existing.notasPedido,
           data.instruccionesEntrega !== undefined ? data.instruccionesEntrega : existing.instruccionesEntrega,
-          cashTotal, downPayment, weeklyPayment, creditWeeks, layawayDeadline,
+          cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks, layawayDeadline,
           id,
         ],
       );
@@ -762,7 +768,7 @@ const Order = {
          o.payment_method, o.payment_status,
          o.total_amount, o.payment_amount,
          (o.total_amount - o.payment_amount) AS balance,
-         o.cash_total, o.down_payment, o.weekly_payment, o.credit_weeks,
+         o.cash_total, o.down_payment, o.weekly_payment, o.last_payment, o.credit_weeks,
          o.layaway_deadline, o.layaway_converted,
          o.order_status, o.created_at
        FROM orders o
@@ -792,6 +798,7 @@ const Order = {
       cashTotal: r.cash_total != null ? Number(r.cash_total) : null,
       downPayment: r.down_payment != null ? Number(r.down_payment) : null,
       weeklyPayment: r.weekly_payment != null ? Number(r.weekly_payment) : null,
+      lastPayment: r.last_payment != null ? Number(r.last_payment) : null,
       creditWeeks: r.credit_weeks != null ? Number(r.credit_weeks) : null,
       layawayDeadline: r.layaway_deadline ?? null,
       layawayConverted: !!r.layaway_converted,

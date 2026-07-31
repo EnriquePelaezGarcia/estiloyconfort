@@ -27,8 +27,8 @@ export class PricingComponent implements OnInit {
 
   protected form = this.fb.group({
     iva: [DEFAULT_PRICING_CONFIG.iva, [Validators.required, Validators.min(0), Validators.max(100)]],
-    card_commission: [DEFAULT_PRICING_CONFIG.card_commission, [Validators.required, Validators.min(0), Validators.max(100)]],
-    msi_commission: [DEFAULT_PRICING_CONFIG.msi_commission, [Validators.required, Validators.min(0), Validators.max(100)]],
+    card_commission_base: [DEFAULT_PRICING_CONFIG.card_commission_base, [Validators.required, Validators.min(0), Validators.max(100)]],
+    msi_commission_base: [DEFAULT_PRICING_CONFIG.msi_commission_base, [Validators.required, Validators.min(0), Validators.max(100)]],
     rounding_step: [DEFAULT_PRICING_CONFIG.rounding_step, [Validators.required, Validators.min(1)]],
     credit_interest: [DEFAULT_PRICING_CONFIG.credit_interest, [Validators.required, Validators.min(0), Validators.max(100)]],
     credit_initial_pct: [DEFAULT_PRICING_CONFIG.credit_initial_pct, [Validators.required, Validators.min(1), Validators.max(99)]],
@@ -57,12 +57,23 @@ export class PricingComponent implements OnInit {
 
   protected formValueInitialPct = computed(() => this.formValue().credit_initial_pct);
 
+  /**
+   * Comisiones netas derivadas de las base. La terminal cobra IVA sobre su
+   * propia comisión, así que la neta es base × (1 + IVA). Son de solo lectura:
+   * si se guardaran aparte, un cambio de tarifa dejaría el sistema inconsistente.
+   */
+  protected netCommissions = computed(() => {
+    const { card, msi } = PricingService.netCommissions(this.formValue());
+    const pct = (n: number) => `${(n * 100).toFixed(4)} %`;
+    return { card: pct(card), msi: pct(msi) };
+  });
+
   constructor() {
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe((v) => {
       this.formValue.set({
         iva: v.iva ?? DEFAULT_PRICING_CONFIG.iva,
-        card_commission: v.card_commission ?? DEFAULT_PRICING_CONFIG.card_commission,
-        msi_commission: v.msi_commission ?? DEFAULT_PRICING_CONFIG.msi_commission,
+        card_commission_base: v.card_commission_base ?? DEFAULT_PRICING_CONFIG.card_commission_base,
+        msi_commission_base: v.msi_commission_base ?? DEFAULT_PRICING_CONFIG.msi_commission_base,
         rounding_step: v.rounding_step ?? DEFAULT_PRICING_CONFIG.rounding_step,
         credit_interest: v.credit_interest ?? DEFAULT_PRICING_CONFIG.credit_interest,
         credit_initial_pct: v.credit_initial_pct ?? DEFAULT_PRICING_CONFIG.credit_initial_pct,

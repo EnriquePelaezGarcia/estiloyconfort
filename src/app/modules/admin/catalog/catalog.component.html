@@ -184,23 +184,110 @@
           </div>
         </div>
 
-        <p class="form-section">Costos y precios</p>
-        <div class="field-row">
-          <div class="field">
-            <label for="baseCost">Costo prov.</label>
-            <input id="baseCost" type="number" formControlName="baseCost" min="0" step="0.01" />
-            @if (form.get('baseCost')?.invalid && form.get('baseCost')?.touched) {
-              <p class="field__error">Requerido</p>
+        <p class="form-section">Costos por fabricante</p>
+
+        @if (loadingCosts()) {
+          <p class="costs__empty">Cargando costos…</p>
+        } @else if (!manufacturers().length) {
+          <p class="costs__empty">
+            No hay fabricantes activos, así que no se pueden capturar costos ni
+            calcular el precio de venta de este producto.
+          </p>
+        } @else {
+          <p class="costs__hint">
+            Captura lo que te cuesta el mueble con cada proveedor. Deja vacío el de
+            quien no te lo surta. El <strong>costo más alto</strong> es el que define
+            el precio de venta, para que la ganancia nunca quede corta si te toca
+            surtir con el caro.
+          </p>
+
+          <div class="costs">
+            <div class="costs__head">
+              <span>Fabricante</span>
+              <span>Costo</span>
+              <span>Efectivo</span>
+              <span>Tarjeta</span>
+              <span>6 MSI</span>
+              <span>Crédito</span>
+            </div>
+
+            @for (row of costRowsWithProfit(); track row.manufacturerId) {
+              <div class="costs__row" [class.costs__row--base]="row.isBaseCost">
+                <span class="costs__name">
+                  {{ row.manufacturerName }}
+                  @if (row.isBaseCost) {
+                    <span class="costs__badge" title="Su costo define el precio de venta">manda</span>
+                  }
+                </span>
+                <input
+                  type="number"
+                  class="costs__input"
+                  min="0"
+                  step="0.01"
+                  placeholder="—"
+                  [value]="row.cost ?? ''"
+                  (input)="onCostChange(row.manufacturerId, $event)"
+                />
+                <span class="costs__profit">{{ row.profit ? money(row.profit.cash) : '—' }}</span>
+                <span class="costs__profit">{{ row.profit ? money(row.profit.card) : '—' }}</span>
+                <span class="costs__profit">{{ row.profit ? money(row.profit.msi) : '—' }}</span>
+                <span class="costs__profit">{{ row.profit ? money(row.profit.credit) : '—' }}</span>
+              </div>
             }
           </div>
+
+          <p class="costs__base">
+            @if (derivedBaseCost() !== null) {
+              Costo base: <strong>{{ money(derivedBaseCost()) }}</strong>
+              — el más alto, de {{ baseCostManufacturer()?.manufacturerName }}
+            } @else {
+              Captura al menos un costo para calcular el precio.
+            }
+          </p>
+        }
+
+        <p class="form-section">Precio de venta</p>
+
+        <div class="mode-toggle">
+          <button
+            type="button"
+            class="mode-toggle__btn"
+            [class.mode-toggle__btn--active]="priceMode() === 'margin'"
+            (click)="setPriceMode('margin')"
+          >
+            Definir por % de ganancia
+          </button>
+          <button
+            type="button"
+            class="mode-toggle__btn"
+            [class.mode-toggle__btn--active]="priceMode() === 'price'"
+            (click)="setPriceMode('price')"
+          >
+            Definir por precio final
+          </button>
+        </div>
+
+        @if (priceMode() === 'margin') {
           <div class="field">
             <label for="marginPercentage">% Ganancia</label>
-            <input id="marginPercentage" type="number" formControlName="marginPercentage" min="0" max="99" step="0.01" />
+            <input id="marginPercentage" type="number" formControlName="marginPercentage" min="0" max="99" step="0.0001" />
             @if (form.get('marginPercentage')?.invalid && form.get('marginPercentage')?.touched) {
               <p class="field__error">0 – 99</p>
             }
           </div>
-        </div>
+        } @else {
+          <div class="field">
+            <label for="targetCashPrice">Precio de contado deseado</label>
+            <input id="targetCashPrice" type="number" formControlName="targetCashPrice" min="0" step="10" />
+            <p class="field__hint">
+              @if (effectiveMargin() !== null) {
+                Margen que lo produce: <strong>{{ effectiveMargin() }} %</strong>
+              } @else {
+                Debe ser mayor que el costo base.
+              }
+            </p>
+          </div>
+        }
 
         <div class="price-preview">
           <div class="price-preview__item">
@@ -216,6 +303,13 @@
             <span class="price-preview__value">{{ money(computedPrices().price_credit) }}</span>
           </div>
         </div>
+        @if (computedCredit(); as credit) {
+          <p class="price-preview__hint">
+            Crédito: enganche de <strong>{{ money(credit.downPayment) }}</strong>,
+            {{ credit.weeks - 1 }} abonos de <strong>{{ money(credit.weeklyPayment) }}</strong>
+            y un último de <strong>{{ money(credit.lastPayment) }}</strong>.
+          </p>
+        }
         <p class="price-preview__hint">
           Se calculan automáticamente con las
           <a routerLink="/admin/reglas-precios">reglas de precios</a>.

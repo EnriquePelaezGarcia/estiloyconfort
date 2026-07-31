@@ -39,10 +39,12 @@ export interface Product {
   dimensions_height: number | null;
   weight_volumetric: number | null;
   availability_days: number;
+  /**
+   * Costo de referencia del producto. Es un valor DERIVADO: el backend lo
+   * mantiene igual al MÁXIMO de los costos de sus proveedores. No se captura.
+   */
   base_cost: number;
   margin_percentage: number;
-  price_base_no_iva: number;
-  price_with_iva: number;
   price_cash: number;
   price_6msi: number;
   price_credit: number | null;
@@ -55,6 +57,35 @@ export interface Product {
   variants?: ProductVariant[];
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Costo de un producto con un proveedor comercial concreto, más la utilidad que
+ * deja en cada modalidad de pago. El proveedor cuyo costo es el más alto define
+ * el costo base del producto (isBaseCost) y por tanto su precio de venta.
+ */
+export interface ProductManufacturerPrice {
+  manufacturerId: number;
+  manufacturerName: string;
+  cost: number;
+  isActive: boolean;
+  /** true si este es el costo más alto, el que manda sobre el precio de venta. */
+  isBaseCost: boolean;
+  utilidadEfectivo: number | null;
+  utilidadTarjeta: number | null;
+  utilidadMsi: number | null;
+  utilidadCredito: number | null;
+  marginPct: number | null;
+}
+
+/** Respuesta de las rutas de costos por proveedor de un producto. */
+export interface ProductManufacturerPricesResponse {
+  data: ProductManufacturerPrice[];
+  /** El MÁXIMO de los costos: es el que alimenta el precio de venta. */
+  baseCost: number;
+  priceCash: number | null;
+  price6msi: number | null;
+  priceCredit: number | null;
 }
 
 export interface ProductListResponse {

@@ -103,3 +103,46 @@
   font-weight: 700;
   color: vars.$color-primary;
 }
+
+// Comisiones netas: valores derivados, no editables.
+.derived {
+  margin-bottom: vars.$spacing-lg;
+  padding: vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  border: 1px dashed vars.$color-border;
+}
+
+.derived__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: vars.$color-text-secondary;
+}
+
+.derived__hint {
+  margin: 0 0 vars.$spacing-sm;
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+}
+
+.derived__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-lg;
+  margin: 0;
+
+  dt {
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: vars.$color-text;
+  }
+}
