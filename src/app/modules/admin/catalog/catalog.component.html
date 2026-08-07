@@ -121,7 +121,16 @@
         <div class="field-row">
           <div class="field">
             <label for="sku">SKU</label>
-            <input id="sku" type="text" formControlName="sku" placeholder="Opcional" />
+            <input
+              id="sku"
+              type="text"
+              [value]="generatedSku()"
+              readonly
+              tabindex="-1"
+              placeholder="Se genera con el nombre"
+              aria-describedby="sku-hint"
+            />
+            <p id="sku-hint" class="field__hint">Se genera automáticamente</p>
           </div>
           <div class="field">
             <label for="categoryId">Categoría</label>
@@ -137,11 +146,6 @@
         <div class="field">
           <label for="description">Descripción</label>
           <textarea id="description" formControlName="description" rows="2"></textarea>
-        </div>
-
-        <div class="field">
-          <label for="materials">Materiales</label>
-          <input id="materials" type="text" formControlName="materials" placeholder="Ej. madera de pino, tela lino" />
         </div>
 
         <div class="field-row">

@@ -16,6 +16,10 @@ ALTER TABLE orders
   ADD COLUMN notas_pedido TEXT NULL AFTER notas_fabricante,
   ADD COLUMN instrucciones_entrega TEXT NULL AFTER notas_pedido;
 
+-- Nota: originalmente "AFTER materials" — la columna materials (texto libre)
+-- se eliminó en schema_drop_product_materials.sql por ser redundante con
+-- material/color. Se referencia "description" para que instalaciones nuevas
+-- (que ya no crean materials) sigan funcionando.
 ALTER TABLE products
-  ADD COLUMN material ENUM('MDF','Melamina') NULL AFTER materials,
+  ADD COLUMN material ENUM('MDF','Melamina') NULL AFTER description,
   ADD COLUMN color VARCHAR(100) NULL DEFAULT 'blanco' AFTER material;

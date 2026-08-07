@@ -25,6 +25,35 @@ function slugify(value: string): string {
     .slice(0, 200);
 }
 
+/** Palabras que no aportan identidad al SKU y se descartan al armar el prefijo. */
+const SKU_STOP_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'con', 'para', 'en', 'a']);
+
+/**
+ * Prefijo del SKU: iniciales de las palabras significativas del nombre.
+ * "Sala esquinera Roma" -> "SER". Si el nombre es de una sola palabra se usan
+ * sus primeras letras ("Buró" -> "BURO") para que el código siga siendo legible.
+ */
+function skuPrefix(name: string): string {
+  const words = name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+
+  const significant = words.filter((w) => !SKU_STOP_WORDS.has(w.toLowerCase()));
+  const useful = significant.length ? significant : words;
+  if (!useful.length) return '';
+
+  // Con una sola palabra las iniciales quedan en una letra; se usan sus
+  // primeras letras para que el código siga siendo legible.
+  if (useful.length === 1) return useful[0].slice(0, 4);
+
+  const initials = useful.slice(0, 4).map((w) => w[0]).join('');
+  return initials.length >= 3 ? initials : useful[0].slice(0, 3) + initials.slice(1);
+}
+
 interface PendingImage {
   file: File;
   preview: string;
@@ -141,6 +170,7 @@ export class CatalogComponent implements OnInit {
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe((v) => {
       this.marginInput.set(v.marginPercentage ?? null);
       this.targetPriceInput.set(v.targetCashPrice ?? null);
+      this.nameInput.set(v.name ?? '');
     });
   }
 
@@ -156,12 +186,34 @@ export class CatalogComponent implements OnInit {
   protected productImages = signal<ProductImage[]>([]);
   protected pendingImages = signal<PendingImage[]>([]);
 
+  /** Nombre capturado, para derivar el SKU en vivo mientras se escribe. */
+  private nameInput = signal('');
+
+  /**
+   * SKU del producto. No se captura: al crear se deriva del nombre (iniciales) más
+   * un consecutivo por prefijo; al editar se conserva el que ya tenía, porque el
+   * código ya circula en pedidos y etiquetas.
+   */
+  protected generatedSku = computed(() => {
+    const existing = this.editing();
+    if (existing) return existing.sku ?? '';
+
+    const prefix = skuPrefix(this.nameInput().trim());
+    if (!prefix) return '';
+
+    const pattern = new RegExp(`^${prefix}-(\\d+)$`);
+    const lastNumber = this.products().reduce((max, p) => {
+      const match = p.sku?.match(pattern);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+
+    return `${prefix}-${String(lastNumber + 1).padStart(4, '0')}`;
+  });
+
   protected form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(3)]],
-    sku: [''],
     categoryId: [null as number | null],
     description: [''],
-    materials: [''],
     material: [null as ProductMaterial | null],
     color: ['blanco'],
     length: [null as number | null, [Validators.min(0)]],
@@ -282,10 +334,8 @@ export class CatalogComponent implements OnInit {
     this.pendingImages.set([]);
     this.form.reset({
       name: '',
-      sku: '',
       categoryId: null,
       description: '',
-      materials: '',
       material: null,
       color: 'blanco',
       length: null,
@@ -325,10 +375,8 @@ export class CatalogComponent implements OnInit {
     });
     this.form.reset({
       name: product.name,
-      sku: product.sku ?? '',
       categoryId: product.category_id,
       description: product.description ?? '',
-      materials: product.materials ?? '',
       material: product.material ?? null,
       color: product.color ?? 'blanco',
       length: product.dimensions_length,
@@ -385,10 +433,9 @@ export class CatalogComponent implements OnInit {
     const payload: ProductPayload = {
       name: raw.name!.trim(),
       slug: slugify(raw.name!),
-      sku: raw.sku?.trim() || null,
+      sku: this.generatedSku() || null,
       category_id: raw.categoryId ?? null,
       description: raw.description?.trim() || null,
-      materials: raw.materials?.trim() || null,
       material: raw.material ?? null,
       color: raw.color?.trim() || 'blanco',
       dimensions_length: raw.length ?? null,

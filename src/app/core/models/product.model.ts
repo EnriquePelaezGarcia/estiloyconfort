@@ -29,7 +29,6 @@ export interface Product {
   category_name: string | null;
   category_slug: string | null;
   description: string | null;
-  materials: string | null;
   /** Material del mueble (MDF o Melamina). */
   material: ProductMaterial | null;
   /** Color de pintura (MDF) o acabado/veta (Melamina). */
@@ -103,7 +102,6 @@ export interface ProductPayload {
   sku: string | null;
   category_id: number | null;
   description: string | null;
-  materials: string | null;
   material: ProductMaterial | null;
   color: string | null;
   dimensions_length: number | null;

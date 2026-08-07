@@ -20,7 +20,6 @@ const products = [
     sku: 'SOF-IMP-003',
     category_slug: 'salas',
     description: 'Sofá de lujo tapizado en tela de alta calidad con estructura de madera de pino. Ideal para salas amplias.',
-    materials: 'Madera de pino, espuma HR, tela microfibra',
     dimensions_length: 220, dimensions_width: 90, dimensions_height: 85,
     weight_volumetric: 45,
     availability_days: 0,
@@ -35,7 +34,6 @@ const products = [
     sku: 'SOF-ECL-002',
     category_slug: 'salas',
     description: 'Sofá modular contemporáneo con chaise longue intercambiable. Disponible en varios colores.',
-    materials: 'Madera de eucalipto, espuma HR-40, tela lino',
     dimensions_length: 180, dimensions_width: 85, dimensions_height: 80,
     weight_volumetric: 38,
     availability_days: 15,
@@ -50,7 +48,6 @@ const products = [
     sku: 'REC-IMP-K',
     category_slug: 'recamaras',
     description: 'Juego de recámara completo: cama king size, 2 burós y cómoda con espejo. Madera maciza lacada.',
-    materials: 'Madera de cedro macizo, MDF lacado, herrajes cromados',
     dimensions_length: 210, dimensions_width: 180, dimensions_height: 130,
     weight_volumetric: 120,
     availability_days: 21,
@@ -65,7 +62,6 @@ const products = [
     sku: 'COM-ROM-006',
     category_slug: 'comedores',
     description: 'Comedor moderno con mesa de vidrio templado y 6 sillas tapizadas. Estilo minimalista.',
-    materials: 'Vidrio templado 12mm, acero inoxidable, tela antimanchas',
     dimensions_length: 180, dimensions_width: 90, dimensions_height: 75,
     weight_volumetric: 65,
     availability_days: 10,
@@ -80,7 +76,6 @@ const products = [
     sku: 'SIL-EJE-001',
     category_slug: 'oficina',
     description: 'Sillón ergonómico con soporte lumbar ajustable, reposabrazos y altura regulable.',
-    materials: 'Estructura acero, espuma memory foam, piel sintética PU',
     dimensions_length: 68, dimensions_width: 68, dimensions_height: 115,
     weight_volumetric: 18,
     availability_days: 0,
@@ -95,7 +90,6 @@ const products = [
     sku: 'EXT-TEC-004',
     category_slug: 'exterior',
     description: 'Juego de jardín en madera de teca natural: mesa + 3 sillones con cojines impermeables.',
-    materials: 'Madera de teca FSC, aluminio, cojines poliéster outdoor',
     dimensions_length: 120, dimensions_width: 80, dimensions_height: 75,
     weight_volumetric: 55,
     availability_days: 30,
@@ -143,18 +137,18 @@ async function seed() {
     const { category_slug, ...data } = p;
     const [res] = await pool.execute(
       `INSERT INTO products
-        (name, slug, sku, category_id, description, materials,
+        (name, slug, sku, category_id, description,
          dimensions_length, dimensions_width, dimensions_height, weight_volumetric,
          availability_days, base_cost, margin_percentage, price_cash, price_6msi,
          stock_quantity, stock_alert_level, is_featured)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name), category_id = VALUES(category_id),
          price_cash = VALUES(price_cash), price_6msi = VALUES(price_6msi),
          stock_quantity = VALUES(stock_quantity)`,
       [
         data.name, data.slug, data.sku, catMap[category_slug], data.description,
-        data.materials, data.dimensions_length, data.dimensions_width,
+        data.dimensions_length, data.dimensions_width,
         data.dimensions_height, data.weight_volumetric, data.availability_days,
         data.base_cost, data.margin_percentage, data.price_cash, data.price_6msi,
         data.stock_quantity, data.stock_alert_level, data.is_featured ? 1 : 0,

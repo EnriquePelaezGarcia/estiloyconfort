@@ -90,7 +90,7 @@ const Product = {
   },
 
   async create(data) {
-    const fields = ['name','slug','sku','category_id','manufacturer_id','description','materials',
+    const fields = ['name','slug','sku','category_id','manufacturer_id','description',
       'material','color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','base_cost','margin_percentage','price_cash','price_6msi','price_credit',
@@ -104,7 +104,7 @@ const Product = {
   },
 
   async update(id, data) {
-    const allowed = ['name','slug','sku','category_id','manufacturer_id','description','materials',
+    const allowed = ['name','slug','sku','category_id','manufacturer_id','description',
       'material','color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','base_cost','margin_percentage','price_cash','price_6msi','price_credit',

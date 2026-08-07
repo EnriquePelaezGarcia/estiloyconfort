@@ -133,14 +133,20 @@
         </div>
 
         <!-- Especificaciones técnicas -->
-        @if (product()!.materials || product()!.dimensions_length) {
+        @if (product()!.material || product()!.color || product()!.dimensions_length) {
           <div class="detail__specs">
             <h3 class="detail__specs-title">Especificaciones</h3>
             <dl class="specs-list">
-              @if (product()!.materials) {
+              @if (product()!.material) {
                 <div class="specs-list__row">
-                  <dt>Materiales</dt>
-                  <dd>{{ product()!.materials }}</dd>
+                  <dt>Material</dt>
+                  <dd>{{ product()!.material }}</dd>
+                </div>
+              }
+              @if (product()!.color) {
+                <div class="specs-list__row">
+                  <dt>Color / Acabado</dt>
+                  <dd>{{ product()!.color }}</dd>
                 </div>
               }
               @if (product()!.dimensions_length) {

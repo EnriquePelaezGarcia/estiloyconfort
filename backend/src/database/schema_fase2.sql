@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS products (
   sku                        VARCHAR(100)   UNIQUE,
   category_id                INT,
   description                TEXT,
-  materials                  VARCHAR(500),
   dimensions_length          DECIMAL(8,2),
   dimensions_width           DECIMAL(8,2),
   dimensions_height          DECIMAL(8,2),
