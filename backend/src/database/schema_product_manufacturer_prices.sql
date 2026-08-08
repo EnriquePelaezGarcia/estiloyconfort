@@ -1,12 +1,12 @@
 -- =====================================================================
 -- Mueblería Estilo y Confort - Migración: costos por fabricante.
---   El mismo modelo se le compra a varios proveedores a costos distintos.
+--   El mismo modelo se le compra a varios fabricantes a costos distintos.
 --   Esta tabla guarda un costo por (producto, fabricante); el costo base del
 --   producto (products.base_cost) pasa a ser el MÁXIMO de ellos, criterio
 --   conservador para que el precio de venta nunca quede corto si toca surtir
---   con el proveedor caro.
+--   con el fabricante caro.
 --
---   NO existe fabricante preferido: el admin asigna el proveedor de cada
+--   NO existe fabricante preferido: el admin asigna el fabricante de cada
 --   pedido a mano. Por eso no hay columna is_preferred.
 --
 -- Ejecutar: node src/database/run-schema.js schema_product_manufacturer_prices.sql

@@ -262,10 +262,12 @@
 .costs__head,
 .costs__row {
   display: grid;
-  grid-template-columns: minmax(9rem, 1.4fr) minmax(7rem, 1fr) repeat(4, minmax(5.5rem, 0.9fr));
+  grid-template-columns:
+    minmax(9rem, 1.4fr) minmax(7rem, 1fr) minmax(5rem, 0.6fr)
+    repeat(4, minmax(5.5rem, 0.9fr));
   gap: vars.$spacing-sm;
   align-items: center;
-  min-width: 44rem;
+  min-width: 50rem;
 }
 
 .costs__head {
@@ -284,6 +286,25 @@
   &--base {
     background: rgba(vars.$color-primary, 0.06);
     border-color: rgba(vars.$color-primary, 0.25);
+  }
+
+  // Sin distintivo no habría forma de saber por qué un costo alto no movió nada.
+  &--no-price {
+    background: rgba(vars.$color-text-secondary, 0.05);
+    border-style: dashed;
+    border-color: rgba(vars.$color-text-secondary, 0.3);
+  }
+}
+
+.costs__check {
+  display: flex;
+  justify-content: center;
+
+  input {
+    width: 18px;
+    height: 18px;
+    accent-color: vars.$color-primary;
+    cursor: pointer;
   }
 }
 
@@ -304,6 +325,12 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+
+  &--muted {
+    background: transparent;
+    border: 1px dashed rgba(vars.$color-text-secondary, 0.5);
+    color: vars.$color-text-secondary;
+  }
 }
 
 .costs__input {

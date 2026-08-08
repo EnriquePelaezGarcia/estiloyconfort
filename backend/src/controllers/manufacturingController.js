@@ -21,6 +21,11 @@ function mapManufacturer(r) {
     notes: r.notes ?? null,
     isActive: !!r.is_active,
     createdAt: r.created_at,
+    /** Logins del portal ligados a este fabricante (0 = no entra al sistema). */
+    userCount: r.user_count != null ? Number(r.user_count) : undefined,
+    hasUsers: r.user_count != null ? Number(r.user_count) > 0 : undefined,
+    /** Productos con costo capturado: sin ninguno no aparece en los selects. */
+    productCount: r.product_count != null ? Number(r.product_count) : undefined,
   };
 }
 
@@ -56,7 +61,7 @@ function mapPo(r) {
 }
 
 /**
- * Módulo Fabricante (panel admin). Gestiona fabricantes/proveedores,
+ * Módulo Fabricante (panel admin). Gestiona fabricantes,
  * órdenes de compra, la lista de producción y el catálogo por fabricante.
  */
 const manufacturingController = {
@@ -64,9 +69,13 @@ const manufacturingController = {
   // GET /api/manufacturing/manufacturers
   listManufacturers: asyncHandler(async (req, res) => {
     const includeInactive = req.query.includeInactive === 'true';
-    const where = includeInactive ? '' : 'WHERE is_active = TRUE';
+    const where = includeInactive ? '' : 'WHERE m.is_active = TRUE';
     const [rows] = await pool.execute(
-      `SELECT * FROM manufacturers ${where} ORDER BY name`,
+      `SELECT m.*,
+              (SELECT COUNT(*) FROM users u WHERE u.manufacturer_id = m.id) AS user_count,
+              (SELECT COUNT(*) FROM product_manufacturer_prices pmp
+                WHERE pmp.manufacturer_id = m.id AND pmp.is_active = TRUE) AS product_count
+       FROM manufacturers m ${where} ORDER BY m.name`,
     );
     res.json({ data: rows.map(mapManufacturer) });
   }),
@@ -235,8 +244,8 @@ const manufacturingController = {
 
   // ─── CATÁLOGO POR FABRICANTE ─────────────────────────────────────────────────
   // GET /api/manufacturing/catalog?manufacturerId=
-  // Un mismo producto se le compra a varios proveedores, así que aparece una vez
-  // bajo CADA uno, con el costo específico de ese proveedor (no el costo base).
+  // Un mismo producto se le compra a varios fabricantes, así que aparece una vez
+  // bajo CADA uno, con el costo específico de ese fabricante (no el costo base).
   catalogByManufacturer: asyncHandler(async (req, res) => {
     const { manufacturerId } = req.query;
     const conditions = ['p.is_active = TRUE', 'pmp.is_active = TRUE'];
@@ -245,7 +254,7 @@ const manufacturingController = {
     const where = `WHERE ${conditions.join(' AND ')}`;
     const [rows] = await pool.execute(
       `SELECT p.id, p.name, p.sku, p.price_cash, p.stock_quantity, p.base_cost,
-              pmp.cost AS supplier_cost,
+              pmp.cost AS manufacturer_cost,
               pmp.manufacturer_id, m.name AS manufacturer_name,
               c.name AS category_name
        FROM products p
@@ -258,13 +267,13 @@ const manufacturingController = {
     );
     res.json({
       data: rows.map((r) => {
-        const cost = Number(r.supplier_cost);
+        const cost = Number(r.manufacturer_cost);
         const priceCash = r.price_cash != null ? Number(r.price_cash) : null;
         return {
           id: r.id,
           name: r.name,
           sku: r.sku,
-          // El costo de ESTE proveedor, no el costo base del producto.
+          // El costo de ESTE fabricante, no el costo base del producto.
           baseCost: cost,
           priceCash,
           // El costo base es el más alto; marcamos a quién le corresponde.

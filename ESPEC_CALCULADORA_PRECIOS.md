@@ -5,6 +5,14 @@
 **Audiencia:** un desarrollador o un modelo de lenguaje que parte de cero.
 **Moneda:** peso mexicano (MXN). **País:** México. **Régimen fiscal asumido:** ver §10.
 
+> **Nota de terminología (posterior a este documento).** El Excel llama
+> "proveedor" a la empresa que surte el mueble. En el sistema esa entidad se
+> llama **Fabricante** (tabla `manufacturers`) y es el único concepto: los
+> usuarios del portal `/fabricante` son logins *de* un fabricante. Al leer
+> "proveedor" aquí, entiéndase "fabricante" —salvo en §3.3 y §11, donde
+> "proveedor de pagos / de terminal" se refiere al procesador de tarjetas—.
+> Ver [plan-unificar-fabricante.md](plan-unificar-fabricante.md).
+
 ---
 
 ## 1. Contexto de negocio
@@ -203,6 +211,8 @@ El Excel no resuelve esta decisión; solo publica `V`.
 ### 5.6 El costo base toma el máximo entre proveedores
 
 `E = MAX(C, D)`. Si un proveedor sube su precio, el precio de venta sube aunque se siga surtiendo con el otro. Es deliberado y conservador. Al modelarlo en base de datos, conviene guardar los costos por proveedor en filas separadas (`producto_proveedor`) en lugar de dos columnas fijas, para poder incorporar un tercer proveedor sin cambiar el esquema.
+
+**Cómo quedó implementado:** tabla `product_manufacturer_prices` (una fila por producto y fabricante), y el máximo se calcula solo sobre las filas con `affects_base_cost = TRUE`. Esa bandera permite registrar un costo puntualmente caro —una compra única— para asignarlo y calcular la utilidad real sin que arrastre el precio al público.
 
 ### 5.7 `% Ganancia` no es una política: es un dial de ajuste
 

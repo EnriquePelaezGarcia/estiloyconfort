@@ -28,3 +28,67 @@
   border-radius: 4px;
   font-size: 0.875rem;
 }
+
+/**
+ * El estado dejó de ser de solo lectura: el admin puede marcar listo cualquier
+ * item, que es la única vía para los fabricantes que no entran al sistema.
+ */
+.ready-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid vars.$color-border;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    font-size: 1.125rem;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: vars.$color-primary;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: progress;
+  }
+
+  &--done {
+    border-color: vars.$color-success;
+    color: vars.$color-success;
+  }
+}
+
+.ready-by {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+}
+
+/** Sin costo capturado no hay a quién asignar: se dice qué hacer, no solo qué falta. */
+.no-costs {
+  display: inline-block;
+  max-width: 15rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+
+  a {
+    color: vars.$color-primary;
+    text-decoration: underline;
+  }
+}
+
+@media print {
+  .ready-toggle {
+    border: none;
+    padding: 0;
+
+    .material-symbols-outlined {
+      display: none;
+    }
+  }
+}

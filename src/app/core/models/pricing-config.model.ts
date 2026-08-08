@@ -50,7 +50,7 @@ export interface CalculatedPrices {
   credit_interest_amount: number | null;
 }
 
-/** Utilidad que deja un proveedor concreto, por modalidad de pago. */
+/** Utilidad que deja un fabricante concreto, por modalidad de pago. */
 export interface ProfitBreakdown {
   cash: number;
   card: number;

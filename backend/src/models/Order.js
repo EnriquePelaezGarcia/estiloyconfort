@@ -27,8 +27,14 @@ function mapItem(row) {
     unitPrice: Number(row.unit_price),
     subtotal: Number(row.subtotal),
     isReady: !!row.is_ready,
+    readyAt: row.ready_at ?? null,
+    readyByName: row.ready_by_name ?? null,
     requiresFabrication: !!row.requires_fabrication,
-    manufacturerUserId: row.manufacturer_user_id ?? null,
+    /** Fabricante al que se le compra este item (tabla manufacturers). */
+    manufacturerId: row.manufacturer_id ?? null,
+    manufacturerName: row.manufacturer_name ?? null,
+    /** Costo congelado al asignar el fabricante. */
+    unitCost: row.unit_cost != null ? Number(row.unit_cost) : null,
   };
 }
 
@@ -170,7 +176,11 @@ const Order = {
     if (!row) return null;
     const order = mapOrder(row);
     const [items] = await pool.execute(
-      'SELECT * FROM order_items WHERE order_id = ? ORDER BY id', [id],
+      `SELECT oi.*, m.name AS manufacturer_name, rb.full_name AS ready_by_name
+       FROM order_items oi
+       LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
+       LEFT JOIN users rb ON rb.id = oi.ready_by
+       WHERE oi.order_id = ? ORDER BY oi.id`, [id],
     );
     const [payments] = await pool.execute(
       `SELECT p.*, u.full_name AS collected_by_name
@@ -702,11 +712,21 @@ const Order = {
     }
   },
 
-  /** Marca un item como listo y, si todos lo están, el pedido pasa a 'ready'. */
-  async markItemReady(orderId, itemId, isReady = true) {
+  /**
+   * Marca un item como listo y, si todos lo están, el pedido pasa a 'ready'.
+   *
+   * Se registra quién lo marcó y cuándo: `is_ready` mezcla dos hechos —"el
+   * fabricante reporta que ya está" y "el admin lo da por recibido"— y esas dos
+   * columnas son lo único que permite distinguirlos. Al desmarcar vuelven a NULL.
+   *
+   * @param {number|null} userId usuario autenticado que hace el cambio
+   */
+  async markItemReady(orderId, itemId, isReady = true, userId = null) {
     await pool.execute(
-      'UPDATE order_items SET is_ready = ? WHERE id = ? AND order_id = ?',
-      [isReady ? 1 : 0, itemId, orderId],
+      `UPDATE order_items
+          SET is_ready = ?, ready_by = ?, ready_at = ?
+        WHERE id = ? AND order_id = ?`,
+      [isReady ? 1 : 0, isReady ? userId : null, isReady ? new Date() : null, itemId, orderId],
     );
     const [[{ pending }]] = await pool.execute(
       'SELECT SUM(is_ready = FALSE) AS pending FROM order_items WHERE order_id = ?', [orderId],

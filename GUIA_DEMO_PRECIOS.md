@@ -1,7 +1,7 @@
 # Guía de demo — Costos por fabricante y precios
 
 Lista de pruebas para mostrar a los empleados cómo funciona el nuevo manejo de
-costos por proveedor y el cálculo de precios. Todas las rutas y cifras de este
+costos por fabricante y el cálculo de precios. Todas las rutas y cifras de este
 documento están verificadas contra la base de datos actual.
 
 ---
@@ -21,24 +21,19 @@ cd ..             →  npm start          (web en http://localhost:4200)
 |---|---|---|
 | Administrador | `admin@estiloyconfort.com` | `Admin1234` |
 | Vendedor | `vendedor@estiloyconfort.com` | `Demo1234` |
-| Fabricante (taller) | `fabricante@estiloyconfort.com` | `Demo1234` |
 | Repartidor | `repartidor@estiloyconfort.com` | `Demo1234` |
+| Fabricante | `angel.mondragon@estiloyconfort.com` | `Demo1234` |
+| Fabricante | `carlos.garcia@estiloyconfort.com` | `Demo1234` |
 
-> Los usuarios `angel.mondragon@` y `carlos.garcia@` también existen con rol
-> fabricante, pero su contraseña no viene de los seeds de demo. Si no entras con
-> `Demo1234`, usa `fabricante@estiloyconfort.com` para esta parte.
+> Los logins de fabricante los crea `seed_manufacturer_users.js`, que además los
+> liga a su empresa. Si esos usuarios ya existían en tu base con otra contraseña,
+> el seed la respeta: solo agrega el vínculo.
 
-**Concepto que hay que explicar primero.** En el sistema la palabra "fabricante"
-significa dos cosas distintas, y conviene aclararlo de entrada para que nadie se
-confunda:
-
-| | Qué es | Dónde aparece |
-|---|---|---|
-| **Proveedor** | La empresa a la que le **compramos** el mueble (Angel Mondragon, Carlos Garcia) | Columna "Proveedor" |
-| **Fabricante (taller)** | La persona que **arma** el mueble y entra al sistema con su usuario | Columna "Fabricante (taller)" |
-
-En la pantalla de Pedidos a fábrica los dos selectores están juntos, por eso
-están etiquetados diferente.
+**Concepto que hay que explicar primero.** "Fabricante" significa **una sola
+cosa**: la empresa o taller al que se le compra el mueble (Angel Mondragon,
+Carlos Garcia). Puede tener un usuario para entrar al sistema y reportar sus
+muebles como listos, o no tenerlo —a quien se le compra una sola vez no hace
+falta darle acceso, y en ese caso el admin marca los muebles listos por él—.
 
 ---
 
@@ -59,7 +54,7 @@ están etiquetados diferente.
 5. El precio de contado es **$4,290**.
 
 **Qué explicar:** el precio se calcula con el costo **más caro**. Así, si nos
-toca surtir con el proveedor caro, la ganancia sigue siendo la planeada. Si
+toca surtir con el fabricante caro, la ganancia sigue siendo la planeada. Si
 surtimos con el barato, ganamos más.
 
 **Prueba a la vista de todos:** en el mismo renglón se ve la ganancia de cada uno.
@@ -80,7 +75,7 @@ cuentas a mano.
 3. Guarda. Vuelve a abrir el producto y confirma que quedó así.
 4. **Regresa el costo a `2350`** y guarda. El precio vuelve exactamente a **$4,290**.
 
-**Qué explicar:** nadie captura porcentajes de ganancia por proveedor. Solo se
+**Qué explicar:** nadie captura porcentajes de ganancia por fabricante. Solo se
 captura lo que nos cuesta, y el sistema hace el resto.
 
 > ⚠️ Deja el costo en 2350 antes de seguir, para que el resto de la demo cuadre.
@@ -112,7 +107,7 @@ sistema despeja el porcentaje.
 
 **Objetivo:** que entiendan qué le cobran al cliente en cada forma de pago.
 
-1. Abre **"Espejo Vanity"** (el más sencillo: cuesta $1,350 con los dos proveedores).
+1. Abre **"Espejo Vanity"** (el más sencillo: cuesta $1,350 con los dos fabricantes).
 2. En el recuadro de precios verán:
 
    | Forma de pago | Precio |
@@ -136,7 +131,7 @@ sistema despeja el porcentaje.
 
 ---
 
-## 5. El vendedor no ve proveedores ni costos
+## 5. El vendedor no ve fabricantes ni costos
 
 **Objetivo:** dejar claro qué información ve cada rol.
 
@@ -144,7 +139,7 @@ sistema despeja el porcentaje.
 2. Ve a **Nuevo pedido** (`/vendedor/nuevo`).
 3. Recorre **todo** el flujo de creación del pedido.
 
-**Qué comprobar:** en ningún paso aparece un selector de proveedor ni de
+**Qué comprobar:** en ningún paso aparece un selector de fabricante ni de
 fabricante, ni el costo de compra. El vendedor solo ve precios de venta.
 
 **Qué explicar:** decidir a quién se le compra es decisión del administrador, no
@@ -152,7 +147,7 @@ del vendedor. Y los costos de compra no se muestran en el punto de venta.
 
 ---
 
-## 6. Crear un pedido y asignarle proveedor
+## 6. Crear un pedido y asignarle fabricante
 
 **Objetivo:** el flujo completo, que es el corazón del cambio.
 
@@ -161,21 +156,23 @@ del vendedor. Y los costos de compra no se muestran en el punto de venta.
 2. Cierra sesión y entra como **admin**.
 3. Ve a **Fabricante → Pedidos a fábrica**
    (`/admin/fabricante/pedidos-fabrica`).
-4. Busca el pedido que acabas de crear. Verás **tres columnas nuevas**:
-   - **Fabricante (taller)** — quién lo arma
-   - **Proveedor** — a quién se le compra, con su costo a la vista
+4. Busca el pedido que acabas de crear. Verás **dos columnas nuevas**:
+   - **Fabricante** — a quién se le compra, con su costo a la vista
    - **Utilidad** — lo que deja la pieza
+
+   Si el producto no tiene ningún costo capturado, en vez del selector aparece un
+   aviso con liga a Catálogo: sin costo no hay a quién asignar.
 
 **Qué comprobar paso a paso:**
 
 | Paso | Qué debe pasar |
 |---|---|
-| Al aparecer el pedido | Proveedor dice **"Sin asignar"** y Utilidad dice **"—"** |
-| Elige *Angel Mondragon — $2,450* | Aparece "Proveedor asignado" y la Utilidad muestra **$1,840** |
+| Al aparecer el pedido | Fabricante dice **"Sin asignar"** y Utilidad dice **"—"** |
+| Elige *Angel Mondragon — $2,450* | Aparece "Fabricante asignado" y la Utilidad muestra **$1,840** |
 | Cambia a *Carlos Garcia — $2,350* | La Utilidad cambia a **$1,940** |
 | Regresa a **"Sin asignar"** | La Utilidad vuelve a "—" |
 
-**Qué explicar:** nada se asigna solo. Ningún proveedor es el predeterminado.
+**Qué explicar:** nada se asigna solo. Ningún fabricante es el predeterminado.
 El administrador decide caso por caso, según quién tenga material, quién esté
 menos cargado de trabajo o quién nos convenga en ese momento.
 
@@ -197,15 +194,15 @@ Es el punto más difícil de entender y el más valioso.
 - Pero si creas un pedido **nuevo** del mismo producto y le asignas Angel, ese
   nuevo mostrará la utilidad con el costo nuevo.
 
-**Qué explicar:** cuando se asigna el proveedor, el sistema **congela** el costo
+**Qué explicar:** cuando se asigna el fabricante, el sistema **congela** el costo
 de ese momento. Así los reportes de meses pasados no se reescriben cada vez que
-un proveedor sube sus precios. Es lo mismo que ya se hace con el precio de venta.
+un fabricante sube sus precios. Es lo mismo que ya se hace con el precio de venta.
 
 > ⚠️ Al terminar, **regresa el costo de Angel a 2450** para dejar el catálogo como estaba.
 
 ---
 
-## 8. Un producto, dos proveedores, en el catálogo por fabricante
+## 8. Un producto, dos fabricantes, en el catálogo por fabricante
 
 1. Como admin, ve a **Fabricante → Catálogo**
    (`/admin/fabricante/catalogo`).
@@ -213,9 +210,9 @@ un proveedor sube sus precios. Es lo mismo que ya se hace con el precio de venta
 3. Filtra por **Carlos Garcia**: aparecen **los mismos muebles**, pero con los
    costos de Carlos.
 
-**Qué explicar:** antes cada producto se podía asociar a un solo proveedor. Ahora
+**Qué explicar:** antes cada producto se podía asociar a un solo fabricante. Ahora
 el mismo mueble aparece bajo los dos, cada uno con su precio de compra. Es la
-lista que se le manda a cada proveedor.
+lista que se le manda a cada fabricante.
 
 ---
 
@@ -246,8 +243,71 @@ comisión real es más alta que la de su contrato. El sistema hace esa cuenta so
 2. Muestra el análisis de márgenes.
 
 **Qué explicar:** la utilidad que se ve aquí ya usa el costo real de cada venta,
-no un costo promedio. Las piezas que todavía no tienen proveedor asignado se
+no un costo promedio. Las piezas que todavía no tienen fabricante asignado se
 cuentan aparte, porque su utilidad es una estimación, no un dato exacto.
+
+---
+
+## 11. Dar de alta un fabricante nuevo
+
+**Objetivo:** mostrar que ya no hace falta tocar la base de datos para empezar a
+comprarle a alguien más.
+
+1. Como admin, ve a **Fabricante → Fabricantes**
+   (`/admin/fabricante/fabricantes`) y pulsa **Nuevo fabricante**.
+2. Captura el nombre (p. ej. *Fabricante de Salas*) y **deja sin marcar**
+   "Crear también su acceso al sistema". Guarda.
+3. En la tabla queda con **Acceso: No** y **0 productos con costo**.
+4. Ve a **Catálogo**, abre un producto y captúrale un costo a ese fabricante.
+5. Vuelve a **Pedidos a fábrica**: ya aparece en el selector de ese producto.
+   Antes de capturar el costo **no** aparecía.
+
+Repite el alta marcando el checkbox: se despliegan correo, contraseña y nombre de
+la persona, y al guardar queda creado el usuario ya ligado a esa empresa
+(**Acceso: Sí**). Si el correo ya estaba en uso, el fabricante se crea igual y el
+sistema avisa que el acceso hay que darlo desde **Usuarios**.
+
+**Qué explicar:** el acceso es opcional a propósito. Fabricante recurrente → con
+acceso, para que reporte él mismo. Compra única → sin acceso.
+
+---
+
+## 12. El admin marca muebles como listos
+
+**Objetivo:** cerrar el hueco que deja un fabricante sin acceso al sistema.
+
+1. Asígnale un item al fabricante sin acceso del paso 11.
+2. En la columna **Estado** de Pedidos a fábrica, pulsa **Pendiente**: cambia a
+   **Listo** y debajo aparece quién lo marcó y cuándo.
+3. Entra como **Angel Mondragon**, marca listo uno de *sus* items, y compara: ahí
+   el nombre que queda registrado es el suyo, no el del admin.
+
+**Qué explicar:** "Listo" ya no significa solo *"el fabricante lo reportó"*;
+también puede ser *"el admin lo dio por recibido"*. Por eso se guarda quién lo
+marcó. Sin este botón, los pedidos de un fabricante sin acceso se atorarían.
+
+---
+
+## 13. Un costo que no mueve el precio
+
+**Objetivo:** poder registrar una compra cara y puntual sin subirle el precio al
+público.
+
+1. En **Catálogo**, abre *Zapatera Vanity* y captúrale a un fabricante un costo
+   más alto que el actual, **desmarcando** la casilla **Define precio**.
+2. La fila queda con el distintivo *sin precio* y el costo base **no cambia**: el
+   precio de contado sigue en $4,290.
+3. Guarda y ve a **Pedidos a fábrica**: ese fabricante **sí** aparece en el
+   selector con su costo. Al asignarlo, la utilidad del item baja y refleja el
+   costo real que se pagó.
+4. Repite con la casilla marcada: el precio de contado sube al instante.
+
+**Qué explicar:** el costo siempre cuenta para saber cuánto ganamos. La casilla
+solo decide si además empuja el precio de mostrador.
+
+> ⚠️ Guardar un costo con la casilla marcada cambia el precio público **de
+> inmediato y sin confirmación**. Un cero de más en el costo se va derecho a la
+> web. Revísalo antes de guardar.
 
 ---
 
@@ -256,18 +316,22 @@ cuentan aparte, porque su utilidad es una estimación, no un dato exacto.
 | # | Prueba | Resultado esperado |
 |---|---|---|
 | 1 | Zapatera Vanity: dos costos | Base $2,450 (el alto), contado $4,290 |
-| 1 | Utilidad por proveedor | Angel $1,840 · Carlos $1,940 |
+| 1 | Utilidad por fabricante | Angel $1,840 · Carlos $1,940 |
 | 2 | Subir Carlos a $2,950 | Contado sube a $5,170; al regresarlo, vuelve a $4,290 |
 | 3 | Modo inverso con $7,990 | Despeja el margen y aterriza en $7,990 |
 | 3 | Modo inverso con $7,995 | Lo sube a $8,000 (redondeo a la decena) |
 | 4 | Espejo Vanity | $2,290 · $2,530 · $2,800 |
 | 4 | Crédito | $980 + 11×$152 + $148 = $2,800 exacto |
-| 5 | Punto de venta como vendedor | No aparece proveedor ni costo en ningún paso |
-| 6 | Pedido nuevo | Proveedor "Sin asignar", utilidad "—" |
-| 6 | Asignar y reasignar proveedor | La utilidad cambia con cada proveedor |
+| 5 | Punto de venta como vendedor | No aparece fabricante ni costo en ningún paso |
+| 6 | Pedido nuevo | Fabricante "Sin asignar", utilidad "—" |
+| 6 | Asignar y reasignar fabricante | La utilidad cambia con cada fabricante |
 | 7 | Subir costo con pedido ya asignado | El pedido conserva su utilidad anterior |
 | 8 | Catálogo por fabricante | El mismo mueble bajo los dos, con costos distintos |
 | 9 | Comisiones netas | 2.79 % → 3.2364 % · 7.69 % → 8.9204 % |
+| 11 | Alta de fabricante sin acceso | Queda con Acceso "No" y 0 productos con costo |
+| 11 | Aparece en el selector | Solo después de capturarle un costo en Catálogo |
+| 12 | Admin marca listo | El estado cambia y queda registrado quién lo marcó |
+| 13 | Costo sin "Define precio" | El precio no se mueve, pero el fabricante sí es asignable |
 
 ---
 
@@ -302,9 +366,18 @@ Porque las cuotas se redondean al peso hacia arriba. Si fueran todas iguales, el
 cliente terminaría pagando unos pesos de más. La última se ajusta para que la
 suma dé exacto.
 
-**¿Qué pasa si un proveedor sube sus precios?**
+**¿Qué pasa si un fabricante sube sus precios?**
 Se captura el costo nuevo y el sistema reprecia ese producto solo. Los pedidos
-que ya tenían proveedor asignado conservan su costo y su utilidad histórica.
+que ya tenían fabricante asignado conservan su costo y su utilidad histórica.
 
-**¿Un mueble tiene que tener costo de los dos proveedores?**
+**¿Un mueble tiene que tener costo de los dos fabricantes?**
 No. Se deja vacío el de quien no nos lo surta. Basta uno para calcular el precio.
+
+**¿Todo fabricante necesita usuario y contraseña?**
+No. El acceso se decide al darlo de alta y se puede agregar después desde
+Usuarios. Al que no entra al sistema, el admin le marca los muebles como listos.
+
+**Si desactivo a un fabricante, ¿pierdo los pedidos que le asigné?**
+No. Desaparece de los selectores para nuevas asignaciones, pero los items que ya
+tenía conservan su fabricante, su costo congelado y su utilidad. Finanzas no
+cambia.

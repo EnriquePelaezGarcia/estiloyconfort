@@ -64,15 +64,19 @@
                 <td class="num strong">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
                 @if (isAdmin) {
                   <td data-label="Fabricante">
-                    @if (it.requiresFabrication) {
+                    @if (it.manufacturerOptions?.length) {
                       <select (change)="onAssignManufacturer(it, $event)" [disabled]="assigningManufacturer().has(it.id!)">
-                        <option value="" [selected]="it.manufacturerUserId === null || it.manufacturerUserId === undefined">Sin asignar</option>
-                        @for (m of manufacturers(); track m.id) {
-                          <option [value]="m.id" [selected]="it.manufacturerUserId === m.id">{{ m.fullName }}</option>
+                        <option value="" [selected]="!it.manufacturerId">Sin asignar</option>
+                        @for (m of it.manufacturerOptions; track m.manufacturerId) {
+                          <option [value]="m.manufacturerId" [selected]="it.manufacturerId === m.manufacturerId">
+                            {{ m.manufacturerName }} — {{ money(m.cost) }}
+                          </option>
                         }
                       </select>
                     } @else {
-                      <span class="muted">—</span>
+                      <span class="muted no-costs">
+                        Sin costo capturado para este producto. Captúralo en Catálogo para poder asignarlo.
+                      </span>
                     }
                   </td>
                 }

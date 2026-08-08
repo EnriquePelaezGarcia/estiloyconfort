@@ -1,12 +1,13 @@
 -- =====================================================================
--- Mueblería Estilo y Confort - Migración: proveedor y costo real por item.
---   - order_items.manufacturer_id: PROVEEDOR COMERCIAL (tabla manufacturers)
---     que surte ese item. Lo asigna el admin a mano, siempre. No confundir con
---     manufacturer_user_id, que es el OPERARIO (usuario con rol manufacturer)
---     que arma el mueble.
+-- Mueblería Estilo y Confort - Migración: fabricante y costo real por item.
+--   - order_items.manufacturer_id: FABRICANTE (tabla manufacturers) que surte
+--     ese item. Lo asigna el admin a mano, siempre.
 --   - order_items.unit_cost: costo congelado al momento de asignar el
---     proveedor. Igual que unit_price, es un snapshot: si mañana sube el costo,
+--     fabricante. Igual que unit_price, es un snapshot: si mañana sube el costo,
 --     el pedido viejo conserva su utilidad real histórica.
+--
+--   El nombre del archivo es histórico: la columna nació como "proveedor",
+--   concepto que schema_unify_manufacturer.sql colapsó en Fabricante.
 --
 --   Ambas nacen en NULL y ese es su estado normal hasta que el admin asigne.
 --

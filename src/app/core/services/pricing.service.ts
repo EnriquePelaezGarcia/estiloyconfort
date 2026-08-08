@@ -186,7 +186,7 @@ export class PricingService {
   }
 
   /**
-   * Utilidad que deja un proveedor concreto, por modalidad de pago.
+   * Utilidad que deja un fabricante concreto, por modalidad de pago.
    * La utilidad de 6 MSI descuenta la comisión de tarjeta sobre el precio a
    * 6 MSI (no sobre el de contado, como hacía el Excel).
    */

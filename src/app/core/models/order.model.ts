@@ -1,3 +1,5 @@
+import { ManufacturerOption } from './manufacturing.model';
+
 export type OrderStatus =
   | 'pending'
   | 'fabricating'
@@ -36,10 +38,18 @@ export interface OrderItem {
   unitPrice: number;
   subtotal?: number;
   isReady?: boolean;
+  /** Quién marcó listo el item y cuándo (null si nadie lo ha marcado). */
+  readyByName?: string | null;
+  readyAt?: string | null;
   /** TRUE si el mueble se fabrica sobre pedido (no admite cambio en pedidos ya cobrados). */
   requiresFabrication?: boolean;
-  /** Id del usuario (rol fabricante) asignado por el admin a este item, si ya se asignó. */
-  manufacturerUserId?: number | null;
+  /** Fabricante al que se le compra este item, si el admin ya lo asignó. */
+  manufacturerId?: number | null;
+  manufacturerName?: string | null;
+  /** Costo congelado al asignar el fabricante. */
+  unitCost?: number | null;
+  /** Fabricantes con costo registrado para este producto (solo en el detalle de admin). */
+  manufacturerOptions?: ManufacturerOption[];
 }
 
 export interface OrderPayment {

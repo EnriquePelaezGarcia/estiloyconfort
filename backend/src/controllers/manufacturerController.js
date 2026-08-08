@@ -7,14 +7,33 @@ const { pool } = require('../config/database');
 const FABRICATION_STATUSES = ['pending', 'fabricating'];
 
 /**
+ * Fabricante (fila en `manufacturers`) que representa este login, o null si
+ * todavía no se le ligó ninguno. `req.user` solo trae { id, role }, por eso se
+ * resuelve contra la BD en vez de leerlo del token.
+ */
+async function manufacturerIdOf(userId) {
+  const [[row]] = await pool.execute('SELECT manufacturer_id FROM users WHERE id = ?', [userId]);
+  return row?.manufacturer_id ?? null;
+}
+
+/**
  * Controlador del módulo Fabricante (rol: manufacturer).
  * Vista de solo lectura de los items por fabricar + marcar items listos.
- * Cada fabricante solo ve los items que el admin le asignó explícitamente
- * (order_items.manufacturer_user_id); nada aparece antes de asignarse.
+ *
+ * Cada fabricante ve los items que el admin le asignó explícitamente
+ * (order_items.manufacturer_id); nada aparece antes de asignarse. El filtro es
+ * por FABRICANTE, no por usuario: si una empresa tiene dos logins, ambos ven la
+ * misma carga de trabajo.
+ *
+ * Un usuario con rol fabricante al que aún no se le ligó empresa no ve nada y
+ * no puede escribir; es un estado válido, no un error.
  */
 const manufacturerController = {
   // GET /api/manufacturer/weekly-list — items por fabricar agregados por producto/SKU
   weeklyList: asyncHandler(async (req, res) => {
+    const manufacturerId = await manufacturerIdOf(req.user.id);
+    if (!manufacturerId) return res.json({ data: [] });
+
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
     const [rows] = await pool.execute(
       `SELECT oi.product_id, oi.product_name, oi.product_sku,
@@ -26,10 +45,10 @@ const manufacturerController = {
        JOIN orders o ON o.id = oi.order_id
        WHERE o.order_status IN (${placeholders})
          AND oi.requires_fabrication = 1
-         AND oi.manufacturer_user_id = ?
+         AND oi.manufacturer_id = ?
        GROUP BY oi.product_id, oi.product_name, oi.product_sku
        ORDER BY oi.product_name`,
-      [...FABRICATION_STATUSES, req.user.id],
+      [...FABRICATION_STATUSES, manufacturerId],
     );
     res.json({
       data: rows.map((r) => ({
@@ -44,8 +63,11 @@ const manufacturerController = {
     });
   }),
 
-  // GET /api/manufacturer/orders — pedidos con items en fabricación asignados a este usuario
+  // GET /api/manufacturer/orders — pedidos con items en fabricación de este fabricante
   orders: asyncHandler(async (req, res) => {
+    const manufacturerId = await manufacturerIdOf(req.user.id);
+    if (!manufacturerId) return res.json({ data: [] });
+
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
     const [items] = await pool.query(
       `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready
@@ -53,9 +75,9 @@ const manufacturerController = {
        JOIN orders o ON o.id = oi.order_id
        WHERE o.order_status IN (${placeholders})
          AND oi.requires_fabrication = 1
-         AND oi.manufacturer_user_id = ?
+         AND oi.manufacturer_id = ?
        ORDER BY oi.id`,
-      [...FABRICATION_STATUSES, req.user.id],
+      [...FABRICATION_STATUSES, manufacturerId],
     );
     if (items.length === 0) return res.json({ data: [] });
 
@@ -85,9 +107,11 @@ const manufacturerController = {
     const order = await Order.findById(req.params.id);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
     if (req.user.role === 'manufacturer') {
+      const manufacturerId = await manufacturerIdOf(req.user.id);
+      if (!manufacturerId) throw ApiError.forbidden('Tu usuario no tiene un fabricante asignado');
       const [[owns]] = await pool.execute(
-        'SELECT 1 FROM order_items WHERE order_id = ? AND manufacturer_user_id = ? LIMIT 1',
-        [req.params.id, req.user.id],
+        'SELECT 1 FROM order_items WHERE order_id = ? AND manufacturer_id = ? LIMIT 1',
+        [req.params.id, manufacturerId],
       );
       if (!owns) throw ApiError.forbidden('Este pedido no te fue asignado');
     }
@@ -95,19 +119,23 @@ const manufacturerController = {
   }),
 
   // PATCH /api/manufacturer/orders/:orderId/items/:itemId/ready
+  // Autorizado también para el admin: los fabricantes sin acceso al sistema no
+  // pueden reportar sus muebles y el pedido se atoraría.
   markItemReady: asyncHandler(async (req, res) => {
     const { orderId, itemId } = req.params;
     if (req.user.role === 'manufacturer') {
+      const manufacturerId = await manufacturerIdOf(req.user.id);
+      if (!manufacturerId) throw ApiError.forbidden('Tu usuario no tiene un fabricante asignado');
       const [[item]] = await pool.execute(
-        'SELECT manufacturer_user_id FROM order_items WHERE id = ? AND order_id = ?',
+        'SELECT manufacturer_id FROM order_items WHERE id = ? AND order_id = ?',
         [itemId, orderId],
       );
-      if (!item || item.manufacturer_user_id !== req.user.id) {
+      if (!item || item.manufacturer_id !== manufacturerId) {
         throw ApiError.forbidden('Este item no te fue asignado');
       }
     }
     const isReady = req.body.isReady !== false;
-    const order = await Order.markItemReady(orderId, itemId, isReady);
+    const order = await Order.markItemReady(orderId, itemId, isReady, req.user.id);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
     res.json({ data: order, message: isReady ? 'Item marcado como listo' : 'Item marcado como pendiente' });
   }),
@@ -115,9 +143,11 @@ const manufacturerController = {
   // PATCH /api/manufacturer/orders/:id/start — mover de 'pending' a 'fabricating'
   startFabrication: asyncHandler(async (req, res) => {
     if (req.user.role === 'manufacturer') {
+      const manufacturerId = await manufacturerIdOf(req.user.id);
+      if (!manufacturerId) throw ApiError.forbidden('Tu usuario no tiene un fabricante asignado');
       const [[owns]] = await pool.execute(
-        'SELECT 1 FROM order_items WHERE order_id = ? AND manufacturer_user_id = ? LIMIT 1',
-        [req.params.id, req.user.id],
+        'SELECT 1 FROM order_items WHERE order_id = ? AND manufacturer_id = ? LIMIT 1',
+        [req.params.id, manufacturerId],
       );
       if (!owns) throw ApiError.forbidden('Este pedido no te fue asignado');
     }

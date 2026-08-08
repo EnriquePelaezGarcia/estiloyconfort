@@ -6,6 +6,9 @@ export interface User {
   fullName: string;
   phone?: string;
   role: UserRole;
+  /** Fabricante que representa este login. Solo aplica al rol 'manufacturer'. */
+  manufacturerId?: number | null;
+  manufacturerName?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

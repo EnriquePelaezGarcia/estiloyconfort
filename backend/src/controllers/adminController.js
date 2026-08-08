@@ -73,7 +73,7 @@ const getDashboard = asyncHandler(async (req, res) => {
      JOIN orders o ON o.id = oi.order_id
      WHERE o.order_status IN ('pending','fabricating')
        AND oi.requires_fabrication = 1
-       AND oi.manufacturer_user_id IS NULL`,
+       AND oi.manufacturer_id IS NULL`,
   );
 
   res.json({
@@ -337,9 +337,9 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
 // GET /api/admin/finances/margin-analysis
 //
 // La utilidad realizada usa el costo CONGELADO en el pedido (oi.unit_cost), no
-// el costo actual del producto: así un cambio de precio del proveedor no
+// el costo actual del producto: así un cambio de precio del fabricante no
 // reescribe la ganancia histórica. Para pedidos anteriores a la migración, o
-// items a los que el admin aún no asignó proveedor, se cae a p.base_cost como
+// items a los que el admin aún no asignó fabricante, se cae a p.base_cost como
 // aproximación, y esas unidades se reportan aparte.
 const getMarginAnalysis = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
@@ -358,7 +358,7 @@ const getMarginAnalysis = asyncHandler(async (req, res) => {
      LIMIT 50`,
   );
 
-  // Desglose por proveedor: qué costo tiene registrado cada uno, qué utilidad
+  // Desglose por fabricante: qué costo tiene registrado cada uno, qué utilidad
   // deja y cuántas piezas surtió realmente.
   const productIds = rows.map((r) => r.id);
   const byProduct = new Map();
@@ -402,7 +402,7 @@ const getMarginAnalysis = asyncHandler(async (req, res) => {
       baseCost: Number(r.base_cost), priceCash: Number(r.price_cash),
       unitMargin: Number(r.unit_margin), marginPct: Number(r.margin_pct),
       unitsSold: Number(r.units_sold), totalMargin: Number(r.total_margin),
-      /** Piezas vendidas sin proveedor asignado: su utilidad es aproximada. */
+      /** Piezas vendidas sin fabricante asignado: su utilidad es aproximada. */
       unitsUnassigned: Number(r.units_unassigned),
       byManufacturer: byProduct.get(r.id) ?? [],
     })),
@@ -419,9 +419,18 @@ const getOrders = asyncHandler(async (req, res) => {
 });
 
 // GET /api/admin/orders/:id
+// Cada item viaja con sus fabricantes candidatos (los que tienen costo para ese
+// producto), para que el select del detalle pueda asignar sin una llamada extra.
 const getOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) throw ApiError.notFound('Pedido no encontrado');
+  const optionsByProduct = await manufacturerOptionsByProduct(
+    (order.items ?? []).map((it) => it.productId),
+  );
+  order.items = (order.items ?? []).map((it) => ({
+    ...it,
+    manufacturerOptions: optionsByProduct.get(it.productId) ?? [],
+  }));
   res.json({ data: order });
 });
 
@@ -450,16 +459,58 @@ const getDeliveryPeople = asyncHandler(async (req, res) => {
   res.json({ data: rows });
 });
 
-// GET /api/admin/manufacturer-users — usuarios con rol fabricante activos (para asignar items)
-const getManufacturerUsers = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(
-    `SELECT u.id, u.full_name AS fullName, u.email
-     FROM users u JOIN roles r ON r.id = u.role_id
-     WHERE r.name = 'manufacturer' AND u.is_active = TRUE
-     ORDER BY u.full_name`,
+/**
+ * Una columna DATE como 'YYYY-MM-DD'.
+ *
+ * mysql2 la entrega como Date en medianoche LOCAL, y al serializarse a JSON se
+ * vuelve un timestamp UTC ("2026-09-15T06:00:00.000Z"). Un `<input type="date">`
+ * solo acepta 'YYYY-MM-DD': con cualquier otro formato se pinta vacío, y parece
+ * que la fecha no se guardó cuando en realidad sí está en la base.
+ *
+ * Se formatea con los getters locales a propósito: recortar el ISO en UTC
+ * correría el día en husos al este de Greenwich.
+ */
+function toDateOnly(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * Fabricantes candidatos a surtir cada producto: solo los que tienen costo
+ * registrado y activo, con lo que cuesta el mueble con cada uno.
+ *
+ * Sin costo capturado no hay a quién asignar — es lo que permite congelar
+ * unit_cost al asignar y saber la utilidad real de la venta.
+ *
+ * @returns {Map<number, Array<{manufacturerId:number, manufacturerName:string, cost:number}>>}
+ */
+async function manufacturerOptionsByProduct(productIds) {
+  const ids = [...new Set(productIds.filter(Boolean))];
+  const optionsByProduct = new Map();
+  if (!ids.length) return optionsByProduct;
+
+  const [costs] = await pool.query(
+    `SELECT pmp.product_id, pmp.manufacturer_id, pmp.cost, m.name
+       FROM product_manufacturer_prices pmp
+       JOIN manufacturers m ON m.id = pmp.manufacturer_id
+      WHERE pmp.product_id IN (?) AND pmp.is_active = TRUE AND m.is_active = TRUE
+      ORDER BY m.name`,
+    [ids],
   );
-  res.json({ data: rows });
-});
+  for (const c of costs) {
+    if (!optionsByProduct.has(c.product_id)) optionsByProduct.set(c.product_id, []);
+    optionsByProduct.get(c.product_id).push({
+      manufacturerId: c.manufacturer_id,
+      manufacturerName: c.name,
+      cost: Number(c.cost),
+    });
+  }
+  return optionsByProduct;
+}
 
 // GET /api/admin/factory-order-items — items de fabricación pendientes, por pedido,
 // con el fabricante que tiene asignado cada uno (o null si aún no se asigna).
@@ -467,38 +518,18 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
             o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
-            oi.quantity, oi.is_ready, oi.manufacturer_user_id, u.full_name AS manufacturer_user_name,
+            oi.quantity, oi.is_ready, oi.ready_at, rb.full_name AS ready_by_name,
             oi.product_id, oi.unit_price, oi.unit_cost,
-            oi.manufacturer_id AS supplier_id, m.name AS supplier_name
+            oi.manufacturer_id, m.name AS manufacturer_name
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
-     LEFT JOIN users u ON u.id = oi.manufacturer_user_id
      LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
+     LEFT JOIN users rb ON rb.id = oi.ready_by
      WHERE o.order_status IN ('pending','fabricating') AND oi.requires_fabrication = 1
      ORDER BY o.manufacturer_due_date IS NULL, o.manufacturer_due_date ASC, o.created_at ASC`,
   );
 
-  // Opciones de proveedor por producto: solo los que tienen costo registrado.
-  const productIds = [...new Set(rows.map((r) => r.product_id).filter(Boolean))];
-  const optionsByProduct = new Map();
-  if (productIds.length) {
-    const [costs] = await pool.query(
-      `SELECT pmp.product_id, pmp.manufacturer_id, pmp.cost, m.name
-         FROM product_manufacturer_prices pmp
-         JOIN manufacturers m ON m.id = pmp.manufacturer_id
-        WHERE pmp.product_id IN (?) AND pmp.is_active = TRUE AND m.is_active = TRUE
-        ORDER BY m.name`,
-      [productIds],
-    );
-    for (const c of costs) {
-      if (!optionsByProduct.has(c.product_id)) optionsByProduct.set(c.product_id, []);
-      optionsByProduct.get(c.product_id).push({
-        manufacturerId: c.manufacturer_id,
-        manufacturerName: c.name,
-        cost: Number(c.cost),
-      });
-    }
-  }
+  const optionsByProduct = await manufacturerOptionsByProduct(rows.map((r) => r.product_id));
 
   res.json({
     data: rows.map((r) => {
@@ -510,20 +541,20 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         customerName: r.customer_name,
         orderStatus: r.order_status,
         expectedDeliveryDate: r.expected_delivery_date,
-        manufacturerDueDate: r.manufacturer_due_date,
+        // La pantalla la edita en un <input type="date">: debe ir sin hora.
+        manufacturerDueDate: toDateOnly(r.manufacturer_due_date),
         productId: r.product_id ?? null,
         productName: r.product_name,
         productSku: r.product_sku,
         quantity: r.quantity,
         isReady: !!r.is_ready,
-        manufacturerUserId: r.manufacturer_user_id ?? null,
-        manufacturerUserName: r.manufacturer_user_name ?? null,
-        // Proveedor comercial: quién surte la pieza. Distinto del operario.
-        supplierId: r.supplier_id ?? null,
-        supplierName: r.supplier_name ?? null,
+        readyByName: r.ready_by_name ?? null,
+        readyAt: r.ready_at ?? null,
+        manufacturerId: r.manufacturer_id ?? null,
+        manufacturerName: r.manufacturer_name ?? null,
         unitCost,
         unitProfit: unitCost !== null ? Number(r.unit_price) - unitCost : null,
-        supplierOptions: optionsByProduct.get(r.product_id) ?? [],
+        manufacturerOptions: optionsByProduct.get(r.product_id) ?? [],
       };
     }),
   });
@@ -543,38 +574,11 @@ const updateManufacturerDueDate = asyncHandler(async (req, res) => {
 });
 
 // PATCH /api/admin/order-items/:id/manufacturer — asigna (o quita, con null) el
-// fabricante responsable de un item. Solo aplica a items que requieren fabricación.
-const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
-  const { manufacturerUserId } = req.body;
-  const [[item]] = await pool.execute(
-    'SELECT id, requires_fabrication FROM order_items WHERE id = ?', [req.params.id],
-  );
-  if (!item) throw ApiError.notFound('Item no encontrado');
-  if (!item.requires_fabrication) throw ApiError.badRequest('Este item no requiere fabricación');
-
-  let value = null;
-  if (manufacturerUserId) {
-    const [[user]] = await pool.execute(
-      `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id
-       WHERE u.id = ? AND r.name = 'manufacturer' AND u.is_active = TRUE`,
-      [manufacturerUserId],
-    );
-    if (!user) throw ApiError.badRequest('Fabricante inválido');
-    value = user.id;
-  }
-  await pool.execute('UPDATE order_items SET manufacturer_user_id = ? WHERE id = ?', [value, req.params.id]);
-  res.json({ message: value ? 'Fabricante asignado' : 'Fabricante quitado' });
-});
-
-// PATCH /api/admin/order-items/:id/supplier — asigna (o quita, con null) el
-// PROVEEDOR COMERCIAL que surte un item, y congela su costo.
-//
-// No confundir con assignOrderItemManufacturer, que asigna al OPERARIO que arma
-// el mueble. Aquí se trata de a quién se le compra.
+// FABRICANTE que surte un item, y congela su costo.
 //
 // Nada se asigna solo: el admin decide caso por caso, y aplica tanto a items que
-// se fabrican como a los que salen de bodega.
-const assignOrderItemSupplier = asyncHandler(async (req, res) => {
+// se fabrican sobre pedido como a los que salen de bodega.
+const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   const { manufacturerId } = req.body;
   const [[item]] = await pool.execute(
     'SELECT id, product_id, unit_price FROM order_items WHERE id = ?', [req.params.id],
@@ -586,15 +590,17 @@ const assignOrderItemSupplier = asyncHandler(async (req, res) => {
       'UPDATE order_items SET manufacturer_id = NULL, unit_cost = NULL WHERE id = ?',
       [req.params.id],
     );
-    return res.json({ data: { supplierId: null, supplierName: null, unitCost: null, unitProfit: null },
-      message: 'Proveedor quitado' });
+    return res.json({
+      data: { manufacturerId: null, manufacturerName: null, unitCost: null, unitProfit: null },
+      message: 'Fabricante quitado',
+    });
   }
 
-  const [[supplier]] = await pool.execute(
+  const [[manufacturer]] = await pool.execute(
     'SELECT id, name FROM manufacturers WHERE id = ? AND is_active = TRUE',
     [manufacturerId],
   );
-  if (!supplier) throw ApiError.badRequest('Proveedor inválido');
+  if (!manufacturer) throw ApiError.badRequest('Fabricante inválido');
 
   const cost = await ProductManufacturerPrice.findCost(item.product_id, manufacturerId);
   if (cost === null) {
@@ -604,17 +610,17 @@ const assignOrderItemSupplier = asyncHandler(async (req, res) => {
   // El costo se congela aquí: si mañana sube, este pedido conserva su utilidad real.
   await pool.execute(
     'UPDATE order_items SET manufacturer_id = ?, unit_cost = ? WHERE id = ?',
-    [supplier.id, cost, req.params.id],
+    [manufacturer.id, cost, req.params.id],
   );
 
   res.json({
     data: {
-      supplierId: supplier.id,
-      supplierName: supplier.name,
+      manufacturerId: manufacturer.id,
+      manufacturerName: manufacturer.name,
       unitCost: cost,
       unitProfit: Number(item.unit_price) - cost,
     },
-    message: 'Proveedor asignado',
+    message: 'Fabricante asignado',
   });
 });
 
@@ -706,11 +712,9 @@ module.exports = {
   assignDelivery,
   removeAssembly,
   getDeliveryPeople,
-  getManufacturerUsers,
   getFactoryOrderItems,
   updateManufacturerDueDate,
   assignOrderItemManufacturer,
-  assignOrderItemSupplier,
   getWeeklyList,
   getSalesReport,
   getInventoryReport,

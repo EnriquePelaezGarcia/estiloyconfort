@@ -1,6 +1,6 @@
 /**
  * Importa los 48 productos del catálogo 2026 (Muebleria_Estilo_Confort_2026_v1.xlsx)
- * con su costo por cada proveedor.
+ * con su costo por cada fabricante.
  *
  * NO ES DESTRUCTIVO: busca cada producto por slug. Si ya existe, actualiza sus
  * costos y su margen; si no, lo crea. Nunca borra ni desactiva nada, y al final
@@ -23,8 +23,8 @@ const { calculatePrices } = require('../utils/pricingCalculator');
 
 // Mapeo de las columnas de costo del Excel a los fabricantes de la base.
 // "Perrucho" es el apodo con el que aparece Angel Mondragon en el archivo.
-const PROVEEDOR_PERRUCHO = 'Angel Mondragon';
-const PROVEEDOR_CARLOS = 'Carlos Garcia';
+const MANUFACTURER_PERRUCHO = 'Angel Mondragon';
+const MANUFACTURER_CARLOS = 'Carlos Garcia';
 
 /**
  * Los 48 productos activos (filas 3–50 del Excel), con los nombres ya limpios:
@@ -102,10 +102,10 @@ async function run() {
   const config = await PricingConfig.getMap();
 
   console.log('▶️  Importando catálogo 2026\n');
-  const idPerrucho = await ensureManufacturer(PROVEEDOR_PERRUCHO);
-  const idCarlos = await ensureManufacturer(PROVEEDOR_CARLOS);
-  console.log(`   Perrucho → ${PROVEEDOR_PERRUCHO} (#${idPerrucho})`);
-  console.log(`   Carlos   → ${PROVEEDOR_CARLOS} (#${idCarlos})\n`);
+  const idPerrucho = await ensureManufacturer(MANUFACTURER_PERRUCHO);
+  const idCarlos = await ensureManufacturer(MANUFACTURER_CARLOS);
+  console.log(`   Perrucho → ${MANUFACTURER_PERRUCHO} (#${idPerrucho})`);
+  console.log(`   Carlos   → ${MANUFACTURER_CARLOS} (#${idCarlos})\n`);
 
   const creados = [];
   const actualizados = [];
@@ -116,7 +116,7 @@ async function run() {
   for (const [fila, nombre, slug, costoPerrucho, costoCarlos, margen, contado, msi, credito] of PRODUCTOS) {
     slugsImportados.add(slug);
 
-    // Costo base = el más alto de los dos proveedores (columna E del Excel).
+    // Costo base = el más alto de los dos fabricantes (columna E del Excel).
     const costoBase = Math.max(costoPerrucho, costoCarlos);
     const precios = calculatePrices(costoBase, margen, config);
 
@@ -180,7 +180,7 @@ async function run() {
       creados.push(`${sku} ${nombre}`);
     }
 
-    // Costos por proveedor. No se pisa un costo que el admin haya editado a
+    // Costos por fabricante. No se pisa un costo que el admin haya editado a
     // mano: solo se inserta el del Excel si la fila aún no existía.
     for (const [manufacturerId, costo] of [[idPerrucho, costoPerrucho], [idCarlos, costoCarlos]]) {
       await pool.execute(

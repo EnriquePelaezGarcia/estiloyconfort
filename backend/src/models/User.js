@@ -10,6 +10,9 @@ function mapUser(row) {
     phone: row.phone,
     role: row.role_name, // nombre del rol, no el id
     roleId: row.role_id,
+    /** Fabricante que representa este login (solo para el rol manufacturer). */
+    manufacturerId: row.manufacturer_id ?? null,
+    manufacturerName: row.manufacturer_name ?? null,
     isActive: !!row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -18,9 +21,11 @@ function mapUser(row) {
 
 const BASE_SELECT = `
   SELECT u.id, u.email, u.full_name, u.phone, u.role_id, r.name AS role_name,
+         u.manufacturer_id, m.name AS manufacturer_name,
          u.is_active, u.created_at, u.updated_at
   FROM users u
   JOIN roles r ON r.id = u.role_id
+  LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
 `;
 
 const User = {
@@ -60,24 +65,33 @@ const User = {
   /**
    * @returns {number} id del usuario creado
    */
-  async create({ email, passwordHash, fullName, phone = null, roleId }) {
+  async create({ email, passwordHash, fullName, phone = null, roleId, manufacturerId = null }) {
     const [result] = await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, phone, role_id)
-       VALUES (:email, :passwordHash, :fullName, :phone, :roleId)`,
-      { email, passwordHash, fullName, phone, roleId },
+      `INSERT INTO users (email, password_hash, full_name, phone, role_id, manufacturer_id)
+       VALUES (:email, :passwordHash, :fullName, :phone, :roleId, :manufacturerId)`,
+      { email, passwordHash, fullName, phone, roleId, manufacturerId },
     );
     return result.insertId;
   },
 
   async update(id, fields) {
-    const allowed = ['email', 'full_name', 'phone', 'role_id', 'is_active'];
-    const map = { email: 'email', fullName: 'full_name', phone: 'phone', roleId: 'role_id', isActive: 'is_active' };
+    const allowed = ['email', 'full_name', 'phone', 'role_id', 'manufacturer_id', 'is_active'];
+    const map = {
+      email: 'email',
+      fullName: 'full_name',
+      phone: 'phone',
+      roleId: 'role_id',
+      manufacturerId: 'manufacturer_id',
+      isActive: 'is_active',
+    };
     const sets = [];
     const params = { id };
 
     for (const [key, value] of Object.entries(fields)) {
       const column = map[key];
-      if (column && allowed.includes(column)) {
+      // `undefined` = el campo no viene en la edición, no "ponlo en NULL".
+      // Sin esta guarda, un PATCH parcial borraba el email del usuario.
+      if (value !== undefined && column && allowed.includes(column)) {
         sets.push(`${column} = :${key}`);
         params[key] = value;
       }

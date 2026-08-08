@@ -89,7 +89,7 @@ export class ProductService {
       .pipe(map(r => r.data));
   }
 
-  // ===== Costos por proveedor comercial =====
+  // ===== Costos por fabricante =====
 
   getManufacturerPrices(productId: number): Observable<ProductManufacturerPricesResponse> {
     return this.api.get<ProductManufacturerPricesResponse>(
@@ -98,17 +98,21 @@ export class ProductService {
   }
 
   /**
-   * Fija el costo de un proveedor. El backend recalcula el costo base (el
-   * máximo de todos los proveedores) y reprecia el producto.
+   * Fija el costo de un fabricante. El backend recalcula el costo base (el
+   * máximo de todos los fabricantes) y reprecia el producto.
+   *
+   * Con `affectsBaseCost` en false el costo queda fuera de ese máximo: sirve
+   * para asignar y para la utilidad real, pero no mueve el precio al público.
    */
   setManufacturerPrice(
     productId: number,
     manufacturerId: number,
     cost: number,
+    affectsBaseCost = true,
   ): Observable<ProductManufacturerPricesResponse> {
     return this.api.put<ProductManufacturerPricesResponse>(
       `/products/${productId}/manufacturer-prices/${manufacturerId}`,
-      { cost },
+      { cost, affectsBaseCost },
     );
   }
 

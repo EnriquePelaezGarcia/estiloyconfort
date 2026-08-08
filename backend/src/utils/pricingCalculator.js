@@ -68,7 +68,7 @@ const EMPTY_PRICES = {
 };
 
 /**
- * @param {number} baseCost  Costo base del producto (el MÁXIMO de sus proveedores)
+ * @param {number} baseCost  Costo base del producto (el MÁXIMO de sus fabricantes)
  * @param {number} marginPct Margen de ganancia en porcentaje (29.3 = 29.3%)
  * @param {object} config    Parámetros globales de pricing_config
  * @returns {typeof EMPTY_PRICES} Precios de venta más el desglose de auditoría.
@@ -196,14 +196,14 @@ function marginFromCashPrice(baseCost, cashPrice, config) {
 }
 
 /**
- * Utilidad que deja un proveedor concreto, por modalidad de pago.
+ * Utilidad que deja un fabricante concreto, por modalidad de pago.
  * Corresponde a las columnas W–AD del Excel.
  *
  * OJO: la utilidad de 6 MSI descuenta la comisión de tarjeta sobre el PRECIO A
  * 6 MSI, no sobre el de contado. El Excel usa el de contado y por eso
  * sobreestima esa utilidad; aquí se calcula bien.
  *
- * @param {number} cost   Costo de ese proveedor
+ * @param {number} cost   Costo de ese fabricante
  * @param {object} prices Resultado de calculatePrices()
  */
 function profitByCost(cost, prices, config) {

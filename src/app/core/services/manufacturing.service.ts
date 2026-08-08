@@ -6,11 +6,18 @@ import {
   Manufacturer,
   ManufacturerCatalogProduct,
   ManufacturerInput,
-  ManufacturerUser,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderStatus,
 } from '../models/manufacturing.model';
+
+/** Resultado de asignar (o quitar) el fabricante de un item. */
+export interface ManufacturerAssignment {
+  manufacturerId: number | null;
+  manufacturerName: string | null;
+  unitCost: number | null;
+  unitProfit: number | null;
+}
 
 /** Módulo Fabricante del panel admin (/api/manufacturing). */
 @Injectable({ providedIn: 'root' })
@@ -72,32 +79,33 @@ export class ManufacturingService {
     return this.api.get<{ data: FactoryOrderItemRow[] }>('/admin/factory-order-items');
   }
 
-  getManufacturerUsers(): Observable<{ data: ManufacturerUser[] }> {
-    return this.api.get<{ data: ManufacturerUser[] }>('/admin/manufacturer-users');
-  }
-
+  /**
+   * Asigna (o quita, con null) el fabricante que surte un item y congela su
+   * costo: si mañana sube, ese pedido conserva su utilidad real.
+   */
   assignOrderItemManufacturer(
     itemId: number,
-    manufacturerUserId: number | null,
-  ): Observable<{ message: string }> {
-    return this.api.patch<{ message: string }>(`/admin/order-items/${itemId}/manufacturer`, {
-      manufacturerUserId,
-    });
+    manufacturerId: number | null,
+  ): Observable<{ data: ManufacturerAssignment; message: string }> {
+    return this.api.patch<{ data: ManufacturerAssignment; message: string }>(
+      `/admin/order-items/${itemId}/manufacturer`,
+      { manufacturerId },
+    );
   }
 
   /**
-   * Asigna el PROVEEDOR comercial que surte un item y congela su costo.
-   * No confundir con assignOrderItemManufacturer, que asigna al operario que
-   * arma el mueble.
+   * Marca (o desmarca) un item como listo. El admin puede hacerlo por los
+   * fabricantes que no entran al sistema; sin esto sus pedidos se atorarían.
    */
-  assignOrderItemSupplier(
+  markItemReady(
+    orderId: number,
     itemId: number,
-    manufacturerId: number | null,
-  ): Observable<{ data: { supplierId: number | null; supplierName: string | null; unitCost: number | null; unitProfit: number | null }; message: string }> {
-    return this.api.patch<{
-      data: { supplierId: number | null; supplierName: string | null; unitCost: number | null; unitProfit: number | null };
-      message: string;
-    }>(`/admin/order-items/${itemId}/supplier`, { manufacturerId });
+    isReady: boolean,
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(
+      `/manufacturer/orders/${orderId}/items/${itemId}/ready`,
+      { isReady },
+    );
   }
 
   /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. Solo admin. */

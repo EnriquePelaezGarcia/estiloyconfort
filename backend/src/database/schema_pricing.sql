@@ -8,7 +8,7 @@ USE estilo_confort;
 
 -- ─── CONFIGURACIÓN DE PRECIOS ───────────────────────────────────────────────
 -- Almacena los parámetros globales que rigen el cálculo de los precios de
--- contado y a 6 MSI a partir del costo del proveedor y el % de ganancia.
+-- contado y a 6 MSI a partir del costo del fabricante y el % de ganancia.
 CREATE TABLE IF NOT EXISTS pricing_config (
   config_key   VARCHAR(50)   PRIMARY KEY,
   config_value DECIMAL(10,4) NOT NULL,

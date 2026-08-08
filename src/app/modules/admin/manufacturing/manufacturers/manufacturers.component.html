@@ -1,0 +1,184 @@
+<div class="section-head">
+  <p class="muted">
+    Empresas y talleres a los que se les compran los muebles. Un fabricante aparece en los
+    selects de Pedidos a fábrica en cuanto tiene un costo capturado en Catálogo.
+  </p>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <span class="material-symbols-outlined">add</span>
+    Nuevo fabricante
+  </button>
+</div>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span><p>Cargando fabricantes…</p></div>
+} @else {
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Fabricante</th>
+          <th>Contacto</th>
+          <th>Teléfono</th>
+          <th>Correo</th>
+          <th>Acceso</th>
+          <th class="num">Productos con costo</th>
+          <th>Estado</th>
+          <th class="actions-col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (m of manufacturers(); track m.id) {
+          <tr>
+            <td data-label="Fabricante" class="strong">{{ m.name }}</td>
+            <td data-label="Contacto">{{ m.contactName || '—' }}</td>
+            <td data-label="Teléfono">{{ m.phone || '—' }}</td>
+            <td data-label="Correo" class="muted">{{ m.email || '—' }}</td>
+            <td data-label="Acceso">
+              @if (m.hasUsers) {
+                <span class="badge badge--green">Sí</span>
+              } @else {
+                <span class="badge badge--gray" title="Nadie entra al portal por este fabricante">No</span>
+              }
+            </td>
+            <td data-label="Productos con costo" class="num">
+              @if (m.productCount) {
+                {{ m.productCount }}
+              } @else {
+                <span class="muted" title="Sin costos no aparece en los selects de asignación">0</span>
+              }
+            </td>
+            <td data-label="Estado">
+              <button
+                type="button"
+                class="status"
+                [class.status--active]="m.isActive"
+                (click)="toggleActive(m)"
+                [title]="m.isActive ? 'Desactivar' : 'Activar'"
+              >
+                <span class="status__dot"></span>
+                {{ m.isActive ? 'Activo' : 'Inactivo' }}
+              </button>
+            </td>
+            <td data-label="Acciones" class="actions">
+              <button type="button" class="icon-btn" (click)="openEdit(m)" title="Editar">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="empty">Aún no hay fabricantes registrados.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ===== Modal crear/editar ===== -->
+@if (isModalOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal">
+      <div class="modal__head">
+        <h2>{{ isEditMode() ? 'Editar fabricante' : 'Nuevo fabricante' }}</h2>
+        <button type="button" class="icon-btn" (click)="closeModal()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="save()" novalidate class="modal__body">
+        <div class="field">
+          <label for="name">Nombre del fabricante</label>
+          <input id="name" type="text" formControlName="name" placeholder="Ej. Talleres Mondragón" />
+          @if (form.get('name')?.invalid && form.get('name')?.touched) {
+            <p class="field__error">Ingresa un nombre (mínimo 3 caracteres)</p>
+          }
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="contactName">Persona de contacto</label>
+            <input id="contactName" type="text" formControlName="contactName" placeholder="Opcional" />
+          </div>
+          <div class="field">
+            <label for="phone">Teléfono</label>
+            <input id="phone" type="tel" formControlName="phone" placeholder="Opcional" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="email">Correo</label>
+          <input id="email" type="email" formControlName="email" placeholder="Opcional" />
+        </div>
+
+        <div class="field">
+          <label for="address">Dirección</label>
+          <input id="address" type="text" formControlName="address" placeholder="Opcional" />
+        </div>
+
+        <div class="field">
+          <label for="notes">Notas</label>
+          <textarea id="notes" rows="2" formControlName="notes" placeholder="Opcional"></textarea>
+        </div>
+
+        @if (!isEditMode()) {
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              formControlName="createAccess"
+              (change)="onCreateAccessToggle($event)"
+            />
+            <span>Crear también su acceso al sistema</span>
+          </label>
+          <p class="field__hint">
+            Márcalo si es un fabricante recurrente y quieres que él mismo reporte sus muebles como
+            listos. Si es una compra única, déjalo sin marcar: tú los marcarás desde Pedidos a fábrica.
+          </p>
+
+          @if (createAccess()) {
+            <div class="access-box">
+              <div class="field">
+                <label for="accessFullName">Nombre de la persona</label>
+                <input id="accessFullName" type="text" formControlName="accessFullName" />
+                @if (form.get('accessFullName')?.invalid && form.get('accessFullName')?.touched) {
+                  <p class="field__error">Ingresa el nombre de quien entrará al sistema</p>
+                }
+              </div>
+              <div class="field">
+                <label for="accessEmail">Correo de acceso</label>
+                <input id="accessEmail" type="email" formControlName="accessEmail" autocomplete="off" />
+                @if (form.get('accessEmail')?.invalid && form.get('accessEmail')?.touched) {
+                  <p class="field__error">Ingresa un correo válido</p>
+                }
+              </div>
+              <div class="field">
+                <label for="accessPassword">Contraseña</label>
+                <input
+                  id="accessPassword"
+                  type="password"
+                  formControlName="accessPassword"
+                  autocomplete="new-password"
+                />
+                @if (form.get('accessPassword')?.invalid && form.get('accessPassword')?.touched) {
+                  <p class="field__error">Mínimo 8 caracteres</p>
+                }
+              </div>
+            </div>
+          }
+        } @else {
+          <p class="field__hint">
+            El acceso al sistema de este fabricante se gestiona desde Usuarios.
+          </p>
+        }
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            @if (saving()) { <span class="spinner spinner--sm"></span> }
+            {{ isEditMode() ? 'Guardar cambios' : 'Crear fabricante' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

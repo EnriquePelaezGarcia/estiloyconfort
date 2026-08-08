@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
 INSERT INTO roles (name, description) VALUES
   ('visitor', 'Visitante anónimo'),
   ('seller', 'Vendedor de tienda'),
-  ('manufacturer', 'Fabricante/Proveedor'),
+  ('manufacturer', 'Fabricante'),
   ('delivery_person', 'Repartidor'),
   ('admin', 'Administrador')
 ON DUPLICATE KEY UPDATE description = VALUES(description);

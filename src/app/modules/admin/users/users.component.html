@@ -44,6 +44,9 @@
             <td data-label="Teléfono">{{ user.phone || '—' }}</td>
             <td data-label="Rol">
               <span class="role-chip role-chip--{{ user.role }}">{{ roleLabel(user.role) }}</span>
+              @if (user.manufacturerName) {
+                <span class="muted"> · {{ user.manufacturerName }}</span>
+              }
             </td>
             <td data-label="Estado">
               <button
@@ -122,6 +125,23 @@
             }
           </div>
         </div>
+
+        @if (isManufacturerRole()) {
+          <div class="field">
+            <label for="manufacturerId">Fabricante que representa</label>
+            <select id="manufacturerId" formControlName="manufacturerId">
+              <option [ngValue]="null" disabled>Selecciona…</option>
+              @for (m of manufacturers(); track m.id) {
+                <option [ngValue]="m.id">{{ m.name }}</option>
+              }
+            </select>
+            @if (form.get('manufacturerId')?.invalid && form.get('manufacturerId')?.touched) {
+              <p class="field__error">
+                Elige el fabricante: sin él, este usuario entra al portal y no ve ningún pedido.
+              </p>
+            }
+          </div>
+        }
 
         @if (!isEditMode()) {
           <div class="field">

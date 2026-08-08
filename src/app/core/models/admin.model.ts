@@ -52,6 +52,8 @@ export interface CreateUserRequest {
   fullName: string;
   phone?: string | null;
   roleId: number;
+  /** Fabricante que representa. Solo se guarda si el rol es 'manufacturer'. */
+  manufacturerId?: number | null;
 }
 
 /** Payload para editar un usuario existente. */
@@ -60,5 +62,6 @@ export interface UpdateUserRequest {
   fullName?: string;
   phone?: string | null;
   roleId?: number;
+  manufacturerId?: number | null;
   isActive?: boolean;
 }

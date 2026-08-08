@@ -27,6 +27,14 @@ Además, la spec funcional revela varias diferencias entre lo que hace el proyec
 
 ## 2. Glosario — dos conceptos distintos llamados "fabricante"
 
+> 🚫 **SUPERADO por [plan-unificar-fabricante.md](plan-unificar-fabricante.md).**
+> Esta sección describe el modelo viejo, con dos entidades paralelas. Ya no es
+> así: hoy **"Fabricante" significa una sola cosa** —la fila en `manufacturers`—,
+> los usuarios del portal son logins *de* un fabricante (`users.manufacturer_id`),
+> la columna `order_items.manufacturer_user_id` fue eliminada y la palabra
+> "proveedor" ya no existe en el sistema. Se conserva solo como registro
+> histórico de por qué el código llegó a tener dos conceptos.
+
 ⚠️ **Es la confusión más probable al leer el código. Leer antes de tocar nada.**
 
 | # | Concepto | Dónde vive hoy | Qué es |

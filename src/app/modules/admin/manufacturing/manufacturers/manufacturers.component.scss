@@ -1,0 +1,100 @@
+@use '../../../../../styles/variables' as vars;
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+
+  .muted { max-width: 46rem; }
+}
+
+// ===== Toggle activo/inactivo =====
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+  color: vars.$color-text-secondary;
+  padding: 3px 10px;
+  border-radius: vars.$radius-full;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: vars.$color-text-secondary;
+  }
+
+  &--active {
+    color: vars.$color-success;
+    border-color: rgba(vars.$color-success, 0.4);
+    background: rgba(vars.$color-success, 0.08);
+
+    .status__dot { background: vars.$color-success; }
+  }
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  font-size: 0.9rem;
+  cursor: pointer;
+
+  input { width: 18px; height: 18px; accent-color: vars.$color-primary; }
+}
+
+.field__hint {
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+  line-height: 1.4;
+}
+
+/** Los campos de acceso solo aparecen si se pidió crear el login. */
+.access-box {
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  .field:last-child { margin-bottom: 0; }
+}
+
+// ===== Responsive: tabla en tarjetas (móvil) =====
+@media (max-width: vars.$bp-tablet) {
+  .table thead { display: none; }
+
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+
+  .table tr {
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    margin-bottom: vars.$spacing-sm;
+    padding: vars.$spacing-sm;
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none !important;
+    padding: 0.4rem vars.$spacing-sm;
+
+    &::before {
+      content: attr(data-label);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: vars.$color-text-secondary;
+    }
+
+    &.actions { justify-content: flex-end; }
+  }
+}

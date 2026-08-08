@@ -17,6 +17,12 @@ export interface Manufacturer {
   notes: string | null;
   isActive: boolean;
   createdAt?: string;
+  /** Logins del portal ligados a este fabricante. */
+  userCount?: number;
+  /** false = a este fabricante nadie entra al sistema por él. */
+  hasUsers?: boolean;
+  /** Productos con costo capturado; sin ninguno no aparece en los selects. */
+  productCount?: number;
 }
 
 /** Payload para crear/editar un fabricante. */
@@ -65,15 +71,8 @@ export interface PurchaseOrderInput {
   items: PurchaseOrderItem[];
 }
 
-/** Usuario con rol fabricante (login real), candidato para asignar items. */
-export interface ManufacturerUser {
-  id: number;
-  fullName: string;
-  email: string;
-}
-
-/** Proveedor candidato a surtir un item, con lo que cuesta ese mueble con él. */
-export interface SupplierOption {
+/** Fabricante candidato a surtir un item, con lo que cuesta ese mueble con él. */
+export interface ManufacturerOption {
   manufacturerId: number;
   manufacturerName: string;
   cost: number;
@@ -94,29 +93,29 @@ export interface FactoryOrderItemRow {
   productSku: string | null;
   quantity: number;
   isReady: boolean;
-  /** OPERARIO (usuario con rol manufacturer) que arma el mueble. */
-  manufacturerUserId: number | null;
-  manufacturerUserName: string | null;
-  /** PROVEEDOR comercial al que se le compra la pieza. Distinto del operario. */
-  supplierId: number | null;
-  supplierName: string | null;
-  /** Costo congelado al asignar el proveedor. */
+  /** Quién marcó listo el item: distingue "el fabricante reportó" de "el admin lo recibió". */
+  readyByName: string | null;
+  readyAt: string | null;
+  /** Fabricante al que se le compra la pieza. */
+  manufacturerId: number | null;
+  manufacturerName: string | null;
+  /** Costo congelado al asignar el fabricante. */
   unitCost: number | null;
   /** Utilidad unitaria = precio de venta − costo congelado. */
   unitProfit: number | null;
-  /** Proveedores con costo registrado para este producto. */
-  supplierOptions: SupplierOption[];
+  /** Fabricantes con costo registrado para este producto. */
+  manufacturerOptions: ManufacturerOption[];
 }
 
 /**
- * Producto del catálogo bajo un proveedor. Un mismo producto aparece una vez
- * por cada proveedor que lo surte, con el costo específico de ese proveedor.
+ * Producto del catálogo bajo un fabricante. Un mismo producto aparece una vez
+ * por cada fabricante que lo surte, con el costo específico de ese fabricante.
  */
 export interface ManufacturerCatalogProduct {
   id: number;
   name: string;
   sku: string | null;
-  /** Costo con ESTE proveedor, no el costo base del producto. */
+  /** Costo con ESTE fabricante, no el costo base del producto. */
   baseCost: number | null;
   priceCash: number | null;
   /** true si su costo es el más alto y por tanto define el precio de venta. */

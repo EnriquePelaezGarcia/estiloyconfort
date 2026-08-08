@@ -59,14 +59,21 @@ interface PendingImage {
   preview: string;
 }
 
-/** Fila editable de costo por proveedor dentro del modal de producto. */
+/** Fila editable de costo por fabricante dentro del modal de producto. */
 interface CostRow {
   manufacturerId: number;
   manufacturerName: string;
-  /** null = a este proveedor no se le compra este mueble. */
+  /** null = a este fabricante no se le compra este mueble. */
   cost: number | null;
-  /** Costo que tenía al abrir el modal, para saber qué cambió al guardar. */
+  /**
+   * false = el costo sirve para asignar y para calcular la utilidad real, pero
+   * queda fuera del máximo que define el precio al público. Es cómo se absorbe
+   * el excedente de una compra única sin mover el precio de mostrador.
+   */
+  affectsBaseCost: boolean;
+  /** Valores que tenía al abrir el modal, para saber qué cambió al guardar. */
   originalCost: number | null;
+  originalAffectsBaseCost: boolean;
 }
 
 /** Cómo se define el precio: capturando el margen o capturando el precio final. */
@@ -93,9 +100,9 @@ export class CatalogComponent implements OnInit {
 
   protected pricingConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
 
-  /** Proveedores activos, para armar la tabla de costos del modal. */
+  /** Fabricantes activos, para armar la tabla de costos del modal. */
   protected manufacturers = signal<Manufacturer[]>([]);
-  /** Costos por proveedor del producto que se está editando. */
+  /** Costos por fabricante del producto que se está editando. */
   protected costRows = signal<CostRow[]>([]);
   protected loadingCosts = signal(false);
 
@@ -111,22 +118,27 @@ export class CatalogComponent implements OnInit {
   protected priceMode = signal<PriceMode>('margin');
 
   /**
-   * Costo base del producto: el MÁXIMO de los costos de sus proveedores. No se
-   * captura, se deriva. Es un criterio conservador: si un proveedor sube su
+   * Costo base del producto: el MÁXIMO de los costos de sus fabricantes. No se
+   * captura, se deriva. Es un criterio conservador: si un fabricante sube su
    * precio, el de venta sube aunque se siga surtiendo con el otro, de modo que
    * el margen nunca queda corto si toca surtir con el caro.
+   *
+   * Los costos marcados como que no definen el precio quedan fuera del máximo.
    */
   protected derivedBaseCost = computed(() => {
     const costs = this.costRows()
+      .filter((r) => r.affectsBaseCost)
       .map((r) => r.cost)
       .filter((c): c is number => c !== null && c > 0);
     return costs.length ? Math.max(...costs) : null;
   });
 
-  /** El proveedor cuyo costo manda sobre el precio de venta. */
+  /** El fabricante cuyo costo manda sobre el precio de venta. */
   protected baseCostManufacturer = computed(() => {
     const max = this.derivedBaseCost();
-    return max === null ? null : this.costRows().find((r) => r.cost === max) ?? null;
+    return max === null
+      ? null
+      : this.costRows().find((r) => r.affectsBaseCost && r.cost === max) ?? null;
   });
 
   /** Margen efectivo: el capturado, o el despejado desde el precio objetivo. */
@@ -151,7 +163,7 @@ export class CatalogComponent implements OnInit {
   );
 
   /**
-   * Filas de costo enriquecidas con la utilidad que deja cada proveedor en cada
+   * Filas de costo enriquecidas con la utilidad que deja cada fabricante en cada
    * modalidad de pago. Se recalculan solas al teclear: el admin nunca captura un
    * porcentaje de ganancia, solo el costo.
    */
@@ -161,7 +173,7 @@ export class CatalogComponent implements OnInit {
     const max = this.derivedBaseCost();
     return this.costRows().map((row) => ({
       ...row,
-      isBaseCost: row.cost !== null && row.cost === max,
+      isBaseCost: row.affectsBaseCost && row.cost !== null && row.cost === max,
       profit: row.cost !== null ? PricingService.profitByCost(row.cost, prices, config) : null,
     }));
   });
@@ -222,7 +234,7 @@ export class CatalogComponent implements OnInit {
     weight: [null as number | null, [Validators.min(0)]],
     availabilityDays: [0, [Validators.required, Validators.min(0)]],
     // No hay campo de costo base: se deriva del máximo de los costos por
-    // proveedor (ver derivedBaseCost).
+    // fabricante (ver derivedBaseCost).
     marginPercentage: [null as number | null, [Validators.min(0), Validators.max(99)]],
     /** Modo inverso: precio de contado deseado, del que se despeja el margen. */
     targetCashPrice: [null as number | null, [Validators.min(0)]],
@@ -264,15 +276,21 @@ export class CatalogComponent implements OnInit {
     this.loadProducts();
   }
 
-  /** Arma una fila por proveedor activo, con el costo que ya tuviera guardado. */
-  private buildCostRows(saved: { manufacturerId: number; cost: number }[] = []): CostRow[] {
+  /** Arma una fila por fabricante activo, con el costo que ya tuviera guardado. */
+  private buildCostRows(
+    saved: { manufacturerId: number; cost: number; affectsBaseCost?: boolean }[] = [],
+  ): CostRow[] {
     return this.manufacturers().map((m) => {
       const match = saved.find((s) => s.manufacturerId === m.id);
+      // Un costo nuevo define el precio salvo que se diga lo contrario.
+      const affectsBaseCost = match?.affectsBaseCost ?? true;
       return {
         manufacturerId: m.id,
         manufacturerName: m.name,
         cost: match?.cost ?? null,
+        affectsBaseCost,
         originalCost: match?.cost ?? null,
+        originalAffectsBaseCost: affectsBaseCost,
       };
     });
   }
@@ -286,6 +304,18 @@ export class CatalogComponent implements OnInit {
           ? { ...r, cost: cost !== null && Number.isFinite(cost) && cost > 0 ? cost : null }
           : r,
       ),
+    );
+  }
+
+  /**
+   * Desmarcarlo deja el costo fuera del máximo que define el precio de venta:
+   * el fabricante sigue siendo asignable y la utilidad del pedido sigue siendo
+   * la real, pero el precio al público no se mueve.
+   */
+  protected onAffectsBaseCostChange(manufacturerId: number, event: Event): void {
+    const affectsBaseCost = (event.target as HTMLInputElement).checked;
+    this.costRows.update((rows) =>
+      rows.map((r) => (r.manufacturerId === manufacturerId ? { ...r, affectsBaseCost } : r)),
     );
   }
 
@@ -360,7 +390,7 @@ export class CatalogComponent implements OnInit {
     this.productImages.set(product.images ?? []);
     this.priceMode.set('margin');
 
-    // Los costos por proveedor viven en su propia tabla; se cargan aparte.
+    // Los costos por fabricante viven en su propia tabla; se cargan aparte.
     this.costRows.set(this.buildCostRows());
     this.loadingCosts.set(true);
     this.productService.getManufacturerPrices(product.id).subscribe({
@@ -472,7 +502,7 @@ export class CatalogComponent implements OnInit {
   }
 
   private onSaved(product: Product, message: string): void {
-    // Los costos por proveedor viven en su propia tabla, así que se guardan
+    // Los costos por fabricante viven en su propia tabla, así que se guardan
     // después del producto. El backend recalcula el costo base (el máximo) y
     // reprecia, por eso al final se recarga el producto.
     this.saveCosts(product).subscribe({
@@ -487,11 +517,21 @@ export class CatalogComponent implements OnInit {
   /** Envía solo los costos que cambiaron; los que se vaciaron se eliminan. */
   private saveCosts(product: Product) {
     const operations = this.costRows()
-      .filter((row) => row.cost !== row.originalCost)
+      // Cambiar solo la casilla en una fila sin costo no es nada que guardar.
+      .filter(
+        (row) =>
+          row.cost !== row.originalCost ||
+          (row.cost !== null && row.affectsBaseCost !== row.originalAffectsBaseCost),
+      )
       .map((row) =>
         row.cost === null
           ? this.productService.removeManufacturerPrice(product.id, row.manufacturerId)
-          : this.productService.setManufacturerPrice(product.id, row.manufacturerId, row.cost),
+          : this.productService.setManufacturerPrice(
+              product.id,
+              row.manufacturerId,
+              row.cost,
+              row.affectsBaseCost,
+            ),
       );
 
     return from(operations).pipe(

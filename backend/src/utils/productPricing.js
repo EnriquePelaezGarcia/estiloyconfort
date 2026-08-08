@@ -19,21 +19,25 @@ async function withCalculatedPrices(data, fallback = {}) {
 
 /**
  * Sincroniza el costo base de un producto con el MÁXIMO de los costos de sus
- * proveedores activos y reprecia el producto.
+ * fabricantes activos y reprecia el producto.
  *
- * Tomar el máximo es deliberado y conservador: si un proveedor sube su precio,
+ * Tomar el máximo es deliberado y conservador: si un fabricante sube su precio,
  * el precio de venta sube aunque se siga surtiendo con el otro, de modo que el
  * margen nunca queda corto si toca surtir con el caro.
  *
- * Si el producto se queda sin ningún costo de proveedor, base_cost conserva su
- * último valor: no se pone en cero ni se bloquea el producto.
+ * Los costos con affects_base_cost = FALSE quedan fuera del máximo: sirven para
+ * asignar y para congelar la utilidad real del pedido, pero no mueven el precio
+ * público. Es el mecanismo para absorber el excedente de una compra única.
+ *
+ * Si el producto se queda sin ningún costo, base_cost conserva su último valor:
+ * no se pone en cero ni se bloquea el producto.
  *
  * @returns {{ baseCost:number, prices:object }|null} null si no hubo costos.
  */
 async function syncBaseCostAndReprice(productId) {
   const [[row]] = await pool.execute(
     `SELECT MAX(cost) AS max_cost FROM product_manufacturer_prices
-      WHERE product_id = ? AND is_active = TRUE`,
+      WHERE product_id = ? AND is_active = TRUE AND affects_base_cost = TRUE`,
     [productId],
   );
 

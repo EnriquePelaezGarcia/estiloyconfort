@@ -24,7 +24,7 @@ router.post('/:id/images', authenticate, authorize('admin'), upload.single('imag
 router.delete('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.deleteImage);
 router.patch('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.setPrimaryImage);
 
-// Rutas admin — costos por proveedor comercial (tabla manufacturers)
+// Rutas admin — costos por fabricante (tabla manufacturers)
 router.get('/:id/manufacturer-prices', authenticate, authorize('admin'), ctrl.getManufacturerPrices);
 router.put('/:id/manufacturer-prices/:manufacturerId', authenticate, authorize('admin'), ctrl.setManufacturerPrice);
 router.delete('/:id/manufacturer-prices/:manufacturerId', authenticate, authorize('admin'), ctrl.removeManufacturerPrice);

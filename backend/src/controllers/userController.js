@@ -4,8 +4,28 @@ const Role = require('../models/Role');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateRegister } = require('../utils/validators');
+const { pool } = require('../config/database');
 
 const SALT_ROUNDS = 10;
+
+/**
+ * Resuelve el fabricante que representará un login.
+ *
+ * Solo tiene sentido para el rol `manufacturer` —es lo que hace que el portal
+ * le muestre trabajo—; para cualquier otro rol se fuerza a NULL aunque venga en
+ * el payload, para que no queden vínculos fantasma si el usuario cambia de rol.
+ */
+async function resolveManufacturerId(role, manufacturerId) {
+  if (role?.name !== 'manufacturer') return null;
+  if (manufacturerId === undefined || manufacturerId === null || manufacturerId === '') return null;
+
+  const [[manufacturer]] = await pool.execute(
+    'SELECT id FROM manufacturers WHERE id = ? AND is_active = TRUE',
+    [manufacturerId],
+  );
+  if (!manufacturer) throw ApiError.badRequest('Fabricante inválido o inactivo');
+  return manufacturer.id;
+}
 
 /**
  * GET /api/users  (solo admin)
@@ -31,7 +51,7 @@ const create = asyncHandler(async (req, res) => {
   const errors = validateRegister(req.body);
   if (errors.length) throw ApiError.badRequest(errors.join(', '));
 
-  const { email, password, fullName, phone, roleId } = req.body;
+  const { email, password, fullName, phone, roleId, manufacturerId } = req.body;
   const normalizedEmail = email.trim().toLowerCase();
 
   const role = await Role.findById(roleId);
@@ -48,6 +68,7 @@ const create = asyncHandler(async (req, res) => {
     fullName: fullName.trim(),
     phone: phone || null,
     roleId,
+    manufacturerId: await resolveManufacturerId(role, manufacturerId),
   });
 
   res.status(201).json(await User.findById(id));
@@ -61,10 +82,15 @@ const update = asyncHandler(async (req, res) => {
   const existing = await User.findById(id);
   if (!existing) throw ApiError.notFound('Usuario no encontrado');
 
-  if (req.body.roleId !== undefined) {
-    const role = await Role.findById(req.body.roleId);
-    if (!role) throw ApiError.badRequest('Rol inválido');
-  }
+  // El vínculo con el fabricante depende del rol resultante, así que se resuelve
+  // contra el rol que quedará (el nuevo si viene en el payload, si no el actual).
+  const roleId = req.body.roleId !== undefined ? req.body.roleId : existing.roleId;
+  const role = await Role.findById(roleId);
+  if (!role) throw ApiError.badRequest('Rol inválido');
+  const manufacturerId = await resolveManufacturerId(
+    role,
+    req.body.manufacturerId !== undefined ? req.body.manufacturerId : existing.manufacturerId,
+  );
 
   let email;
   if (req.body.email !== undefined) {
@@ -79,6 +105,7 @@ const update = asyncHandler(async (req, res) => {
     fullName: req.body.fullName,
     phone: req.body.phone,
     roleId: req.body.roleId,
+    manufacturerId,
     isActive: req.body.isActive,
   });
   res.json(updated);

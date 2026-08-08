@@ -14,7 +14,7 @@ import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/p
 interface CartLine {
   product: InventoryItem;
   quantity: number;
-  /** ¿Se fabrica sobre pedido? Heurística por defecto, corregible por el vendedor (D3). */
+  /** ¿Se fabrica sobre pedido? Nace apagado; lo marca quien vende (D3). */
   requiresFabrication: boolean;
 }
 
@@ -320,11 +320,6 @@ export class OrderCreateComponent implements OnInit {
     });
   }
 
-  /** Heurística por defecto (D3): sin stock suficiente o con notas de fabricante → fabricación. */
-  private heuristicFabrication(product: InventoryItem): boolean {
-    return product.stock_quantity < 1 || !!this.form.controls.notasFabricante.value?.trim();
-  }
-
   /** ¿Se puede modificar (cantidad/quitar/checkbox) esta línea del carrito? */
   protected canEditLine(line: CartLine): boolean {
     return !this.isRestrictedEdit() || !line.requiresFabrication;
@@ -340,10 +335,9 @@ export class OrderCreateComponent implements OnInit {
           l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l,
         );
       }
-      return [
-        ...lines,
-        { product, quantity: 1, requiresFabrication: this.isRestrictedEdit() ? false : this.heuristicFabrication(product) },
-      ];
+      // Siempre nace apagado: "se fabrica sobre pedido" lo decide quien vende,
+      // no una heurística. Igual para vendedor y admin.
+      return [...lines, { product, quantity: 1, requiresFabrication: false }];
     });
   }
 
@@ -363,7 +357,7 @@ export class OrderCreateComponent implements OnInit {
     );
   }
 
-  /** Corrección manual del checkbox "Se fabrica sobre pedido" (D3). Bloqueado en edición restringida. */
+  /** Marca/desmarca "Se fabrica sobre pedido" (D3). Bloqueado en edición restringida. */
   protected toggleFabrication(productId: number): void {
     if (this.isRestrictedEdit()) return;
     this.lines.update((lines) =>

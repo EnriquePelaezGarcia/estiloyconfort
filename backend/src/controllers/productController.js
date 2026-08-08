@@ -8,10 +8,12 @@ const { calculatePrices, profitByCost, marginFromCashPrice } = require('../utils
 const { withCalculatedPrices } = require('../utils/productPricing');
 
 /**
- * Arma la respuesta de costos por proveedor de un producto: a cada costo le
+ * Arma la respuesta de costos por fabricante de un producto: a cada costo le
  * calcula la utilidad que deja en cada modalidad de pago, contra el precio de
- * venta vigente. El proveedor cuyo costo es el máximo es el que define el
+ * venta vigente. El fabricante cuyo costo es el máximo es el que define el
  * precio (base_cost), y se marca con isBaseCost.
+ *
+ * Los costos marcados como que no afectan el precio quedan fuera de ese máximo.
  */
 async function manufacturerPricesPayload(productId) {
   const [[product]] = await pool.execute(
@@ -27,7 +29,8 @@ async function manufacturerPricesPayload(productId) {
 
   const baseCost = Number(product.base_cost);
   const prices = calculatePrices(baseCost, product.margin_percentage, config);
-  const maxCost = costs.length ? Math.max(...costs.filter((c) => c.isActive).map((c) => c.cost)) : null;
+  const pricing = costs.filter((c) => c.isActive && c.affectsBaseCost).map((c) => c.cost);
+  const maxCost = pricing.length ? Math.max(...pricing) : null;
 
   return {
     data: costs.map((c) => {
@@ -36,8 +39,9 @@ async function manufacturerPricesPayload(productId) {
         manufacturerId: c.manufacturerId,
         manufacturerName: c.manufacturerName,
         cost: c.cost,
+        affectsBaseCost: c.affectsBaseCost,
         isActive: c.isActive,
-        isBaseCost: c.isActive && c.cost === maxCost,
+        isBaseCost: c.isActive && c.affectsBaseCost && c.cost === maxCost,
         utilidadEfectivo: profit?.cash ?? null,
         utilidadTarjeta: profit?.card ?? null,
         utilidadMsi: profit?.msi ?? null,
@@ -172,7 +176,7 @@ const productController = {
     } catch (err) { next(err); }
   },
 
-  // ===== Costos por proveedor =====
+  // ===== Costos por fabricante =====
 
   async getManufacturerPrices(req, res, next) {
     try {
@@ -199,7 +203,9 @@ const productController = {
       );
       if (!manufacturer) return res.status(404).json({ message: 'Fabricante no encontrado o inactivo' });
 
-      await ProductManufacturerPrice.upsert(id, manufacturerId, cost);
+      // Por omisión el costo sí define el precio de venta: es el caso normal.
+      const affectsBaseCost = req.body.affectsBaseCost !== false;
+      await ProductManufacturerPrice.upsert(id, manufacturerId, cost, affectsBaseCost);
       const payload = await manufacturerPricesPayload(id);
       res.json({ ...payload, message: 'Costo actualizado' });
     } catch (err) { next(err); }

@@ -90,7 +90,15 @@ export const adminRoutes: Routes = [
           import('./manufacturing/manufacturing.component').then((m) => m.ManufacturingComponent),
         title: 'Fabricante - Panel Admin',
         children: [
-          { path: '', redirectTo: 'ordenes-compra', pathMatch: 'full' },
+          { path: '', redirectTo: 'fabricantes', pathMatch: 'full' },
+          {
+            path: 'fabricantes',
+            loadComponent: () =>
+              import('./manufacturing/manufacturers/manufacturers.component').then(
+                (m) => m.ManufacturersComponent,
+              ),
+            title: 'Fabricantes - Panel Admin',
+          },
           {
             path: 'ordenes-compra',
             loadComponent: () =>

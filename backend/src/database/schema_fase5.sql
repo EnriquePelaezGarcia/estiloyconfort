@@ -1,13 +1,13 @@
 -- =====================================================================
 -- Mueblería Estilo y Confort - Esquema FASE 5 (módulo Fabricante admin)
--- Fabricantes/proveedores, órdenes de compra y relación producto-fabricante.
+-- Fabricantes, órdenes de compra y relación producto-fabricante.
 -- Ejecutar en MySQL 8.0+ después de schema_fase4.sql (depende de products y users).
 --   node src/database/run-schema.js schema_fase5.sql
 -- =====================================================================
 
 USE estilo_confort;
 
--- ─── FABRICANTES / PROVEEDORES ───────────────────────────────────────────────
+-- ─── FABRICANTES ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS manufacturers (
   id           INT          PRIMARY KEY AUTO_INCREMENT,
   name         VARCHAR(255) NOT NULL,

@@ -8,7 +8,7 @@ const router = Router();
 // Módulo Fabricante (panel admin): solo administradores.
 router.use(authenticate, authorize('admin'));
 
-// Fabricantes / proveedores
+// Fabricantes
 router.get('/manufacturers', manufacturingController.listManufacturers);
 router.post('/manufacturers', manufacturingController.createManufacturer);
 router.put('/manufacturers/:id', manufacturingController.updateManufacturer);

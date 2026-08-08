@@ -199,7 +199,7 @@
           </p>
         } @else {
           <p class="costs__hint">
-            Captura lo que te cuesta el mueble con cada proveedor. Deja vacío el de
+            Captura lo que te cuesta el mueble con cada fabricante. Deja vacío el de
             quien no te lo surta. El <strong>costo más alto</strong> es el que define
             el precio de venta, para que la ganancia nunca quede corta si te toca
             surtir con el caro.
@@ -209,6 +209,7 @@
             <div class="costs__head">
               <span>Fabricante</span>
               <span>Costo</span>
+              <span>Define precio</span>
               <span>Efectivo</span>
               <span>Tarjeta</span>
               <span>6 MSI</span>
@@ -216,11 +217,21 @@
             </div>
 
             @for (row of costRowsWithProfit(); track row.manufacturerId) {
-              <div class="costs__row" [class.costs__row--base]="row.isBaseCost">
+              <div
+                class="costs__row"
+                [class.costs__row--base]="row.isBaseCost"
+                [class.costs__row--no-price]="row.cost !== null && !row.affectsBaseCost"
+              >
                 <span class="costs__name">
                   {{ row.manufacturerName }}
                   @if (row.isBaseCost) {
                     <span class="costs__badge" title="Su costo define el precio de venta">manda</span>
+                  }
+                  @if (row.cost !== null && !row.affectsBaseCost) {
+                    <span
+                      class="costs__badge costs__badge--muted"
+                      title="Este costo no mueve el precio al público"
+                    >sin precio</span>
                   }
                 </span>
                 <input
@@ -232,6 +243,13 @@
                   [value]="row.cost ?? ''"
                   (input)="onCostChange(row.manufacturerId, $event)"
                 />
+                <label class="costs__check" title="Este costo define el precio de venta">
+                  <input
+                    type="checkbox"
+                    [checked]="row.affectsBaseCost"
+                    (change)="onAffectsBaseCostChange(row.manufacturerId, $event)"
+                  />
+                </label>
                 <span class="costs__profit">{{ row.profit ? money(row.profit.cash) : '—' }}</span>
                 <span class="costs__profit">{{ row.profit ? money(row.profit.card) : '—' }}</span>
                 <span class="costs__profit">{{ row.profit ? money(row.profit.msi) : '—' }}</span>
@@ -239,6 +257,11 @@
               </div>
             }
           </div>
+
+          <p class="costs__hint">
+            <strong>Define precio</strong> viene marcado. Al desmarcarlo, el costo se usará para
+            asignar y calcular tu utilidad, pero el precio al público no cambiará.
+          </p>
 
           <p class="costs__base">
             @if (derivedBaseCost() !== null) {

@@ -9,7 +9,6 @@ import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { Order, OrderItem, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
-import { ManufacturerUser } from '../../../core/models/manufacturing.model';
 import {
   DELIVERY_TYPE_LABELS,
   ORDER_STATUS_LABELS,
@@ -61,8 +60,6 @@ export class OrderDetailComponent implements OnInit {
   protected assemblyModalOpen = signal(false);
   protected removingAssembly = signal(false);
 
-  /** Fabricantes disponibles para asignar a items de fabricación (solo admin). */
-  protected manufacturers = signal<ManufacturerUser[]>([]);
   /** Ids de items con una asignación de fabricante en curso. */
   protected assigningManufacturer = signal<Set<number>>(new Set());
 
@@ -178,12 +175,6 @@ export class OrderDetailComponent implements OnInit {
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.load(id);
-    if (this.isAdmin) {
-      this.manufacturingService.getManufacturerUsers().subscribe({
-        next: (res) => this.manufacturers.set(res.data),
-        error: () => {},
-      });
-    }
   }
 
   protected get isAdmin(): boolean {
@@ -205,35 +196,56 @@ export class OrderDetailComponent implements OnInit {
     });
   }
 
+  /**
+   * Asigna el fabricante que surte el item y congela su costo. Las opciones son
+   * las que ya vienen en el pedido: solo los fabricantes con costo capturado
+   * para ese producto.
+   */
   protected onAssignManufacturer(it: OrderItem, event: Event): void {
     const raw = (event.target as HTMLSelectElement).value;
-    const manufacturerUserId = raw ? Number(raw) : null;
+    const manufacturerId = raw ? Number(raw) : null;
     const itemId = it.id!;
 
     this.assigningManufacturer.update((set) => new Set(set).add(itemId));
-    this.manufacturingService.assignOrderItemManufacturer(itemId, manufacturerUserId).subscribe({
-      next: () => {
+    const release = () =>
+      this.assigningManufacturer.update((set) => {
+        const next = new Set(set);
+        next.delete(itemId);
+        return next;
+      });
+
+    this.manufacturingService.assignOrderItemManufacturer(itemId, manufacturerId).subscribe({
+      next: (res) => {
         this.order.update((o) =>
           o
-            ? { ...o, items: (o.items ?? []).map((i) => (i.id === itemId ? { ...i, manufacturerUserId } : i)) }
+            ? {
+                ...o,
+                items: (o.items ?? []).map((i) =>
+                  i.id === itemId
+                    ? {
+                        ...i,
+                        manufacturerId: res.data.manufacturerId,
+                        manufacturerName: res.data.manufacturerName,
+                        unitCost: res.data.unitCost,
+                      }
+                    : i,
+                ),
+              }
             : o,
         );
-        this.assigningManufacturer.update((set) => {
-          const next = new Set(set);
-          next.delete(itemId);
-          return next;
-        });
-        this.notification.success(manufacturerUserId ? 'Fabricante asignado' : 'Fabricante quitado');
+        release();
+        this.notification.success(res.message);
       },
       error: (err: { error?: { message?: string } }) => {
-        this.assigningManufacturer.update((set) => {
-          const next = new Set(set);
-          next.delete(itemId);
-          return next;
-        });
+        release();
         this.notification.error(err?.error?.message ?? 'No se pudo asignar el fabricante');
       },
     });
+  }
+
+  protected money(value: number | null | undefined): string {
+    if (value === null || value === undefined) return '—';
+    return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
   protected openPayment(): void {

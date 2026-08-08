@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
-import { FactoryOrderItemRow, ManufacturerUser } from '../../../../core/models/manufacturing.model';
+import { FactoryOrderItemRow } from '../../../../core/models/manufacturing.model';
 
 /** Un pedido con todos sus items de fabricación agrupados. */
 export interface FactoryOrderGroup {
@@ -19,19 +20,18 @@ export interface FactoryOrderGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './factory-orders.component.html',
   styleUrl: './factory-orders.component.scss',
-  imports: [RouterLink],
+  imports: [RouterLink, DatePipe],
 })
 export class FactoryOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
 
   protected rows = signal<FactoryOrderItemRow[]>([]);
-  protected manufacturers = signal<ManufacturerUser[]>([]);
   protected loading = signal(true);
-  /** Ids de items con una asignación de operario en curso. */
+  /** Ids de items con una asignación de fabricante en curso. */
   protected assigning = signal<Set<number>>(new Set());
-  /** Ids de items con una asignación de proveedor en curso. */
-  protected assigningSupplier = signal<Set<number>>(new Set());
+  /** Ids de items con un cambio de estado (listo/pendiente) en curso. */
+  protected markingReady = signal<Set<number>>(new Set());
   /** Ids de pedidos con la fecha de entrega del fabricante en proceso de guardado. */
   protected savingDueDate = signal<Set<number>>(new Set());
 
@@ -57,6 +57,11 @@ export class FactoryOrdersComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.load();
+  }
+
+  private load(): void {
+    this.loading.set(true);
     this.manufacturingService.getFactoryOrderItems().subscribe({
       next: (res) => {
         this.rows.set(res.data);
@@ -67,64 +72,26 @@ export class FactoryOrdersComponent implements OnInit {
         this.notification.error('No se pudo cargar la lista de pedidos a fábrica');
       },
     });
-
-    this.manufacturingService.getManufacturerUsers().subscribe({
-      next: (res) => this.manufacturers.set(res.data),
-      error: () => {},
-    });
-  }
-
-  protected onAssignChange(row: FactoryOrderItemRow, event: Event): void {
-    const raw = (event.target as HTMLSelectElement).value;
-    const manufacturerUserId = raw ? Number(raw) : null;
-
-    this.assigning.update((set) => new Set(set).add(row.itemId));
-    this.manufacturingService.assignOrderItemManufacturer(row.itemId, manufacturerUserId).subscribe({
-      next: () => {
-        const manufacturer = this.manufacturers().find((m) => m.id === manufacturerUserId);
-        this.rows.update((rows) =>
-          rows.map((r) =>
-            r.itemId === row.itemId
-              ? { ...r, manufacturerUserId, manufacturerUserName: manufacturer?.fullName ?? null }
-              : r,
-          ),
-        );
-        this.assigning.update((set) => {
-          const next = new Set(set);
-          next.delete(row.itemId);
-          return next;
-        });
-        this.notification.success(manufacturerUserId ? 'Fabricante asignado' : 'Fabricante quitado');
-      },
-      error: (err: { error?: { message?: string } }) => {
-        this.assigning.update((set) => {
-          const next = new Set(set);
-          next.delete(row.itemId);
-          return next;
-        });
-        this.notification.error(err?.error?.message ?? 'No se pudo asignar el fabricante');
-      },
-    });
   }
 
   /**
-   * Asigna el proveedor comercial que surte el item. Nada se asigna solo: el
-   * admin decide caso por caso, y al guardarse queda congelado el costo con el
-   * que se calculará la utilidad real de esa venta.
+   * Asigna el fabricante que surte el item. Nada se asigna solo: el admin decide
+   * caso por caso, y al guardarse queda congelado el costo con el que se
+   * calculará la utilidad real de esa venta.
    */
-  protected onSupplierChange(row: FactoryOrderItemRow, event: Event): void {
+  protected onManufacturerChange(row: FactoryOrderItemRow, event: Event): void {
     const raw = (event.target as HTMLSelectElement).value;
     const manufacturerId = raw ? Number(raw) : null;
 
-    this.assigningSupplier.update((set) => new Set(set).add(row.itemId));
+    this.assigning.update((set) => new Set(set).add(row.itemId));
     const release = () =>
-      this.assigningSupplier.update((set) => {
+      this.assigning.update((set) => {
         const next = new Set(set);
         next.delete(row.itemId);
         return next;
       });
 
-    this.manufacturingService.assignOrderItemSupplier(row.itemId, manufacturerId).subscribe({
+    this.manufacturingService.assignOrderItemManufacturer(row.itemId, manufacturerId).subscribe({
       next: (res) => {
         this.rows.update((rows) =>
           rows.map((r) => (r.itemId === row.itemId ? { ...r, ...res.data } : r)),
@@ -134,7 +101,35 @@ export class FactoryOrdersComponent implements OnInit {
       },
       error: (err: { error?: { message?: string } }) => {
         release();
-        this.notification.error(err?.error?.message ?? 'No se pudo asignar el proveedor');
+        this.notification.error(err?.error?.message ?? 'No se pudo asignar el fabricante');
+      },
+    });
+  }
+
+  /**
+   * El admin marca listo un item. Es imprescindible para los fabricantes que no
+   * entran al sistema: si nadie reporta por ellos, el pedido nunca avanzaría.
+   * Se recarga la lista porque marcar el último item mueve el pedido a "Listo".
+   */
+  protected onReadyToggle(row: FactoryOrderItemRow): void {
+    const isReady = !row.isReady;
+    this.markingReady.update((set) => new Set(set).add(row.itemId));
+    const release = () =>
+      this.markingReady.update((set) => {
+        const next = new Set(set);
+        next.delete(row.itemId);
+        return next;
+      });
+
+    this.manufacturingService.markItemReady(row.orderId, row.itemId, isReady).subscribe({
+      next: (res) => {
+        release();
+        this.notification.success(res.message);
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        release();
+        this.notification.error(err?.error?.message ?? 'No se pudo cambiar el estado del item');
       },
     });
   }

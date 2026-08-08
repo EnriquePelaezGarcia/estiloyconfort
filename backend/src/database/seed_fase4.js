@@ -1,6 +1,6 @@
 /**
- * Seed Fase 4: usuarios de negocio (vendedor, repartidor, fabricante) y
- * pedidos de ejemplo con items, entregas y pagos.
+ * Seed Fase 4: usuarios de negocio (vendedor, repartidor) y pedidos de
+ * ejemplo con items, entregas y pagos.
  * Requiere haber ejecutado antes: schema.sql, schema_fase2.sql, seed_fase2.js
  * y schema_fase4.sql.
  * Ejecutar: node src/database/seed_fase4.js
@@ -13,7 +13,8 @@ const PASSWORD = 'Demo1234';
 const businessUsers = [
   { email: 'vendedor@estiloyconfort.com', fullName: 'Verónica Vendedora', phone: '2221112233', role: 'seller' },
   { email: 'repartidor@estiloyconfort.com', fullName: 'Ricardo Repartidor', phone: '2224445566', role: 'delivery_person' },
-  { email: 'fabricante@estiloyconfort.com', fullName: 'Fabián Fabricante', phone: '2227778899', role: 'manufacturer' },
+  // Los logins de fabricante no van aquí: pertenecen a un fabricante real de la
+  // tabla `manufacturers` y se crean en seed_manufacturer_users.js.
 ];
 
 async function ensureUsers() {

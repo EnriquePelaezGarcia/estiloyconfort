@@ -31,12 +31,10 @@ router.patch('/orders/:id/status', adminController.updateOrderStatus);
 router.patch('/orders/:id/assign', adminController.assignDelivery);
 router.delete('/orders/:id/assembly', adminController.removeAssembly);
 router.get('/delivery-people', adminController.getDeliveryPeople);
-router.get('/manufacturer-users', adminController.getManufacturerUsers);
 router.get('/factory-order-items', adminController.getFactoryOrderItems);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);
+// Fabricante que surte el item; al asignarlo se congela su costo.
 router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);
-// Proveedor comercial que surte el item (distinto del operario de arriba).
-router.patch('/order-items/:id/supplier', adminController.assignOrderItemSupplier);
 
 // Reportes (Fase 4)
 router.get('/reports/sales', adminController.getSalesReport);
