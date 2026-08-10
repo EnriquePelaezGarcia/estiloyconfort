@@ -10,6 +10,7 @@ const router = Router();
 router.use(authenticate, authorize('admin'));
 
 router.get('/dashboard', adminController.getDashboard);
+router.get('/health/pricing', adminController.getPricingHealth);
 
 // Reglas de precios (configuración global)
 router.get('/pricing-config', pricingController.getConfig);
@@ -39,5 +40,10 @@ router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemMan
 // Reportes (Fase 4)
 router.get('/reports/sales', adminController.getSalesReport);
 router.get('/reports/inventory', adminController.getInventoryReport);
+
+// Listas de precios por material (Fase 5 del plan de precios por material y mayoreo)
+router.get('/price-list', adminController.getPriceList);
+router.get('/wholesale-price-list', adminController.getWholesalePriceList);
+router.get('/profit-matrix', adminController.getProfitMatrix);
 
 module.exports = router;

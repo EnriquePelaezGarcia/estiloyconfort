@@ -1,4 +1,5 @@
 // Modelos del módulo Fabricante (panel admin).
+import { ProductMaterial } from './order.model';
 
 export type PurchaseOrderStatus =
   | 'draft'
@@ -111,20 +112,25 @@ export interface FactoryOrderItemRow {
  * Producto del catálogo bajo un fabricante. Un mismo producto aparece una vez
  * por cada fabricante que lo surte, con el costo específico de ese fabricante.
  */
+/** Costo de este fabricante EN UN MATERIAL concreto (D1), con su margen. */
+export interface ManufacturerCatalogMaterialCost {
+  cost: number | null;
+  /** true si su costo es el más alto en ESE material (RN-02) y por tanto define el precio de venta. */
+  isBaseCost: boolean;
+  priceCash: number | null;
+  unitMargin: number | null;
+}
+
 export interface ManufacturerCatalogProduct {
   id: number;
   name: string;
   sku: string | null;
-  /** Costo con ESTE fabricante, no el costo base del producto. */
-  baseCost: number | null;
-  priceCash: number | null;
-  /** true si su costo es el más alto y por tanto define el precio de venta. */
-  isBaseCost: boolean;
-  unitMargin: number | null;
   stockQuantity: number;
   manufacturerId: number | null;
   manufacturerName: string | null;
   categoryName: string | null;
+  /** Los 3 costos de este fabricante para el producto (D1/RN-03). */
+  materials: Record<ProductMaterial, ManufacturerCatalogMaterialCost>;
 }
 
 export const PURCHASE_ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {

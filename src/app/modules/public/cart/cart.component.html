@@ -16,7 +16,7 @@
       <div class="cart-layout">
         <!-- Lista de productos -->
         <section class="cart-items">
-          @for (item of cart.items(); track item.productId) {
+          @for (item of cart.items(); track lineKey(item)) {
             <article class="cart-item">
               <div class="cart-item__image">
                 @if (item.primaryImage) {
@@ -30,9 +30,7 @@
                 <a [routerLink]="['/producto', item.slug]" class="cart-item__name">
                   {{ item.name }}
                 </a>
-                @if (variantLabel(item)) {
-                  <p class="cart-item__variants">{{ variantLabel(item) }}</p>
-                }
+                <p class="cart-item__variants">{{ materialLabels[item.material] }}@if (variantLabel(item)) {, {{ variantLabel(item) }}}</p>
                 @if (item.availabilityDays > 0) {
                   <span class="cart-item__lead">{{ item.availabilityDays }} días de fabricación</span>
                 }

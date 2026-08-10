@@ -16,15 +16,31 @@ export type OrderStatus =
  */
 export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit' | 'transfer' | 'layaway';
 
-/** Condición de venta del pedido (qué precio aplica y qué reglas de cobro). */
-export type SaleScheme = 'cash' | 'msi' | 'store_credit' | 'layaway';
+/**
+ * Condición de venta del pedido (qué precio aplica y qué reglas de cobro).
+ * 'wholesale' (RN-10, D5) aún no tiene UI en el POS — el backend ya la acepta.
+ */
+export type SaleScheme = 'cash' | 'msi' | 'store_credit' | 'layaway' | 'wholesale';
 
 /** Instrumento con el que se recibe cada cobro. */
 export type PaymentInstrument = 'cash' | 'card' | 'transfer' | 'msi';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
-/** Material del mueble (mismo ENUM en orders y products). */
-export type ProductMaterial = 'MDF' | 'Melamina';
+/**
+ * Material del mueble (mismo ENUM en orders, products y order_items).
+ * Define el precio de venta (RN-01…RN-03 del motor de precios): un mismo
+ * producto tiene hasta 3 costos/precios distintos, uno por material.
+ */
+export type ProductMaterial = 'MDF' | 'MELAMINA_BLANCA' | 'MELAMINA_COLOR';
+
+/** Orden de presentación en selects y tablas. Fuente única de verdad. */
+export const MATERIALS: readonly ProductMaterial[] = ['MDF', 'MELAMINA_BLANCA', 'MELAMINA_COLOR'];
+
+export const MATERIAL_LABELS: Record<ProductMaterial, string> = {
+  MDF: 'MDF Pintado',
+  MELAMINA_BLANCA: 'Melamina Blanca',
+  MELAMINA_COLOR: 'Melamina Color',
+};
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 export interface OrderItem {
@@ -180,14 +196,22 @@ export interface SellerDashboard {
   }>;
 }
 
+/** Precio de un producto en un material concreto, para el buscador del POS. */
+export interface InventoryMaterialPrice {
+  material: ProductMaterial;
+  priceCash: number;
+  price6msi: number;
+  priceMayoreo: number | null;
+}
+
 export interface InventoryItem {
   id: number;
   name: string;
   sku: string;
-  price_cash: number;
-  price_6msi: number;
   stock_quantity: number;
   availability_days: number;
+  /** Los materiales en los que este producto SÍ se cotiza (RN-03). */
+  materialPrices: InventoryMaterialPrice[];
 }
 
 export interface DeliveryAssignment {
@@ -368,9 +392,74 @@ export interface InventoryReportRow {
   category: string | null;
   stock_quantity: number;
   stock_alert_level: number;
-  base_cost: number;
-  price_cash: number;
+  /** null = el producto no se cotiza en el material de su stock (RN-03). */
+  base_cost: number | null;
+  price_cash: number | null;
   stock_value: number;
+}
+
+/**
+ * Fila del catálogo propio del fabricante (D14, portal de solo lectura):
+ * SOLO sus 3 costos por material. Nunca precio de venta, costo base ni
+ * margen — esas columnas no existen en esta respuesta.
+ */
+export interface ManufacturerOwnCatalogItem {
+  productId: number;
+  name: string;
+  sku: string | null;
+  costMdf: number | null;
+  costMelaminaBlanca: number | null;
+  costMelaminaColor: number | null;
+}
+
+// ===== Fase 5 — listas de precios por material =====
+
+/** Fila de la Lista de Precios (Producto × Material -> cara al cliente). */
+export interface PriceListRow {
+  productId: number;
+  name: string;
+  sku: string | null;
+  categoryName: string | null;
+  material: ProductMaterial;
+  priceCash: number;
+  price6msi: number | null;
+  priceCredit: number | null;
+  downPayment: number | null;
+  weeklyPayment: number | null;
+  lastPayment: number | null;
+  weeks: number | null;
+}
+
+/** Fila de Precios Mayoreo (Producto × Material -> Mayoreo vs Contado). */
+export interface WholesalePriceListRow {
+  productId: number;
+  name: string;
+  sku: string | null;
+  categoryName: string | null;
+  material: ProductMaterial;
+  priceCash: number;
+  priceMayoreo: number;
+  savingsPct: number | null;
+}
+
+/** Fila del Panel de Utilidades (Producto × Material × Fabricante × forma de pago). */
+export interface ProfitMatrixRow {
+  productId: number;
+  name: string;
+  sku: string | null;
+  material: ProductMaterial;
+  manufacturerId: number;
+  manufacturerName: string;
+  cost: number;
+  cash: number | null;
+  card: number | null;
+  msi: number | null;
+  credit: number | null;
+  marginPct: number | null;
+  wholesale: number | null;
+  wholesaleMarginPct: number | null;
+  /** true = el margen de contado quedó bajo min_margin_alert (solo visual). */
+  alertLow: boolean;
 }
 
 /** Cliente con pedido pendiente de crédito tienda o sistema de apartado. */

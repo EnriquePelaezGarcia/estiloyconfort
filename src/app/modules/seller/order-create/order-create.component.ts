@@ -7,7 +7,7 @@ import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ShippingService } from '../../../core/services/shipping.service';
-import { AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem, OrderItem, OrderStatus, ProductMaterial, SaleScheme } from '../../../core/models/order.model';
+import { AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem, MATERIAL_LABELS, OrderItem, OrderStatus, ProductMaterial, SaleScheme } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
@@ -154,21 +154,44 @@ export class OrderCreateComponent implements OnInit {
   protected isLayaway = computed(() => this.paymentMethodSig() === 'layaway');
   /** ¿El método de pago es 6 Meses sin intereses? */
   protected isMsi = computed(() => this.paymentMethodSig() === 'msi');
+  /** RN-10/D5 — venta de contado entre negocios: sin IVA ni comisiones. */
+  protected isWholesale = computed(() => this.paymentMethodSig() === 'wholesale');
 
-  /** Precio unitario base según método de pago: 6 MSI usa price_6msi del catálogo. */
-  private priceFor(product: InventoryItem, msi: boolean): number {
-    return msi && product.price_6msi > 0 ? product.price_6msi : product.price_cash;
-  }
-
-  /** Precio unitario aplicado al producto según el método de pago actual. */
-  protected unitPrice(product: InventoryItem): number {
-    return this.priceFor(product, this.isMsi());
-  }
-
-  protected total = computed(() => {
-    const msi = this.isMsi();
-    return this.lines().reduce((sum, l) => sum + this.priceFor(l.product, msi) * l.quantity, 0);
+  /**
+   * Material activo, como signal (Fase 6.1): es el cambio de UX central de
+   * esta pantalla — elegirlo reprecia TODAS las líneas ya capturadas, sin
+   * recargar ni volver a buscar el producto.
+   */
+  private materialSigRaw = toSignal(this.form.controls.material.valueChanges, {
+    initialValue: this.form.controls.material.value,
   });
+  protected materialSig = computed<ProductMaterial>(() => this.materialSigRaw() ?? 'MDF');
+  protected readonly materialLabels = MATERIAL_LABELS;
+
+  /** Fila de precios del producto para el material activo, o null si no se cotiza ahí (RN-03). */
+  protected lineMaterialPrice(product: InventoryItem) {
+    const material = this.materialSig();
+    return product.materialPrices.find((mp) => mp.material === material) ?? null;
+  }
+
+  /** Precio unitario según esquema de venta Y material activo. null = no se cotiza (RN-03). */
+  protected unitPrice(product: InventoryItem): number | null {
+    const mp = this.lineMaterialPrice(product);
+    if (!mp) return null;
+    if (this.isWholesale()) return mp.priceMayoreo;
+    if (this.isMsi() && mp.price6msi > 0) return mp.price6msi;
+    return mp.priceCash;
+  }
+
+  /** Líneas cuyo producto no se cotiza en el material activo (RN-03): se marcan en rojo, no se borran solas. */
+  protected unquotedLines = computed(() =>
+    this.lines().filter((l) => this.unitPrice(l.product) === null),
+  );
+  protected hasUnquotedLines = computed(() => this.unquotedLines().length > 0);
+
+  protected total = computed(() =>
+    this.lines().reduce((sum, l) => sum + (this.unitPrice(l.product) ?? 0) * l.quantity, 0),
+  );
 
   protected layawayDeadline = computed(() => {
     if (!this.isLayaway()) return null;
@@ -196,6 +219,22 @@ export class OrderCreateComponent implements OnInit {
         } else {
           floors.setValue(0);
           floors.disable();
+        }
+      });
+
+    // Coherencia material ↔ color (D15 / §6.1b): la melamina blanca solo
+    // existe en blanco, así que el campo se fija y se bloquea. El backend
+    // valida lo mismo (Order.js) — esto es solo la primera defensa.
+    this.form.controls.material.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((material) => {
+        const color = this.form.controls.color;
+        if (material === 'MELAMINA_BLANCA') {
+          color.setValue('blanco');
+          color.disable();
+        } else {
+          color.enable();
+          if (color.value === 'blanco') color.setValue('');
         }
       });
   }
@@ -267,16 +306,21 @@ export class OrderCreateComponent implements OnInit {
           this.shippingCp.set(cp);
           if (cp.length === 5) this.fetchShippingQuote(cp);
         }
+        // Nota: al editar, cada línea solo "conoce" el precio que ya tenía
+        // congelado (su material original). Si el vendedor cambia el material
+        // del pedido, estas líneas viejas se marcan como no cotizadas —
+        // deberá quitarlas y volver a buscar el producto en el nuevo material.
         this.lines.set(
           (data.items ?? []).map((it) => ({
             product: {
               id: it.productId,
               name: it.productName ?? '',
               sku: it.productSku ?? '',
-              price_cash: it.unitPrice,
-              price_6msi: 0,
               stock_quantity: 0,
               availability_days: 0,
+              materialPrices: [
+                { material: data.material ?? 'MDF', priceCash: it.unitPrice, price6msi: it.unitPrice, priceMayoreo: null },
+              ],
             },
             quantity: it.quantity,
             requiresFabrication: !!it.requiresFabrication,
@@ -327,6 +371,10 @@ export class OrderCreateComponent implements OnInit {
 
   protected addProduct(product: InventoryItem): void {
     if (this.isRestrictedEdit() && product.stock_quantity <= 0) return;
+    if (!this.lineMaterialPrice(product)) {
+      this.notification.error(`No disponible en ${this.materialLabels[this.materialSig()]}`);
+      return;
+    }
     this.lines.update((lines) => {
       const existing = lines.find((l) => l.product.id === product.id);
       if (existing) {
@@ -382,6 +430,13 @@ export class OrderCreateComponent implements OnInit {
       this.notification.error('Agrega al menos un producto al pedido');
       return;
     }
+    if (this.hasUnquotedLines()) {
+      this.notification.error(
+        `Estos muebles no se cotizan en ${this.materialLabels[this.materialSig()]}: ` +
+          `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material.`,
+      );
+      return;
+    }
     const raw = this.form.getRawValue();
     const payload: CreateOrderRequest = {
       customerName: raw.customerName!,
@@ -405,7 +460,9 @@ export class OrderCreateComponent implements OnInit {
       items: this.lines().map((l) => ({
         productId: l.product.id,
         quantity: l.quantity,
-        unitPrice: this.unitPrice(l.product),
+        // El backend recalcula el precio autoritativo por esquema y material
+        // (RN-01…RN-10); este valor es solo para no romper el tipo del payload.
+        unitPrice: this.unitPrice(l.product) ?? 0,
         requiresFabrication: l.requiresFabrication,
       })),
     };

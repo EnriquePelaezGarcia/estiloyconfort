@@ -140,6 +140,39 @@ const manufacturerController = {
     res.json({ data: order, message: isReady ? 'Item marcado como listo' : 'Item marcado como pendiente' });
   }),
 
+  // GET /api/manufacturer/catalog — SUS costos por material, nunca precio de
+  // venta, costo base ni margen (D14). El admin puede consultar el de
+  // cualquiera con ?manufacturerId=; el fabricante ignora ese parámetro.
+  myCatalog: asyncHandler(async (req, res) => {
+    const manufacturerId = req.user.role === 'admin'
+      ? Number(req.query.manufacturerId)
+      : await manufacturerIdOf(req.user.id);
+    if (!manufacturerId) return res.json({ data: [] });
+
+    // Sin JOIN a product_material_prices ni a las vistas: si la consulta no
+    // puede alcanzar los precios de venta, no puede filtrarlos por error.
+    const [rows] = await pool.execute(
+      `SELECT p.id AS product_id, p.name, p.sku,
+              pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color
+         FROM product_manufacturer_prices pmp
+         JOIN products p ON p.id = pmp.product_id
+        WHERE pmp.manufacturer_id = ? AND pmp.is_active = TRUE
+          AND (pmp.cost_mdf IS NOT NULL OR pmp.cost_melamina_blanca IS NOT NULL OR pmp.cost_melamina_color IS NOT NULL)
+        ORDER BY p.name`,
+      [manufacturerId],
+    );
+    res.json({
+      data: rows.map((r) => ({
+        productId: r.product_id,
+        name: r.name,
+        sku: r.sku,
+        costMdf: r.cost_mdf != null ? Number(r.cost_mdf) : null,
+        costMelaminaBlanca: r.cost_melamina_blanca != null ? Number(r.cost_melamina_blanca) : null,
+        costMelaminaColor: r.cost_melamina_color != null ? Number(r.cost_melamina_color) : null,
+      })),
+    });
+  }),
+
   // PATCH /api/manufacturer/orders/:id/start — mover de 'pending' a 'fabricating'
   startFabrication: asyncHandler(async (req, res) => {
     if (req.user.role === 'manufacturer') {

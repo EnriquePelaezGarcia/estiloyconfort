@@ -8,6 +8,7 @@ import {
   ManufacturerCatalogProduct,
   ManufacturerInput,
 } from '../../../../core/models/manufacturing.model';
+import { MATERIAL_LABELS, MATERIALS } from '../../../../core/models/order.model';
 
 @Component({
   selector: 'app-manufacturer-catalog',
@@ -25,6 +26,8 @@ export class ManufacturerCatalogComponent implements OnInit {
   protected products = signal<ManufacturerCatalogProduct[]>([]);
   protected loading = signal(true);
   protected selectedManufacturer = signal<number | null>(null);
+  protected readonly materials = MATERIALS;
+  protected readonly materialLabels = MATERIAL_LABELS;
 
   /** Fabricante en edición (null = formulario cerrado, 0 = alta nueva). */
   protected editing = signal<number | null>(null);

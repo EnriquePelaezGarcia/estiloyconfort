@@ -85,6 +85,22 @@
           <span class="material-symbols-outlined attention-item__arrow">chevron_right</span>
         </a>
       </li>
+      @if (s.unpricedOrderItems > 0) {
+        <li>
+          <a
+            class="attention-item attention-item--alert"
+            routerLink="../reportes"
+            title="Líneas sin fabricante asignado y sin costo base para su material: su utilidad se está calculando contra costo cero"
+          >
+            <span class="material-symbols-outlined attention-item__icon">error</span>
+            <div class="attention-item__body">
+              <span class="attention-item__value">{{ s.unpricedOrderItems }}</span>
+              <span class="attention-item__label">Líneas con utilidad calculada contra costo $0 — revisar</span>
+            </div>
+            <span class="material-symbols-outlined attention-item__arrow">chevron_right</span>
+          </a>
+        </li>
+      }
     </ul>
   </section>
 

@@ -20,7 +20,13 @@ export type PricingConfigKey =
   | 'credit_initial_pct'
   | 'credit_weeks'
   | 'assembly_base'
-  | 'assembly_per_floor';
+  | 'assembly_per_floor'
+  // RN-10 — factor de mayoreo, uno por material.
+  | 'wholesale_factor_mdf'
+  | 'wholesale_factor_blanca'
+  | 'wholesale_factor_color'
+  // Umbral visual del semáforo de utilidades. No bloquea nada.
+  | 'min_margin_alert';
 
 /** Mapa key -> valor usado por el calculador de precios. */
 export type PricingConfigMap = Record<PricingConfigKey, number>;
@@ -35,6 +41,10 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   credit_weeks: 12,
   assembly_base: 150,
   assembly_per_floor: 50,
+  wholesale_factor_mdf: 1.334,
+  wholesale_factor_blanca: 1.334,
+  wholesale_factor_color: 1.334,
+  min_margin_alert: 20,
 };
 
 export interface CalculatedPrices {

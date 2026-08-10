@@ -1,10 +1,17 @@
 /**
- * Seed Fase 4: usuarios de negocio (vendedor, repartidor) y pedidos de
- * ejemplo con items, entregas y pagos.
- * Requiere haber ejecutado antes: schema.sql, schema_fase2.sql, seed_fase2.js
- * y schema_fase4.sql.
- * Ejecutar: node src/database/seed_fase4.js
+ * DEPRECADO (Fase 9 — plan-precios-por-material-y-mayoreo.md): los pedidos
+ * demo de este seed leen products.price_cash (columna eliminada por la
+ * migración "contract") y no fijan order_items.material, hoy obligatorio.
+ * Para usuarios/pedidos de prueba usa el flujo real del POS contra el
+ * catálogo de seed_products_2026.js. Se conserva solo como referencia
+ * histórica y ya no debe ejecutarse.
+ * Seed Fase 4 (histórico): usuarios de negocio y pedidos de ejemplo.
  */
+throw new Error(
+  'seed_fase4.js está deprecado: sus pedidos demo dependen de columnas ' +
+  'eliminadas en la migración de Fase 9. Crea pedidos de prueba desde el POS.',
+);
+// eslint-disable-next-line no-unreachable
 const { pool } = require('../config/database');
 const bcrypt = require('bcryptjs');
 

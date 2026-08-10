@@ -109,9 +109,22 @@ export class CatalogComponent implements OnInit {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  /**
+   * Desde el catálogo no hay selector de material (Fase 4bis.3): si el
+   * producto se cotiza en más de un material, "Agregar" lleva a la ficha en
+   * vez de adivinar cuál. Con uno solo, agrega directo.
+   */
   onAddToCart(product: Product): void {
-    this.cartService.addItem(product, 1);
-    this.addedProductId.set(product.id);
-    setTimeout(() => this.addedProductId.set(null), 1500);
+    if ((product.quoted_materials ?? 0) !== 1) {
+      this.router.navigate(['/producto', product.slug]);
+      return;
+    }
+    this.productService.getProduct(product.slug).subscribe((full) => {
+      const material = full.materialPrices?.find((m) => m.base_cost != null)?.material;
+      if (!material) { this.router.navigate(['/producto', product.slug]); return; }
+      this.cartService.addItem(full, material, 1);
+      this.addedProductId.set(product.id);
+      setTimeout(() => this.addedProductId.set(null), 1500);
+    });
   }
 }

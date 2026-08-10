@@ -1,7 +1,17 @@
 /**
- * Seed Fase 2: categorías y productos de ejemplo para Mueblería Estilo y Confort.
- * Ejecutar: node src/database/seed_fase2.js
+ * DEPRECADO (Fase 9 — plan-precios-por-material-y-mayoreo.md): este seed
+ * escribía directamente en products.base_cost/price_cash/price_6msi, columnas
+ * eliminadas en la migración "contract" (schema_material_pricing_contract.sql).
+ * El catálogo de ejemplo vigente es seed_products_2026.js (3 costos por
+ * fabricante y material). Este archivo se conserva solo como referencia
+ * histórica y ya no debe ejecutarse.
+ * Seed Fase 2 (histórico): categorías y productos de ejemplo.
  */
+throw new Error(
+  'seed_fase2.js está deprecado: usa "node src/database/seed_products_2026.js". ' +
+  'Este seed escribe en columnas eliminadas por la migración de Fase 9.',
+);
+// eslint-disable-next-line no-unreachable
 const { pool } = require('../config/database');
 
 const categories = [

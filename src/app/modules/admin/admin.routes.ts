@@ -39,6 +39,24 @@ export const adminRoutes: Routes = [
         title: 'Reglas de precios - Panel Admin',
       },
       {
+        path: 'lista-precios',
+        loadComponent: () =>
+          import('./price-list/price-list.component').then((m) => m.PriceListComponent),
+        title: 'Lista de precios - Panel Admin',
+      },
+      {
+        path: 'precios-mayoreo',
+        loadComponent: () =>
+          import('./wholesale-list/wholesale-list.component').then((m) => m.WholesaleListComponent),
+        title: 'Precios mayoreo - Panel Admin',
+      },
+      {
+        path: 'utilidades',
+        loadComponent: () =>
+          import('./profit-matrix/profit-matrix.component').then((m) => m.ProfitMatrixComponent),
+        title: 'Panel de utilidades - Panel Admin',
+      },
+      {
         path: 'punto-venta',
         loadComponent: () =>
           import('../seller/order-create/order-create.component').then((m) => m.OrderCreateComponent),

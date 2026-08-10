@@ -13,10 +13,21 @@ const Product = {
       conditions.push('(p.name LIKE ? OR p.description LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
     }
-    if (minPrice) { conditions.push('p.price_cash >= ?'); params.push(Number(minPrice)); }
-    if (maxPrice) { conditions.push('p.price_cash <= ?'); params.push(Number(maxPrice)); }
+    // D7: el precio público es un rango (hasta 3 materiales); minPrice/maxPrice
+    // y el orden operan sobre pp.price_from, el mínimo entre materiales cotizados.
+    // Sin JOIN a product_public_prices ni a product_inventory_prices en este
+    // WHERE se estaría filtrando sobre el precio equivocado (D10).
+    if (minPrice) { conditions.push('pp.price_from >= ?'); params.push(Number(minPrice)); }
+    if (maxPrice) { conditions.push('pp.price_from <= ?'); params.push(Number(maxPrice)); }
+    // El catálogo público solo debe listar productos con al menos un material
+    // cotizado (D7); el admin (includeInactive = true) necesita ver todos,
+    // cotizados o no, para poder terminar de capturarles el costo.
+    if (!includeInactive) conditions.push('pp.quoted_materials > 0');
 
-    const validSorts = { price_asc: 'p.price_cash ASC', price_desc: 'p.price_cash DESC', name: 'p.name ASC', newest: 'p.created_at DESC' };
+    const validSorts = {
+      price_asc: 'pp.price_from ASC', price_desc: 'pp.price_from DESC',
+      name: 'p.name ASC', newest: 'p.created_at DESC',
+    };
     const orderBy = validSorts[sort] || 'p.created_at DESC';
 
     // LIMIT/OFFSET no pueden ir como parámetros en pool.execute() (prepared
@@ -28,16 +39,20 @@ const Product = {
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) AS total FROM products p ${where}`, params
+      `SELECT COUNT(*) AS total FROM products p
+       LEFT JOIN product_public_prices pp ON pp.product_id = p.id
+       ${where}`, params
     );
 
     const [rows] = await pool.execute(
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug,
               m.name AS manufacturer_name,
+              pp.price_from, pp.price_to, pp.price_6msi_from, pp.price_mayoreo_from, pp.quoted_materials,
               (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
+       LEFT JOIN product_public_prices pp ON pp.product_id = p.id
        ${where}
        ORDER BY ${orderBy}
        LIMIT ${safeLimit} OFFSET ${offset}`,
@@ -50,10 +65,12 @@ const Product = {
   async findById(id, { includeInactive = false } = {}) {
     const [[product]] = await pool.execute(
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug,
-              m.name AS manufacturer_name
+              m.name AS manufacturer_name,
+              pp.price_from, pp.price_to, pp.price_6msi_from, pp.price_mayoreo_from, pp.quoted_materials
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
+       LEFT JOIN product_public_prices pp ON pp.product_id = p.id
        WHERE p.id = ?${includeInactive ? '' : ' AND p.is_active = TRUE'}`,
       [id]
     );
@@ -67,8 +84,13 @@ const Product = {
       'SELECT * FROM product_variants WHERE product_id = ? AND is_active = TRUE ORDER BY variant_type, variant_value',
       [id]
     );
+    // D7: la ficha de producto muestra los 3 precios, uno por material.
+    const [materialPrices] = await pool.execute(
+      'SELECT material, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
+      [id]
+    );
 
-    return { ...product, images, variants };
+    return { ...product, images, variants, materialPrices };
   },
 
   async findBySlug(slug) {
@@ -78,11 +100,12 @@ const Product = {
 
   async search(q) {
     const [rows] = await pool.execute(
-      `SELECT id, name, slug, price_cash,
-              (SELECT image_url FROM product_images WHERE product_id = products.id AND is_primary = TRUE LIMIT 1) AS primary_image
-       FROM products
-       WHERE is_active = TRUE AND (name LIKE ? OR sku LIKE ?)
-       ORDER BY is_featured DESC, name
+      `SELECT p.id, p.name, p.slug, pp.price_from,
+              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image
+       FROM products p
+       LEFT JOIN product_public_prices pp ON pp.product_id = p.id
+       WHERE p.is_active = TRUE AND (p.name LIKE ? OR p.sku LIKE ?)
+       ORDER BY p.is_featured DESC, p.name
        LIMIT 8`,
       [`%${q}%`, `%${q}%`]
     );
@@ -93,7 +116,7 @@ const Product = {
     const fields = ['name','slug','sku','category_id','manufacturer_id','description',
       'material','color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
-      'availability_days','base_cost','margin_percentage','price_cash','price_6msi','price_credit',
+      'availability_days','margin_percentage',
       'stock_quantity','stock_alert_level','is_featured'];
     const values = fields.map(f => data[f] ?? null);
     const [result] = await pool.execute(
@@ -107,7 +130,7 @@ const Product = {
     const allowed = ['name','slug','sku','category_id','manufacturer_id','description',
       'material','color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
-      'availability_days','base_cost','margin_percentage','price_cash','price_6msi','price_credit',
+      'availability_days','margin_percentage',
       'stock_quantity','stock_alert_level','is_featured','is_active'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
     if (!entries.length) return this.findById(id, { includeInactive: true });

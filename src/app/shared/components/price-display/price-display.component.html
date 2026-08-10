@@ -1,14 +1,22 @@
 <div class="price-display" [class]="'price-display--' + layout()">
   <div class="price-display__cash">
-    <span class="price-display__label">Contado</span>
+    <span class="price-display__label">{{ fromPrefix() ? 'Desde' : 'Contado' }}</span>
     <span class="price-display__amount price-display__amount--main">
-      {{ priceCash() | currency:'MXN':'symbol-narrow':'1.2-2' }}
+      @if (priceCash() !== null) {
+        {{ priceCash() | currency:'MXN':'symbol-narrow':'1.2-2' }}
+      } @else {
+        —
+      }
     </span>
   </div>
   <div class="price-display__msi">
     <span class="price-display__label">6 MSI</span>
     <span class="price-display__amount">
-      {{ price6msi() | currency:'MXN':'symbol-narrow':'1.2-2' }}
+      @if (price6msi() !== null) {
+        {{ price6msi() | currency:'MXN':'symbol-narrow':'1.2-2' }}
+      } @else {
+        —
+      }
     </span>
   </div>
 </div>

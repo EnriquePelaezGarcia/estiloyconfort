@@ -1,0 +1,60 @@
+<header class="page-head no-print">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Precios mayoreo</h1>
+  </div>
+  <button type="button" class="btn btn--ghost" (click)="print()">
+    <span class="material-symbols-outlined">print</span> Imprimir
+  </button>
+</header>
+
+<p class="intro no-print">
+  Producto × material: precio de mayoreo (RN-10, directo sobre el costo base,
+  sin IVA ni comisión) contra el de contado, y el ahorro que representa.
+</p>
+
+<div class="toolbar no-print">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="search" placeholder="Buscar por nombre o SKU..." (input)="onSearch($event)" />
+  </div>
+  <select class="filter-select" (change)="onMaterialChange($event)">
+    <option value="">Todos los materiales</option>
+    @for (material of materials; track material) {
+      <option [value]="material">{{ materialLabels[material] }}</option>
+    }
+  </select>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando precios de mayoreo…</p></div>
+} @else if (filteredRows().length === 0) {
+  <p class="empty">No hay productos con precio de mayoreo para este filtro.</p>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Producto</th><th>Material</th>
+          <th class="num">Contado</th><th class="num">Mayoreo</th><th class="num">Ahorro</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of filteredRows(); track r.productId + r.material) {
+          <tr>
+            <td data-label="Producto" class="strong">
+              {{ r.name }}
+              @if (r.sku) { <span class="muted"> · {{ r.sku }}</span> }
+            </td>
+            <td data-label="Material">{{ materialLabels[r.material] }}</td>
+            <td data-label="Contado" class="num">{{ r.priceCash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Mayoreo" class="num strong">{{ r.priceMayoreo | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Ahorro" class="num">
+              @if (r.savingsPct !== null) { {{ r.savingsPct }}% } @else { — }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

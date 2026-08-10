@@ -245,7 +245,9 @@ const manufacturingController = {
   // ─── CATÁLOGO POR FABRICANTE ─────────────────────────────────────────────────
   // GET /api/manufacturing/catalog?manufacturerId=
   // Un mismo producto se le compra a varios fabricantes, así que aparece una vez
-  // bajo CADA uno, con el costo específico de ese fabricante (no el costo base).
+  // bajo CADA uno, con LOS TRES costos de ese fabricante (D1) y el isBaseCost
+  // calculado POR MATERIAL (D3): un fabricante puede mandar el precio en MDF y
+  // no mandarlo en Melamina Color, aunque sea el mismo producto.
   catalogByManufacturer: asyncHandler(async (req, res) => {
     const { manufacturerId } = req.query;
     const conditions = ['p.is_active = TRUE', 'pmp.is_active = TRUE'];
@@ -253,8 +255,8 @@ const manufacturingController = {
     if (manufacturerId) { conditions.push('pmp.manufacturer_id = ?'); params.push(Number(manufacturerId)); }
     const where = `WHERE ${conditions.join(' AND ')}`;
     const [rows] = await pool.execute(
-      `SELECT p.id, p.name, p.sku, p.price_cash, p.stock_quantity, p.base_cost,
-              pmp.cost AS manufacturer_cost,
+      `SELECT p.id, p.name, p.sku, p.stock_quantity,
+              pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color,
               pmp.manufacturer_id, m.name AS manufacturer_name,
               c.name AS category_name
        FROM products p
@@ -265,24 +267,50 @@ const manufacturingController = {
        ORDER BY m.name, p.name`,
       params,
     );
+
+    const productIds = [...new Set(rows.map((r) => r.id))];
+    let baseCostByProduct = new Map();
+    if (productIds.length) {
+      const [mpRows] = await pool.query(
+        `SELECT product_id, material, base_cost, price_cash
+           FROM product_material_prices WHERE product_id IN (?)`,
+        [productIds],
+      );
+      baseCostByProduct = new Map();
+      for (const r of mpRows) {
+        if (!baseCostByProduct.has(r.product_id)) baseCostByProduct.set(r.product_id, {});
+        baseCostByProduct.get(r.product_id)[r.material] = {
+          baseCost: r.base_cost != null ? Number(r.base_cost) : null,
+          priceCash: r.price_cash != null ? Number(r.price_cash) : null,
+        };
+      }
+    }
+
+    const MATERIAL_COLUMN = { MDF: 'cost_mdf', MELAMINA_BLANCA: 'cost_melamina_blanca', MELAMINA_COLOR: 'cost_melamina_color' };
+
     res.json({
       data: rows.map((r) => {
-        const cost = Number(r.manufacturer_cost);
-        const priceCash = r.price_cash != null ? Number(r.price_cash) : null;
+        const materialInfo = baseCostByProduct.get(r.id) || {};
+        const materials = {};
+        for (const [material, column] of Object.entries(MATERIAL_COLUMN)) {
+          const cost = r[column] != null ? Number(r[column]) : null;
+          const mi = materialInfo[material];
+          materials[material] = {
+            cost,
+            isBaseCost: cost != null && mi?.baseCost != null && cost === mi.baseCost,
+            priceCash: mi?.priceCash ?? null,
+            unitMargin: cost != null && mi?.priceCash != null ? Math.round((mi.priceCash - cost) * 100) / 100 : null,
+          };
+        }
         return {
           id: r.id,
           name: r.name,
           sku: r.sku,
-          // El costo de ESTE fabricante, no el costo base del producto.
-          baseCost: cost,
-          priceCash,
-          // El costo base es el más alto; marcamos a quién le corresponde.
-          isBaseCost: r.base_cost != null && cost === Number(r.base_cost),
-          unitMargin: priceCash !== null ? Math.round((priceCash - cost) * 100) / 100 : null,
           stockQuantity: Number(r.stock_quantity),
           manufacturerId: r.manufacturer_id,
           manufacturerName: r.manufacturer_name,
           categoryName: r.category_name ?? null,
+          materials,
         };
       }),
     });

@@ -22,6 +22,13 @@ export interface DashboardStats {
   categories: number;
   /** Muebles sobre pedido (requires_fabrication) sin fabricante asignado. */
   unassignedFabricationItems: number;
+  /**
+   * §2.6b del plan de precios por material y mayoreo — líneas sin fabricante
+   * asignado Y sin costo base para su material: su utilidad se calcularía
+   * contra costo CERO. A diferencia de unassignedFabricationItems, > 0 es
+   * una alarma, no un estado normal del flujo.
+   */
+  unpricedOrderItems: number;
   recentProducts: RecentProduct[];
   lowStockProducts: LowStockProduct[];
 }
@@ -30,7 +37,8 @@ export interface RecentProduct {
   id: number;
   name: string;
   sku: string;
-  price_cash: number;
+  /** null = aún no se le captura costo a ningún fabricante (RN-03). */
+  price_cash: number | null;
   stock_quantity: number;
   stock_alert_level: number;
   category_name: string | null;

@@ -7,6 +7,7 @@ const router = Router();
 
 router.use(authenticate, authorize('manufacturer', 'admin'));
 
+router.get('/catalog', manufacturerController.myCatalog);
 router.get('/weekly-list', manufacturerController.weeklyList);
 router.get('/orders', manufacturerController.orders);
 router.get('/orders/:id', manufacturerController.getOrder);

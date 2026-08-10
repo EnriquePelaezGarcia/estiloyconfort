@@ -1,6 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { Cart, CartItem, CartVariantSelection } from '../models/cart.model';
 import { Product } from '../models/product.model';
+import { MATERIAL_LABELS, ProductMaterial } from '../models/order.model';
 
 const CART_KEY = 'ec_cart';
 const CART_TTL_DAYS = 30;
@@ -17,16 +18,29 @@ export class CartService {
   readonly iva = computed(() => this.subtotal() * 0.16);
   readonly total = computed(() => this.subtotal() + this.iva());
 
+  /**
+   * Agrega un producto EN UN MATERIAL concreto. El precio se toma de
+   * `product.materialPrices` (uno por material, D2/D3) — nunca de
+   * `product.price_cash`, que es el precio del material del STOCK, no
+   * necesariamente el que el cliente eligió (D6).
+   *
+   * @param material Debe venir de un material COTIZADO (`materialPrices` con
+   *   `base_cost` no nulo); quien llama es responsable de no ofrecer los que
+   *   no lo están (RN-03).
+   */
   addItem(
     product: Product,
+    material: ProductMaterial,
     quantity = 1,
     variantSelections: CartVariantSelection = {},
     variantPriceModifier = 0
   ): void {
+    const materialPrice = product.materialPrices?.find((mp) => mp.material === material);
+    const priceCash = materialPrice?.price_cash ?? product.price_cash ?? 0;
+    const price6msi = materialPrice?.price_6msi ?? product.price_6msi ?? 0;
+
     this._cart.update(cart => {
-      const existing = cart.items.find(
-        i => i.productId === product.id && JSON.stringify(i.variantSelections) === JSON.stringify(variantSelections)
-      );
+      const existing = cart.items.find((i) => this.sameLine(i, product.id, material, variantSelections));
       const items = existing
         ? cart.items.map(i =>
             i === existing ? { ...i, quantity: i.quantity + quantity } : i
@@ -38,8 +52,9 @@ export class CartService {
               name: product.name,
               slug: product.slug,
               primaryImage: product.primary_image,
-              priceCash: product.price_cash,
-              price6msi: product.price_6msi,
+              material,
+              priceCash,
+              price6msi,
               quantity,
               variantSelections,
               variantPriceModifier,
@@ -51,27 +66,40 @@ export class CartService {
     this.persist();
   }
 
-  updateQuantity(productId: number, variantSelections: CartVariantSelection, quantity: number): void {
-    if (quantity <= 0) { this.removeItem(productId, variantSelections); return; }
+  updateQuantity(
+    productId: number,
+    material: ProductMaterial,
+    variantSelections: CartVariantSelection,
+    quantity: number,
+  ): void {
+    if (quantity <= 0) { this.removeItem(productId, material, variantSelections); return; }
     this._cart.update(cart => ({
       ...cart,
       items: cart.items.map(i =>
-        i.productId === productId && JSON.stringify(i.variantSelections) === JSON.stringify(variantSelections)
-          ? { ...i, quantity }
-          : i
+        this.sameLine(i, productId, material, variantSelections) ? { ...i, quantity } : i
       ),
     }));
     this.persist();
   }
 
-  removeItem(productId: number, variantSelections: CartVariantSelection = {}): void {
+  removeItem(productId: number, material: ProductMaterial, variantSelections: CartVariantSelection = {}): void {
     this._cart.update(cart => ({
       ...cart,
-      items: cart.items.filter(
-        i => !(i.productId === productId && JSON.stringify(i.variantSelections) === JSON.stringify(variantSelections))
-      ),
+      items: cart.items.filter((i) => !this.sameLine(i, productId, material, variantSelections)),
     }));
     this.persist();
+  }
+
+  /** El mismo mueble en dos materiales son dos líneas distintas (Fase 4bis.3). */
+  private sameLine(
+    item: CartItem,
+    productId: number,
+    material: ProductMaterial,
+    variantSelections: CartVariantSelection,
+  ): boolean {
+    return item.productId === productId
+      && item.material === material
+      && JSON.stringify(item.variantSelections) === JSON.stringify(variantSelections);
   }
 
   clear(): void {
@@ -89,7 +117,8 @@ export class CartService {
       const price = ((i.priceCash + i.variantPriceModifier) * i.quantity).toLocaleString('es-MX', {
         style: 'currency', currency: 'MXN',
       });
-      return `▸ ${i.name}${variants ? ` (${variants})` : ''} x${i.quantity} — ${price}`;
+      const materialLabel = MATERIAL_LABELS[i.material];
+      return `▸ ${i.name} (${materialLabel}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
     });
     const total = this.total().toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
     const text = `Hola, me interesa hacer un pedido:\n\n${lines.join('\n')}\n\n*Total estimado: ${total}*\n\n¿Pueden confirmar disponibilidad?`;

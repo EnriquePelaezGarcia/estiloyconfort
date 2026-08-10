@@ -1,4 +1,5 @@
 import { ProductMaterial } from './order.model';
+import { ProfitBreakdown } from './pricing-config.model';
 
 export interface ProductVariant {
   id: number;
@@ -39,14 +40,24 @@ export interface Product {
   weight_volumetric: number | null;
   availability_days: number;
   /**
-   * Costo de referencia del producto. Es un valor DERIVADO: el backend lo
-   * mantiene igual al MÁXIMO de los costos de sus fabricantes. No se captura.
+   * ⛔ Espejo temporal (D9 del plan de precios por material): refleja el
+   * precio del MATERIAL DEL STOCK (`material` de este mismo producto), no un
+   * precio único. Se elimina en la Fase 9. Preferir `priceFrom`/`materialPrices`.
    */
-  base_cost: number;
+  base_cost: number | null;
   margin_percentage: number;
-  price_cash: number;
-  price_6msi: number;
+  price_cash: number | null;
+  price_6msi: number | null;
   price_credit: number | null;
+  /** D7 — catálogo público: el mínimo entre los materiales cotizados. */
+  price_from?: number | null;
+  price_to?: number | null;
+  price_6msi_from?: number | null;
+  price_mayoreo_from?: number | null;
+  /** 0 = ningún material tiene costo capturado: no se muestra en público. */
+  quoted_materials?: number;
+  /** Los 3 precios, uno por material (ficha de producto, D7). */
+  materialPrices?: MaterialPrices[];
   stock_quantity: number;
   stock_alert_level: number;
   is_active: boolean;
@@ -58,35 +69,54 @@ export interface Product {
   updated_at: string;
 }
 
+/** Precios de un producto en un material concreto (product_material_prices). */
+export interface MaterialPrices {
+  material: ProductMaterial;
+  base_cost: number | null;
+  price_cash: number | null;
+  price_6msi: number | null;
+  price_credit: number | null;
+  price_mayoreo: number | null;
+}
+
+/** El costo de un fabricante en un material concreto, con su utilidad. */
+export interface MaterialCost {
+  cost: number | null;
+  /** true si este es el costo más alto en ESE material (RN-02). */
+  isBaseCost: boolean;
+  /** null = sin costo capturado en este material ("No aplica", RN-03). */
+  profit: (ProfitBreakdown & { wholesale: number | null; wholesaleMarginPct: number | null }) | null;
+}
+
 /**
- * Costo de un producto con un fabricante concreto, más la utilidad que deja en
- * cada modalidad de pago. El fabricante cuyo costo es el más alto define el
- * costo base del producto (isBaseCost) y por tanto su precio de venta.
+ * Costos de un fabricante para un producto, UNO por material (D1): no hay
+ * relación aritmética entre ellos, cada uno se captura por separado.
  */
 export interface ProductManufacturerPrice {
   manufacturerId: number;
   manufacturerName: string;
-  cost: number;
-  /** false = el costo no entra al máximo que define el precio de venta. */
+  /** false = los 3 costos quedan fuera del máximo que define el precio de venta. */
   affectsBaseCost: boolean;
   isActive: boolean;
-  /** true si este es el costo más alto, el que manda sobre el precio de venta. */
-  isBaseCost: boolean;
-  utilidadEfectivo: number | null;
-  utilidadTarjeta: number | null;
-  utilidadMsi: number | null;
-  utilidadCredito: number | null;
-  marginPct: number | null;
+  costs: Record<ProductMaterial, MaterialCost>;
+}
+
+/** Estado de precio de un material a nivel producto (sin desglose por fabricante). */
+export interface ProductMaterialPriceInfo {
+  baseCost: number | null;
+  priceCash: number | null;
+  price6msi: number | null;
+  priceCredit: number | null;
+  priceMayoreo: number | null;
+  /** false = ningún fabricante cotiza este material (RN-03): "No aplica". */
+  isQuoted: boolean;
 }
 
 /** Respuesta de las rutas de costos por fabricante de un producto. */
 export interface ProductManufacturerPricesResponse {
   data: ProductManufacturerPrice[];
-  /** El MÁXIMO de los costos: es el que alimenta el precio de venta. */
-  baseCost: number;
-  priceCash: number | null;
-  price6msi: number | null;
-  priceCredit: number | null;
+  materials: Record<ProductMaterial, ProductMaterialPriceInfo>;
+  marginPercentage: number;
 }
 
 export interface ProductListResponse {
@@ -97,13 +127,20 @@ export interface ProductListResponse {
   pages: number;
 }
 
-/** Payload para crear/editar un producto desde el panel admin (Fase 3). */
+/**
+ * Payload para crear/editar un producto desde el panel admin.
+ *
+ * D6 del plan de precios por material y mayoreo: NO lleva base_cost ni los 3
+ * precios — son derivados de los costos por fabricante (tabla aparte) y el
+ * backend los ignora si se envían. La única captura manual es margin_percentage.
+ */
 export interface ProductPayload {
   name: string;
   slug: string;
   sku: string | null;
   category_id: number | null;
   description: string | null;
+  /** Material del STOCK físico en bodega (D6), no "el material por defecto". */
   material: ProductMaterial | null;
   color: string | null;
   dimensions_length: number | null;
@@ -111,11 +148,7 @@ export interface ProductPayload {
   dimensions_height: number | null;
   weight_volumetric: number | null;
   availability_days: number;
-  base_cost: number;
   margin_percentage: number;
-  price_cash: number | null;
-  price_6msi: number | null;
-  price_credit: number | null;
   stock_quantity: number;
   stock_alert_level: number;
   is_featured: boolean;

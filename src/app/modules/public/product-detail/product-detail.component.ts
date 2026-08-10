@@ -10,8 +10,9 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CurrencyPipe, TitleCasePipe } from '@angular/common';
 import { ProductService } from '../../../core/services/product.service';
 import { CartService } from '../../../core/services/cart.service';
-import { Product, ProductVariant } from '../../../core/models/product.model';
+import { MaterialPrices, Product, ProductVariant } from '../../../core/models/product.model';
 import { CartVariantSelection } from '../../../core/models/cart.model';
+import { MATERIAL_LABELS, MATERIALS, ProductMaterial } from '../../../core/models/order.model';
 import { PriceDisplayComponent } from '../../../shared/components/price-display/price-display.component';
 
 @Component({
@@ -34,6 +35,30 @@ export class ProductDetailComponent implements OnInit {
   selectedVariants = signal<CartVariantSelection>({});
   quantity = signal(1);
   added = signal(false);
+
+  protected readonly materials = MATERIALS;
+  protected readonly materialLabels = MATERIAL_LABELS;
+
+  /** Material elegido para cotizar y agregar al carrito (D2/D3, Fase 6.1). */
+  selectedMaterial = signal<ProductMaterial | null>(null);
+
+  /** Los 3 materiales con su estado: cotizado o "No aplica" (RN-03). */
+  materialOptions = computed<(MaterialPrices & { isQuoted: boolean })[]>(() => {
+    const rows = this.product()?.materialPrices ?? [];
+    return MATERIALS.map((material) => {
+      const row = rows.find((r) => r.material === material);
+      return row
+        ? { ...row, isQuoted: row.base_cost != null }
+        : { material, base_cost: null, price_cash: null, price_6msi: null, price_credit: null, price_mayoreo: null, isQuoted: false };
+    });
+  });
+
+  /** Precios del material elegido, o null si aún no se elige ninguno. */
+  selectedMaterialPrices = computed(() => {
+    const material = this.selectedMaterial();
+    if (!material) return null;
+    return this.materialOptions().find((m) => m.material === material) ?? null;
+  });
 
   activeImage = computed(() => {
     const p = this.product();
@@ -59,22 +84,40 @@ export class ProductDetailComponent implements OnInit {
       .reduce((sum, v) => sum + v.price_modifier, 0);
   });
 
-  finalPriceCash = computed(() => (this.product()?.price_cash ?? 0) + this.variantPriceModifier());
-  finalPrice6msi = computed(() => (this.product()?.price_6msi ?? 0) + this.variantPriceModifier());
+  /** null mientras no se eligió (o no se puede elegir) un material cotizado. */
+  finalPriceCash = computed(() => {
+    const p = this.selectedMaterialPrices()?.price_cash;
+    return p != null ? p + this.variantPriceModifier() : null;
+  });
+  finalPrice6msi = computed(() => {
+    const p = this.selectedMaterialPrices()?.price_6msi;
+    return p != null ? p + this.variantPriceModifier() : null;
+  });
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const slug = params.get('slug')!;
       this.loading.set(true);
       this.error.set(false);
+      this.selectedMaterial.set(null);
       this.productService.getProduct(slug).subscribe({
         next: p => {
           this.product.set(p);
           this.loading.set(false);
+          // Si solo hay UN material cotizado, se elige solo (D7); con varios,
+          // el cliente decide — no hay "el" precio hasta que elige.
+          const quoted = (p.materialPrices ?? []).filter((m) => m.base_cost != null);
+          if (quoted.length === 1) this.selectedMaterial.set(quoted[0].material);
         },
         error: () => { this.loading.set(false); this.error.set(true); },
       });
     });
+  }
+
+  selectMaterial(material: ProductMaterial): void {
+    const option = this.materialOptions().find((m) => m.material === material);
+    if (!option?.isQuoted) return;
+    this.selectedMaterial.set(material);
   }
 
   selectImage(index: number): void {
@@ -95,8 +138,9 @@ export class ProductDetailComponent implements OnInit {
 
   addToCart(): void {
     const p = this.product();
-    if (!p) return;
-    this.cartService.addItem(p, this.quantity(), this.selectedVariants(), this.variantPriceModifier());
+    const material = this.selectedMaterial();
+    if (!p || !material) return;
+    this.cartService.addItem(p, material, this.quantity(), this.selectedVariants(), this.variantPriceModifier());
     this.added.set(true);
     setTimeout(() => this.added.set(false), 2000);
   }

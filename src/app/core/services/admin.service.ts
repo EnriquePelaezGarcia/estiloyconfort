@@ -18,9 +18,20 @@ import {
   OrderStatus,
   Paginated,
   PaymentTypeBreakdown,
+  PriceListRow,
+  ProductMaterial,
+  ProfitMatrixRow,
   SalesReportRow,
   Transaction,
+  WholesalePriceListRow,
 } from '../models/order.model';
+
+/** Filtros comunes a las 3 listas de precios por material (Fase 5). */
+export interface MaterialListFilters {
+  material?: ProductMaterial;
+  search?: string;
+  categoria?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AdminService {
@@ -144,5 +155,38 @@ export class AdminService {
 
   getInventoryReport(): Observable<{ data: InventoryReportRow[] }> {
     return this.api.get<{ data: InventoryReportRow[] }>('/admin/reports/inventory');
+  }
+
+  // ===== Fase 5 — listas de precios por material =====
+
+  private materialParams(filters: MaterialListFilters): Record<string, string> {
+    const params: Record<string, string> = {};
+    if (filters.material) params['material'] = filters.material;
+    if (filters.search) params['search'] = filters.search;
+    if (filters.categoria) params['categoria'] = filters.categoria;
+    return params;
+  }
+
+  /** Lista de Precios: Producto × Material -> Contado, 6 MSI, Crédito, cara al cliente. */
+  getPriceList(filters: MaterialListFilters = {}): Observable<{ data: PriceListRow[] }> {
+    return this.api.get<{ data: PriceListRow[] }>('/admin/price-list', this.materialParams(filters));
+  }
+
+  /** Precios Mayoreo: Producto × Material -> Mayoreo vs Contado, cara al mayorista. */
+  getWholesalePriceList(filters: MaterialListFilters = {}): Observable<{ data: WholesalePriceListRow[] }> {
+    return this.api.get<{ data: WholesalePriceListRow[] }>(
+      '/admin/wholesale-price-list',
+      this.materialParams(filters),
+    );
+  }
+
+  /** Panel de Utilidades: Producto × Material × Fabricante × forma de pago. */
+  getProfitMatrix(
+    filters: MaterialListFilters = {},
+  ): Observable<{ data: ProfitMatrixRow[]; minMarginAlert: number }> {
+    return this.api.get<{ data: ProfitMatrixRow[]; minMarginAlert: number }>(
+      '/admin/profit-matrix',
+      this.materialParams(filters),
+    );
   }
 }

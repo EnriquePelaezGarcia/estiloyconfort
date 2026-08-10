@@ -31,8 +31,9 @@
     </h3>
 
     <app-price-display
-      [priceCash]="product().price_cash"
-      [price6msi]="product().price_6msi"
+      [priceCash]="product().price_from ?? product().price_cash"
+      [price6msi]="product().price_6msi_from ?? product().price_6msi"
+      [fromPrefix]="(product().quoted_materials ?? 1) > 1"
       layout="card"
     ></app-price-display>
 

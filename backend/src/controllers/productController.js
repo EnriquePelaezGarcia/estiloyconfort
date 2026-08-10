@@ -4,56 +4,47 @@ const { pool } = require('../config/database');
 const Product = require('../models/Product');
 const ProductManufacturerPrice = require('../models/ProductManufacturerPrice');
 const PricingConfig = require('../models/PricingConfig');
-const { calculatePrices, profitByCost, marginFromCashPrice } = require('../utils/pricingCalculator');
-const { withCalculatedPrices } = require('../utils/productPricing');
+const { calculatePrices, marginFromCashPrice, MATERIALS } = require('../utils/pricingCalculator');
+const { syncMaterialPricesAndReprice } = require('../utils/productPricing');
 
 /**
- * Arma la respuesta de costos por fabricante de un producto: a cada costo le
- * calcula la utilidad que deja en cada modalidad de pago, contra el precio de
- * venta vigente. El fabricante cuyo costo es el máximo es el que define el
- * precio (base_cost), y se marca con isBaseCost.
- *
- * Los costos marcados como que no afectan el precio quedan fuera de ese máximo.
+ * Arma la respuesta de costos por fabricante de un producto EN LOS TRES
+ * MATERIALES (D1/D2/D3). Cada fabricante trae sus tres costos y la utilidad
+ * que deja por material × forma de pago (RN-12…RN-15); ProductManufacturerPrice
+ * ya resuelve `isBaseCost` por material (RN-02) y deja `null` donde el
+ * fabricante no cotiza ese material (RN-03).
  */
 async function manufacturerPricesPayload(productId) {
   const [[product]] = await pool.execute(
-    'SELECT base_cost, margin_percentage, price_cash FROM products WHERE id = ?',
+    'SELECT id, margin_percentage FROM products WHERE id = ?',
     [productId],
   );
   if (!product) return null;
 
-  const [costs, config] = await Promise.all([
+  const [manufacturerCosts, materialRows] = await Promise.all([
     ProductManufacturerPrice.findByProduct(productId),
-    PricingConfig.getMap(),
+    pool.execute(
+      'SELECT material, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
+      [productId],
+    ).then(([rows]) => rows),
   ]);
 
-  const baseCost = Number(product.base_cost);
-  const prices = calculatePrices(baseCost, product.margin_percentage, config);
-  const pricing = costs.filter((c) => c.isActive && c.affectsBaseCost).map((c) => c.cost);
-  const maxCost = pricing.length ? Math.max(...pricing) : null;
+  const materials = {};
+  for (const material of MATERIALS) {
+    const row = materialRows.find((r) => r.material === material);
+    materials[material] = row
+      ? {
+        baseCost: row.base_cost != null ? Number(row.base_cost) : null,
+        priceCash: row.price_cash != null ? Number(row.price_cash) : null,
+        price6msi: row.price_6msi != null ? Number(row.price_6msi) : null,
+        priceCredit: row.price_credit != null ? Number(row.price_credit) : null,
+        priceMayoreo: row.price_mayoreo != null ? Number(row.price_mayoreo) : null,
+        isQuoted: row.base_cost != null,
+      }
+      : { baseCost: null, priceCash: null, price6msi: null, priceCredit: null, priceMayoreo: null, isQuoted: false };
+  }
 
-  return {
-    data: costs.map((c) => {
-      const profit = profitByCost(c.cost, prices, config);
-      return {
-        manufacturerId: c.manufacturerId,
-        manufacturerName: c.manufacturerName,
-        cost: c.cost,
-        affectsBaseCost: c.affectsBaseCost,
-        isActive: c.isActive,
-        isBaseCost: c.isActive && c.affectsBaseCost && c.cost === maxCost,
-        utilidadEfectivo: profit?.cash ?? null,
-        utilidadTarjeta: profit?.card ?? null,
-        utilidadMsi: profit?.msi ?? null,
-        utilidadCredito: profit?.credit ?? null,
-        marginPct: profit?.marginPct ?? null,
-      };
-    }),
-    baseCost,
-    priceCash: prices.price_cash,
-    price6msi: prices.price_6msi,
-    priceCredit: prices.price_credit,
-  };
+  return { data: manufacturerCosts, materials, marginPercentage: Number(product.margin_percentage) };
 }
 
 const productController = {
@@ -96,23 +87,43 @@ const productController = {
 
   async create(req, res, next) {
     try {
-      const data = await withCalculatedPrices(req.body);
+      // D6: el payload ya NO acepta base_cost/price_cash/price_6msi/price_credit.
+      // Son datos derivados; la única captura manual es margin_percentage.
+      // eslint-disable-next-line no-unused-vars
+      const { base_cost, price_cash, price_6msi, price_credit, ...data } = req.body;
+      if (data.margin_percentage !== undefined) {
+        const m = Number(data.margin_percentage);
+        if (!Number.isFinite(m) || m < 0 || m >= 100) {
+          return res.status(400).json({
+            message: 'El % de ganancia debe estar entre 0 y 99.99. Un valor >= 100 produce precios negativos.',
+          });
+        }
+      }
       const product = await Product.create(data);
+      // Sin costos de fabricante todavía, las 3 filas quedan en NULL: es
+      // correcto, el producto "no se cotiza" hasta que se le asigne un costo.
+      await syncMaterialPricesAndReprice(product.id);
       res.status(201).json({ data: product, message: 'Producto creado exitosamente' });
     } catch (err) { next(err); }
   },
 
   async update(req, res, next) {
     try {
-      // Si cambian costo o margen (o cualquiera de ellos), recalculamos precios.
-      // Tomamos el producto actual como fallback para el parámetro no enviado.
-      let data = req.body;
-      if (req.body.base_cost !== undefined || req.body.margin_percentage !== undefined) {
-        const current = await Product.findById(req.params.id, { includeInactive: true });
-        data = await withCalculatedPrices(req.body, current || {});
+      // eslint-disable-next-line no-unused-vars
+      const { base_cost, price_cash, price_6msi, price_credit, ...data } = req.body;
+      if (data.margin_percentage !== undefined) {
+        const m = Number(data.margin_percentage);
+        if (!Number.isFinite(m) || m < 0 || m >= 100) {
+          return res.status(400).json({
+            message: 'El % de ganancia debe estar entre 0 y 99.99. Un valor >= 100 produce precios negativos.',
+          });
+        }
       }
       const product = await Product.update(req.params.id, data);
       if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
+      if (data.margin_percentage !== undefined) {
+        await syncMaterialPricesAndReprice(product.id);
+      }
       res.json({ data: product, message: 'Producto actualizado' });
     } catch (err) { next(err); }
   },
@@ -178,6 +189,35 @@ const productController = {
 
   // ===== Costos por fabricante =====
 
+  /**
+   * Los 3 materiales de un producto con costo base y los 4 precios finales,
+   * SIN el detalle por fabricante (a diferencia de getManufacturerPrices).
+   * Pensado para vendedor/POS: necesita el precio, no la composición de costos.
+   */
+  async getMaterialPrices(req, res, next) {
+    try {
+      const [rows] = await pool.execute(
+        'SELECT material, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
+        [req.params.id],
+      );
+      if (!rows.length) return res.status(404).json({ message: 'Producto no encontrado' });
+      const data = MATERIALS.map((material) => {
+        const row = rows.find((r) => r.material === material);
+        const isQuoted = !!row && row.base_cost != null;
+        return {
+          material,
+          estado: isQuoted ? 'cotizado' : 'no_aplica',
+          baseCost: isQuoted ? Number(row.base_cost) : null,
+          priceCash: isQuoted ? Number(row.price_cash) : null,
+          price6msi: isQuoted ? Number(row.price_6msi) : null,
+          priceCredit: isQuoted ? Number(row.price_credit) : null,
+          priceMayoreo: isQuoted ? Number(row.price_mayoreo) : null,
+        };
+      });
+      res.json({ data });
+    } catch (err) { next(err); }
+  },
+
   async getManufacturerPrices(req, res, next) {
     try {
       const payload = await manufacturerPricesPayload(req.params.id);
@@ -189,9 +229,32 @@ const productController = {
   async setManufacturerPrice(req, res, next) {
     try {
       const { id, manufacturerId } = req.params;
-      const cost = Number(req.body.cost);
-      if (!Number.isFinite(cost) || cost <= 0) {
-        return res.status(400).json({ message: 'El costo debe ser un número mayor que cero' });
+      // Sin compatibilidad hacia atrás (D8): el body viejo { cost } se rechaza.
+      const { costs } = req.body;
+      if (!costs || typeof costs !== 'object') {
+        return res.status(400).json({
+          message: 'El body debe traer "costs": { MDF, MELAMINA_BLANCA, MELAMINA_COLOR }, cada uno número o null.',
+        });
+      }
+      const parsedCosts = {};
+      let anyCost = false;
+      for (const material of MATERIALS) {
+        const raw = costs[material];
+        if (raw === null || raw === undefined || raw === '') {
+          parsedCosts[material] = null;
+          continue;
+        }
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value <= 0) {
+          return res.status(400).json({
+            message: `El costo debe ser mayor a 0. Deja el campo vacío si el fabricante no hace este mueble en ${material}.`,
+          });
+        }
+        parsedCosts[material] = value;
+        anyCost = true;
+      }
+      if (!anyCost) {
+        return res.status(400).json({ message: 'Se debe capturar al menos un costo en algún material.' });
       }
 
       const [[product]] = await pool.execute('SELECT id FROM products WHERE id = ?', [id]);
@@ -205,7 +268,7 @@ const productController = {
 
       // Por omisión el costo sí define el precio de venta: es el caso normal.
       const affectsBaseCost = req.body.affectsBaseCost !== false;
-      await ProductManufacturerPrice.upsert(id, manufacturerId, cost, affectsBaseCost);
+      await ProductManufacturerPrice.upsert(id, manufacturerId, parsedCosts, affectsBaseCost);
       const payload = await manufacturerPricesPayload(id);
       res.json({ ...payload, message: 'Costo actualizado' });
     } catch (err) { next(err); }

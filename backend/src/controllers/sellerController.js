@@ -229,18 +229,43 @@ const sellerController = {
     res.json({ data: quote });
   }),
 
-  // GET /api/seller/inventory — disponibilidad de productos para armar pedidos
+  // GET /api/seller/inventory — disponibilidad de productos para armar pedidos.
+  // Trae los 3 precios por material (product_material_prices) en
+  // `materialPrices`: el POS (Fase 6.1) elige el material ANTES de buscar
+  // productos y resuelve el precio de cada línea desde aquí, nunca de un
+  // precio plano de products (D6).
   inventory: asyncHandler(async (req, res) => {
     const { search } = req.query;
     const params = [];
-    let where = 'WHERE is_active = TRUE';
-    if (search) { where += ' AND (name LIKE ? OR sku LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+    let where = 'WHERE p.is_active = TRUE';
+    if (search) { where += ' AND (p.name LIKE ? OR p.sku LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     const [rows] = await pool.execute(
-      `SELECT id, name, sku, price_cash, price_6msi, stock_quantity, availability_days
-       FROM products ${where} ORDER BY name LIMIT 50`,
+      `SELECT p.id, p.name, p.sku, p.stock_quantity, p.availability_days,
+              mp.material, mp.price_cash, mp.price_6msi, mp.price_mayoreo, mp.base_cost
+       FROM products p
+       LEFT JOIN product_material_prices mp ON mp.product_id = p.id AND mp.base_cost IS NOT NULL
+       ${where} ORDER BY p.name LIMIT 50`,
       params,
     );
-    res.json({ data: rows });
+    const byProduct = new Map();
+    for (const r of rows) {
+      if (!byProduct.has(r.id)) {
+        byProduct.set(r.id, {
+          id: r.id, name: r.name, sku: r.sku,
+          stock_quantity: r.stock_quantity, availability_days: r.availability_days,
+          materialPrices: [],
+        });
+      }
+      if (r.material) {
+        byProduct.get(r.id).materialPrices.push({
+          material: r.material,
+          priceCash: Number(r.price_cash),
+          price6msi: Number(r.price_6msi),
+          priceMayoreo: r.price_mayoreo != null ? Number(r.price_mayoreo) : null,
+        });
+      }
+    }
+    res.json({ data: [...byProduct.values()] });
   }),
 };
 

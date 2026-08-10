@@ -54,6 +54,8 @@ export const SALE_SCHEME_LABELS: Record<SaleScheme, string> = {
   msi: 'Meses sin intereses',
   store_credit: 'Crédito tienda',
   layaway: 'Apartado',
+  // RN-10/D5: aún sin UI en el POS, pero el backend ya la acepta.
+  wholesale: 'Mayoreo',
 };
 
 /** Etiquetas del instrumento de cobro (nivel pago). */

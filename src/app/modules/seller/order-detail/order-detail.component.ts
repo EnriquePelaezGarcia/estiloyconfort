@@ -134,13 +134,18 @@ export class OrderDetailComponent implements OnInit {
 
   protected editConfirmOpen = signal(false);
 
-  /** Instrumentos de cobro permitidos según la condición de venta del pedido. */
+  /**
+   * Instrumentos de cobro permitidos según la condición de venta del pedido.
+   * Espejo de allowedInstruments en backend/src/models/Payment.js — mismo
+   * criterio en los dos lados (D5: Mayoreo solo efectivo/transferencia).
+   */
   protected allowedInstruments = computed<PaymentInstrument[]>(() => {
     switch (this.order()?.paymentMethod) {
       case 'msi':
         return ['msi', 'cash', 'transfer'];
       case 'store_credit':
       case 'layaway':
+      case 'wholesale':
         return ['cash', 'transfer'];
       default: // 'cash' = Contado
         return ['cash', 'card', 'transfer'];

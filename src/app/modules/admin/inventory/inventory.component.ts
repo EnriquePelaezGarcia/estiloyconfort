@@ -54,8 +54,10 @@ export class InventoryComponent implements OnInit {
     () => this.products().filter((p) => this.stockState(p) === 'out').length,
   );
 
+  // base_cost es null cuando el producto no se cotiza en el material de su
+  // stock (ningún fabricante lo tiene capturado ahí): cuenta como $0, no NaN.
   protected inventoryValue = computed(() =>
-    this.products().reduce((sum, p) => sum + p.base_cost * p.stock_quantity, 0),
+    this.products().reduce((sum, p) => sum + (p.base_cost ?? 0) * p.stock_quantity, 0),
   );
 
   protected filteredProducts = computed(() => {

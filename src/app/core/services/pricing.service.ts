@@ -10,6 +10,14 @@ import {
   PricingConfigMap,
   ProfitBreakdown,
 } from '../models/pricing-config.model';
+import { ProductMaterial } from '../models/order.model';
+
+/** Clave del factor de mayoreo en PricingConfigMap, por material (RN-10). */
+const WHOLESALE_FACTOR_KEY: Record<ProductMaterial, keyof PricingConfigMap> = {
+  MDF: 'wholesale_factor_mdf',
+  MELAMINA_BLANCA: 'wholesale_factor_blanca',
+  MELAMINA_COLOR: 'wholesale_factor_color',
+};
 
 const EMPTY_PRICES: CalculatedPrices = {
   price_cash: null,
@@ -211,5 +219,38 @@ export class PricingService {
       credit: T === null ? null : round2(T - C - J),
       marginPct: round2(((O - C) / O) * 100),
     };
+  }
+
+  /**
+   * RN-10 — Precio de mayoreo. Espejo de pricingCalculator.js → calculateWholesalePrice.
+   * Directo sobre el costo base: sin %ganancia, sin IVA, sin comisión. Redondeo
+   * al peso (no al múltiplo de 10 del contado).
+   */
+  static calculateWholesalePrice(
+    baseCost: number | null,
+    material: ProductMaterial,
+    config: PricingConfigMap,
+  ): number | null {
+    const C = Number(baseCost);
+    if (!Number.isFinite(C) || C <= 0) return null;
+
+    const factor = Number(config[WHOLESALE_FACTOR_KEY[material]]);
+    if (!Number.isFinite(factor) || factor <= 0) return null;
+
+    return PricingService.ceilTo(C * factor, 1);
+  }
+
+  /**
+   * RN-15 — Utilidad de mayoreo de un fabricante concreto. Sin IVA ni comisión:
+   * es venta de contado entre negocios (D5).
+   */
+  static wholesaleProfit(
+    cost: number | null,
+    wholesalePrice: number | null,
+  ): { profit: number; marginPct: number } | null {
+    const C = Number(cost);
+    const P = Number(wholesalePrice);
+    if (!Number.isFinite(C) || C <= 0 || !Number.isFinite(P) || P <= 0) return null;
+    return { profit: round2(P - C), marginPct: round2(((P - C) / P) * 100) };
   }
 }

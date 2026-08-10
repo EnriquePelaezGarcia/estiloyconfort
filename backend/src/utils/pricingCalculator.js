@@ -225,10 +225,61 @@ function profitByCost(cost, prices, config) {
   };
 }
 
+/** Los 3 materiales, en orden de presentación. Fuente única de verdad. */
+const MATERIALS = ['MDF', 'MELAMINA_BLANCA', 'MELAMINA_COLOR'];
+
+/** Clave del factor de mayoreo en pricing_config, por material (RN-10). */
+const WHOLESALE_FACTOR_KEY = {
+  MDF: 'wholesale_factor_mdf',
+  MELAMINA_BLANCA: 'wholesale_factor_blanca',
+  MELAMINA_COLOR: 'wholesale_factor_color',
+};
+
+/**
+ * RN-10 — Precio de mayoreo.
+ *   precioMayoreo = CEILING(costoBase(material) * factorMayoreo[material], 1)
+ *
+ * Se calcula DIRECTO sobre el costo base: no pasa por %ganancia, no lleva IVA
+ * y no absorbe comisión de terminal. Redondeo al peso, no al múltiplo de 10:
+ * el mayorista compra por volumen y la lista se maneja al peso exacto.
+ *
+ * Varía por material por dos vías independientes: el costo base ya es distinto
+ * por material y el factor es propio de cada material.
+ *
+ * @returns {number|null} null si el material no se cotiza (RN-03) o falta el factor.
+ */
+function calculateWholesalePrice(baseCost, material, config) {
+  const C = Number(baseCost);
+  if (!Number.isFinite(C) || C <= 0) return null;
+
+  const factor = Number(config[WHOLESALE_FACTOR_KEY[material]]);
+  if (!Number.isFinite(factor) || factor <= 0) return null;
+
+  return ceilTo(C * factor, 1);
+}
+
+/**
+ * RN-15 — Utilidad de mayoreo de un fabricante concreto.
+ *   utilidad = precioMayoreo - costoDelFabricante
+ *
+ * No se descuenta IVA ni comisión: es venta de contado entre negocios (D5).
+ * Se calcula contra el costo REAL del fabricante, no contra el costo base.
+ */
+function wholesaleProfit(cost, wholesalePrice) {
+  const C = Number(cost);
+  const P = Number(wholesalePrice);
+  if (!Number.isFinite(C) || C <= 0 || !Number.isFinite(P) || P <= 0) return null;
+  return { profit: round2(P - C), marginPct: round2(((P - C) / P) * 100) };
+}
+
 module.exports = {
   calculatePrices,
   calculateCredit,
   marginFromCashPrice,
   profitByCost,
+  calculateWholesalePrice,
+  wholesaleProfit,
+  MATERIALS,
+  WHOLESALE_FACTOR_KEY,
   ceilTo,
 };

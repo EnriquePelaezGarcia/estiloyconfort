@@ -16,6 +16,14 @@
 
     .material-symbols-outlined { color: vars.$color-gold; }
   }
+
+  &--error {
+    border: 1px solid #dc2626;
+    background: color-mix(in srgb, #dc2626 8%, white);
+    color: vars.$color-text;
+
+    .material-symbols-outlined { color: #dc2626; }
+  }
 }
 
 .order-grid {
@@ -62,8 +70,15 @@
   &__name { font-weight: 600; font-size: 0.9rem; color: vars.$color-text; }
   &__sku { font-size: 0.78rem; color: vars.$color-text-secondary; }
   &__price { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
+  &__price.muted { color: vars.$color-text-secondary; font-weight: 500; font-size: 0.78rem; }
 
   .material-symbols-outlined { color: vars.$color-primary; }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    .material-symbols-outlined { color: vars.$color-text-secondary; }
+  }
 }
 
 .cart-line {
@@ -73,9 +88,12 @@
   padding: vars.$spacing-sm 0;
   border-bottom: 1px solid vars.$color-border;
 
+  &--alert { background: color-mix(in srgb, #dc2626 6%, white); }
+
   &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   &__name { font-weight: 600; font-size: 0.88rem; }
   &__price { font-size: 0.78rem; color: vars.$color-text-secondary; }
+  &__price--alert { color: #dc2626; font-weight: 600; }
   &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }
 
   &__fabrication {

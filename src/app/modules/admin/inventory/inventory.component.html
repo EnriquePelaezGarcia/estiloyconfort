@@ -96,7 +96,7 @@
                 @default { <span class="badge badge--green">Disponible</span> }
               }
             </td>
-            <td data-label="Valor" class="num">{{ money(product.base_cost * product.stock_quantity) }}</td>
+            <td data-label="Valor" class="num">{{ money((product.base_cost ?? 0) * product.stock_quantity) }}</td>
             <td data-label="Acciones" class="actions">
               <button type="button" class="icon-btn" (click)="openAdjust(product)" title="Ajustar stock">
                 <span class="material-symbols-outlined">tune</span>

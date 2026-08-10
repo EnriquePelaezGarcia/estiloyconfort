@@ -11,6 +11,7 @@ import {
   ProductManufacturerPricesResponse,
   ProductPayload,
 } from '../models/product.model';
+import { ProductMaterial } from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
@@ -98,21 +99,24 @@ export class ProductService {
   }
 
   /**
-   * Fija el costo de un fabricante. El backend recalcula el costo base (el
-   * máximo de todos los fabricantes) y reprecia el producto.
+   * Fija los 3 costos de un fabricante (D1: uno por material, sin relación
+   * aritmética entre ellos). `null` explícito en un material = "este
+   * fabricante no hace el mueble en ese material" (RN-03). El backend
+   * recalcula el costo base POR MATERIAL (el máximo de todos los fabricantes)
+   * y reprecia el producto en los 3.
    *
-   * Con `affectsBaseCost` en false el costo queda fuera de ese máximo: sirve
-   * para asignar y para la utilidad real, pero no mueve el precio al público.
+   * Con `affectsBaseCost` en false los 3 costos quedan fuera de ese máximo:
+   * sirven para asignar y para la utilidad real, pero no mueven el precio al público.
    */
   setManufacturerPrice(
     productId: number,
     manufacturerId: number,
-    cost: number,
+    costs: Partial<Record<ProductMaterial, number | null>>,
     affectsBaseCost = true,
   ): Observable<ProductManufacturerPricesResponse> {
     return this.api.put<ProductManufacturerPricesResponse>(
       `/products/${productId}/manufacturer-prices/${manufacturerId}`,
-      { cost, affectsBaseCost },
+      { costs, affectsBaseCost },
     );
   }
 

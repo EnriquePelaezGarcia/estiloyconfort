@@ -7,6 +7,9 @@ const LAYAWAY_MIN_DEPOSIT = 500;
  *   - Contado (cash):  efectivo, tarjeta, transferencia.
  *   - MSI:             tarjeta a MSI, efectivo, transferencia.
  *   - Crédito/Apartado: sólo efectivo y transferencia.
+ *   - Mayoreo:          sólo efectivo y transferencia (D5 — venta de contado
+ *                        entre negocios, el precio no contempla comisión de
+ *                        terminal; aceptar tarjeta cobraría de menos).
  */
 function allowedInstruments(scheme) {
   switch (scheme) {
@@ -14,6 +17,7 @@ function allowedInstruments(scheme) {
       return ['msi', 'cash', 'transfer'];
     case 'store_credit':
     case 'layaway':
+    case 'wholesale':
       return ['cash', 'transfer'];
     default: // 'cash' = Contado
       return ['cash', 'card', 'transfer'];

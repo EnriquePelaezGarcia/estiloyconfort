@@ -9,11 +9,18 @@ import { PricingService } from '../../../core/services/pricing.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { AuthService } from '../../../core/auth/auth.service';
-import { Product, ProductImage, ProductPayload } from '../../../core/models/product.model';
+import { Product, ProductImage, ProductManufacturerPrice, ProductPayload } from '../../../core/models/product.model';
 import { Manufacturer } from '../../../core/models/manufacturing.model';
-import { ProductMaterial } from '../../../core/models/order.model';
+import { MATERIAL_LABELS, MATERIALS, ProductMaterial } from '../../../core/models/order.model';
 import { Category } from '../../../core/models/category.model';
-import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
+import { CalculatedPrices, DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
+
+/** Un valor por material — el molde que reutilizan costos, precios y mayoreo. */
+type ByMaterial<T> = Record<ProductMaterial, T>;
+
+function emptyByMaterial<T>(value: T): ByMaterial<T> {
+  return { MDF: value, MELAMINA_BLANCA: value, MELAMINA_COLOR: value };
+}
 
 function slugify(value: string): string {
   return value
@@ -59,20 +66,24 @@ interface PendingImage {
   preview: string;
 }
 
-/** Fila editable de costo por fabricante dentro del modal de producto. */
+/**
+ * Fila editable de costos por fabricante dentro del modal de producto.
+ * UN costo por material (D1): no hay relación aritmética entre ellos, cada
+ * uno se captura por separado. `null` = a este fabricante no se le compra
+ * este mueble EN ESE MATERIAL (RN-03).
+ */
 interface CostRow {
   manufacturerId: number;
   manufacturerName: string;
-  /** null = a este fabricante no se le compra este mueble. */
-  cost: number | null;
+  costs: ByMaterial<number | null>;
   /**
-   * false = el costo sirve para asignar y para calcular la utilidad real, pero
-   * queda fuera del máximo que define el precio al público. Es cómo se absorbe
-   * el excedente de una compra única sin mover el precio de mostrador.
+   * false = los 3 costos sirven para asignar y para calcular la utilidad real,
+   * pero quedan fuera del máximo que define el precio al público. Es cómo se
+   * absorbe el excedente de una compra única sin mover el precio de mostrador.
    */
   affectsBaseCost: boolean;
   /** Valores que tenía al abrir el modal, para saber qué cambió al guardar. */
-  originalCost: number | null;
+  originalCosts: ByMaterial<number | null>;
   originalAffectsBaseCost: boolean;
 }
 
@@ -108,6 +119,11 @@ export class CatalogComponent implements OnInit {
 
   private marginInput = signal<number | null>(null);
   private targetPriceInput = signal<number | null>(null);
+  /** Material de referencia para el modo "precio final": el del stock. */
+  private materialInput = signal<ProductMaterial>('MDF');
+
+  protected readonly materials = MATERIALS;
+  protected readonly materialLabels = MATERIAL_LABELS;
 
   /**
    * El precio se puede definir de dos maneras: capturando el margen, o
@@ -118,64 +134,98 @@ export class CatalogComponent implements OnInit {
   protected priceMode = signal<PriceMode>('margin');
 
   /**
-   * Costo base del producto: el MÁXIMO de los costos de sus fabricantes. No se
-   * captura, se deriva. Es un criterio conservador: si un fabricante sube su
-   * precio, el de venta sube aunque se siga surtiendo con el otro, de modo que
-   * el margen nunca queda corto si toca surtir con el caro.
+   * Costo base POR MATERIAL (D3, RN-02): el MÁXIMO de los costos de sus
+   * fabricantes en cada material. No se captura, se deriva. Es un criterio
+   * conservador: si un fabricante sube su precio, el de venta sube aunque se
+   * siga surtiendo con el otro, de modo que el margen nunca queda corto si
+   * toca surtir con el caro.
    *
    * Los costos marcados como que no definen el precio quedan fuera del máximo.
    */
-  protected derivedBaseCost = computed(() => {
-    const costs = this.costRows()
-      .filter((r) => r.affectsBaseCost)
-      .map((r) => r.cost)
-      .filter((c): c is number => c !== null && c > 0);
-    return costs.length ? Math.max(...costs) : null;
+  protected derivedBaseCosts = computed<ByMaterial<number | null>>(() => {
+    const rows = this.costRows().filter((r) => r.affectsBaseCost);
+    const result = emptyByMaterial<number | null>(null) as ByMaterial<number | null>;
+    for (const material of MATERIALS) {
+      const costs = rows
+        .map((r) => r.costs[material])
+        .filter((c): c is number => c !== null && c > 0);
+      result[material] = costs.length ? Math.max(...costs) : null;
+    }
+    return result;
   });
 
-  /** El fabricante cuyo costo manda sobre el precio de venta. */
-  protected baseCostManufacturer = computed(() => {
-    const max = this.derivedBaseCost();
-    return max === null
-      ? null
-      : this.costRows().find((r) => r.affectsBaseCost && r.cost === max) ?? null;
-  });
-
-  /** Margen efectivo: el capturado, o el despejado desde el precio objetivo. */
+  /**
+   * Margen efectivo: el capturado, o el despejado desde el precio objetivo.
+   * Uno solo para los 3 materiales (D4): es del producto, no del material.
+   */
   protected effectiveMargin = computed(() => {
     if (this.priceMode() === 'margin') return this.marginInput();
     const solved = PricingService.marginFromCashPrice(
-      this.derivedBaseCost(),
+      this.derivedBaseCosts()[this.materialInput()],
       this.targetPriceInput(),
       this.pricingConfig(),
     );
     return solved?.marginPercentage ?? null;
   });
 
-  /** Precios calculados en vivo a partir del costo base y el margen efectivo. */
-  protected computedPrices = computed(() =>
-    PricingService.calculatePrices(this.derivedBaseCost(), this.effectiveMargin(), this.pricingConfig()),
-  );
+  /** Precios calculados en vivo, uno por material, a partir del costo base y el margen efectivo. */
+  protected computedPricesByMaterial = computed<ByMaterial<CalculatedPrices>>(() => {
+    const margin = this.effectiveMargin();
+    const config = this.pricingConfig();
+    const baseCosts = this.derivedBaseCosts();
+    const result = {} as ByMaterial<CalculatedPrices>;
+    for (const material of MATERIALS) {
+      result[material] = PricingService.calculatePrices(baseCosts[material], margin, config);
+    }
+    return result;
+  });
 
-  /** Plan de crédito del producto, para mostrar enganche y abonos en el modal. */
-  protected computedCredit = computed(() =>
-    PricingService.calculateCredit(this.computedPrices().price_cash, this.pricingConfig()),
-  );
+  /** RN-10 — precio de mayoreo por material: directo sobre el costo base. */
+  protected computedWholesaleByMaterial = computed<ByMaterial<number | null>>(() => {
+    const config = this.pricingConfig();
+    const baseCosts = this.derivedBaseCosts();
+    const result = {} as ByMaterial<number | null>;
+    for (const material of MATERIALS) {
+      result[material] = PricingService.calculateWholesalePrice(baseCosts[material], material, config);
+    }
+    return result;
+  });
+
+  /** Plan de crédito por material, para mostrar enganche y abonos en el modal. */
+  protected computedCreditByMaterial = computed(() => {
+    const prices = this.computedPricesByMaterial();
+    const config = this.pricingConfig();
+    const result = {} as ByMaterial<ReturnType<typeof PricingService.calculateCredit>>;
+    for (const material of MATERIALS) {
+      result[material] = PricingService.calculateCredit(prices[material].price_cash, config);
+    }
+    return result;
+  });
 
   /**
-   * Filas de costo enriquecidas con la utilidad que deja cada fabricante en cada
-   * modalidad de pago. Se recalculan solas al teclear: el admin nunca captura un
+   * Filas de costo enriquecidas con la utilidad que deja cada fabricante en
+   * cada material. Se recalculan solas al teclear: el admin nunca captura un
    * porcentaje de ganancia, solo el costo.
    */
   protected costRowsWithProfit = computed(() => {
-    const prices = this.computedPrices();
+    const prices = this.computedPricesByMaterial();
+    const wholesale = this.computedWholesaleByMaterial();
     const config = this.pricingConfig();
-    const max = this.derivedBaseCost();
-    return this.costRows().map((row) => ({
-      ...row,
-      isBaseCost: row.affectsBaseCost && row.cost !== null && row.cost === max,
-      profit: row.cost !== null ? PricingService.profitByCost(row.cost, prices, config) : null,
-    }));
+    const baseCosts = this.derivedBaseCosts();
+    return this.costRows().map((row) => {
+      const materials = {} as ByMaterial<{
+        cost: number | null;
+        isBaseCost: boolean;
+        profitCash: number | null;
+      }>;
+      for (const material of MATERIALS) {
+        const cost = row.costs[material];
+        const isBaseCost = row.affectsBaseCost && cost !== null && cost === baseCosts[material];
+        const profit = cost !== null ? PricingService.profitByCost(cost, prices[material], config) : null;
+        materials[material] = { cost, isBaseCost, profitCash: profit?.cash ?? null };
+      }
+      return { ...row, materials };
+    });
   });
 
   constructor() {
@@ -183,6 +233,7 @@ export class CatalogComponent implements OnInit {
       this.marginInput.set(v.marginPercentage ?? null);
       this.targetPriceInput.set(v.targetCashPrice ?? null);
       this.nameInput.set(v.name ?? '');
+      this.materialInput.set((v.material as ProductMaterial) ?? 'MDF');
     });
   }
 
@@ -276,32 +327,33 @@ export class CatalogComponent implements OnInit {
     this.loadProducts();
   }
 
-  /** Arma una fila por fabricante activo, con el costo que ya tuviera guardado. */
-  private buildCostRows(
-    saved: { manufacturerId: number; cost: number; affectsBaseCost?: boolean }[] = [],
-  ): CostRow[] {
+  /** Arma una fila por fabricante activo, con los costos que ya tuviera guardados. */
+  private buildCostRows(saved: ProductManufacturerPrice[] = []): CostRow[] {
     return this.manufacturers().map((m) => {
       const match = saved.find((s) => s.manufacturerId === m.id);
       // Un costo nuevo define el precio salvo que se diga lo contrario.
       const affectsBaseCost = match?.affectsBaseCost ?? true;
+      const costs = emptyByMaterial<number | null>(null) as ByMaterial<number | null>;
+      for (const material of MATERIALS) costs[material] = match?.costs?.[material]?.cost ?? null;
       return {
         manufacturerId: m.id,
         manufacturerName: m.name,
-        cost: match?.cost ?? null,
+        costs,
         affectsBaseCost,
-        originalCost: match?.cost ?? null,
+        originalCosts: { ...costs },
         originalAffectsBaseCost: affectsBaseCost,
       };
     });
   }
 
-  protected onCostChange(manufacturerId: number, event: Event): void {
+  protected onCostChange(manufacturerId: number, material: ProductMaterial, event: Event): void {
     const raw = (event.target as HTMLInputElement).value;
     const cost = raw === '' ? null : Number(raw);
+    const value = cost !== null && Number.isFinite(cost) && cost > 0 ? cost : null;
     this.costRows.update((rows) =>
       rows.map((r) =>
         r.manufacturerId === manufacturerId
-          ? { ...r, cost: cost !== null && Number.isFinite(cost) && cost > 0 ? cost : null }
+          ? { ...r, costs: { ...r.costs, [material]: value } }
           : r,
       ),
     );
@@ -327,7 +379,7 @@ export class CatalogComponent implements OnInit {
     if (mode === this.priceMode()) return;
 
     if (mode === 'price') {
-      const currentPrice = this.computedPrices().price_cash;
+      const currentPrice = this.computedPricesByMaterial()[this.materialInput()].price_cash;
       this.priceMode.set(mode);
       this.form.patchValue({ targetCashPrice: currentPrice });
     } else {
@@ -444,9 +496,9 @@ export class CatalogComponent implements OnInit {
       return;
     }
 
-    const baseCost = this.derivedBaseCost();
-    if (baseCost === null) {
-      this.notification.error('Captura el costo de al menos un fabricante');
+    const baseCosts = this.derivedBaseCosts();
+    if (MATERIALS.every((m) => baseCosts[m] === null)) {
+      this.notification.error('Captura el costo de al menos un fabricante en algún material');
       return;
     }
     const margin = this.effectiveMargin();
@@ -473,13 +525,10 @@ export class CatalogComponent implements OnInit {
       dimensions_height: raw.height ?? null,
       weight_volumetric: raw.weight ?? null,
       availability_days: raw.availabilityDays ?? 0,
-      base_cost: baseCost,
+      // Sin base_cost ni precios (D6): son derivados de los costos por
+      // fabricante que se guardan aparte en saveCosts(); el backend los ignora
+      // si se envían.
       margin_percentage: margin,
-      // El backend recalcula contado y 6 MSI desde las reglas; enviamos el
-      // cálculo en vivo solo como referencia.
-      price_cash: this.computedPrices().price_cash,
-      price_6msi: this.computedPrices().price_6msi,
-      price_credit: this.computedPrices().price_credit,
       stock_quantity: raw.stockQuantity ?? 0,
       stock_alert_level: raw.stockAlertLevel ?? 5,
       is_featured: raw.isFeatured ?? false,
@@ -514,25 +563,26 @@ export class CatalogComponent implements OnInit {
     });
   }
 
-  /** Envía solo los costos que cambiaron; los que se vaciaron se eliminan. */
+  /** Envía solo las filas que cambiaron; las que se vaciaron por completo se eliminan. */
   private saveCosts(product: Product) {
     const operations = this.costRows()
-      // Cambiar solo la casilla en una fila sin costo no es nada que guardar.
-      .filter(
-        (row) =>
-          row.cost !== row.originalCost ||
-          (row.cost !== null && row.affectsBaseCost !== row.originalAffectsBaseCost),
-      )
-      .map((row) =>
-        row.cost === null
-          ? this.productService.removeManufacturerPrice(product.id, row.manufacturerId)
-          : this.productService.setManufacturerPrice(
+      .filter((row) => {
+        const costsChanged = MATERIALS.some((m) => row.costs[m] !== row.originalCosts[m]);
+        const hasAnyCost = MATERIALS.some((m) => row.costs[m] !== null);
+        // Cambiar solo la casilla en una fila sin ningún costo no es nada que guardar.
+        return costsChanged || (hasAnyCost && row.affectsBaseCost !== row.originalAffectsBaseCost);
+      })
+      .map((row) => {
+        const hasAnyCost = MATERIALS.some((m) => row.costs[m] !== null);
+        return hasAnyCost
+          ? this.productService.setManufacturerPrice(
               product.id,
               row.manufacturerId,
-              row.cost,
+              row.costs,
               row.affectsBaseCost,
-            ),
-      );
+            )
+          : this.productService.removeManufacturerPrice(product.id, row.manufacturerId);
+      });
 
     return from(operations).pipe(
       concatMap((op) => op),

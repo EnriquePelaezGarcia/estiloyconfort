@@ -13,6 +13,12 @@ const ALLOWED_KEYS = [
   'credit_weeks',
   'assembly_base',
   'assembly_per_floor',
+  // RN-10 — factor de mayoreo, uno por material (§9.2 del doc de reglas).
+  'wholesale_factor_mdf',
+  'wholesale_factor_blanca',
+  'wholesale_factor_color',
+  // Umbral visual del semáforo de utilidades (§5.4 del plan). No bloquea nada.
+  'min_margin_alert',
 ];
 
 const PricingConfig = {
@@ -40,20 +46,62 @@ const PricingConfig = {
       credit_weeks: 12,
       assembly_base: 150,
       assembly_per_floor: 50,
+      wholesale_factor_mdf: 1.334,
+      wholesale_factor_blanca: 1.334,
+      wholesale_factor_color: 1.334,
+      min_margin_alert: 20,
     };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;
   },
 
-  /** Actualiza un conjunto de parámetros { key: value }. Ignora claves no permitidas. */
+  /**
+   * Actualiza un conjunto de parámetros { key: value }. Ignora claves no
+   * permitidas y rechaza valores fuera de rango (§2.7 del plan de precios
+   * por material y mayoreo): un porcentaje >= 100% produce precios
+   * negativos o división por cero en el motor, y un factor de mayoreo <= 0
+   * anula el precio de mayoreo de todo el catálogo en el siguiente reprecio.
+   */
   async updateMany(values) {
-    const entries = Object.entries(values).filter(
-      ([k, v]) => ALLOWED_KEYS.includes(k) && Number.isFinite(Number(v)) && Number(v) >= 0
-    );
-    for (const [key, value] of entries) {
+    const entries = Object.entries(values).filter(([k]) => ALLOWED_KEYS.includes(k));
+    const parsed = {};
+    for (const [key, raw] of entries) {
+      const v = Number(raw);
+      if (!Number.isFinite(v)) continue;
+      const isWholesaleFactor = key.startsWith('wholesale_factor_');
+      const isPercentage = ['iva', 'card_commission_base', 'msi_commission_base'].includes(key);
+      if (isWholesaleFactor && v <= 0) {
+        const err = new Error(`${key} debe ser mayor a 0.`);
+        err.statusCode = 400;
+        throw err;
+      }
+      if (isPercentage && (v < 0 || v >= 100)) {
+        const err = new Error(`${key} debe estar entre 0 y 99.99.`);
+        err.statusCode = 400;
+        throw err;
+      }
+      if (!isWholesaleFactor && !isPercentage && v < 0) {
+        const err = new Error(`${key} no puede ser negativo.`);
+        err.statusCode = 400;
+        throw err;
+      }
+      parsed[key] = v;
+    }
+    // La comisión de tarjeta más la de 6 MSI, ya con IVA, no puede alcanzar el
+    // 100%: precioContado/precio6Msi (RN-06/RN-07) dividen entre (1 - comisión)
+    // y un valor >= 1 produce un precio negativo o infinito.
+    const current = await this.getMap();
+    const card = parsed.card_commission_base ?? Number(current.card_commission_base);
+    const msi = parsed.msi_commission_base ?? Number(current.msi_commission_base);
+    if (card + msi >= 100) {
+      const err = new Error('La comisión de tarjeta más la de 6 MSI no puede alcanzar el 100%.');
+      err.statusCode = 400;
+      throw err;
+    }
+    for (const [key, value] of Object.entries(parsed)) {
       await pool.execute(
         'UPDATE pricing_config SET config_value = ? WHERE config_key = ?',
-        [Number(value), key]
+        [value, key]
       );
     }
     return this.findAll();

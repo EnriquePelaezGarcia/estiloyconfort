@@ -1,0 +1,65 @@
+<header class="page-head no-print">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Lista de precios</h1>
+  </div>
+  <button type="button" class="btn btn--ghost" (click)="print()">
+    <span class="material-symbols-outlined">print</span> Imprimir
+  </button>
+</header>
+
+<p class="intro no-print">
+  Producto × material, con Contado, 6 MSI, Crédito Tienda y su plan de pagos.
+  Solo se listan los materiales cotizados (con costo de al menos un fabricante).
+</p>
+
+<div class="toolbar no-print">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="search" placeholder="Buscar por nombre o SKU..." (input)="onSearch($event)" />
+  </div>
+  <select class="filter-select" (change)="onMaterialChange($event)">
+    <option value="">Todos los materiales</option>
+    @for (material of materials; track material) {
+      <option [value]="material">{{ materialLabels[material] }}</option>
+    }
+  </select>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando lista de precios…</p></div>
+} @else if (filteredRows().length === 0) {
+  <p class="empty">No hay productos cotizados con este filtro.</p>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards print-table">
+      <thead>
+        <tr>
+          <th>Producto</th><th>Material</th>
+          <th class="num">Contado</th><th class="num">6 MSI</th><th class="num">Crédito</th>
+          <th class="num">Enganche</th><th class="num">Pago semanal</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of filteredRows(); track r.productId + r.material) {
+          <tr>
+            <td data-label="Producto" class="strong">
+              {{ r.name }}
+              @if (r.sku) { <span class="muted"> · {{ r.sku }}</span> }
+            </td>
+            <td data-label="Material">{{ materialLabels[r.material] }}</td>
+            <td data-label="Contado" class="num">{{ r.priceCash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="6 MSI" class="num">{{ r.price6msi | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Crédito" class="num">{{ r.priceCredit | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Enganche" class="num">{{ r.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Pago semanal" class="num">
+              @if (r.weeklyPayment !== null) {
+                {{ r.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }} × {{ r.weeks }}
+              } @else { — }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

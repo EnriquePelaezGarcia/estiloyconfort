@@ -1,0 +1,72 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Administración</span>
+    <h1 class="page-head__title">Panel de utilidades</h1>
+  </div>
+</header>
+
+<p class="intro">
+  Producto × material × fabricante × forma de pago. En rojo, los renglones
+  cuyo margen de contado baja de <strong>{{ minMarginAlert() }}%</strong>
+  (umbral editable en Reglas de precios).
+</p>
+
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="search" placeholder="Buscar por nombre o SKU..." (input)="onSearch($event)" />
+  </div>
+  <select class="filter-select" (change)="onMaterialChange($event)">
+    <option value="">Todos los materiales</option>
+    @for (material of materials; track material) {
+      <option [value]="material">{{ materialLabels[material] }}</option>
+    }
+  </select>
+  <button type="button" class="btn" [class.btn--primary]="onlyAlerts()" (click)="toggleOnlyAlerts()">
+    <span class="material-symbols-outlined">warning</span>
+    Solo alertas ({{ alertCount() }})
+  </button>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando panel de utilidades…</p></div>
+} @else if (filteredRows().length === 0) {
+  <p class="empty">No hay filas para este filtro.</p>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Producto</th><th>Material</th><th>Fabricante</th><th class="num">Costo</th>
+          <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">6 MSI</th>
+          <th class="num">Crédito</th><th class="num">Mayoreo</th><th class="num">Margen</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of filteredRows(); track r.productId + r.material + r.manufacturerId) {
+          <tr [class.row--alert]="r.alertLow">
+            <td data-label="Producto" class="strong">
+              {{ r.name }}
+              @if (r.sku) { <span class="muted"> · {{ r.sku }}</span> }
+            </td>
+            <td data-label="Material">{{ materialLabels[r.material] }}</td>
+            <td data-label="Fabricante">{{ r.manufacturerName }}</td>
+            <td data-label="Costo" class="num">{{ r.cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Efectivo" class="num">{{ r.cash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Tarjeta" class="num">{{ r.card | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="6 MSI" class="num">{{ r.msi | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Crédito" class="num">{{ r.credit | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <td data-label="Mayoreo" class="num">
+              @if (r.wholesale !== null) { {{ r.wholesale | currency:'MXN':'symbol-narrow':'1.2-2' }} } @else { — }
+            </td>
+            <td data-label="Margen" class="num">
+              <span class="badge" [class]="r.alertLow ? 'badge--red' : 'badge--green'">
+                {{ r.marginPct }}%
+              </span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

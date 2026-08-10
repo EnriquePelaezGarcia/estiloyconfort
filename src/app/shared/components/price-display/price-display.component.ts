@@ -9,7 +9,10 @@ import { CurrencyPipe } from '@angular/common';
   imports: [CurrencyPipe],
 })
 export class PriceDisplayComponent {
-  priceCash = input.required<number>();
-  price6msi = input.required<number>();
+  /** null = el producto no se cotiza en ningún material (D7): se muestra "—". */
+  priceCash = input.required<number | null>();
+  price6msi = input.required<number | null>();
   layout = input<'card' | 'detail'>('card');
+  /** true = el precio es el mínimo entre varios materiales cotizados (D7). */
+  fromPrefix = input(false);
 }

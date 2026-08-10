@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { ManufacturerOrder, Order, WeeklyListRow } from '../models/order.model';
+import { ManufacturerOrder, ManufacturerOwnCatalogItem, Order, WeeklyListRow } from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
 export class ManufacturerService {
@@ -28,5 +28,14 @@ export class ManufacturerService {
       `/manufacturer/orders/${orderId}/items/${itemId}/ready`,
       { isReady },
     );
+  }
+
+  /**
+   * SOLO sus 3 costos por material (D14): nunca precio de venta, costo base
+   * ni margen de la tienda. El backend resuelve el fabricante desde el token;
+   * no hay parámetro que lo cambie.
+   */
+  getMyCatalog(): Observable<{ data: ManufacturerOwnCatalogItem[] }> {
+    return this.api.get<{ data: ManufacturerOwnCatalogItem[] }>('/manufacturer/catalog');
   }
 }

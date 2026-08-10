@@ -89,7 +89,7 @@ export class ReportsComponent implements OnInit {
         ])
       : this.inventoryRows().map((r) => [
           r.sku, r.name, r.category ?? '', r.stock_quantity, r.stock_alert_level,
-          r.base_cost, r.price_cash, r.stock_value,
+          r.base_cost ?? 'No aplica', r.price_cash ?? 'No aplica', r.stock_value,
         ]);
 
     const csv = [headers, ...rows]

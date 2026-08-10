@@ -1,0 +1,55 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Fabricante</span>
+    <h1 class="page-head__title">Mis precios</h1>
+  </div>
+</header>
+
+<p class="intro">
+  Estos son los costos vigentes que la tienda tiene registrados contigo, por
+  material. Para solicitar un ajuste, contacta al administrador.
+</p>
+
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="search" placeholder="Buscar por nombre o SKU..." (input)="onSearch($event)" />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando tu catálogo…</p></div>
+} @else if (filteredItems().length === 0) {
+  <p class="empty">Aún no tienes costos registrados.</p>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Producto</th><th>SKU</th>
+          <th class="num">MDF Pintado</th><th class="num">Melamina Blanca</th><th class="num">Melamina Color</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of filteredItems(); track item.productId) {
+          <tr>
+            <td data-label="Producto" class="strong">{{ item.name }}</td>
+            <td data-label="SKU" class="muted">{{ item.sku ?? '—' }}</td>
+            <td data-label="MDF Pintado" class="num">
+              @if (item.costMdf !== null) { {{ item.costMdf | currency:'MXN':'symbol-narrow':'1.2-2' }} }
+              @else { <span class="muted">No aplica</span> }
+            </td>
+            <td data-label="Melamina Blanca" class="num">
+              @if (item.costMelaminaBlanca !== null) { {{ item.costMelaminaBlanca | currency:'MXN':'symbol-narrow':'1.2-2' }} }
+              @else { <span class="muted">No aplica</span> }
+            </td>
+            <td data-label="Melamina Color" class="num">
+              @if (item.costMelaminaColor !== null) { {{ item.costMelaminaColor | currency:'MXN':'symbol-narrow':'1.2-2' }} }
+              @else { <span class="muted">No aplica</span> }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

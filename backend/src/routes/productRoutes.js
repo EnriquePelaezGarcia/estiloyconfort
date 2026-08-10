@@ -24,6 +24,9 @@ router.post('/:id/images', authenticate, authorize('admin'), upload.single('imag
 router.delete('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.deleteImage);
 router.patch('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.setPrimaryImage);
 
+// Precios por material — admin y vendedor (el POS los necesita para cotizar)
+router.get('/:id/material-prices', authenticate, authorize('admin', 'seller'), ctrl.getMaterialPrices);
+
 // Rutas admin — costos por fabricante (tabla manufacturers)
 router.get('/:id/manufacturer-prices', authenticate, authorize('admin'), ctrl.getManufacturerPrices);
 router.put('/:id/manufacturer-prices/:manufacturerId', authenticate, authorize('admin'), ctrl.setManufacturerPrice);

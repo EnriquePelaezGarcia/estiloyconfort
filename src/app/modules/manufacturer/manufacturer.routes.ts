@@ -22,6 +22,14 @@ export const manufacturerRoutes: Routes = [
           ),
         title: 'Pedidos a fabricar - Fabricante',
       },
+      {
+        path: 'mis-precios',
+        loadComponent: () =>
+          import('./catalog/manufacturer-own-catalog.component').then(
+            (m) => m.ManufacturerOwnCatalogComponent,
+          ),
+        title: 'Mis precios - Fabricante',
+      },
       { path: '**', redirectTo: 'lista-semanal' },
     ],
   },

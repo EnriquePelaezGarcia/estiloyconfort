@@ -262,12 +262,20 @@
 .costs__head,
 .costs__row {
   display: grid;
-  grid-template-columns:
-    minmax(9rem, 1.4fr) minmax(7rem, 1fr) minmax(5rem, 0.6fr)
-    repeat(4, minmax(5.5rem, 0.9fr));
+  // Fabricante + 3 materiales + "define precio".
+  grid-template-columns: minmax(9rem, 1.2fr) repeat(3, minmax(8rem, 1fr)) minmax(5rem, 0.6fr);
   gap: vars.$spacing-sm;
   align-items: center;
-  min-width: 50rem;
+  min-width: 42rem;
+}
+
+// Tabla de precios calculados: sin columna de "define precio".
+.costs--summary {
+  .costs__head,
+  .costs__row {
+    grid-template-columns: minmax(9rem, 1.2fr) repeat(3, minmax(8rem, 1fr));
+    min-width: 34rem;
+  }
 }
 
 .costs__head {
@@ -283,16 +291,25 @@
   border-radius: vars.$radius-sm;
   border: 1px solid transparent;
 
-  &--base {
-    background: rgba(vars.$color-primary, 0.06);
-    border-color: rgba(vars.$color-primary, 0.25);
-  }
+  &--summary {
+    font-size: 0.86rem;
 
-  // Sin distintivo no habría forma de saber por qué un costo alto no movió nada.
-  &--no-price {
-    background: rgba(vars.$color-text-secondary, 0.05);
-    border-style: dashed;
-    border-color: rgba(vars.$color-text-secondary, 0.3);
+    .costs__name {
+      font-weight: 600;
+    }
+  }
+}
+
+.costs__material-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+
+  &--base {
+    .costs__input {
+      border-color: vars.$color-primary;
+      background: rgba(vars.$color-primary, 0.06);
+    }
   }
 }
 

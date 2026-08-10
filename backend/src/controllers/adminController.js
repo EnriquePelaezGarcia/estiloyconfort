@@ -3,6 +3,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const Order = require('../models/Order');
 const ProductManufacturerPrice = require('../models/ProductManufacturerPrice');
+const PricingConfig = require('../models/PricingConfig');
+const { calculateCredit, profitByCost, wholesaleProfit, MATERIALS } = require('../utils/pricingCalculator');
 
 /**
  * GET /api/admin/dashboard  (solo admin)
@@ -25,14 +27,18 @@ const getDashboard = asyncHandler(async (req, res) => {
      ORDER BY r.id`,
   );
 
+  // El valor de inventario usa el costo base del MATERIAL DEL STOCK
+  // (product_inventory_prices, D10) — no products.base_cost, que es un espejo
+  // temporal condenado a desaparecer en la Fase 9 (D9).
   const [[productStats]] = await pool.query(
     `SELECT
         COUNT(*) AS totalProducts,
-        SUM(stock_quantity <= stock_alert_level) AS lowStockCount,
-        SUM(stock_quantity = 0) AS outOfStockCount,
-        COALESCE(SUM(base_cost * stock_quantity), 0) AS inventoryValue
-     FROM products
-     WHERE is_active = TRUE`,
+        SUM(p.stock_quantity <= p.stock_alert_level) AS lowStockCount,
+        SUM(p.stock_quantity = 0) AS outOfStockCount,
+        COALESCE(SUM(COALESCE(ip.stock_base_cost, 0) * p.stock_quantity), 0) AS inventoryValue
+     FROM products p
+     LEFT JOIN product_inventory_prices ip ON ip.product_id = p.id
+     WHERE p.is_active = TRUE`,
   );
 
   const [[{ totalCategories }]] = await pool.query(
@@ -40,10 +46,11 @@ const getDashboard = asyncHandler(async (req, res) => {
   );
 
   const [recentProducts] = await pool.query(
-    `SELECT p.id, p.name, p.sku, p.price_cash, p.stock_quantity, p.stock_alert_level,
+    `SELECT p.id, p.name, p.sku, ip.stock_price_cash AS price_cash, p.stock_quantity, p.stock_alert_level,
             c.name AS category_name, p.created_at
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN product_inventory_prices ip ON ip.product_id = p.id
      WHERE p.is_active = TRUE
      ORDER BY p.created_at DESC
      LIMIT 5`,
@@ -76,6 +83,10 @@ const getDashboard = asyncHandler(async (req, res) => {
        AND oi.manufacturer_id IS NULL`,
   );
 
+  // §2.6b — líneas cuya utilidad se calcularía contra costo CERO. Debe ser 0;
+  // si no lo es, es una alarma (a diferencia de `unassigned`, que es normal).
+  const [[unpriced]] = await pool.query('SELECT COUNT(*) AS n FROM order_items_sin_costo');
+
   res.json({
     users: {
       total: Number(userStats.totalUsers) || 0,
@@ -96,6 +107,9 @@ const getDashboard = asyncHandler(async (req, res) => {
     },
     categories: Number(totalCategories) || 0,
     unassignedFabricationItems: Number(unassigned.n) || 0,
+    // §2.6b — > 0 es una alarma real (utilidad inflada), a diferencia de
+    // unassignedFabricationItems, que es un estado normal del flujo.
+    unpricedOrderItems: Number(unpriced.n) || 0,
     recentProducts,
     lowStockProducts,
   });
@@ -128,11 +142,15 @@ const getFinancesSummary = asyncHandler(async (req, res) => {
   const costParams = [];
   if (from) { costConds.push('o.order_date >= ?'); costParams.push(from); }
   if (to) { costConds.push('o.order_date <= ?'); costParams.push(`${to} 23:59:59`); }
+  // §2.6: el costo real (oi.unit_cost) manda; sin fabricante asignado se cae al
+  // costo base del MATERIAL CONGELADO en la línea (oi.material), nunca al del
+  // material de stock. El `, 0)` final es el caso "ni siquiera hay costo base
+  // para ese material" — corrupción, no estado normal (§2.6b).
   const [[cost]] = await pool.execute(
-    `SELECT COALESCE(SUM(oi.quantity * p.base_cost), 0) AS totalCost
+    `SELECT COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS totalCost
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
-     JOIN products p ON p.id = oi.product_id
+     LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material = oi.material
      WHERE ${costConds.join(' AND ')}`,
     costParams,
   );
@@ -252,10 +270,10 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
       `SELECT o.id AS orderId, o.order_number AS orderNumber, o.customer_name AS customerName,
               o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
               o.order_date AS date,
-              COALESCE(SUM(oi.quantity * p.base_cost), 0) AS amount
+              COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS amount
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
-       JOIN products p ON p.id = oi.product_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material = oi.material
        WHERE ${conds.join(' AND ')}
        GROUP BY o.id ORDER BY o.order_date DESC LIMIT 300`,
       params,
@@ -271,10 +289,10 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
               o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
               o.order_date AS date,
               COALESCE((SELECT SUM(pay.amount) FROM payments pay WHERE pay.order_id = o.id), 0) AS revenue,
-              COALESCE(SUM(oi.quantity * p.base_cost), 0) AS cost
+              COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS cost
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
-       JOIN products p ON p.id = oi.product_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material = oi.material
        WHERE ${conds.join(' AND ')}
        GROUP BY o.id ORDER BY o.order_date DESC LIMIT 300`,
       params,
@@ -311,9 +329,10 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
     const placeholders = orderIds.map(() => '?').join(',');
     const [items] = await pool.query(
       `SELECT oi.order_id AS orderId, oi.product_name AS productName, oi.product_sku AS productSku,
-              oi.quantity AS quantity, oi.unit_price AS unitPrice, p.base_cost AS baseCost
+              oi.quantity AS quantity, oi.unit_price AS unitPrice,
+              COALESCE(oi.unit_cost, mp.base_cost) AS baseCost
        FROM order_items oi
-       LEFT JOIN products p ON p.id = oi.product_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material = oi.material
        WHERE oi.order_id IN (${placeholders})
        ORDER BY oi.id`,
       orderIds,
@@ -336,62 +355,83 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
 
 // GET /api/admin/finances/margin-analysis
 //
-// La utilidad realizada usa el costo CONGELADO en el pedido (oi.unit_cost), no
-// el costo actual del producto: así un cambio de precio del fabricante no
-// reescribe la ganancia histórica. Para pedidos anteriores a la migración, o
-// items a los que el admin aún no asignó fabricante, se cae a p.base_cost como
-// aproximación, y esas unidades se reportan aparte.
+// 🔴 Endpoint más delicado del plan de precios por material y mayoreo (§2.6):
+// un error aquí no rompe nada visible, solo infla o desinfla la utilidad que
+// el dueño usa para decidir.
+//
+// La utilidad realizada usa el costo CONGELADO en la línea (oi.unit_cost, no
+// el costo actual del producto): así un cambio de precio del fabricante no
+// reescribe la ganancia histórica. Para líneas a las que el admin aún no
+// asignó fabricante, se cae al costo base del MATERIAL CONGELADO en esa línea
+// (oi.material, nunca el material de stock del producto) — y esas unidades se
+// reportan aparte en unitsUnassigned. Si ni siquiera hay costo base para ese
+// material, el `, 0)` final las trataría como ganancia total: por eso se
+// cuentan aparte en unpricedUnits (§2.6b) en vez de sumarse en silencio.
 const getMarginAnalysis = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT p.id, p.name, p.sku, p.base_cost, p.price_cash,
-            ROUND((p.price_cash - p.base_cost), 2) AS unit_margin,
-            ROUND(((p.price_cash - p.base_cost) / NULLIF(p.price_cash, 0)) * 100, 2) AS margin_pct,
+    `SELECT p.id, p.name, p.sku, ip.stock_material, ip.stock_base_cost, ip.stock_price_cash,
+            ROUND((ip.stock_price_cash - ip.stock_base_cost), 2) AS unit_margin,
+            ROUND(((ip.stock_price_cash - ip.stock_base_cost) / NULLIF(ip.stock_price_cash, 0)) * 100, 2) AS margin_pct,
             COALESCE(SUM(oi.quantity), 0) AS units_sold,
-            COALESCE(SUM(oi.quantity * (oi.unit_price - COALESCE(oi.unit_cost, p.base_cost))), 0) AS total_margin,
-            COALESCE(SUM(CASE WHEN oi.unit_cost IS NULL THEN oi.quantity ELSE 0 END), 0) AS units_unassigned
+            COALESCE(SUM(oi.quantity * (oi.unit_price - COALESCE(oi.unit_cost, mp.base_cost, 0))), 0) AS total_margin,
+            COALESCE(SUM(CASE WHEN oi.unit_cost IS NULL THEN oi.quantity ELSE 0 END), 0) AS units_unassigned,
+            COALESCE(SUM(CASE WHEN oi.unit_cost IS NULL AND mp.base_cost IS NULL THEN oi.quantity ELSE 0 END), 0) AS unpriced_units
      FROM products p
+     LEFT JOIN product_inventory_prices ip ON ip.product_id = p.id
      LEFT JOIN order_items oi ON oi.product_id = p.id
      LEFT JOIN orders o ON o.id = oi.order_id AND o.order_status <> 'cancelled'
+     LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material = oi.material
      WHERE p.is_active = TRUE
      GROUP BY p.id
      ORDER BY total_margin DESC
      LIMIT 50`,
   );
 
-  // Desglose por fabricante: qué costo tiene registrado cada uno, qué utilidad
-  // deja y cuántas piezas surtió realmente.
+  // Desglose por fabricante: sus 3 costos por material (D1), la utilidad
+  // realizada (siempre sobre oi.unit_cost/unit_price congelados, ajena al
+  // material) y cuántas piezas surtió.
   const productIds = rows.map((r) => r.id);
   const byProduct = new Map();
   if (productIds.length) {
-    const [breakdown] = await pool.query(
-      `SELECT pmp.product_id, pmp.manufacturer_id, m.name AS manufacturer_name, pmp.cost,
-              p.price_cash,
-              COALESCE(SUM(oi.quantity), 0) AS units_sold,
-              COALESCE(SUM(oi.quantity * (oi.unit_price - oi.unit_cost)), 0) AS realized_margin
+    const [pmpRows] = await pool.query(
+      `SELECT pmp.product_id, pmp.manufacturer_id, m.name AS manufacturer_name,
+              pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color
          FROM product_manufacturer_prices pmp
          JOIN manufacturers m ON m.id = pmp.manufacturer_id
-         JOIN products p ON p.id = pmp.product_id
-         LEFT JOIN order_items oi
-                ON oi.product_id = pmp.product_id
-               AND oi.manufacturer_id = pmp.manufacturer_id
-         LEFT JOIN orders o ON o.id = oi.order_id AND o.order_status <> 'cancelled'
         WHERE pmp.product_id IN (?) AND pmp.is_active = TRUE
-        GROUP BY pmp.product_id, pmp.manufacturer_id
         ORDER BY m.name`,
       [productIds],
     );
-    for (const b of breakdown) {
+    const [salesRows] = await pool.query(
+      `SELECT oi.product_id, oi.manufacturer_id,
+              COALESCE(SUM(oi.quantity), 0) AS units_sold,
+              COALESCE(SUM(oi.quantity * (oi.unit_price - oi.unit_cost)), 0) AS realized_margin
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id AND o.order_status <> 'cancelled'
+        WHERE oi.product_id IN (?) AND oi.manufacturer_id IS NOT NULL
+        GROUP BY oi.product_id, oi.manufacturer_id`,
+      [productIds],
+    );
+    const salesByKey = new Map(salesRows.map((s) => [`${s.product_id}:${s.manufacturer_id}`, s]));
+    const stockMaterialByProduct = new Map(rows.map((r) => [r.id, r.stock_material || 'MDF']));
+
+    for (const b of pmpRows) {
       if (!byProduct.has(b.product_id)) byProduct.set(b.product_id, []);
-      const cost = Number(b.cost);
-      const priceCash = Number(b.price_cash);
+      const stockMaterial = stockMaterialByProduct.get(b.product_id) || 'MDF';
+      const cost = b[MATERIAL_COST_COLUMN[stockMaterial]];
+      const sales = salesByKey.get(`${b.product_id}:${b.manufacturer_id}`);
+      const stockRow = rows.find((r) => r.id === b.product_id);
+      const priceCash = stockRow?.stock_price_cash != null ? Number(stockRow.stock_price_cash) : null;
       byProduct.get(b.product_id).push({
         manufacturerId: b.manufacturer_id,
         manufacturerName: b.manufacturer_name,
-        cost,
-        unitMargin: Math.round((priceCash - cost) * 100) / 100,
-        marginPct: priceCash > 0 ? Math.round(((priceCash - cost) / priceCash) * 10000) / 100 : 0,
-        unitsSold: Number(b.units_sold),
-        realizedMargin: Number(b.realized_margin),
+        // Costo en el material de STOCK del producto; "No aplica" si ese
+        // fabricante no cotiza ese material (RN-03).
+        cost: cost != null ? Number(cost) : null,
+        unitMargin: cost != null && priceCash != null ? Math.round((priceCash - Number(cost)) * 100) / 100 : null,
+        marginPct: cost != null && priceCash ? Math.round(((priceCash - Number(cost)) / priceCash) * 10000) / 100 : null,
+        unitsSold: sales ? Number(sales.units_sold) : 0,
+        realizedMargin: sales ? Number(sales.realized_margin) : 0,
       });
     }
   }
@@ -399,11 +439,18 @@ const getMarginAnalysis = asyncHandler(async (req, res) => {
   res.json({
     data: rows.map((r) => ({
       id: r.id, name: r.name, sku: r.sku,
-      baseCost: Number(r.base_cost), priceCash: Number(r.price_cash),
-      unitMargin: Number(r.unit_margin), marginPct: Number(r.margin_pct),
+      stockMaterial: r.stock_material,
+      baseCost: r.stock_base_cost != null ? Number(r.stock_base_cost) : null,
+      priceCash: r.stock_price_cash != null ? Number(r.stock_price_cash) : null,
+      unitMargin: r.unit_margin != null ? Number(r.unit_margin) : null,
+      marginPct: r.margin_pct != null ? Number(r.margin_pct) : null,
       unitsSold: Number(r.units_sold), totalMargin: Number(r.total_margin),
-      /** Piezas vendidas sin fabricante asignado: su utilidad es aproximada. */
+      /** Piezas vendidas sin fabricante asignado: su utilidad es aproximada
+       * contra el costo base del material de esa línea (§2.6). Normal. */
       unitsUnassigned: Number(r.units_unassigned),
+      /** Piezas cuya utilidad se calculó contra costo CERO por falta de precio
+       * base para su material: es una alarma, no un estado normal (§2.6b). */
+      unpricedUnits: Number(r.unpriced_units),
       byManufacturer: byProduct.get(r.id) ?? [],
     })),
   });
@@ -424,12 +471,12 @@ const getOrders = asyncHandler(async (req, res) => {
 const getOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) throw ApiError.notFound('Pedido no encontrado');
-  const optionsByProduct = await manufacturerOptionsByProduct(
-    (order.items ?? []).map((it) => it.productId),
+  const optionsByKey = await manufacturerOptionsByProduct(
+    (order.items ?? []).map((it) => ({ productId: it.productId, material: it.material })),
   );
   order.items = (order.items ?? []).map((it) => ({
     ...it,
-    manufacturerOptions: optionsByProduct.get(it.productId) ?? [],
+    manufacturerOptions: optionsByKey.get(`${it.productId}:${it.material || 'MDF'}`) ?? [],
   }));
   res.json({ data: order });
 });
@@ -479,37 +526,49 @@ function toDateOnly(value) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+const MATERIAL_COST_COLUMN = {
+  MDF: 'cost_mdf', MELAMINA_BLANCA: 'cost_melamina_blanca', MELAMINA_COLOR: 'cost_melamina_color',
+};
+
 /**
- * Fabricantes candidatos a surtir cada producto: solo los que tienen costo
- * registrado y activo, con lo que cuesta el mueble con cada uno.
+ * Fabricantes candidatos a surtir cada LÍNEA (producto + material congelado,
+ * Fase 1.2 §2b): solo los que tienen costo registrado en ESE material. El
+ * mismo fabricante puede cotizar un producto en MDF y no en Melamina Color
+ * (D1/RN-03), así que el filtro no puede ser solo por producto.
  *
  * Sin costo capturado no hay a quién asignar — es lo que permite congelar
  * unit_cost al asignar y saber la utilidad real de la venta.
  *
- * @returns {Map<number, Array<{manufacturerId:number, manufacturerName:string, cost:number}>>}
+ * @param {Array<{productId:number, material:string}>} items
+ * @returns {Map<string, Array<{manufacturerId:number, manufacturerName:string, cost:number}>>}
+ *   keyed por `${productId}:${material}` — el mismo producto puede aparecer en
+ *   pedidos distintos con materiales distintos, y el costo/candidatos cambian
+ *   por material (D1/RN-03), no solo por producto.
  */
-async function manufacturerOptionsByProduct(productIds) {
-  const ids = [...new Set(productIds.filter(Boolean))];
-  const optionsByProduct = new Map();
-  if (!ids.length) return optionsByProduct;
+async function manufacturerOptionsByProduct(items) {
+  const ids = [...new Set(items.map((it) => it.productId).filter(Boolean))];
+  const optionsByKey = new Map();
+  if (!ids.length) return optionsByKey;
 
   const [costs] = await pool.query(
-    `SELECT pmp.product_id, pmp.manufacturer_id, pmp.cost, m.name
+    `SELECT pmp.product_id, pmp.manufacturer_id, m.name,
+            pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color
        FROM product_manufacturer_prices pmp
        JOIN manufacturers m ON m.id = pmp.manufacturer_id
       WHERE pmp.product_id IN (?) AND pmp.is_active = TRUE AND m.is_active = TRUE
       ORDER BY m.name`,
     [ids],
   );
-  for (const c of costs) {
-    if (!optionsByProduct.has(c.product_id)) optionsByProduct.set(c.product_id, []);
-    optionsByProduct.get(c.product_id).push({
-      manufacturerId: c.manufacturer_id,
-      manufacturerName: c.name,
-      cost: Number(c.cost),
-    });
+  for (const it of items) {
+    const material = it.material || 'MDF';
+    const key = `${it.productId}:${material}`;
+    const column = MATERIAL_COST_COLUMN[material];
+    const list = costs
+      .filter((c) => c.product_id === it.productId && c[column] != null)
+      .map((c) => ({ manufacturerId: c.manufacturer_id, manufacturerName: c.name, cost: Number(c[column]) }));
+    optionsByKey.set(key, list);
   }
-  return optionsByProduct;
+  return optionsByKey;
 }
 
 // GET /api/admin/factory-order-items — items de fabricación pendientes, por pedido,
@@ -518,7 +577,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
             o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
-            oi.quantity, oi.is_ready, oi.ready_at, rb.full_name AS ready_by_name,
+            oi.material, oi.quantity, oi.is_ready, oi.ready_at, rb.full_name AS ready_by_name,
             oi.product_id, oi.unit_price, oi.unit_cost,
             oi.manufacturer_id, m.name AS manufacturer_name
      FROM order_items oi
@@ -529,7 +588,9 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
      ORDER BY o.manufacturer_due_date IS NULL, o.manufacturer_due_date ASC, o.created_at ASC`,
   );
 
-  const optionsByProduct = await manufacturerOptionsByProduct(rows.map((r) => r.product_id));
+  const optionsByKey = await manufacturerOptionsByProduct(
+    rows.map((r) => ({ productId: r.product_id, material: r.material })),
+  );
 
   res.json({
     data: rows.map((r) => {
@@ -554,7 +615,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         manufacturerName: r.manufacturer_name ?? null,
         unitCost,
         unitProfit: unitCost !== null ? Number(r.unit_price) - unitCost : null,
-        manufacturerOptions: optionsByProduct.get(r.product_id) ?? [],
+        manufacturerOptions: optionsByKey.get(`${r.product_id}:${r.material || 'MDF'}`) ?? [],
       };
     }),
   });
@@ -581,7 +642,7 @@ const updateManufacturerDueDate = asyncHandler(async (req, res) => {
 const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   const { manufacturerId } = req.body;
   const [[item]] = await pool.execute(
-    'SELECT id, product_id, unit_price FROM order_items WHERE id = ?', [req.params.id],
+    'SELECT id, product_id, unit_price, material FROM order_items WHERE id = ?', [req.params.id],
   );
   if (!item) throw ApiError.notFound('Item no encontrado');
 
@@ -602,9 +663,12 @@ const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   );
   if (!manufacturer) throw ApiError.badRequest('Fabricante inválido');
 
-  const cost = await ProductManufacturerPrice.findCost(item.product_id, manufacturerId);
+  // El material lo aporta la línea (congelado al crear el pedido, Fase 1.2 §2b):
+  // el costo tiene que ser el de ESE material, no el de otro que el fabricante
+  // cotice más barato.
+  const cost = await ProductManufacturerPrice.findCost(item.product_id, manufacturerId, item.material);
   if (cost === null) {
-    throw ApiError.badRequest('Ese fabricante no tiene costo registrado para este producto');
+    throw ApiError.badRequest(`Ese fabricante no tiene costo registrado para este producto en ${item.material}`);
   }
 
   // El costo se congela aquí: si mañana sube, este pedido conserva su utilidad real.
@@ -674,12 +738,17 @@ const getSalesReport = asyncHandler(async (req, res) => {
 });
 
 // GET /api/admin/reports/inventory
+// El costo y el precio son los del MATERIAL DEL STOCK (product_inventory_prices,
+// D10) — no products.base_cost/price_cash, espejo temporal condenado en la
+// Fase 9 (D9).
 const getInventoryReport = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT p.sku, p.name, c.name AS category, p.stock_quantity, p.stock_alert_level,
-            p.base_cost, p.price_cash,
-            (p.base_cost * p.stock_quantity) AS stock_value
-     FROM products p LEFT JOIN categories c ON c.id = p.category_id
+            ip.stock_base_cost AS base_cost, ip.stock_price_cash AS price_cash,
+            (COALESCE(ip.stock_base_cost, 0) * p.stock_quantity) AS stock_value
+     FROM products p
+     LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN product_inventory_prices ip ON ip.product_id = p.id
      WHERE p.is_active = TRUE ORDER BY p.name`,
   );
   res.json({ data: rows });
@@ -699,8 +768,189 @@ const removeAssembly = asyncHandler(async (req, res) => {
   });
 });
 
+// ===================== FASE 5 — LISTAS DE PRECIOS POR MATERIAL =====================
+
+/** Filtro común a las 3 listas: material, texto libre y categoría. */
+function materialListFilters(query) {
+  const { material, search, categoria } = query;
+  const conditions = ['mp.base_cost IS NOT NULL', 'p.is_active = TRUE'];
+  const params = [];
+  if (material && MATERIALS.includes(material)) { conditions.push('mp.material = ?'); params.push(material); }
+  if (search) { conditions.push('(p.name LIKE ? OR p.sku LIKE ?)'); params.push(`%${search}%`, `%${search}%`); }
+  if (categoria) { conditions.push('c.slug = ?'); params.push(categoria); }
+  return { where: conditions.join(' AND '), params };
+}
+
+// GET /api/admin/price-list?material=&search=&categoria=
+// Producto × material -> Contado, 6 MSI, Crédito, Enganche, Pago semanal.
+// Es la lista cara al cliente (§11.5 del doc de reglas / Fase 5.3 del plan).
+const getPriceList = asyncHandler(async (req, res) => {
+  const { where, params } = materialListFilters(req.query);
+  const [rows] = await pool.execute(
+    `SELECT p.id, p.name, p.sku, c.name AS category_name, mp.material,
+            mp.price_cash, mp.price_6msi, mp.price_credit
+       FROM product_material_prices mp
+       JOIN products p ON p.id = mp.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
+      WHERE ${where}
+      ORDER BY p.name, mp.material`,
+    params,
+  );
+  const config = await PricingConfig.getMap();
+  res.json({
+    data: rows.map((r) => {
+      const credit = calculateCredit(Number(r.price_cash), config);
+      return {
+        productId: r.id,
+        name: r.name,
+        sku: r.sku,
+        categoryName: r.category_name ?? null,
+        material: r.material,
+        priceCash: Number(r.price_cash),
+        price6msi: r.price_6msi != null ? Number(r.price_6msi) : null,
+        priceCredit: r.price_credit != null ? Number(r.price_credit) : null,
+        downPayment: credit?.downPayment ?? null,
+        weeklyPayment: credit?.weeklyPayment ?? null,
+        lastPayment: credit?.lastPayment ?? null,
+        weeks: credit?.weeks ?? null,
+      };
+    }),
+  });
+});
+
+// GET /api/admin/wholesale-price-list?material=&search=&categoria=
+// Producto × material -> Mayoreo vs Contado, con el ahorro en %. Cara al mayorista.
+const getWholesalePriceList = asyncHandler(async (req, res) => {
+  const { where, params } = materialListFilters(req.query);
+  const [rows] = await pool.execute(
+    `SELECT p.id, p.name, p.sku, c.name AS category_name, mp.material,
+            mp.price_cash, mp.price_mayoreo
+       FROM product_material_prices mp
+       JOIN products p ON p.id = mp.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
+      WHERE ${where} AND mp.price_mayoreo IS NOT NULL
+      ORDER BY p.name, mp.material`,
+    params,
+  );
+  res.json({
+    data: rows.map((r) => {
+      const priceCash = Number(r.price_cash);
+      const priceMayoreo = Number(r.price_mayoreo);
+      return {
+        productId: r.id,
+        name: r.name,
+        sku: r.sku,
+        categoryName: r.category_name ?? null,
+        material: r.material,
+        priceCash,
+        priceMayoreo,
+        savingsPct: priceCash > 0 ? Math.round(((priceCash - priceMayoreo) / priceCash) * 10000) / 100 : null,
+      };
+    }),
+  });
+});
+
+// GET /api/admin/profit-matrix?material=&minMargin=
+// Producto × material × fabricante × forma de pago, con % de margen. El
+// semáforo (alertLow) usa min_margin_alert de pricing_config; es solo visual.
+const getProfitMatrix = asyncHandler(async (req, res) => {
+  const { where, params } = materialListFilters(req.query);
+  const [rows] = await pool.execute(
+    `SELECT p.id, p.name, p.sku, mp.material, mp.price_cash, mp.price_6msi, mp.price_credit, mp.price_mayoreo,
+            pmp.manufacturer_id, m.name AS manufacturer_name,
+            pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color
+       FROM product_material_prices mp
+       JOIN products p ON p.id = mp.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
+       JOIN product_manufacturer_prices pmp ON pmp.product_id = mp.product_id AND pmp.is_active = TRUE
+       JOIN manufacturers m ON m.id = pmp.manufacturer_id AND m.is_active = TRUE
+      WHERE ${where}
+      ORDER BY p.name, mp.material, m.name`,
+    params,
+  );
+  const config = await PricingConfig.getMap();
+  const minMarginAlert = Number(config.min_margin_alert) || 20;
+  const MATERIAL_COST_COLUMN = { MDF: 'cost_mdf', MELAMINA_BLANCA: 'cost_melamina_blanca', MELAMINA_COLOR: 'cost_melamina_color' };
+
+  const data = [];
+  for (const r of rows) {
+    const cost = r[MATERIAL_COST_COLUMN[r.material]];
+    if (cost == null) continue; // RN-03: este fabricante no cotiza este material.
+
+    const prices = {
+      price_cash: Number(r.price_cash),
+      price_6msi: r.price_6msi != null ? Number(r.price_6msi) : null,
+      price_credit: r.price_credit != null ? Number(r.price_credit) : null,
+      iva_amount: null,
+    };
+    // profitByCost necesita iva_amount; se recalcula a partir de price_cash
+    // (mismo camino que RN-04/05, solo se invierte para el desglose).
+    const iva = Number(config.iva) / 100;
+    const card = (Number(config.card_commission_base) / 100) * (1 + iva);
+    const K = prices.price_cash * (1 - card);
+    const G = K / (1 + iva);
+    prices.iva_amount = Math.round(G * iva * 100) / 100;
+
+    const cashProfit = profitByCost(Number(cost), prices, config);
+    const wPrice = r.price_mayoreo != null ? Number(r.price_mayoreo) : null;
+    const wProfit = wPrice != null ? wholesaleProfit(Number(cost), wPrice) : null;
+
+    data.push({
+      productId: r.id,
+      name: r.name,
+      sku: r.sku,
+      material: r.material,
+      manufacturerId: r.manufacturer_id,
+      manufacturerName: r.manufacturer_name,
+      cost: Number(cost),
+      cash: cashProfit?.cash ?? null,
+      card: cashProfit?.card ?? null,
+      msi: cashProfit?.msi ?? null,
+      credit: cashProfit?.credit ?? null,
+      marginPct: cashProfit?.marginPct ?? null,
+      wholesale: wProfit?.profit ?? null,
+      wholesaleMarginPct: wProfit?.marginPct ?? null,
+      alertLow: cashProfit?.marginPct != null && cashProfit.marginPct < minMarginAlert,
+    });
+  }
+
+  res.json({ data, minMarginAlert });
+});
+
+/**
+ * GET /api/admin/health/pricing (solo admin) — §2.6b del plan de precios por
+ * material y mayoreo, capas 1 y 2 de defensa contra la utilidad inflada.
+ *
+ * `order_items_sin_costo` (schema_material_pricing_views.sql) son líneas SIN
+ * fabricante asignado Y sin costo base para su material: su utilidad se
+ * calcularía contra costo CERO si no se marcaran aparte. Debe estar vacía;
+ * si no lo está, el número "malo" no debe viajar escondido dentro de una
+ * suma que se ve perfectamente normal (por eso también aparece como
+ * `unpricedUnits` en /admin/finances/margin-analysis).
+ */
+const getPricingHealth = asyncHandler(async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT order_item_id, order_id, product_id, material, quantity, unit_price, product_name
+       FROM order_items_sin_costo
+      ORDER BY order_id, order_item_id`,
+  );
+  res.json({
+    data: rows.map((r) => ({
+      orderItemId: r.order_item_id,
+      orderId: r.order_id,
+      productId: r.product_id,
+      material: r.material,
+      quantity: r.quantity,
+      unitPrice: Number(r.unit_price),
+      productName: r.product_name,
+    })),
+    count: rows.length,
+  });
+});
+
 module.exports = {
   getDashboard,
+  getPricingHealth,
   getFinancesSummary,
   getTransactions,
   getByPaymentType,
@@ -718,4 +968,7 @@ module.exports = {
   getWeeklyList,
   getSalesReport,
   getInventoryReport,
+  getPriceList,
+  getWholesalePriceList,
+  getProfitMatrix,
 };

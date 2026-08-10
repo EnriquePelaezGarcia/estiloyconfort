@@ -11,6 +11,12 @@
     Este pedido ya fue cobrado. Solo puedes cambiar muebles de stock por otros muebles de stock.
   </div>
 }
+@if (hasUnquotedLines()) {
+  <div class="banner banner--error">
+    <span class="material-symbols-outlined">error</span>
+    {{ unquotedLines().length }} mueble(s) no se cotizan en {{ materialLabels[materialSig()] }}: quítalos o cambia el material antes de continuar.
+  </div>
+}
 
 <form [formGroup]="form" (ngSubmit)="submit()" class="order-grid">
 
@@ -52,15 +58,21 @@
           <option value="msi">Meses sin intereses</option>
           <option value="store_credit">Crédito tienda</option>
           <option value="layaway">Apartado</option>
+          <option value="wholesale">Mayoreo</option>
         </select>
-        <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
+        @if (isWholesale()) {
+          <p class="field__hint">Precio de mayoreo — venta de contado entre negocios (sin IVA ni comisión). Solo efectivo o transferencia.</p>
+        } @else {
+          <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
+        }
       </div>
       <div class="field-row">
         <div class="field">
           <label for="material">Material *</label>
           <select id="material" formControlName="material">
-            <option value="MDF">MDF</option>
-            <option value="Melamina">Melamina</option>
+            <option value="MDF">MDF Pintado</option>
+            <option value="MELAMINA_BLANCA">Melamina Blanca</option>
+            <option value="MELAMINA_COLOR">Melamina Color</option>
           </select>
         </div>
         <div class="field" [class.field--error]="form.controls.color.touched && form.controls.color.invalid">
@@ -71,7 +83,9 @@
             formControlName="color"
             placeholder="Ej. Blanco, Chocolate, Vetado Nogal, Gris texturizado..."
           />
-          @if (form.controls.color.touched && form.controls.color.invalid) {
+          @if (materialSig() === 'MELAMINA_BLANCA') {
+            <p class="field__hint">La melamina blanca solo existe en blanco. Para otro color elige Melamina Color.</p>
+          } @else if (form.controls.color.touched && form.controls.color.invalid) {
             <p class="field__error">Ingresa el color o acabado.</p>
           }
         </div>
@@ -220,13 +234,23 @@
           <div class="state"><div class="spinner"></div></div>
         } @else {
           @for (p of availableSearchResults(); track p.id) {
-            <button type="button" class="result" (click)="addProduct(p)">
+            <button
+              type="button"
+              class="result"
+              [disabled]="!lineMaterialPrice(p)"
+              [title]="lineMaterialPrice(p) ? '' : 'No disponible en ' + materialLabels[materialSig()]"
+              (click)="addProduct(p)"
+            >
               <span class="result__info">
                 <span class="result__name">{{ p.name }}</span>
                 <span class="result__sku">{{ p.sku }} · Stock: {{ p.stock_quantity }}</span>
               </span>
-              <span class="result__price">{{ unitPrice(p) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-              <span class="material-symbols-outlined">add_circle</span>
+              @if (lineMaterialPrice(p)) {
+                <span class="result__price">{{ unitPrice(p) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                <span class="material-symbols-outlined">add_circle</span>
+              } @else {
+                <span class="result__price muted">No disponible en {{ materialLabels[materialSig()] }}</span>
+              }
             </button>
           } @empty {
             <p class="empty">Sin resultados.</p>
@@ -241,10 +265,16 @@
         <p class="empty">Agrega productos desde el buscador.</p>
       } @else {
         @for (l of lines(); track l.product.id) {
-          <div class="cart-line" [class.cart-line--locked]="!canEditLine(l)">
+          <div class="cart-line" [class.cart-line--locked]="!canEditLine(l)" [class.cart-line--alert]="!lineMaterialPrice(l.product)">
             <div class="cart-line__info">
               <span class="cart-line__name">{{ l.product.name }}</span>
-              <span class="cart-line__price">{{ unitPrice(l.product) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
+              @if (lineMaterialPrice(l.product)) {
+                <span class="cart-line__price">{{ unitPrice(l.product) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
+              } @else {
+                <span class="cart-line__price cart-line__price--alert">
+                  No se cotiza en {{ materialLabels[materialSig()] }} — quítalo o cambia el material
+                </span>
+              }
               <label class="cart-line__fabrication">
                 <input
                   type="checkbox"
@@ -264,7 +294,11 @@
                 <span class="material-symbols-outlined">add</span>
               </button>
             </div>
-            <span class="cart-line__subtotal">{{ unitPrice(l.product) * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            <span class="cart-line__subtotal">
+              @if (unitPrice(l.product) !== null) {
+                {{ unitPrice(l.product)! * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              } @else { — }
+            </span>
             @if (canEditLine(l)) {
               <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(l.product.id)" aria-label="Eliminar">
                 <span class="material-symbols-outlined">delete</span>

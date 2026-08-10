@@ -150,12 +150,14 @@
 
         <div class="field-row">
           <div class="field">
-            <label for="material">Material</label>
+            <label for="material">Material del stock</label>
             <select id="material" formControlName="material">
               <option [ngValue]="null">Selecciona…</option>
-              <option value="MDF">MDF</option>
-              <option value="Melamina">Melamina</option>
+              @for (material of materials; track material) {
+                <option [value]="material">{{ materialLabels[material] }}</option>
+              }
             </select>
+            <p class="field__hint">De qué material es el mueble que tienes en bodega. No limita en qué materiales se vende (eso lo definen los costos por fabricante de abajo).</p>
           </div>
           <div class="field">
             <label for="color">Color / Acabado</label>
@@ -208,72 +210,61 @@
           <div class="costs">
             <div class="costs__head">
               <span>Fabricante</span>
-              <span>Costo</span>
+              @for (material of materials; track material) {
+                <span>{{ materialLabels[material] }}</span>
+              }
               <span>Define precio</span>
-              <span>Efectivo</span>
-              <span>Tarjeta</span>
-              <span>6 MSI</span>
-              <span>Crédito</span>
             </div>
 
             @for (row of costRowsWithProfit(); track row.manufacturerId) {
-              <div
-                class="costs__row"
-                [class.costs__row--base]="row.isBaseCost"
-                [class.costs__row--no-price]="row.cost !== null && !row.affectsBaseCost"
-              >
-                <span class="costs__name">
-                  {{ row.manufacturerName }}
-                  @if (row.isBaseCost) {
-                    <span class="costs__badge" title="Su costo define el precio de venta">manda</span>
-                  }
-                  @if (row.cost !== null && !row.affectsBaseCost) {
-                    <span
-                      class="costs__badge costs__badge--muted"
-                      title="Este costo no mueve el precio al público"
-                    >sin precio</span>
-                  }
-                </span>
-                <input
-                  type="number"
-                  class="costs__input"
-                  min="0"
-                  step="0.01"
-                  placeholder="—"
-                  [value]="row.cost ?? ''"
-                  (input)="onCostChange(row.manufacturerId, $event)"
-                />
-                <label class="costs__check" title="Este costo define el precio de venta">
+              <div class="costs__row">
+                <span class="costs__name">{{ row.manufacturerName }}</span>
+                @for (material of materials; track material) {
+                  <div
+                    class="costs__material-cell"
+                    [class.costs__material-cell--base]="row.materials[material].isBaseCost"
+                  >
+                    <input
+                      type="number"
+                      class="costs__input"
+                      min="0"
+                      step="0.01"
+                      placeholder="No aplica"
+                      [value]="row.materials[material].cost ?? ''"
+                      (input)="onCostChange(row.manufacturerId, material, $event)"
+                    />
+                    @if (row.materials[material].isBaseCost) {
+                      <span class="costs__badge" title="Su costo define el precio de venta en este material">manda</span>
+                    } @else if (row.materials[material].cost !== null && !row.affectsBaseCost) {
+                      <span class="costs__badge costs__badge--muted" title="Este costo no mueve el precio al público">sin precio</span>
+                    }
+                    @if (row.materials[material].profitCash !== null) {
+                      <span class="costs__profit">Ganancia: {{ money(row.materials[material].profitCash) }}</span>
+                    }
+                  </div>
+                }
+                <label class="costs__check" title="Estos costos definen el precio de venta">
                   <input
                     type="checkbox"
                     [checked]="row.affectsBaseCost"
                     (change)="onAffectsBaseCostChange(row.manufacturerId, $event)"
                   />
                 </label>
-                <span class="costs__profit">{{ row.profit ? money(row.profit.cash) : '—' }}</span>
-                <span class="costs__profit">{{ row.profit ? money(row.profit.card) : '—' }}</span>
-                <span class="costs__profit">{{ row.profit ? money(row.profit.msi) : '—' }}</span>
-                <span class="costs__profit">{{ row.profit ? money(row.profit.credit) : '—' }}</span>
               </div>
             }
           </div>
 
           <p class="costs__hint">
-            <strong>Define precio</strong> viene marcado. Al desmarcarlo, el costo se usará para
-            asignar y calcular tu utilidad, pero el precio al público no cambiará.
-          </p>
-
-          <p class="costs__base">
-            @if (derivedBaseCost() !== null) {
-              Costo base: <strong>{{ money(derivedBaseCost()) }}</strong>
-              — el más alto, de {{ baseCostManufacturer()?.manufacturerName }}
-            } @else {
-              Captura al menos un costo para calcular el precio.
-            }
+            Deja vacío el material que ese fabricante no te surta ("No aplica" — nunca $0).
+            <strong>Define precio</strong> viene marcado; al desmarcarlo, sus costos se usan
+            para asignar y calcular tu utilidad, pero el precio al público no cambia.
           </p>
         }
 
-        <p class="form-section">Precio de venta</p>
+        <p class="form-section">Precio de venta por material</p>
+        <p class="costs__hint">
+          Un solo % de ganancia para los 3 materiales (se aplica sobre cada costo base por separado).
+        </p>
 
         <div class="mode-toggle">
           <button
@@ -304,35 +295,59 @@
           </div>
         } @else {
           <div class="field">
-            <label for="targetCashPrice">Precio de contado deseado</label>
+            <label for="targetCashPrice">Precio de contado deseado ({{ materialLabels[form.value.material ?? 'MDF'] }})</label>
             <input id="targetCashPrice" type="number" formControlName="targetCashPrice" min="0" step="10" />
             <p class="field__hint">
               @if (effectiveMargin() !== null) {
                 Margen que lo produce: <strong>{{ effectiveMargin() }} %</strong>
               } @else {
-                Debe ser mayor que el costo base.
+                Debe ser mayor que el costo base del material del stock.
               }
             </p>
           </div>
         }
 
-        <div class="price-preview">
-          <div class="price-preview__item">
-            <span class="price-preview__label">Precio de contado</span>
-            <span class="price-preview__value">{{ money(computedPrices().price_cash) }}</span>
+        <div class="costs costs--summary">
+          <div class="costs__head">
+            <span>Precio</span>
+            @for (material of materials; track material) {
+              <span>{{ materialLabels[material] }}</span>
+            }
           </div>
-          <div class="price-preview__item price-preview__item--msi">
-            <span class="price-preview__label">Precio a 6 MSI</span>
-            <span class="price-preview__value">{{ money(computedPrices().price_6msi) }}</span>
+          <div class="costs__row costs__row--summary">
+            <span class="costs__name">Costo base</span>
+            @for (material of materials; track material) {
+              <span class="costs__profit">{{ money(derivedBaseCosts()[material]) }}</span>
+            }
           </div>
-          <div class="price-preview__item price-preview__item--credit">
-            <span class="price-preview__label">Crédito Tienda</span>
-            <span class="price-preview__value">{{ money(computedPrices().price_credit) }}</span>
+          <div class="costs__row costs__row--summary">
+            <span class="costs__name">Contado</span>
+            @for (material of materials; track material) {
+              <span class="costs__profit">{{ money(computedPricesByMaterial()[material].price_cash) }}</span>
+            }
+          </div>
+          <div class="costs__row costs__row--summary">
+            <span class="costs__name">6 MSI</span>
+            @for (material of materials; track material) {
+              <span class="costs__profit">{{ money(computedPricesByMaterial()[material].price_6msi) }}</span>
+            }
+          </div>
+          <div class="costs__row costs__row--summary">
+            <span class="costs__name">Crédito Tienda</span>
+            @for (material of materials; track material) {
+              <span class="costs__profit">{{ money(computedPricesByMaterial()[material].price_credit) }}</span>
+            }
+          </div>
+          <div class="costs__row costs__row--summary">
+            <span class="costs__name">Mayoreo</span>
+            @for (material of materials; track material) {
+              <span class="costs__profit">{{ money(computedWholesaleByMaterial()[material]) }}</span>
+            }
           </div>
         </div>
-        @if (computedCredit(); as credit) {
+        @if (computedCreditByMaterial()[form.value.material ?? 'MDF']; as credit) {
           <p class="price-preview__hint">
-            Crédito: enganche de <strong>{{ money(credit.downPayment) }}</strong>,
+            Crédito en {{ materialLabels[form.value.material ?? 'MDF'] }}: enganche de <strong>{{ money(credit.downPayment) }}</strong>,
             {{ credit.weeks - 1 }} abonos de <strong>{{ money(credit.weeklyPayment) }}</strong>
             y un último de <strong>{{ money(credit.lastPayment) }}</strong>.
           </p>
