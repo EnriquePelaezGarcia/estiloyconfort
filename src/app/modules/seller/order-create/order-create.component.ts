@@ -423,10 +423,25 @@ export class OrderCreateComponent implements OnInit {
       return [...lines, {
         product,
         materialId: defaultMaterial.materialId,
-        color: defaultMaterial.colorPolicy === 'fixed' ? defaultMaterial.fixedColor : null,
+        color: this.initialColorFor(defaultMaterial),
         quantity: 1,
       }];
     });
+  }
+
+  /**
+   * Color inicial de una línea según la política de material (M6):
+   *   - 'fixed'    → el color fijo del material (Melamina Blanca = "Blanco").
+   *   - 'required' → nada: el vendedor tiene que capturarlo.
+   *   - 'free'     → editable desde el inicio. MDF Pintado es una placa que
+   *     se pinta a pedido; sin nada capturado se asume "Blanco" (el mismo
+   *     default histórico de products.color), pero el vendedor lo cambia
+   *     escribiendo otro color si el cliente pidió uno distinto.
+   */
+  private initialColorFor(mp: InventoryMaterialPrice): string | null {
+    if (mp.colorPolicy === 'fixed') return mp.fixedColor;
+    if (mp.colorPolicy === 'required') return null;
+    return mp.code === 'MDF' ? 'Blanco' : null;
   }
 
   /** Cambia el material de ESA línea (M4): solo esa línea reprecia, no el resto del pedido. */
@@ -436,9 +451,13 @@ export class OrderCreateComponent implements OnInit {
       lines.map((l, i) => {
         if (i !== index) return l;
         const mp = l.product.materialPrices.find((m) => m.materialId === materialId);
+        if (!mp) return { ...l, materialId };
         // Al cambiar de material la política de color puede cambiar (M6 §6.2.4):
-        // un color incompatible no se conserva en silencio.
-        const color = mp?.colorPolicy === 'fixed' ? mp.fixedColor : (mp?.colorPolicy === 'required' ? null : l.color);
+        // un color incompatible no se conserva en silencio ('fixed'/'required'
+        // siempre se recalculan). Si la línea ya traía un color libre
+        // capturado a mano, se respeta al cambiar entre dos materiales
+        // 'free' — no se pisa lo que el vendedor ya escribió.
+        const color = mp.colorPolicy === 'free' ? (l.color ?? this.initialColorFor(mp)) : this.initialColorFor(mp);
         return { ...l, materialId, color };
       }),
     );

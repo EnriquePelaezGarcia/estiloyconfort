@@ -250,16 +250,17 @@
               }
 
               @if (lineMaterialPrice(l); as mp) {
-                @if (mp.colorPolicy !== 'free' || l.color) {
-                  <input
-                    type="text"
-                    class="cart-line__color"
-                    [value]="l.color ?? ''"
-                    [disabled]="mp.colorPolicy === 'fixed' || !canEditLine(l)"
-                    [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
-                    (input)="changeLineColor(i, $event)"
-                  />
-                }
+                <!-- M6: siempre visible y editable salvo color fijo ('fixed').
+                     'free' (p.ej. MDF Pintado) trae "Blanco" por default pero
+                     el vendedor puede escribir otro color por línea. -->
+                <input
+                  type="text"
+                  class="cart-line__color"
+                  [value]="l.color ?? ''"
+                  [disabled]="mp.colorPolicy === 'fixed' || !canEditLine(l)"
+                  [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
+                  (input)="changeLineColor(i, $event)"
+                />
               }
 
               @if (unitPrice(l) !== null) {
