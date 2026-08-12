@@ -1,0 +1,18 @@
+@use '../../../../../styles/variables' as vars;
+
+.table__num { text-align: right; }
+.table__actions { text-align: right; white-space: nowrap; }
+
+.table__hint {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: vars.$color-text-secondary;
+}
+
+// Rojo = se debe. Verde = saldo a favor (se pagó de más o hay un anticipo
+// sobre algo que aún no llega).
+.balance--due { color: vars.$color-error; }
+.balance--credit { color: vars.$color-success; }
+
+.btn .material-symbols-outlined { font-size: 1.1rem; }

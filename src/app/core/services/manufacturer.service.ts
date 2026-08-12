@@ -1,7 +1,36 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { ManufacturerOrder, ManufacturerOwnCatalogItem, Order, WeeklyListRow } from '../models/order.model';
+import {
+  PayableDocumentDetail,
+  PayableDocumentsResponse,
+  PayableSourceType,
+  PaymentBatch,
+} from '../models/payable.model';
+
+/** Filtros del historial. El backend fuerza el fabricante desde el token. */
+export interface ManufacturerHistoryFilters {
+  period?: string;
+  date?: string;
+  from?: string;
+  to?: string;
+  sourceType?: string;
+  fabricationStatus?: string;
+  paymentStatus?: string;
+  dateBasis?: 'delivered' | 'ordered';
+}
+
+function toParams(filters: object = {}): Record<string, string> {
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== '') {
+      params[key] = String(value);
+    }
+  }
+  return params;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ManufacturerService {
@@ -37,5 +66,38 @@ export class ManufacturerService {
    */
   getMyCatalog(): Observable<{ data: ManufacturerOwnCatalogItem[] }> {
     return this.api.get<{ data: ManufacturerOwnCatalogItem[] }>('/manufacturer/catalog');
+  }
+
+  // ─── HISTORIAL Y PAGOS ─────────────────────────────────────────────────────
+  // Hasta ahora NINGÚN método aceptaba fechas: el portal solo mostraba lo
+  // pendiente de fabricar, sin historial ni montos.
+
+  /**
+   * Pedidos y órdenes de compra con monto, pagado y saldo. Igual que el
+   * catálogo (D14), el backend fuerza el fabricante desde el token: no hay
+   * parámetro que permita ver la cartera de otro.
+   */
+  history(filters: ManufacturerHistoryFilters = {}): Observable<PayableDocumentsResponse> {
+    return this.api.get<PayableDocumentsResponse>('/manufacturer/history', toParams(filters));
+  }
+
+  /** Piezas de un documento, para la fila expandible. */
+  historyDetail(
+    sourceType: PayableSourceType,
+    sourceId: number,
+  ): Observable<PayableDocumentDetail> {
+    return this.api.get<{ data: PayableDocumentDetail }>(
+      `/manufacturer/history/${sourceType}/${sourceId}`,
+    ).pipe(map((r) => r.data));
+  }
+
+  /** Los cortes que ha recibido. */
+  payments(
+    filters: ManufacturerHistoryFilters = {},
+  ): Observable<{ data: PaymentBatch[]; meta: { total: number; count: number } }> {
+    return this.api.get<{ data: PaymentBatch[]; meta: { total: number; count: number } }>(
+      '/manufacturer/payments',
+      toParams(filters),
+    );
   }
 }

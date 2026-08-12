@@ -1,0 +1,205 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Fabricante</p>
+    <h1 class="page-head__title">Historial y pagos</h1>
+    <p class="page-head__sub">Lo que has fabricado y lo que se te debe</p>
+  </div>
+  <button type="button" class="btn btn--ghost no-print" (click)="print()">
+    <span class="material-symbols-outlined">print</span> Imprimir
+  </button>
+</header>
+
+<section class="toolbar no-print">
+  <div class="filters__periods">
+    <button type="button" class="chip" [class.chip--active]="period() === 'week'" (click)="selectPeriod('week')">Esta semana</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'month'" (click)="selectPeriod('month')">Este mes</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
+  </div>
+  <div class="toolbar__filters">
+    <select class="filter-select" (change)="onSourceType($event)">
+      <option value="">Pedidos y órdenes de compra</option>
+      <option value="order">Solo pedidos</option>
+      <option value="purchase_order">Solo órdenes de compra</option>
+    </select>
+    <select class="filter-select" (change)="onFabricationStatus($event)">
+      <option value="">Todos los estados</option>
+      <option value="pendiente">Por fabricar</option>
+      <option value="fabricado">Entregados a tienda</option>
+      <option value="entregado">Entregados al cliente</option>
+    </select>
+  </div>
+</section>
+
+<p class="period-tag">
+  Periodo: <strong>{{ rangeFrom() | date: 'd MMM' }} al {{ rangeTo() | date: 'd MMM y' }}</strong>
+  @if (period() === 'week') {
+    <span class="period-tag__hint">(semana lunes a domingo)</span>
+  }
+</p>
+
+<section class="stat-grid">
+  <div class="stat-card">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">description</span></span>
+    <span class="stat-card__label">Documentos</span>
+    <span class="stat-card__value">{{ summary().count }}</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">inventory_2</span></span>
+    <span class="stat-card__label">Piezas</span>
+    <span class="stat-card__value">{{ summary().pieces }}</span>
+  </div>
+  <div class="stat-card stat-card--gold">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">receipt_long</span></span>
+    <span class="stat-card__label">Monto del período</span>
+    <span class="stat-card__value">{{ summary().amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">{{ summary().paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }} pagado</span>
+  </div>
+  <div class="stat-card stat-card--success">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
+    <span class="stat-card__label">Saldo por cobrar</span>
+    <span class="stat-card__value">{{ summary().balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel__title"><span>Detalle</span></div>
+
+  @if (loading()) {
+    <div class="state"><span class="spinner"></span> Cargando...</div>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Tipo</th>
+            <th>Folio</th>
+            <th>Entrega</th>
+            <th class="table__num">Piezas</th>
+            <th class="table__num">Monto</th>
+            <th class="table__num">Pagado</th>
+            <th class="table__num">Saldo</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of documents(); track d.sourceType + d.sourceId) {
+            <tr class="row--clickable" (click)="toggleExpand(d)">
+              <td>
+                <span class="material-symbols-outlined expand-icon">
+                  {{ isExpanded(d) ? 'expand_less' : 'expand_more' }}
+                </span>
+              </td>
+              <td><span class="badge" [class]="typeTone[d.sourceType]">{{ typeLabels[d.sourceType] }}</span></td>
+              <td><strong>{{ d.folio }}</strong></td>
+              <td>
+                @if (d.deliveredAt) {
+                  {{ d.deliveredAt | date: 'dd/MM/yyyy' }}
+                } @else {
+                  <span class="table__hint">sin entregar</span>
+                }
+              </td>
+              <td class="table__num">{{ d.pieces }}</td>
+              <td class="table__num">{{ d.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td class="table__num">{{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td class="table__num"><strong>{{ d.balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+              <td>
+                <span class="badge" [class]="statusTone[d.paymentStatus]">
+                  {{ statusLabels[d.paymentStatus] }}
+                  @if (d.paymentStatus === 'anticipo') {
+                    {{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+                  }
+                </span>
+                <small class="badge badge--sm" [class]="fabTone[d.fabricationStatus]">
+                  {{ fabLabels[d.fabricationStatus] }}
+                </small>
+              </td>
+            </tr>
+            @if (isExpanded(d)) {
+              <tr class="row--detail">
+                <td colspan="9">
+                  @if (itemsOf(d).length) {
+                    <table class="subtable">
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th>Material</th>
+                          <th>Color</th>
+                          <th class="table__num">Cantidad</th>
+                          <th class="table__num">Costo unitario</th>
+                          <th class="table__num">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (item of itemsOf(d); track item.id) {
+                          <tr>
+                            <td>{{ item.productName }}</td>
+                            <td>{{ item.materialLabel ?? '—' }}</td>
+                            <td>{{ item.color ?? '—' }}</td>
+                            <td class="table__num">{{ item.quantity }}</td>
+                            <td class="table__num">{{ item.unitCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+                            <td class="table__num">{{ item.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <span class="state"><span class="spinner spinner--sm"></span> Cargando piezas...</span>
+                  }
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr>
+              <td colspan="9" class="empty">Sin movimientos en este período.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<section class="panel">
+  <div class="panel__title">
+    <span>Pagos recibidos</span>
+    <strong>{{ paymentsTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+  </div>
+  @if (payments().length) {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Método</th>
+            <th>Referencia</th>
+            <th>Aplicado a</th>
+            <th class="table__num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of payments(); track p.id) {
+            <tr>
+              <td>{{ p.paymentDate | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ methodLabels[p.paymentMethod] }}</td>
+              <td>{{ p.reference || '—' }}</td>
+              <td>
+                <span class="folios">
+                  @for (l of p.lines; track l.sourceType + l.sourceId) {
+                    <span class="folio-chip">
+                      {{ l.folio }}
+                      <small>{{ l.amount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}</small>
+                    </span>
+                  }
+                </span>
+              </td>
+              <td class="table__num"><strong>{{ p.totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <p class="empty">Sin pagos registrados en este período.</p>
+  }
+</section>

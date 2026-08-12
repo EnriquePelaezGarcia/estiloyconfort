@@ -1,0 +1,91 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Cuentas por pagar</h1>
+    <p class="page-head__sub">Lo que se le debe a cada fabricante, por pedidos y órdenes de compra</p>
+  </div>
+</header>
+
+<section class="stat-grid">
+  <div class="stat-card stat-card--danger">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
+    <span class="stat-card__label">Saldo total por pagar</span>
+    <span class="stat-card__value">{{ totalBalance() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">{{ manufacturers().length }} fabricante(s)</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">receipt_long</span></span>
+    <span class="stat-card__label">Adeudo acumulado</span>
+    <span class="stat-card__value">{{ totalAmount() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">histórico completo</span>
+  </div>
+  <div class="stat-card stat-card--success">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">payments</span></span>
+    <span class="stat-card__label">Ya pagado</span>
+    <span class="stat-card__value">{{ totalPaid() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">histórico completo</span>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel__title"><span>Por fabricante</span></div>
+
+  @if (loading()) {
+    <div class="state"><span class="spinner"></span> Cargando...</div>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Fabricante</th>
+            <th class="table__num">Documentos</th>
+            <th class="table__num">Con saldo</th>
+            <th class="table__num">Adeudo</th>
+            <th class="table__num">Pagado</th>
+            <th class="table__num">Saldo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of manufacturers(); track m.manufacturerId) {
+            <tr>
+              <td>
+                <strong>{{ m.manufacturerName ?? 'Sin nombre' }}</strong>
+                @if (m.looseCharges) {
+                  <small class="table__hint">
+                    incluye {{ m.looseCharges | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }} en cargos sueltos
+                  </small>
+                }
+              </td>
+              <td class="table__num">{{ m.documents }}</td>
+              <td class="table__num">{{ m.documentsWithBalance }}</td>
+              <td class="table__num">{{ m.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td class="table__num">{{ m.paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td class="table__num">
+                <strong [class.balance--due]="m.balance > 0" [class.balance--credit]="m.balance < 0">
+                  {{ m.balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                </strong>
+                @if (m.balance < 0) {
+                  <small class="table__hint">saldo a favor</small>
+                }
+              </td>
+              <td class="table__actions">
+                <a class="btn btn--primary" [routerLink]="[m.manufacturerId]">
+                  Ver y pagar
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </a>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty">
+                Sin adeudos. Aparecerán en cuanto asignes fabricante y costo a las líneas de un
+                pedido, o marques una orden de compra como recibida.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

@@ -1,7 +1,9 @@
 const Order = require('../models/Order');
+const ManufacturerPayable = require('../models/ManufacturerPayable');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { pool } = require('../config/database');
+const { periodFromQuery } = require('../utils/periods');
 
 // Estados de pedido que requieren fabricación.
 const FABRICATION_STATUSES = ['pending', 'fabricating'];
@@ -196,6 +198,103 @@ const manufacturerController = {
     if (!order) throw ApiError.notFound('Pedido no encontrado');
     res.json({ data: order, message: 'Pedido en fabricación' });
   }),
+
+  // ─── HISTORIAL Y PAGOS ─────────────────────────────────────────────────────
+
+  /**
+   * GET /api/manufacturer/history?period&date&from&to&sourceType&...
+   *
+   * Historial completo de lo que se le encargó: pedidos y órdenes de compra,
+   * con monto, pagado y saldo. Es lo que el portal NO tenía: hasta ahora las
+   * consultas filtraban a order_status IN ('pending','fabricating'), así que
+   * un pedido desaparecía en cuanto se terminaba.
+   *
+   * AISLAMIENTO: el manufacturerId sale SIEMPRE del usuario autenticado, nunca
+   * del query string. Un admin sí puede pasar ?manufacturerId= para auditar.
+   */
+  history: asyncHandler(async (req, res) => {
+    const manufacturerId = await resolveManufacturerScope(req);
+    if (!manufacturerId) return res.json({ data: [], meta: emptyHistoryMeta() });
+
+    // Default: el mes en curso. `dateBasis=ordered` deja ver también lo que
+    // todavía no se entrega (que no tiene fecha de entrega).
+    const range = periodFromQuery(req.query);
+    const documents = await ManufacturerPayable.documentsFor({
+      manufacturerId,
+      from: range.from,
+      to: range.to,
+      dateBasis: req.query.dateBasis === 'ordered' ? 'ordered' : 'delivered',
+      sourceType: req.query.sourceType,
+      fabricationStatus: req.query.fabricationStatus,
+      paymentStatus: req.query.paymentStatus,
+    });
+
+    res.json({
+      data: documents,
+      meta: {
+        period: range.period,
+        from: range.from,
+        to: range.to,
+        summary: ManufacturerPayable.summarize(documents),
+      },
+    });
+  }),
+
+  /**
+   * GET /api/manufacturer/history/:sourceType/:sourceId — piezas del documento.
+   * Se resuelve con el MISMO scope forzado, así que un fabricante no puede
+   * pedir el detalle de un pedido que no es suyo aunque adivine el id.
+   */
+  historyDetail: asyncHandler(async (req, res) => {
+    const manufacturerId = await resolveManufacturerScope(req);
+    if (!manufacturerId) throw ApiError.forbidden('Tu usuario no tiene un fabricante asignado');
+    const { sourceType, sourceId } = req.params;
+    if (!['order', 'purchase_order'].includes(sourceType)) {
+      throw ApiError.badRequest('Tipo de documento inválido');
+    }
+    const detail = await ManufacturerPayable.documentDetail(sourceType, sourceId, manufacturerId);
+    if (!detail) throw ApiError.notFound('Documento no encontrado');
+    res.json({ data: detail });
+  }),
+
+  /** GET /api/manufacturer/payments — los cortes que ha recibido. */
+  payments: asyncHandler(async (req, res) => {
+    const manufacturerId = await resolveManufacturerScope(req);
+    if (!manufacturerId) return res.json({ data: [], meta: { total: 0, count: 0 } });
+
+    const hasRange = req.query.period || req.query.from || req.query.to;
+    const range = hasRange ? periodFromQuery(req.query) : { from: null, to: null };
+    const data = await ManufacturerPayable.listBatches({
+      manufacturerId,
+      from: range.from,
+      to: range.to,
+    });
+    const total = data.reduce((sum, b) => sum + b.totalAmount, 0);
+    res.json({ data, meta: { total: Math.round(total * 100) / 100, count: data.length } });
+  }),
 };
+
+/**
+ * Fabricante al que se limita la consulta.
+ *
+ * Para el rol `manufacturer` SIEMPRE es el suyo, aunque mande otro en el query
+ * string: es la defensa contra que un fabricante lea la cartera de otro. El
+ * admin sí puede apuntar a cualquiera (lo usa la pantalla de admin).
+ */
+async function resolveManufacturerScope(req) {
+  if (req.user.role === 'admin' && req.query.manufacturerId) {
+    return Number(req.query.manufacturerId);
+  }
+  return manufacturerIdOf(req.user.id);
+}
+
+function emptyHistoryMeta() {
+  return {
+    period: 'month',
+    from: null,
+    to: null,
+    summary: { count: 0, pieces: 0, amount: 0, paid: 0, balance: 0 },
+  };
+}
 
 module.exports = manufacturerController;

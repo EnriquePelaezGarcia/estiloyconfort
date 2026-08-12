@@ -116,3 +116,12 @@
   font-size: 0.85rem;
   color: vars.$color-text-secondary;
 }
+
+// Estado de pago de la OC, leído de cuentas por pagar (no se guarda aquí).
+.badge--sm {
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.66rem;
+  padding: 0.1rem 0.35rem;
+  vertical-align: middle;
+}

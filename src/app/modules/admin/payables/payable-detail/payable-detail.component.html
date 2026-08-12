@@ -1,0 +1,325 @@
+<a routerLink="/admin/cuentas-por-pagar" class="back-link">
+  <span class="material-symbols-outlined">arrow_back</span> Cuentas por pagar
+</a>
+
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Estado de cuenta</p>
+    <h1 class="page-head__title">{{ manufacturerName() }}</h1>
+  </div>
+  <nav class="page-head__tabs">
+    <button type="button" class="btn btn--ghost" (click)="openCharge()">
+      <span class="material-symbols-outlined">note_add</span> Cargo manual
+    </button>
+    <button type="button" class="btn btn--primary" (click)="openCut()">
+      <span class="material-symbols-outlined">payments</span> Cerrar corte
+    </button>
+  </nav>
+</header>
+
+<section class="stat-grid">
+  <div class="stat-card">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">description</span></span>
+    <span class="stat-card__label">Documentos</span>
+    <span class="stat-card__value">{{ documents().length }}</span>
+    <span class="stat-card__hint">{{ totals().pieces }} pieza(s)</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">receipt_long</span></span>
+    <span class="stat-card__label">Adeudo</span>
+    <span class="stat-card__value">{{ totals().amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+  </div>
+  <div class="stat-card stat-card--success">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">check_circle</span></span>
+    <span class="stat-card__label">Pagado</span>
+    <span class="stat-card__value">{{ totals().paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+  </div>
+  <div class="stat-card stat-card--danger">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
+    <span class="stat-card__label">Saldo</span>
+    <span class="stat-card__value">{{ totals().balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+  </div>
+</section>
+
+<section class="toolbar">
+  <div class="filters__periods">
+    <button type="button" class="chip" [class.chip--active]="period() === 'week'" (click)="selectPeriod('week')">Esta semana</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'month'" (click)="selectPeriod('month')">Este mes</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'all'" (click)="selectPeriod('all')">Todo</button>
+  </div>
+  <select class="filter-select" (change)="onSourceType($event)">
+    <option value="">Pedidos y órdenes de compra</option>
+    <option value="order">Solo pedidos</option>
+    <option value="purchase_order">Solo órdenes de compra</option>
+  </select>
+</section>
+
+<section class="panel">
+  <div class="panel__title"><span>Documentos</span></div>
+
+  @if (loading()) {
+    <div class="state"><span class="spinner"></span> Cargando...</div>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Folio</th>
+            <th>Referencia</th>
+            <th>Entrega</th>
+            <th class="table__num">Piezas</th>
+            <th class="table__num">Monto</th>
+            <th class="table__num">Pagado</th>
+            <th class="table__num">Saldo</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of documents(); track d.sourceType + d.sourceId) {
+            <tr>
+              <td><span class="badge" [class]="typeTone[d.sourceType]">{{ typeLabels[d.sourceType] }}</span></td>
+              <td><strong>{{ d.folio }}</strong></td>
+              <td>{{ d.reference || '—' }}</td>
+              <td>
+                @if (d.deliveredAt) {
+                  {{ d.deliveredAt | date: 'dd/MM/yyyy' }}
+                } @else {
+                  <span class="table__hint">sin entregar</span>
+                }
+              </td>
+              <td class="table__num">{{ d.pieces }}</td>
+              <td class="table__num">
+                {{ d.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                @if (d.charges) {
+                  <small class="table__hint">
+                    incl. {{ d.charges | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }} en cargos
+                  </small>
+                }
+              </td>
+              <td class="table__num">{{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td class="table__num">
+                <strong [class.balance--due]="d.balance > 0" [class.balance--credit]="d.balance < 0">
+                  {{ d.balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                </strong>
+              </td>
+              <td>
+                <span class="badge" [class]="statusTone[d.paymentStatus]">{{ statusLabels[d.paymentStatus] }}</span>
+                <small class="badge badge--sm" [class]="fabTone[d.fabricationStatus]">
+                  {{ fabLabels[d.fabricationStatus] }}
+                </small>
+              </td>
+              <td class="table__actions">
+                @if (d.balance > 0 || d.amount === 0) {
+                  <button type="button" class="icon-btn" (click)="openAdvance(d)" title="Registrar anticipo o pago">
+                    <span class="material-symbols-outlined">add_card</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="10" class="empty">Sin documentos en este período.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<!-- ── HISTORIAL DE PAGOS ────────────────────────────────────────────────── -->
+<section class="panel">
+  <div class="panel__title"><span>Pagos registrados</span></div>
+  @if (batches().length) {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Método</th>
+            <th>Referencia</th>
+            <th>Aplicado a</th>
+            <th class="table__num">Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (b of batches(); track b.id) {
+            <tr>
+              <td>{{ b.paymentDate | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ methodLabels[b.paymentMethod] }}</td>
+              <td>{{ b.reference || '—' }}</td>
+              <td>
+                <span class="folios">
+                  @for (l of b.lines; track l.sourceType + l.sourceId) {
+                    <span class="folio-chip">
+                      {{ l.folio }}
+                      <small>{{ l.amount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}</small>
+                    </span>
+                  }
+                </span>
+              </td>
+              <td class="table__num"><strong>{{ b.totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+              <td class="table__actions">
+                <button type="button" class="icon-btn icon-btn--danger" (click)="removeBatch(b)" title="Eliminar pago">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <p class="empty">Todavía no se le registra ningún pago.</p>
+  }
+</section>
+
+<!-- ── MODAL: CERRAR CORTE ───────────────────────────────────────────────── -->
+@if (cutOpen()) {
+  <div class="modal-backdrop" (click)="closeCut()">
+    <div class="modal modal--lg" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Registrar pago</h2>
+        <button type="button" class="icon-btn" (click)="closeCut()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form [formGroup]="cutForm" (ngSubmit)="saveCut()">
+        <div class="modal__body">
+          <p class="modal__note">
+            <span class="material-symbols-outlined">info</span>
+            Una sola salida de caja, repartida entre los documentos que marques.
+            Los que aún no se entregan quedan sin marcar: pagarlos es un anticipo.
+          </p>
+
+          <div class="cut-list">
+            @for (line of cutLines(); track line.document.sourceType + line.document.sourceId; let i = $index) {
+              <div class="cut-row" [class.cut-row--off]="!line.selected">
+                <input type="checkbox" [checked]="line.selected" (change)="toggleCutLine(i)" />
+                <span class="cut-row__folio">
+                  <span class="badge badge--sm" [class]="typeTone[line.document.sourceType]">
+                    {{ typeLabels[line.document.sourceType] }}
+                  </span>
+                  <strong>{{ line.document.folio }}</strong>
+                  <small>{{ fabLabels[line.document.fabricationStatus] }}</small>
+                </span>
+                <span class="cut-row__balance">
+                  saldo {{ line.document.balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="cut-row__amount"
+                  [value]="line.amount"
+                  [disabled]="!line.selected"
+                  (input)="onCutAmount(i, $event)"
+                />
+              </div>
+            }
+          </div>
+
+          <div class="cut-total">
+            <span>Total del pago</span>
+            <strong>{{ cutTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+          </div>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">Fecha del pago</span>
+              <input type="date" formControlName="paymentDate" />
+            </label>
+            <label class="field">
+              <span class="field__label">Método</span>
+              <select formControlName="paymentMethod">
+                @for (m of methods; track m) {
+                  <option [value]="m">{{ methodLabels[m] }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span class="field__label">Referencia (opcional)</span>
+            <input type="text" formControlName="reference" placeholder="Ej. folio de la transferencia" />
+          </label>
+          <label class="field">
+            <span class="field__label">Notas</span>
+            <input type="text" formControlName="notes" />
+          </label>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeCut()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="cutForm.invalid || saving() || cutTotal() <= 0">
+            @if (saving()) {
+              <span class="spinner spinner--sm"></span> Guardando...
+            } @else {
+              Registrar {{ cutTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── MODAL: CARGO MANUAL ───────────────────────────────────────────────── -->
+@if (chargeOpen()) {
+  <div class="modal-backdrop" (click)="closeCharge()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Cargo manual</h2>
+        <button type="button" class="icon-btn" (click)="closeCharge()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form [formGroup]="chargeForm" (ngSubmit)="saveCharge()">
+        <div class="modal__body">
+          <label class="field">
+            <span class="field__label">Documento (opcional)</span>
+            <select formControlName="sourceKey">
+              <option value="">Sin documento (cargo suelto)</option>
+              @for (d of documents(); track d.sourceType + d.sourceId) {
+                <option [value]="d.sourceType + ':' + d.sourceId">
+                  {{ typeLabels[d.sourceType] }} {{ d.folio }}
+                </option>
+              }
+            </select>
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">Monto</span>
+              <input type="number" step="0.01" formControlName="amount" />
+            </label>
+            <label class="field">
+              <span class="field__label">Fecha</span>
+              <input type="date" formControlName="chargeDate" />
+            </label>
+          </div>
+          <label class="field">
+            <span class="field__label">Concepto</span>
+            <input type="text" formControlName="concept" placeholder="Ej. flete extra" />
+          </label>
+          <label class="field">
+            <span class="field__label">Notas</span>
+            <input type="text" formControlName="notes" />
+          </label>
+          <p class="modal__note">
+            <span class="material-symbols-outlined">info</span>
+            Usa un monto <strong>negativo</strong> para una nota de crédito o un descuento
+            (por ejemplo, una pieza que llegó mal).
+          </p>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeCharge()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="chargeForm.invalid || saving()">
+            Guardar cargo
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

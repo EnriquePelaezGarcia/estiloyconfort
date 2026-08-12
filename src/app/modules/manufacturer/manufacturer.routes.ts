@@ -23,6 +23,14 @@ export const manufacturerRoutes: Routes = [
         title: 'Pedidos a fabricar - Fabricante',
       },
       {
+        path: 'historial',
+        loadComponent: () =>
+          import('./history/manufacturer-history.component').then(
+            (m) => m.ManufacturerHistoryComponent,
+          ),
+        title: 'Historial y pagos - Fabricante',
+      },
+      {
         path: 'mis-precios',
         loadComponent: () =>
           import('./catalog/manufacturer-own-catalog.component').then(

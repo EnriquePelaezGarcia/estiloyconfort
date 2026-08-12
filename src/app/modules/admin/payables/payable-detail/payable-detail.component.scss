@@ -1,0 +1,163 @@
+@use '../../../../../styles/variables' as vars;
+
+.page-head__tabs {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.filters__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.table__num { text-align: right; }
+.table__actions { text-align: right; white-space: nowrap; }
+
+.table__hint {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: vars.$color-text-secondary;
+}
+
+.balance--due { color: vars.$color-error; }
+.balance--credit { color: vars.$color-success; }
+
+.badge--sm {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+}
+
+// ── Folios del historial de pagos ──────────────────────────────────────────
+.folios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.folio-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  font-size: 0.75rem;
+
+  small { color: vars.$color-text-secondary; }
+}
+
+// ── Modal de corte ─────────────────────────────────────────────────────────
+.cut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: vars.$spacing-md;
+  padding-right: 0.25rem;
+}
+
+.cut-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto 120px;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: 0.5rem;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+  transition: opacity vars.$transition-fast;
+
+  // Un documento no marcado sigue visible pero atenuado: se ve que existe y
+  // que se decidió no pagarlo en este corte.
+  &--off { opacity: 0.45; }
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: auto 1fr;
+    row-gap: 0.35rem;
+  }
+}
+
+.cut-row__folio {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+
+  small { color: vars.$color-text-secondary; font-size: 0.72rem; }
+}
+
+.cut-row__balance {
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  white-space: nowrap;
+}
+
+.cut-row__amount {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  text-align: right;
+  font-size: 0.9rem;
+  font-weight: 600;
+
+  &:disabled { background: vars.$color-border; }
+}
+
+.cut-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+  background: rgba(vars.$color-primary, 0.07);
+  border-radius: vars.$radius-md;
+  font-size: 0.9rem;
+
+  strong {
+    font-family: vars.$font-headline;
+    font-size: 1.4rem;
+    color: vars.$color-primary;
+  }
+}
+
+.modal__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: vars.$spacing-sm 0;
+  padding: vars.$spacing-sm;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1rem; flex-shrink: 0; }
+}

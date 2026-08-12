@@ -1,0 +1,118 @@
+@use '../../../../styles/variables' as vars;
+
+.toolbar__filters {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.filters__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.period-tag {
+  margin: 0 0 vars.$spacing-md;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+
+  strong { color: vars.$color-primary; }
+
+  &__hint { font-size: 0.78rem; }
+}
+
+.table__num { text-align: right; }
+
+.table__hint {
+  font-size: 0.75rem;
+  color: vars.$color-text-secondary;
+}
+
+.badge--sm {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.row--clickable {
+  cursor: pointer;
+
+  &:hover { background: vars.$color-bg; }
+}
+
+.expand-icon {
+  font-size: 1.2rem;
+  color: vars.$color-text-secondary;
+}
+
+.row--detail > td {
+  background: vars.$color-bg;
+  padding: vars.$spacing-sm vars.$spacing-md;
+}
+
+.subtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+
+  th {
+    text-align: left;
+    padding: 0.3rem 0.5rem;
+    color: vars.$color-text-secondary;
+    font-weight: 600;
+    border-bottom: 1px solid vars.$color-border;
+  }
+
+  td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid rgba(vars.$color-border, 0.5);
+  }
+}
+
+.folios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.folio-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  font-size: 0.75rem;
+
+  small { color: vars.$color-text-secondary; }
+}
+
+// El fabricante imprime este estado de cuenta para cobrar: los filtros y
+// botones no aportan nada en papel.
+@media print {
+  .no-print,
+  .toolbar { display: none !important; }
+}

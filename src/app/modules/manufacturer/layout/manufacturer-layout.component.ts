@@ -15,6 +15,7 @@ export class ManufacturerLayoutComponent {
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Lista semanal', icon: 'list_alt', route: 'lista-semanal' },
     { label: 'Pedidos a fabricar', icon: 'precision_manufacturing', route: 'pedidos' },
+    { label: 'Historial y pagos', icon: 'history', route: 'historial' },
     { label: 'Mis precios', icon: 'payments', route: 'mis-precios' },
   ];
 }

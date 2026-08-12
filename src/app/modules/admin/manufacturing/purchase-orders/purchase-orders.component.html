@@ -22,6 +22,7 @@
       <thead>
         <tr>
           <th>Orden</th><th>Fabricante</th><th class="num">Items</th><th class="num">Total</th>
+          <th class="num">Pagado</th><th class="num">Saldo</th>
           <th>Fecha</th><th>Estado</th><th></th>
         </tr>
       </thead>
@@ -32,6 +33,24 @@
             <td data-label="Fabricante">{{ o.manufacturerName ?? '—' }}</td>
             <td data-label="Items" class="num">{{ o.itemCount ?? 0 }}</td>
             <td data-label="Total" class="num">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+            <!-- Saldo leído de cuentas por pagar: una OC recibida ya es deuda. -->
+            <td data-label="Pagado" class="num">
+              @if (paymentOf(o.id); as p) {
+                {{ p.paid | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                <small class="badge badge--sm" [class]="paymentStatusTone[p.status]">
+                  {{ paymentStatusLabels[p.status] }}
+                </small>
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+            <td data-label="Saldo" class="num">
+              @if (paymentOf(o.id); as p) {
+                <strong>{{ p.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
             <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
             <td data-label="Estado">
               <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
@@ -50,7 +69,7 @@
           </tr>
           @if (expanded() === o.id) {
             <tr class="detail-row">
-              <td colspan="7">
+              <td colspan="9">
                 @if (expandedItems().length === 0) {
                   <p class="empty">Cargando items…</p>
                 } @else {

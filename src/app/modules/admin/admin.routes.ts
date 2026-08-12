@@ -115,6 +115,22 @@ export const adminRoutes: Routes = [
         title: 'Comisiones de repartidor - Panel Admin',
       },
       {
+        path: 'cuentas-por-pagar',
+        loadComponent: () =>
+          import('./payables/payables-list/payables-list.component').then(
+            (m) => m.PayablesListComponent,
+          ),
+        title: 'Cuentas por pagar - Panel Admin',
+      },
+      {
+        path: 'cuentas-por-pagar/:manufacturerId',
+        loadComponent: () =>
+          import('./payables/payable-detail/payable-detail.component').then(
+            (m) => m.PayableDetailComponent,
+          ),
+        title: 'Estado de cuenta - Panel Admin',
+      },
+      {
         path: 'finanzas/detalle/:metric',
         loadComponent: () =>
           import('./finances/finance-detail/finance-detail.component').then(

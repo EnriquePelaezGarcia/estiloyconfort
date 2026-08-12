@@ -15,6 +15,19 @@ import {
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUS_TONE,
 } from '../../../../core/models/manufacturing.model';
+import { PayablesService } from '../../../../core/services/payables.service';
+import { PayablePaymentStatus } from '../../../../core/models/payable.model';
+import {
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_TONE,
+} from '../../../../core/models/payable-labels';
+
+/** Estado de pago de una OC, resuelto contra cuentas por pagar. */
+interface PoPayment {
+  paid: number;
+  balance: number;
+  status: PayablePaymentStatus;
+}
 
 @Component({
   selector: 'app-purchase-orders',
@@ -25,8 +38,19 @@ import {
 })
 export class PurchaseOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
+  private payablesService = inject(PayablesService);
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
+
+  protected readonly paymentStatusLabels = PAYMENT_STATUS_LABELS;
+  protected readonly paymentStatusTone = PAYMENT_STATUS_TONE;
+
+  /**
+   * Estado de pago por OC, traído de cuentas por pagar. Se muestra aquí para
+   * no obligar a cambiar de pantalla: una OC recibida ya es deuda con el
+   * fabricante. No se guarda nada en purchase_orders — solo se lee.
+   */
+  protected payments = signal<Record<number, PoPayment>>({});
 
   protected orders = signal<PurchaseOrder[]>([]);
   protected manufacturers = signal<Manufacturer[]>([]);
@@ -68,12 +92,36 @@ export class PurchaseOrdersComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadPayments();
     this.manufacturingService.getManufacturers().subscribe({
       next: (res) => this.manufacturers.set(res.data),
     });
     this.manufacturingService.getCatalog().subscribe({
       next: (res) => this.products.set(res.data),
     });
+  }
+
+  /** Saldos de todas las OCs, en una sola consulta. Silencioso si falla: es
+   *  información complementaria y no debe romper la pantalla de OCs. */
+  protected loadPayments(): void {
+    this.payablesService.documents({ sourceType: 'purchase_order' }).subscribe({
+      next: (res) => {
+        const map: Record<number, PoPayment> = {};
+        for (const doc of res.data) {
+          map[doc.sourceId] = {
+            paid: doc.paid,
+            balance: doc.balance,
+            status: doc.paymentStatus,
+          };
+        }
+        this.payments.set(map);
+      },
+      error: () => {},
+    });
+  }
+
+  protected paymentOf(id: number): PoPayment | null {
+    return this.payments()[id] ?? null;
   }
 
   protected load(): void {
