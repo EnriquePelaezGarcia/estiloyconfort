@@ -204,8 +204,13 @@ async function resolveOrderLine(conn, it, paymentMethod, config) {
     throw err;
   }
 
+  // Alias a camelCase: validateLineMaterialColor lee material.colorPolicy /
+  // material.fixedColor — con los nombres de columna crudos (snake_case) la
+  // validación de M6 nunca se disparaba (ni 'fixed' ni 'required'), un bug
+  // real encontrado al verificar §7.2 del plan.
   const [[declared]] = await conn.execute(
-    `SELECT pm.stock_quantity, mat.code, mat.label, mat.color_policy, mat.fixed_color
+    `SELECT pm.stock_quantity, mat.code, mat.label,
+            mat.color_policy AS colorPolicy, mat.fixed_color AS fixedColor
        FROM product_materials pm
        JOIN materials mat ON mat.id = pm.material_id
       WHERE pm.product_id = ? AND pm.material_id = ? AND pm.is_active = TRUE`,
