@@ -7,33 +7,49 @@ const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'deliv
 const LAYAWAY_MIN_DEPOSIT = 500;
 const LAYAWAY_MONTHS = 3;
 
-// Materiales permitidos para el mueble (ENUM en BD, plan de precios por
-// material y mayoreo). El material del pedido ahora DEFINE el precio de cada
-// línea (RN-01…RN-03), así que no puede quedar en NULL: por eso el default es
-// 'MDF' y no null como antes.
-const MATERIALS = ['MDF', 'MELAMINA_BLANCA', 'MELAMINA_COLOR'];
-
-/** Normaliza el material al ENUM de la BD; cualquier otro valor cae a 'MDF'. */
-function sanitizeMaterial(value) {
-  return MATERIALS.includes(value) ? value : 'MDF';
-}
+/**
+ * M4 del plan de catálogo de materiales: el material y el color YA NO son
+ * del pedido, son de CADA LÍNEA. `orders.material`/`orders.color` se
+ * eliminaron (Fase 1); `order_items.material_id` se elige por el vendedor en
+ * cada línea y se congela junto con `material_label` y `color` (M7).
+ *
+ * Es el cambio de fondo del plan (§1.2): un ropero de Melamina y una base de
+ * cama que solo existe en Madera ahora caben en el mismo pedido.
+ */
 
 /**
- * Coherencia material ↔ color (D15 / §6.1b del plan de precios por material
- * y mayoreo): la melamina blanca solo existe en blanco. El frontend ya
- * bloquea el campo, pero esta no puede ser la única defensa — cualquiera
- * puede pegarle directo a la API.
+ * Coherencia material ↔ color por LÍNEA (M6 §6.2): la política vive en el
+ * material (`color_policy`), no cableada en código. El frontend deshabilita
+ * el campo, pero esta no puede ser la única defensa — cualquiera puede
+ * pegarle directo a la API.
+ *
+ * @param {{code:string,label:string,colorPolicy:string,fixedColor:string|null}} material
+ * @param {string|null|undefined} color
+ * @returns {string|null} el color normalizado a guardar en la línea
  */
-function validateMaterialColor(material, color) {
-  if (material !== 'MELAMINA_BLANCA') return;
-  const normalized = (color ?? 'blanco').trim().toLowerCase();
-  if (normalized && normalized !== 'blanco') {
-    const err = new Error(
-      'La Melamina Blanca solo existe en color blanco. Para otro color elige Melamina Color.',
-    );
+function validateLineMaterialColor(material, color) {
+  const trimmed = (color ?? '').trim();
+
+  if (material.colorPolicy === 'fixed') {
+    const normalized = trimmed.toLowerCase();
+    const expected = (material.fixedColor ?? '').trim().toLowerCase();
+    if (normalized && normalized !== expected) {
+      const err = new Error(
+        `${material.label} solo existe en ${material.fixedColor}. Para otro color elige otro material.`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+    return material.fixedColor ?? null;
+  }
+
+  if (material.colorPolicy === 'required' && !trimmed) {
+    const err = new Error(`${material.label} requiere especificar un color.`);
     err.statusCode = 400;
     throw err;
   }
+
+  return trimmed || null;
 }
 
 function mapItem(row) {
@@ -50,10 +66,12 @@ function mapItem(row) {
     isReady: !!row.is_ready,
     readyAt: row.ready_at ?? null,
     readyByName: row.ready_by_name ?? null,
-    /** Material CONGELADO al crear la línea (Fase 1.2 §2b): no cambia si se
-     * edita orders.material después, para no alterar retroactivamente la
-     * utilidad histórica de líneas ya cerradas. */
-    material: row.material,
+    /** Material CONGELADO al crear la línea (M4/M7): no cambia si el
+     * catálogo de materiales se edita después, para no alterar
+     * retroactivamente la utilidad histórica de líneas ya cerradas. */
+    materialId: row.material_id,
+    materialLabel: row.material_label,
+    color: row.color ?? null,
     requiresFabrication: !!row.requires_fabrication,
     /** Fabricante al que se le compra este item (tabla manufacturers). */
     manufacturerId: row.manufacturer_id ?? null,
@@ -64,26 +82,14 @@ function mapItem(row) {
 }
 
 /**
- * Heurística por defecto de `requires_fabrication` cuando el payload no la
- * trae (clientes viejos): fabricación si no había stock suficiente o si el
- * pedido lleva especificaciones personalizadas capturadas por el vendedor.
- */
-function defaultRequiresFabrication(product, qty, orderData) {
-  const noStock = Number(product.stock_quantity) < qty;
-  const hasCustomSpecs = !!(orderData?.notasFabricante);
-  return noStock || hasCustomSpecs;
-}
-
-/**
- * Precio unitario autoritativo según esquema de venta Y material del pedido
- * (RN-06…RN-10 del doc de reglas; D5 del plan de precios por material):
+ * Precio unitario autoritativo según esquema de venta (RN-06…RN-10):
  *   - 'wholesale' → price_mayoreo   (RN-10, sin IVA ni comisiones)
  *   - 'msi'       → price_6msi
  *   - resto       → price_cash      (Contado, Crédito Tienda y Apartado)
  *
  * @param {object} materialPrices fila de product_material_prices para
- *   (productId, material del pedido). Nunca products.price_cash: ese es el
- *   precio del material del STOCK, no necesariamente el del pedido (D6).
+ *   (productId, materialId DE LA LÍNEA, M4). Nunca un precio plano del
+ *   producto: cada línea puede tener un material distinto.
  */
 function unitPriceForScheme(materialPrices, paymentMethod) {
   if (paymentMethod === 'wholesale') return Number(materialPrices.price_mayoreo);
@@ -143,8 +149,6 @@ function mapOrder(row) {
     assemblyService: !!row.assembly_service,
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
-    material: row.material ?? null,
-    color: row.color ?? null,
     notasFabricante: row.notas_fabricante ?? null,
     notasPedido: row.notas_pedido ?? null,
     instruccionesEntrega: row.instrucciones_entrega ?? null,
@@ -168,6 +172,113 @@ const BASE_SELECT = `
   LEFT JOIN users s ON s.id = o.seller_id
   LEFT JOIN users d ON d.id = o.delivery_person_id
 `;
+
+/**
+ * Resuelve, dentro de la transacción `conn`, todo lo necesario para congelar
+ * una línea de pedido (M4/M7/M12/M15.4):
+ *   - el producto existe
+ *   - el material está declarado para ese producto Y tiene costo (RN-03)
+ *   - el color es válido para la color_policy de ese material (M6)
+ *   - el mínimo de mayoreo se cumple si el esquema es 'wholesale' (M12)
+ *   - requires_fabrication se DERIVA del stock de (producto, material) — ya
+ *     no se captura a mano (M15.4); el stock nunca bloquea la venta.
+ *
+ * @returns {object} línea resuelta lista para INSERT, con el stock_quantity
+ *   ANTES de este pedido (para decidir requiresFabrication) — el descuento
+ *   real de stock lo hace quien llama, después del INSERT.
+ */
+async function resolveOrderLine(conn, it, paymentMethod, config) {
+  const [[product]] = await conn.execute(
+    'SELECT id, name, sku, wholesale_min_qty FROM products WHERE id = ?', [it.productId],
+  );
+  if (!product) {
+    const err = new Error(`Producto ${it.productId} no encontrado`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const materialId = Number(it.materialId);
+  if (!materialId) {
+    const err = new Error(`Falta el material de la línea "${product.name}".`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const [[declared]] = await conn.execute(
+    `SELECT pm.stock_quantity, mat.code, mat.label, mat.color_policy, mat.fixed_color
+       FROM product_materials pm
+       JOIN materials mat ON mat.id = pm.material_id
+      WHERE pm.product_id = ? AND pm.material_id = ? AND pm.is_active = TRUE`,
+    [it.productId, materialId],
+  );
+  if (!declared) {
+    const err = new Error(`"${product.name}" no se ofrece en ese material.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const [[materialPrices]] = await conn.execute(
+    'SELECT price_cash, price_6msi, price_mayoreo, base_cost FROM product_material_prices WHERE product_id = ? AND material_id = ?',
+    [it.productId, materialId],
+  );
+  // RN-03: si el producto no se cotiza en este material, vender a $0 sería
+  // peor que no vender — se rechaza la línea explícitamente.
+  if (!materialPrices || materialPrices.base_cost == null) {
+    const err = new Error(
+      `"${product.name}" no se cotiza en ${declared.label}. Elige otro material o quita el producto.`,
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const color = validateLineMaterialColor(declared, it.color);
+
+  const qty = Math.max(1, Number(it.quantity) || 1);
+
+  // M12: cantidad mínima de mayoreo, por producto o global.
+  if (paymentMethod === 'wholesale') {
+    const minQty = product.wholesale_min_qty != null
+      ? Number(product.wholesale_min_qty)
+      : Number(config.wholesale_min_qty) || 1;
+    if (qty < minQty) {
+      const err = new Error(
+        `"${product.name}" requiere al menos ${minQty} piezas para venderse a mayoreo (van ${qty}).`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  // M15.4: el stock informa, no bloquea. Sin existencia -> fabricación,
+  // pero la venta procede siempre y el stock puede quedar negativo.
+  const stockBefore = Number(declared.stock_quantity) || 0;
+  const requiresFabrication = stockBefore <= 0;
+
+  const unitPrice = unitPriceForScheme(materialPrices, paymentMethod);
+  const subtotal = unitPrice * qty;
+
+  return {
+    productId: product.id,
+    productName: product.name,
+    productSku: product.sku,
+    materialId,
+    materialLabel: declared.label,
+    color,
+    quantity: qty,
+    variantSelections: it.variantSelections ?? null,
+    unitPrice,
+    subtotal,
+    requiresFabrication,
+  };
+}
+
+/** Descuenta (o `delta` negativo, devuelve) stock de (producto, material). Puede quedar negativo (M15.4). */
+async function adjustMaterialStock(conn, productId, materialId, delta) {
+  await conn.execute(
+    'UPDATE product_materials SET stock_quantity = stock_quantity + ? WHERE product_id = ? AND material_id = ?',
+    [delta, productId, materialId],
+  );
+}
 
 const Order = {
   ORDER_STATUSES,
@@ -229,7 +340,7 @@ const Order = {
 
   /**
    * Crea un pedido con sus items en una transacción.
-   * @param {object} data datos del pedido (incluye items[])
+   * @param {object} data datos del pedido (incluye items[], cada uno con materialId, M4)
    * @param {number} sellerId id del vendedor que crea el pedido
    */
   async create(data, sellerId) {
@@ -239,63 +350,32 @@ const Order = {
 
       const orderNumber = await this.generateOrderNumber();
       const items = Array.isArray(data.items) ? data.items : [];
+      if (!items.length) {
+        const err = new Error('El pedido debe incluir al menos un producto');
+        err.statusCode = 400;
+        throw err;
+      }
 
-      // El esquema de venta determina qué precio del catálogo se aplica.
       const paymentMethod = data.paymentMethod ?? 'cash';
-      // El material del PEDIDO define el precio de cada línea (RN-01…RN-03) y
-      // se congela en cada order_item (Fase 1.2 §2b); debe resolverse ANTES de
-      // valorar las líneas.
-      const orderMaterial = sanitizeMaterial(data.material);
-      validateMaterialColor(orderMaterial, data.color);
 
-      // Resuelve precios/snapshots desde products + product_material_prices
-      // (fuente única de verdad de precios, D6) y valida stock.
+      // M11: el mayoreo se entrega apagado. price_mayoreo se calcula desde
+      // el día uno, pero un POST directo a la API se rechaza si el flag
+      // sigue apagado — el POS ya lo oculta, esta es la segunda defensa.
+      const config = await PricingConfig.getMap();
+      if (paymentMethod === 'wholesale' && !Number(config.wholesale_enabled)) {
+        const err = new Error('El esquema de Mayoreo no está activo.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // M4: cada línea trae y congela su propio material_id + color; ya no
+      // hay un material único de pedido que reprecie todas las líneas.
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
-        const [[product]] = await conn.execute(
-          'SELECT id, name, sku, stock_quantity FROM products WHERE id = ?', [it.productId],
-        );
-        if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
-        const [[materialPrices]] = await conn.execute(
-          'SELECT price_cash, price_6msi, price_mayoreo, base_cost FROM product_material_prices WHERE product_id = ? AND material = ?',
-          [it.productId, orderMaterial],
-        );
-        // RN-03: si el producto no se cotiza en este material, vender a $0
-        // sería peor que no vender — se rechaza la línea explícitamente.
-        if (!materialPrices || materialPrices.base_cost == null) {
-          const err = new Error(
-            `"${product.name}" no se cotiza en el material ${orderMaterial}. Elige otro material o quita el producto.`,
-          );
-          err.statusCode = 400;
-          throw err;
-        }
-        const qty = Math.max(1, Number(it.quantity) || 1);
-        const requiresFabrication = it.requiresFabrication !== undefined
-          ? !!it.requiresFabrication
-          : defaultRequiresFabrication(product, qty, data);
-        // Los items que se fabrican sobre pedido no salen del inventario físico.
-        if (!requiresFabrication && Number(product.stock_quantity) < qty) {
-          const stockErr = new Error(
-            `Stock insuficiente para "${product.name}". Disponible: ${product.stock_quantity}`,
-          );
-          stockErr.statusCode = 400;
-          throw stockErr;
-        }
-        const unitPrice = unitPriceForScheme(materialPrices, paymentMethod);
-        const subtotal = unitPrice * qty;
-        total += subtotal;
-        resolvedItems.push({
-          productId: product.id,
-          productName: product.name,
-          productSku: product.sku,
-          material: orderMaterial,
-          quantity: qty,
-          variantSelections: it.variantSelections ?? null,
-          unitPrice,
-          subtotal,
-          requiresFabrication,
-        });
+        const resolved = await resolveOrderLine(conn, it, paymentMethod, config);
+        total += resolved.subtotal;
+        resolvedItems.push(resolved);
       }
 
       // Para "Crédito Tienda" el total es precio con interés y se guarda el desglose.
@@ -309,7 +389,6 @@ const Order = {
       let layawayDeadline = null;
 
       if (paymentMethod === 'store_credit') {
-        const config = await PricingConfig.getMap();
         const credit = calculateCredit(total, config);
         if (!credit) throw new Error('No se pudo calcular el plan de crédito para este pedido');
         totalAmount = credit.creditPrice;
@@ -338,7 +417,6 @@ const Order = {
       const assemblyFloors = assemblyService ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0) : 0;
       let assemblyCost = 0;
       if (assemblyService) {
-        const config = await PricingConfig.getMap();
         assemblyCost = computeAssemblyCost(assemblyFloors, config);
         totalAmount += assemblyCost;
       }
@@ -351,9 +429,9 @@ const Order = {
            delivery_type, payment_method, payment_status, payment_amount, order_status,
            expected_delivery_date, total_amount, shipping_cost, shipping_postal_code,
            assembly_service, assembly_floors, assembly_cost,
-           material, color, notas_fabricante, notas_pedido, instrucciones_entrega,
+           notas_fabricante, notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -363,7 +441,6 @@ const Order = {
           'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
           totalAmount, shippingCost, shippingPostalCode,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
-          orderMaterial, data.color ?? 'blanco',
           data.notasFabricante ?? null, data.notasPedido ?? null,
           data.instruccionesEntrega ?? null,
           cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks,
@@ -375,21 +452,19 @@ const Order = {
       for (const it of resolvedItems) {
         await conn.execute(
           `INSERT INTO order_items
-            (order_id, product_id, product_name, product_sku, material, quantity, variant_selections, unit_price, subtotal, requires_fabrication)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            (order_id, product_id, product_name, product_sku, material_id, material_label, color,
+             quantity, variant_selections, unit_price, subtotal, requires_fabrication)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
-            orderId, it.productId, it.productName, it.productSku, it.material, it.quantity,
+            orderId, it.productId, it.productName, it.productSku,
+            it.materialId, it.materialLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
         );
-        // Descontar stock solo de items de almacén; los de fabricación no salen del inventario.
-        if (!it.requiresFabrication) {
-          await conn.execute(
-            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-            [it.quantity, it.productId],
-          );
-        }
+        // M15.4: el stock siempre se descuenta de la fila (producto, material)
+        // correcta, aunque quede negativo. No bloquea la venta.
+        await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
       }
 
       await conn.commit();
@@ -409,22 +484,12 @@ const Order = {
       return this.updateWithItems(id, data);
     }
 
-    if (data.material !== undefined || data.color !== undefined) {
-      const existing = await this.findById(id);
-      const effectiveMaterial = data.material !== undefined
-        ? sanitizeMaterial(data.material)
-        : sanitizeMaterial(existing?.material);
-      const effectiveColor = data.color !== undefined ? data.color : existing?.color;
-      validateMaterialColor(effectiveMaterial, effectiveColor);
-    }
-
     const allowed = {
       customerName: 'customer_name', customerEmail: 'customer_email',
       customerPhone: 'customer_phone', deliveryAddress: 'delivery_address',
       googleMapsUrl: 'google_maps_url',
       deliveryType: 'delivery_type', paymentMethod: 'payment_method',
       expectedDeliveryDate: 'expected_delivery_date', notes: 'notes',
-      material: 'material', color: 'color',
       notasFabricante: 'notas_fabricante', notasPedido: 'notas_pedido',
       instruccionesEntrega: 'instrucciones_entrega',
     };
@@ -433,7 +498,7 @@ const Order = {
     for (const [key, col] of Object.entries(allowed)) {
       if (data[key] !== undefined) {
         sets.push(`${col} = ?`);
-        params.push(key === 'material' ? sanitizeMaterial(data[key]) : data[key]);
+        params.push(data[key]);
       }
     }
     if (!sets.length) return this.findById(id);
@@ -445,7 +510,8 @@ const Order = {
   /**
    * Edita un pedido reemplazando sus items. Recalcula el total (y el plan de
    * crédito/apartado según el método) ajustando el stock de forma atómica:
-   * primero devuelve el stock de los items actuales y luego descuenta el nuevo.
+   * primero devuelve el stock de los items actuales (por su material
+   * congelado, M4) y luego descuenta el nuevo.
    */
   async updateWithItems(id, data) {
     const existing = await this.findById(id);
@@ -455,74 +521,33 @@ const Order = {
     try {
       await conn.beginTransaction();
 
-      // 1. Devolver al inventario el stock de los items actuales (solo los de almacén;
-      // los de fabricación nunca salieron del inventario físico).
+      // 1. Devolver al inventario el stock de los items actuales, cada uno a
+      // su material_id (M4/M15) — nunca al del producto en general.
       const [oldItems] = await conn.execute(
-        'SELECT product_id, quantity, requires_fabrication FROM order_items WHERE order_id = ?', [id],
+        'SELECT product_id, material_id, quantity FROM order_items WHERE order_id = ?', [id],
       );
       for (const it of oldItems) {
-        if (it.product_id != null && !it.requires_fabrication) {
-          await conn.execute(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-            [it.quantity, it.product_id],
-          );
+        if (it.product_id != null && it.material_id != null) {
+          await adjustMaterialStock(conn, it.product_id, it.material_id, it.quantity);
         }
       }
 
-      // 2. Resolver los nuevos items y validar stock (ya restaurado).
+      // 2. Resolver los nuevos items y validar (stock ya restaurado).
       const items = Array.isArray(data.items) ? data.items : [];
-      // El esquema de venta determina qué precio del catálogo se aplica.
       const paymentMethod = data.paymentMethod ?? existing.paymentMethod ?? 'cash';
-      // El material puede venir en la edición o conservar el que ya tenía el
-      // pedido; en cualquier caso se congela en cada línea nueva.
-      const orderMaterial = data.material !== undefined
-        ? sanitizeMaterial(data.material)
-        : sanitizeMaterial(existing.material);
-      validateMaterialColor(orderMaterial, data.color !== undefined ? data.color : existing.color);
+      const config = await PricingConfig.getMap();
+      if (paymentMethod === 'wholesale' && !Number(config.wholesale_enabled)) {
+        const err = new Error('El esquema de Mayoreo no está activo.');
+        err.statusCode = 400;
+        throw err;
+      }
+
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
-        const [[product]] = await conn.execute(
-          'SELECT id, name, sku, stock_quantity FROM products WHERE id = ?', [it.productId],
-        );
-        if (!product) throw new Error(`Producto ${it.productId} no encontrado`);
-        const [[materialPrices]] = await conn.execute(
-          'SELECT price_cash, price_6msi, price_mayoreo, base_cost FROM product_material_prices WHERE product_id = ? AND material = ?',
-          [it.productId, orderMaterial],
-        );
-        if (!materialPrices || materialPrices.base_cost == null) {
-          const err = new Error(
-            `"${product.name}" no se cotiza en el material ${orderMaterial}. Elige otro material o quita el producto.`,
-          );
-          err.statusCode = 400;
-          throw err;
-        }
-        const qty = Math.max(1, Number(it.quantity) || 1);
-        const requiresFabrication = it.requiresFabrication !== undefined
-          ? !!it.requiresFabrication
-          : defaultRequiresFabrication(product, qty, data);
-        // Los items que se fabrican sobre pedido no salen del inventario físico.
-        if (!requiresFabrication && Number(product.stock_quantity) < qty) {
-          const stockErr = new Error(
-            `Stock insuficiente para "${product.name}". Disponible: ${product.stock_quantity}`,
-          );
-          stockErr.statusCode = 400;
-          throw stockErr;
-        }
-        const unitPrice = unitPriceForScheme(materialPrices, paymentMethod);
-        const subtotal = unitPrice * qty;
-        total += subtotal;
-        resolvedItems.push({
-          productId: product.id,
-          productName: product.name,
-          productSku: product.sku,
-          material: orderMaterial,
-          quantity: qty,
-          variantSelections: it.variantSelections ?? null,
-          unitPrice,
-          subtotal,
-          requiresFabrication,
-        });
+        const resolved = await resolveOrderLine(conn, it, paymentMethod, config);
+        total += resolved.subtotal;
+        resolvedItems.push(resolved);
       }
 
       // 3. Recalcular totales y desglose según el método de pago.
@@ -535,7 +560,6 @@ const Order = {
       let layawayDeadline = null;
 
       if (paymentMethod === 'store_credit') {
-        const config = await PricingConfig.getMap();
         const credit = calculateCredit(total, config);
         if (!credit) throw new Error('No se pudo calcular el plan de crédito para este pedido');
         totalAmount = credit.creditPrice;
@@ -574,12 +598,7 @@ const Order = {
       if (data.assemblyService !== undefined) {
         assemblyService = !!data.assemblyService;
         assemblyFloors = assemblyService ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0) : 0;
-        if (assemblyService) {
-          const config = await PricingConfig.getMap();
-          assemblyCost = computeAssemblyCost(assemblyFloors, config);
-        } else {
-          assemblyCost = 0;
-        }
+        assemblyCost = assemblyService ? computeAssemblyCost(assemblyFloors, config) : 0;
       }
       totalAmount += assemblyCost;
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
@@ -589,20 +608,17 @@ const Order = {
       for (const it of resolvedItems) {
         await conn.execute(
           `INSERT INTO order_items
-            (order_id, product_id, product_name, product_sku, material, quantity, variant_selections, unit_price, subtotal, requires_fabrication)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            (order_id, product_id, product_name, product_sku, material_id, material_label, color,
+             quantity, variant_selections, unit_price, subtotal, requires_fabrication)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
-            id, it.productId, it.productName, it.productSku, it.material, it.quantity,
+            id, it.productId, it.productName, it.productSku,
+            it.materialId, it.materialLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
         );
-        if (!it.requiresFabrication) {
-          await conn.execute(
-            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-            [it.quantity, it.productId],
-          );
-        }
+        await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
       }
 
       // 5. Recalcular el estado de pago contra el nuevo total.
@@ -617,8 +633,7 @@ const Order = {
            payment_method = ?, payment_status = ?, expected_delivery_date = ?, notes = ?,
            total_amount = ?, shipping_cost = ?, shipping_postal_code = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
-           material = ?, color = ?, notas_fabricante = ?, notas_pedido = ?,
-           instrucciones_entrega = ?,
+           notas_fabricante = ?, notas_pedido = ?, instrucciones_entrega = ?,
            cash_total = ?, down_payment = ?,
            weekly_payment = ?, last_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
@@ -634,8 +649,6 @@ const Order = {
           data.notes !== undefined ? data.notes : existing.notes,
           totalAmount, shippingCost, shippingPostalCode,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
-          data.material !== undefined ? sanitizeMaterial(data.material) : existing.material,
-          data.color !== undefined ? data.color : existing.color,
           data.notasFabricante !== undefined ? data.notasFabricante : existing.notasFabricante,
           data.notasPedido !== undefined ? data.notasPedido : existing.notasPedido,
           data.instruccionesEntrega !== undefined ? data.instruccionesEntrega : existing.instruccionesEntrega,
@@ -762,20 +775,16 @@ const Order = {
 
   async remove(id) {
     const [items] = await pool.execute(
-      'SELECT product_id, quantity, requires_fabrication FROM order_items WHERE order_id = ?', [id],
+      'SELECT product_id, material_id, quantity FROM order_items WHERE order_id = ?', [id],
     );
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE id = ?", [id]);
-      // Devolver stock al cancelar el pedido (solo items de almacén; los de
-      // fabricación nunca salieron del inventario físico).
+      // Devolver stock al cancelar el pedido, cada uno a su material congelado.
       for (const item of items) {
-        if (!item.requires_fabrication) {
-          await conn.execute(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-            [item.quantity, item.product_id],
-          );
+        if (item.product_id != null && item.material_id != null) {
+          await adjustMaterialStock(conn, item.product_id, item.material_id, item.quantity);
         }
       }
       await conn.commit();
