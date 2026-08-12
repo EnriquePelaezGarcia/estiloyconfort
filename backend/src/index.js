@@ -5,6 +5,7 @@ const corsMiddleware = require('./config/cors');
 const { testConnection } = require('./config/database');
 const apiRoutes = require('./routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { scheduleQuoteCleanup } = require('./jobs/cleanupExpiredQuotes');
 
 const app = express();
 
@@ -26,6 +27,8 @@ app.use(errorHandler);
 async function start() {
   try {
     await testConnection();
+    // Requiere la BD viva: se programa después de validar la conexión.
+    scheduleQuoteCleanup();
     app.listen(env.port, () => {
       console.log(`🚀 API escuchando en http://localhost:${env.port}/api`);
       console.log(`   Entorno: ${env.nodeEnv}`);

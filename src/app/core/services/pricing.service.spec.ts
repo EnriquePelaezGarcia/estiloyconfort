@@ -34,7 +34,7 @@ const CONFIG: PricingConfigMap = {
 const WHOLESALE_FACTOR = 1.334;
 
 describe('PricingService — paridad con el backend', () => {
-  it('Caso 1 — Espejo Vanity / MDF Pintado', () => {
+  it('Caso 1 — Espejo Vanity / MDF', () => {
     const prices = PricingService.calculatePrices(1350, 29.3, CONFIG);
     expect(prices.price_cash).toBe(2290);
     expect(prices.price_6msi).toBe(2530);

@@ -39,7 +39,7 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Precios mayoreo', icon: 'store', route: 'precios-mayoreo', wholesaleOnly: true },
     { label: 'Panel de utilidades', icon: 'insights', route: 'utilidades' },
     { label: 'Nuevo pedido', icon: 'point_of_sale', route: 'punto-venta' },
-    { label: 'Cotizar envío', icon: 'local_shipping', route: 'cotizar-envio' },
+    { label: 'Cotizaciones', icon: 'request_quote', route: 'cotizaciones' },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
     { label: 'Todos los pedidos', icon: 'local_shipping', route: 'pedidos' },

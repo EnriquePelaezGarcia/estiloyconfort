@@ -14,6 +14,14 @@ export const routes: Routes = [
       import('./modules/public/public.routes').then((m) => m.publicRoutes),
   },
   {
+    // Link público que el vendedor comparte por WhatsApp. Sin guard: el
+    // cliente no tiene cuenta y el token de la URL es la única credencial.
+    path: 'cotizacion/:token',
+    loadComponent: () =>
+      import('./modules/public/quote-view/quote-view.component').then((m) => m.QuoteViewComponent),
+    title: 'Cotización - Mueblería Estilo y Confort',
+  },
+  {
     path: 'auth',
     loadChildren: () => import('./modules/auth/auth.routes').then((m) => m.authRoutes),
   },

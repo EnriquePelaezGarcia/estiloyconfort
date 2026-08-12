@@ -1,0 +1,151 @@
+@use '../../../../../styles/variables' as vars;
+
+// `.toolbar`, `.search`, `.badge`, `.btn`, `.icon-btn`, `.state`, `.spinner`,
+// `.empty` y `.modal*` son globales (styles/_business.scss).
+
+.toolbar {
+  justify-content: space-between;
+
+  .search { max-width: 280px; }
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid vars.$color-border;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: vars.$color-text-secondary;
+  transition: color vars.$transition-fast, border-color vars.$transition-fast;
+
+  &--active {
+    color: vars.$color-primary;
+    border-bottom-color: vars.$color-primary;
+    font-weight: 600;
+  }
+
+  &:hover:not(&--active) { color: vars.$color-text; }
+}
+
+// Botón compacto: las tarjetas llevan 3-4 acciones en una fila.
+.btn--sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+
+  .material-symbols-outlined { font-size: 1.05rem; }
+}
+
+.quote-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: vars.$spacing-md;
+}
+
+.quote-card {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-left: 3px solid vars.$color-text-secondary;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface;
+
+  // La franja izquierda indica de un vistazo en qué punto del ciclo está.
+  &[data-status='confirmed'] { border-left-color: vars.$color-gold; }
+  &[data-status='converted'] { border-left-color: vars.$color-success; }
+
+  &__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+  }
+
+  &__who { display: flex; flex-direction: column; min-width: 0; }
+
+  &__name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: vars.$color-text;
+  }
+
+  &__meta {
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__total {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: vars.$color-primary;
+  }
+
+  &__breakdown {
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__expiry {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1rem; }
+
+    // Últimos días de vigencia: el vendedor debe darle seguimiento ya.
+    &--soon {
+      color: vars.$color-error;
+      font-weight: 600;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding-top: vars.$spacing-sm;
+    border-top: 1px dashed vars.$color-border;
+  }
+
+  &__done {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: vars.$color-success;
+
+    .material-symbols-outlined { font-size: 1.05rem; }
+  }
+}
+
+// Colores del estado sobre la base global `.badge`.
+.badge {
+  &[data-status='open']      { background: rgba(vars.$color-text-secondary, 0.15); color: vars.$color-text-secondary; }
+  &[data-status='confirmed'] { background: rgba(vars.$color-gold, 0.16); color: vars.$color-gold; }
+  &[data-status='converted'] { background: rgba(vars.$color-success, 0.14); color: vars.$color-success; }
+}
+
+.muted { color: vars.$color-text-secondary; font-size: 0.85rem; }

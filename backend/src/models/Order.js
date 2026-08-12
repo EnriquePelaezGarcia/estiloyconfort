@@ -1,5 +1,6 @@
 const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
+const Quote = require('./Quote');
 const { calculateCredit } = require('../utils/pricingCalculator');
 
 const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
@@ -470,6 +471,13 @@ const Order = {
         // M15.4: el stock siempre se descuenta de la fila (producto, material)
         // correcta, aunque quede negativo. No bloquea la venta.
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
+      }
+
+      // El pedido nació de una cotización: se cierra su ciclo dentro de la
+      // MISMA transacción. Si el pedido se revierte, la cotización no queda
+      // marcada como convertida apuntando a un pedido que no existe.
+      if (data.fromQuoteId) {
+        await Quote.markConverted(data.fromQuoteId, orderId, conn);
       }
 
       await conn.commit();

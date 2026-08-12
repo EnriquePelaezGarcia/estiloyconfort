@@ -1,0 +1,398 @@
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { CurrencyPipe } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
+import { SellerService } from '../../../../core/services/seller.service';
+import { QuotesService } from '../../../../core/services/quotes.service';
+import { ShippingService } from '../../../../core/services/shipping.service';
+import { PricingService } from '../../../../core/services/pricing.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+import {
+  AssemblyRates, InventoryItem, InventoryMaterialPrice, SaleScheme,
+} from '../../../../core/models/order.model';
+import { CreateQuoteRequest, Quote } from '../../../../core/models/quote.model';
+import { ShippingQuote } from '../../../../core/models/shipping.model';
+import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
+
+/**
+ * Línea de la cotización. Igual que el `CartLine` del POS: el material y el
+ * color son de CADA línea (M4), no del documento completo.
+ */
+interface QuoteLine {
+  product: InventoryItem;
+  materialId: number;
+  color: string | null;
+  quantity: number;
+}
+
+/**
+ * Builder de cotizaciones rápidas. Es el POS despojado de todo lo que no
+ * hace falta para contestar "¿cuánto me sale?": sin dirección, sin esquema
+ * de pago, sin repartidor, sin notas de fabricante.
+ *
+ * Lo único que conserva íntegro es lo que forma el número final —productos,
+ * envío por CP y armado— porque el cliente siempre pide el total con envío
+ * incluido y ese total debe ser el que termine pagando.
+ */
+@Component({
+  selector: 'app-quote-create',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './quote-create.component.html',
+  styleUrl: './quote-create.component.scss',
+  imports: [ReactiveFormsModule, CurrencyPipe],
+})
+export class QuoteCreateComponent implements OnInit {
+  private sellerService = inject(SellerService);
+  private quotesService = inject(QuotesService);
+  private shippingService = inject(ShippingService);
+  private notification = inject(NotificationService);
+  private fb = inject(FormBuilder);
+  private router = inject(Router);
+
+  protected saving = signal(false);
+  protected searching = signal(false);
+  protected searchResults = signal<InventoryItem[]>([]);
+  protected lines = signal<QuoteLine[]>([]);
+
+  /** Cotización ya creada: la pantalla pasa a modo "compartir". */
+  protected created = signal<Quote | null>(null);
+  protected copied = signal(false);
+
+  protected form = this.fb.group({
+    customerName: ['', [Validators.required, Validators.minLength(3)]],
+    customerPhone: [''],
+    paymentMethod: ['cash' as SaleScheme, Validators.required],
+    assemblyService: [false],
+    assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
+  });
+
+  // ===== Condición de venta: define el precio de cada línea =====
+  private paymentMethodSig = toSignal(this.form.controls.paymentMethod.valueChanges, {
+    initialValue: this.form.controls.paymentMethod.value,
+  });
+  protected isMsi = computed(() => this.paymentMethodSig() === 'msi');
+  protected isCredit = computed(() => this.paymentMethodSig() === 'store_credit');
+  protected isLayaway = computed(() => this.paymentMethodSig() === 'layaway');
+  protected isWholesale = computed(() => this.paymentMethodSig() === 'wholesale');
+
+  /** Parámetros de crédito y mayoreo para simular el plan en vivo. */
+  private pricingConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
+
+  /** M11: Mayoreo solo se ofrece si el negocio lo tiene encendido. */
+  protected wholesaleEnabled = computed(() => this.pricingConfig().wholesale_enabled === 1);
+  /** M13: el precio de mayoreo es SIN IVA por default; el total lo desglosa. */
+  protected wholesalePriceIncludesIva = computed(
+    () => this.pricingConfig().wholesale_price_includes_iva === 1,
+  );
+  protected wholesaleIva = computed(() =>
+    this.isWholesale() && !this.wholesalePriceIncludesIva()
+      ? this.subtotal() * (this.pricingConfig().iva / 100)
+      : 0,
+  );
+
+  /** M12: mínimo de mayoreo por línea (override del producto o el global). */
+  protected wholesaleMinQtyGlobal = computed(() => this.pricingConfig().wholesale_min_qty);
+  protected lineWholesaleShortfall(line: QuoteLine): number {
+    if (!this.isWholesale()) return 0;
+    const min = line.product.wholesaleMinQty ?? this.wholesaleMinQtyGlobal();
+    return Math.max(0, min - line.quantity);
+  }
+  protected wholesaleShortLines = computed(() =>
+    this.isWholesale() ? this.lines().filter((l) => this.lineWholesaleShortfall(l) > 0) : [],
+  );
+
+  /** Plan de crédito calculado en vivo sobre el total de contado. */
+  protected creditQuote = computed(() =>
+    this.isCredit() ? PricingService.calculateCredit(this.subtotal(), this.pricingConfig()) : null,
+  );
+
+  /** Fecha límite del apartado (3 meses), solo informativa en la captura. */
+  protected layawayDeadline = computed(() => {
+    if (!this.isLayaway()) return null;
+    const d = new Date();
+    d.setMonth(d.getMonth() + 3);
+    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  });
+
+  // ===== Envío por CP (mismo mecanismo que el POS) =====
+  protected shippingCp = signal('');
+  protected shippingQuote = signal<ShippingQuote | null>(null);
+  protected shippingCost = computed(() => this.shippingQuote()?.price ?? 0);
+
+  // ===== Servicio de armado =====
+  protected assemblyRates = signal<AssemblyRates | null>(null);
+  private assemblyServiceSig = toSignal(this.form.controls.assemblyService.valueChanges, {
+    initialValue: this.form.controls.assemblyService.value,
+  });
+  private assemblyFloorsSig = toSignal(this.form.controls.assemblyFloors.valueChanges, {
+    initialValue: this.form.controls.assemblyFloors.value,
+  });
+  protected hasAssembly = computed(() => !!this.assemblyServiceSig());
+  protected assemblyFloorsValue = computed(() =>
+    Math.max(0, Math.trunc(Number(this.assemblyFloorsSig())) || 0),
+  );
+  protected assemblyCost = computed(() => {
+    const rates = this.assemblyRates();
+    if (!this.hasAssembly() || !rates) return 0;
+    return rates.base + this.assemblyFloorsValue() * rates.perFloor;
+  });
+
+  /** Precios del producto en el material de ESA línea. */
+  protected lineMaterialPrice(line: QuoteLine): InventoryMaterialPrice | null {
+    return line.product.materialPrices.find((mp) => mp.materialId === line.materialId) ?? null;
+  }
+
+  /**
+   * Precio unitario según la condición de venta elegida — misma tabla de
+   * decisión que el POS y que Quote.js en el backend. Cambiar el selector
+   * repreica todo el carrito solo, sin tocar las líneas.
+   * null = el producto no se cotiza en ese material (RN-03).
+   */
+  protected unitPrice(line: QuoteLine): number | null {
+    const mp = this.lineMaterialPrice(line);
+    if (!mp || !mp.isQuoted) return null;
+    if (this.isWholesale()) return mp.priceMayoreo;
+    if (this.isMsi() && mp.price6msi != null && mp.price6msi > 0) return mp.price6msi;
+    return mp.priceCash;
+  }
+
+  protected unquotedLines = computed(() => this.lines().filter((l) => this.unitPrice(l) === null));
+  protected hasUnquotedLines = computed(() => this.unquotedLines().length > 0);
+
+  /** Suma de las líneas, sin envío ni armado (precio de contado en crédito). */
+  protected subtotal = computed(() =>
+    this.lines().reduce((sum, l) => sum + (this.unitPrice(l) ?? 0) * l.quantity, 0),
+  );
+
+  /**
+   * Total de los productos ya con el tratamiento del esquema: en crédito
+   * tienda lleva el interés; en el resto es el subtotal tal cual.
+   */
+  protected productsTotal = computed(() => {
+    const credit = this.creditQuote();
+    return this.isCredit() && credit ? credit.creditPrice : this.subtotal();
+  });
+
+  protected grandTotal = computed(
+    () => this.productsTotal() + this.shippingCost() + this.assemblyCost(),
+  );
+
+  constructor() {
+    // El piso solo aplica cuando la cotización incluye armado.
+    this.form.controls.assemblyService.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((enabled) => {
+        const floors = this.form.controls.assemblyFloors;
+        if (enabled) {
+          floors.enable();
+        } else {
+          floors.setValue(0);
+          floors.disable();
+        }
+      });
+  }
+
+  ngOnInit(): void {
+    this.searchProducts('');
+    this.sellerService.getAssemblyRates().subscribe({
+      next: ({ data }) => this.assemblyRates.set(data),
+      error: () => {},
+    });
+    this.sellerService.getCreditConfig().subscribe({
+      next: ({ data }) =>
+        this.pricingConfig.set({
+          ...DEFAULT_PRICING_CONFIG,
+          credit_interest: data.creditInterest,
+          credit_initial_pct: data.creditInitialPct,
+          credit_weeks: data.creditWeeks,
+          rounding_step: data.roundingStep,
+          iva: data.iva,
+          wholesale_enabled: data.wholesaleEnabled ? 1 : 0,
+          wholesale_min_qty: data.wholesaleMinQty,
+          wholesale_price_includes_iva: data.wholesalePriceIncludesIva ? 1 : 0,
+        }),
+      error: () => {},
+    });
+  }
+
+  protected searchProducts(term: string): void {
+    this.searching.set(true);
+    this.sellerService.searchInventory(term || undefined).subscribe({
+      next: (res) => {
+        this.searchResults.set(res.data);
+        this.searching.set(false);
+      },
+      error: () => this.searching.set(false),
+    });
+  }
+
+  protected onSearchInput(event: Event): void {
+    this.searchProducts((event.target as HTMLInputElement).value);
+  }
+
+  protected onShippingCpInput(event: Event): void {
+    const cp = (event.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 5);
+    this.shippingCp.set(cp);
+    if (cp.length === 5) {
+      this.shippingService.quoteByPostalCode(cp).subscribe({
+        next: (q) => this.shippingQuote.set(q),
+        error: () => this.shippingQuote.set(null),
+      });
+    } else {
+      this.shippingQuote.set(null);
+    }
+  }
+
+  /** Agrega el producto con su primer material cotizado (M5). */
+  protected addProduct(product: InventoryItem): void {
+    const quoted = product.materialPrices.filter((mp) => mp.isQuoted);
+    if (!quoted.length) {
+      this.notification.error(`"${product.name}" no tiene precio en ningún material.`);
+      return;
+    }
+    const defaultMaterial = quoted[0];
+    this.lines.update((lines) => {
+      const existing = lines.find(
+        (l) => l.product.id === product.id && l.materialId === defaultMaterial.materialId,
+      );
+      if (existing) {
+        return lines.map((l) => (l === existing ? { ...l, quantity: l.quantity + 1 } : l));
+      }
+      return [
+        ...lines,
+        {
+          product,
+          materialId: defaultMaterial.materialId,
+          color: defaultMaterial.colorPolicy === 'fixed' ? defaultMaterial.fixedColor : null,
+          quantity: 1,
+        },
+      ];
+    });
+  }
+
+  /** Cambiar el material reprecia SOLO esa línea (M4). */
+  protected changeLineMaterial(index: number, event: Event): void {
+    const materialId = Number((event.target as HTMLSelectElement).value);
+    this.lines.update((lines) =>
+      lines.map((l, i) => {
+        if (i !== index) return l;
+        const mp = l.product.materialPrices.find((m) => m.materialId === materialId);
+        // Un color incompatible con el nuevo material no se arrastra en silencio (M6 §6.2.4).
+        const color =
+          mp?.colorPolicy === 'fixed'
+            ? mp.fixedColor
+            : mp?.colorPolicy === 'required'
+              ? null
+              : l.color;
+        return { ...l, materialId, color };
+      }),
+    );
+  }
+
+  protected changeLineColor(index: number, event: Event): void {
+    const color = (event.target as HTMLInputElement).value;
+    this.lines.update((lines) => lines.map((l, i) => (i === index ? { ...l, color } : l)));
+  }
+
+  protected changeQty(index: number, delta: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index ? { ...l, quantity: Math.max(1, l.quantity + delta) } : l)),
+    );
+  }
+
+  protected removeLine(index: number): void {
+    this.lines.update((lines) => lines.filter((_, i) => i !== index));
+  }
+
+  protected submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.notification.error('Ingresa el nombre del cliente');
+      return;
+    }
+    if (this.lines().length === 0) {
+      this.notification.error('Agrega al menos un producto a la cotización');
+      return;
+    }
+    if (this.hasUnquotedLines()) {
+      this.notification.error(
+        `Estos muebles no se cotizan en el material elegido: ` +
+          `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material.`,
+      );
+      return;
+    }
+    // M12 — el backend es la defensa real, pero avisar aquí evita que el
+    // vendedor descubra el mínimo hasta después de darle Crear.
+    if (this.wholesaleShortLines().length) {
+      const detail = this.wholesaleShortLines()
+        .map((l) => `${l.product.name} (faltan ${this.lineWholesaleShortfall(l)})`)
+        .join(', ');
+      this.notification.error(`Mayoreo exige cantidad mínima por línea: ${detail}.`);
+      return;
+    }
+
+    const raw = this.form.getRawValue();
+    const payload: CreateQuoteRequest = {
+      customerName: raw.customerName!.trim(),
+      customerPhone: raw.customerPhone?.trim() || null,
+      paymentMethod: raw.paymentMethod!,
+      shippingPostalCode: this.shippingCp() || null,
+      assemblyService: !!raw.assemblyService,
+      assemblyFloors: this.assemblyFloorsValue(),
+      // El backend recalcula precio, envío y armado con las tarifas vigentes:
+      // aquí solo viaja QUÉ se cotiza, no CUÁNTO cuesta.
+      items: this.lines().map((l) => ({
+        productId: l.product.id,
+        materialId: l.materialId,
+        color: l.color,
+        quantity: l.quantity,
+      })),
+    };
+
+    this.saving.set(true);
+    this.quotesService.create(payload).subscribe({
+      next: (quote) => {
+        this.saving.set(false);
+        this.created.set(quote);
+        this.notification.success('Cotización creada');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.saving.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo crear la cotización');
+      },
+    });
+  }
+
+  /** Copia el link al portapapeles con feedback temporal en el botón. */
+  protected copyLink(): void {
+    const quote = this.created();
+    if (!quote) return;
+    navigator.clipboard.writeText(quote.shareUrl).then(
+      () => {
+        this.copied.set(true);
+        setTimeout(() => this.copied.set(false), 2000);
+      },
+      () => this.notification.error('No se pudo copiar el enlace'),
+    );
+  }
+
+  /**
+   * Abre WhatsApp con el mensaje listo. Sin teléfono abre el selector de
+   * contacto de WhatsApp, que es justo lo que se necesita cuando el vendedor
+   * cotizó sin capturar el número.
+   */
+  protected whatsappUrl(quote: Quote): string {
+    const phone = (quote.customerPhone ?? '').replace(/\D/g, '');
+    const text = encodeURIComponent(
+      `Hola ${quote.customerName}, aquí está tu cotización de Mueblería Estilo y Confort:\n${quote.shareUrl}`,
+    );
+    return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+  }
+
+  /** Vuelve al listado del panel correspondiente (admin o vendedor). */
+  protected goToList(): void {
+    const base = this.router.url.startsWith('/admin') ? '/admin' : '/vendedor';
+    this.router.navigate([base, 'cotizaciones']);
+  }
+}

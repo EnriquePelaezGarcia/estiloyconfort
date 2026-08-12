@@ -331,7 +331,7 @@ export type ProductMaterial = 'MDF' | 'MELAMINA_BLANCA' | 'MELAMINA_COLOR';
 
 | Código | Etiqueta UI |
 |---|---|
-| `MDF` | MDF Pintado |
+| `MDF` | MDF |
 | `MELAMINA_BLANCA` | Melamina Blanca |
 | `MELAMINA_COLOR` | Melamina Color |
 
@@ -575,7 +575,7 @@ CREATE TABLE IF NOT EXISTS product_material_prices (
 -- Tres parámetros separados aunque hoy valgan lo mismo: el negocio los puede
 -- mover por material sin tocar fórmulas.
 INSERT INTO pricing_config (config_key, config_value, label, description, unit, order_display) VALUES
-  ('wholesale_factor_mdf',    1.3340, 'Factor Mayoreo — MDF Pintado',
+  ('wholesale_factor_mdf',    1.3340, 'Factor Mayoreo — MDF',
    'El precio de mayoreo es el costo base del material multiplicado por este factor, sin IVA ni comisiones.', 'x', 10),
   ('wholesale_factor_blanca', 1.3340, 'Factor Mayoreo — Melamina Blanca',
    'El precio de mayoreo es el costo base del material multiplicado por este factor, sin IVA ni comisiones.', 'x', 11),
@@ -969,7 +969,7 @@ Las tres listas aceptan `?material=`, `?search=`, `?categoria=` y devuelven ya f
 export type ProductMaterial = 'MDF' | 'MELAMINA_BLANCA' | 'MELAMINA_COLOR';
 
 export const MATERIAL_LABELS: Record<ProductMaterial, string> = {
-  MDF: 'MDF Pintado',
+  MDF: 'MDF',
   MELAMINA_BLANCA: 'Melamina Blanca',
   MELAMINA_COLOR: 'Melamina Color',
 };
@@ -1110,7 +1110,7 @@ Eso hace el problema mucho más chico de lo que parecía:
 
 1. **Selector de material en la ficha de producto**, obligatorio antes de "Agregar al carrito". Se muestran los 3 precios; los materiales no cotizados salen deshabilitados con la leyenda "No disponible".
 2. **`CartItem` gana `material: ProductMaterial`** y guarda el precio de ese material. La identidad de una línea pasa a ser `(productId, material, variantSelections)` — así el mismo mueble en dos materiales son dos líneas, que es lo correcto.
-3. **El mensaje de WhatsApp incluye el material** de cada mueble: `▸ Espejo Vanity (MDF Pintado) x1 — $2,290`. El vendedor recibe todo lo que necesita.
+3. **El mensaje de WhatsApp incluye el material** de cada mueble: `▸ Espejo Vanity (MDF) x1 — $2,290`. El vendedor recibe todo lo que necesita.
 4. **Se pueden mezclar materiales libremente.** Es un mensaje, no un pedido.
 
 > ✅ Esto **no choca** con §10 ("material por pedido, no por línea"). Esa restricción vive en `orders`, y el carrito nunca llega ahí: el vendedor captura el pedido a mano desde el POS con el mensaje a la vista. Si el cliente pidió dos materiales, el vendedor levanta dos pedidos — igual que hoy.
@@ -1127,7 +1127,7 @@ Eso hace el problema mucho más chico de lo que parecía:
 La tabla de costos pasa de una columna a tres. Diseño propuesto:
 
 ```
-Fabricante   │ MDF Pintado │ Mel. Blanca │ Mel. Color │ Afecta base │
+Fabricante   │ MDF         │ Mel. Blanca │ Mel. Color │ Afecta base │
 ─────────────┼─────────────┼─────────────┼────────────┼─────────────┤
 Perrucho     │  $ 1,350    │  $ 1,950    │ No aplica  │     ☑       │
 Carlos       │  $ 1,100    │  $ 1,700    │  $ 2,100   │     ☑       │
@@ -1270,7 +1270,7 @@ Tabla simple, sin acciones (D14: solo lectura):
 
 ```
 Mis precios — Perrucho
-Producto              MDF Pintado   Mel. Blanca   Mel. Color
+Producto              MDF           Mel. Blanca   Mel. Color
 ──────────────────────────────────────────────────────────────
 Espejo Vanity            $1,350        $1,950     No aplica
 Zapatera Vanity          $2,450        $3,050       $3,450
@@ -1328,7 +1328,7 @@ Tras insertar cada producto con sus costos, el seed llama a `syncMaterialPricesA
 
 `node:test` sobre funciones **puras**, sin base de datos ni mocks. Estos casos exactos del §8 del doc de reglas:
 
-**Caso 1 — Espejo Vanity / MDF Pintado**
+**Caso 1 — Espejo Vanity / MDF**
 ```
 costoPerrucho 1350 · costoCarlos 1100 · %ganancia 29.3
 costoBase      1350

@@ -7,6 +7,7 @@ import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ShippingService } from '../../../core/services/shipping.service';
+import { QuotesService } from '../../../core/services/quotes.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem,
@@ -46,6 +47,7 @@ export class OrderCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
   private notification = inject(NotificationService);
   private shippingService = inject(ShippingService);
+  private quotesService = inject(QuotesService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -59,6 +61,15 @@ export class OrderCreateComponent implements OnInit {
   /** Id del pedido cuando se entra en modo edición (?edit=ID); null al crear. */
   protected editId = signal<number | null>(null);
   protected isEditing = computed(() => this.editId() !== null);
+
+  /**
+   * Cotización de origen (?fromQuote=ID). Solo precarga el formulario; el
+   * pedido se crea normal y al guardarlo el backend cierra la cotización.
+   */
+  protected fromQuoteId = signal<number | null>(null);
+  protected fromQuote = computed(() => this.fromQuoteId() !== null);
+  /** Nombre del cliente cotizado, para el aviso de la pantalla. */
+  protected quoteCustomerName = signal<string>('');
 
   /** Estado y datos originales del pedido en edición (para restringir el cambio). */
   protected orderStatus = signal<OrderStatus | null>(null);
@@ -277,6 +288,15 @@ export class OrderCreateComponent implements OnInit {
       if (!Number.isNaN(id)) this.loadOrderForEdit(id);
     }
 
+    // Pedido nacido de una cotización: ?fromQuote=ID precarga cliente,
+    // productos, envío y armado. Excluyente con ?edit — se está creando un
+    // pedido nuevo, no editando uno existente.
+    const quoteParam = this.route.snapshot.queryParamMap.get('fromQuote');
+    if (!editParam && quoteParam) {
+      const id = Number(quoteParam);
+      if (!Number.isNaN(id)) this.loadFromQuote(id);
+    }
+
     this.sellerService.getCreditConfig().subscribe({
       next: ({ data }) =>
         this.creditConfig.set({
@@ -361,6 +381,74 @@ export class OrderCreateComponent implements OnInit {
     });
   }
 
+  /**
+   * Precarga el POS desde una cotización confirmada. Reconstruye las líneas
+   * igual que `loadOrderForEdit`: cada item ya trae su material y precio
+   * congelados, así que se arma un InventoryItem de una sola fila para que
+   * la línea conserve exactamente el precio que se le cotizó al cliente.
+   *
+   * Lo que la cotización no capturó (dirección, forma de pago, notas) se
+   * queda vacío a propósito: es lo que el vendedor debe completar ahora.
+   */
+  private loadFromQuote(id: number): void {
+    this.quotesService.getById(id).subscribe({
+      next: (quote) => {
+        this.fromQuoteId.set(quote.id);
+        this.quoteCustomerName.set(quote.customerName);
+        this.form.patchValue({
+          customerName: quote.customerName,
+          customerPhone: quote.customerPhone ?? '',
+          // El pedido hereda la condición con la que se cotizó: el cliente
+          // aceptó ESE precio, no el de otro esquema.
+          paymentMethod: quote.paymentMethod ?? 'cash',
+          assemblyService: quote.assemblyService,
+          assemblyFloors: quote.assemblyFloors ?? 0,
+        });
+        if (quote.shippingPostalCode) {
+          const cp = String(quote.shippingPostalCode).replace(/\D/g, '').slice(0, 5);
+          this.shippingCp.set(cp);
+          if (cp.length === 5) this.fetchShippingQuote(cp);
+        }
+        this.lines.set(
+          (quote.items ?? []).map((it) => ({
+            product: {
+              id: it.productId,
+              name: it.productName,
+              sku: it.productSku ?? '',
+              availability_days: 0,
+              materialPrices: [
+                {
+                  materialId: it.materialId,
+                  code: '',
+                  label: it.materialLabel,
+                  colorPolicy: 'free' as const,
+                  fixedColor: null,
+                  // La cotización no reserva inventario: el stock real se
+                  // evalúa aquí, al crear el pedido. Se asume disponible para
+                  // no bloquear la carga; el backend deriva el valor correcto.
+                  stockQuantity: 1,
+                  isQuoted: true,
+                  // El precio de la línea ya viene congelado por la condición
+                  // con la que se cotizó; se replica en los tres esquemas para
+                  // que la línea muestre el precio pactado sea cual sea el
+                  // seleccionado. El backend recalcula el autoritativo al
+                  // guardar (RN-01…RN-10), así que esto es solo la vista.
+                  priceCash: it.unitPrice,
+                  price6msi: it.unitPrice,
+                  priceMayoreo: it.unitPrice,
+                },
+              ],
+            },
+            materialId: it.materialId,
+            color: it.color ?? null,
+            quantity: it.quantity,
+          })),
+        );
+      },
+      error: () => this.notification.error('No se pudo cargar la cotización'),
+    });
+  }
+
   protected searchProducts(term: string): void {
     this.searching.set(true);
     this.sellerService.searchInventory(term || undefined).subscribe({
@@ -433,8 +521,8 @@ export class OrderCreateComponent implements OnInit {
    * Color inicial de una línea según la política de material (M6):
    *   - 'fixed'    → el color fijo del material (Melamina Blanca = "Blanco").
    *   - 'required' → nada: el vendedor tiene que capturarlo.
-   *   - 'free'     → editable desde el inicio. MDF Pintado es una placa que
-   *     se pinta a pedido; sin nada capturado se asume "Blanco" (el mismo
+   *   - 'free'     → editable desde el inicio. El MDF es una placa que se
+   *     pinta a pedido; sin nada capturado se asume "Blanco" (el mismo
    *     default histórico de products.color), pero el vendedor lo cambia
    *     escribiendo otro color si el cliente pidió uno distinto.
    */
@@ -531,6 +619,9 @@ export class OrderCreateComponent implements OnInit {
       notasFabricante: raw.notasFabricante?.trim() || null,
       notasPedido: raw.notasPedido?.trim() || null,
       instruccionesEntrega: raw.instruccionesEntrega?.trim() || null,
+      // Cierra la cotización de origen (si la hubo) en la misma transacción
+      // del pedido. En modo edición no aplica: no se está creando nada.
+      fromQuoteId: this.isEditing() ? null : this.fromQuoteId(),
       // M4: cada línea manda su propio material_id + color. requiresFabrication
       // NO se manda: el backend lo DERIVA del stock (producto,material) al
       // crear la línea (M15.4) — capturarlo a mano ya no tiene sentido.

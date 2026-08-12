@@ -5,6 +5,13 @@
   </div>
 </header>
 
+@if (fromQuote()) {
+  <div class="banner banner--info">
+    <span class="material-symbols-outlined">request_quote</span>
+    Pedido a partir de la cotización de <strong>{{ quoteCustomerName() }}</strong>.
+    Completa dirección, forma de pago y datos faltantes; la cotización se cerrará al guardar.
+  </div>
+}
 @if (isRestrictedEdit()) {
   <div class="banner banner--warn">
     <span class="material-symbols-outlined">info</span>
@@ -213,6 +220,13 @@
         } @else {
           @for (p of availableSearchResults(); track p.id) {
             <button type="button" class="result" (click)="addProduct(p)">
+              @if (p.primaryImage) {
+                <img class="result__thumb" [src]="p.primaryImage" [alt]="p.name" loading="lazy" />
+              } @else {
+                <span class="result__thumb result__thumb--empty">
+                  <span class="material-symbols-outlined">chair</span>
+                </span>
+              }
               <span class="result__info">
                 <span class="result__name">{{ p.name }}</span>
                 <span class="result__sku">{{ p.sku }} · {{ p.materialPrices.length }} material(es)</span>
@@ -251,7 +265,7 @@
 
               @if (lineMaterialPrice(l); as mp) {
                 <!-- M6: siempre visible y editable salvo color fijo ('fixed').
-                     'free' (p.ej. MDF Pintado) trae "Blanco" por default pero
+                     'free' (p.ej. MDF) trae "Blanco" por default pero
                      el vendedor puede escribir otro color por línea. -->
                 <input
                   type="text"

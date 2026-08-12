@@ -24,7 +24,7 @@ Costo de fabricante (por material)
 Dimensiones del modelo:
 - **54 productos**
 - **2 fabricantes**: `Perrucho`, `Carlos`
-- **3 materiales**: `MDF Pintado`, `Melamina Blanca`, `Melamina Color`
+- **3 materiales**: `MDF`, `Melamina Blanca`, `Melamina Color`
 - **4 formas de venta**: `Contado`, `6 MSI`, `Crédito Tienda`, `Mayoreo`
 - Total de filas de precio: 54 × 3 = **162 combinaciones producto/material**
 
@@ -44,7 +44,7 @@ Estos son los **únicos valores editables globales**. Toda fórmula debe referen
 | `tasaInteresCredito` | Tasa Interés Crédito Tienda (%) | 0.22 | B9 |
 | `porcentajePagoInicial` | % Pago Inicial Crédito | 0.35 | B10 |
 | `semanasFinanciamiento` | # Semanas Financiamiento | 12 | B11 |
-| `factorMayoreoMdf` | Factor Mayoreo - MDF Pintado | 1.334 | B12 |
+| `factorMayoreoMdf` | Factor Mayoreo - MDF | 1.334 | B12 |
 | `factorMayoreoMelaminaBlanca` | Factor Mayoreo - Melamina Blanca | 1.334 | B13 |
 | `factorMayoreoMelaminaColor` | Factor Mayoreo - Melamina Color | 1.334 | B14 |
 
@@ -314,7 +314,7 @@ Extra Melamina Color = **1000** salvo las excepciones marcadas.
 
 ## 8. Ejemplo de verificación (test case obligatorio)
 
-**Producto:** Espejo Vanity — **Material:** MDF Pintado
+**Producto:** Espejo Vanity — **Material:** MDF
 ```
 costoPerrucho  = 1350
 costoCarlos    = 1100

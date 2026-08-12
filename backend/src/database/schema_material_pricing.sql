@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS product_material_prices (
 -- Tres parámetros separados aunque hoy valgan lo mismo: el negocio los puede
 -- mover por material sin tocar fórmulas.
 INSERT INTO pricing_config (config_key, config_value, label, description, unit, order_display) VALUES
-  ('wholesale_factor_mdf',    1.3340, 'Factor Mayoreo — MDF Pintado',
+  ('wholesale_factor_mdf',    1.3340, 'Factor Mayoreo — MDF',
    'El precio de mayoreo es el costo base del material multiplicado por este factor, sin IVA ni comisiones.', 'x', 10),
   ('wholesale_factor_blanca', 1.3340, 'Factor Mayoreo — Melamina Blanca',
    'El precio de mayoreo es el costo base del material multiplicado por este factor, sin IVA ni comisiones.', 'x', 11),

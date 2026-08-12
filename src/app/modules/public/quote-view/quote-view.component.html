@@ -1,0 +1,162 @@
+<div class="quote-page">
+  @if (loading()) {
+    <div class="state"><div class="spinner"></div></div>
+  } @else if (notFound()) {
+    <div class="quote-sheet quote-sheet--empty">
+      <span class="material-symbols-outlined quote-sheet__empty-icon">link_off</span>
+      <h1 class="quote-sheet__empty-title">Esta cotización ya no está disponible</h1>
+      <p class="quote-sheet__empty-text">
+        Es posible que haya vencido o que el enlace sea incorrecto.
+        Contacta a tu vendedor para solicitar una cotización nueva.
+      </p>
+    </div>
+  } @else if (quote(); as q) {
+    <article class="quote-sheet">
+      <header class="quote-sheet__head">
+        <div class="brand">
+          <span class="brand__name">Mueblería Estilo y Confort</span>
+          <span class="brand__tag">Cotización</span>
+        </div>
+        <div class="quote-sheet__for">
+          <span class="quote-sheet__label">Para</span>
+          <span class="quote-sheet__customer">{{ q.customerName }}</span>
+          @if (q.sellerName) {
+            <span class="quote-sheet__seller">Atendido por {{ q.sellerName }}</span>
+          }
+          <span class="scheme-tag">{{ schemeLabel(q.paymentMethod) }}</span>
+        </div>
+      </header>
+
+      <section class="items">
+        @for (it of q.items; track $index) {
+          <div class="item">
+            <div class="item__info">
+              <span class="item__name">{{ it.productName }}</span>
+              <span class="item__detail">
+                {{ it.materialLabel }}@if (it.color) { · {{ it.color }} }
+              </span>
+              <span class="item__unit">
+                {{ it.quantity }} × {{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              </span>
+            </div>
+            <span class="item__subtotal">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
+      </section>
+
+      <section class="totals">
+        <div class="totals__row">
+          <span>
+            @if (q.paymentMethod === 'store_credit') { Productos (precio de contado) }
+            @else { Productos }
+          </span>
+          <span>{{ q.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+
+        @if (q.paymentMethod === 'store_credit' && q.cashTotal != null) {
+          <div class="totals__row">
+            <span>Interés por financiamiento</span>
+            <span>{{ (q.totalAmount - q.shippingCost - q.assemblyCost - q.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
+
+        @if (q.shippingPostalCode) {
+          <div class="totals__row">
+            <span>
+              Envío
+              @if (q.shippingZoneLabel) { · {{ q.shippingZoneLabel }} }
+            </span>
+            @if (q.shippingCost === 0) {
+              <span class="totals__free">GRATIS</span>
+            } @else {
+              <span>{{ q.shippingCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            }
+          </div>
+        }
+
+        @if (q.assemblyService) {
+          <div class="totals__row">
+            <span>Servicio de armado (piso {{ q.assemblyFloors }})</span>
+            <span>{{ q.assemblyCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
+
+        @if (q.wholesaleIva) {
+          <div class="totals__row">
+            <span>IVA (se suma al facturar)</span>
+            <span>{{ q.wholesaleIva | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
+
+        <div class="totals__grand">
+          <span>Total</span>
+          <span class="totals__amount">
+            {{ (q.totalAmount + (q.wholesaleIva ?? 0)) | currency:'MXN':'symbol-narrow':'1.2-2' }}
+          </span>
+        </div>
+      </section>
+
+      <!-- Plan de pagos: lo que el cliente a crédito pregunta de inmediato. -->
+      @if (q.paymentMethod === 'store_credit' && q.downPayment != null) {
+        <section class="plan">
+          <h2 class="plan__title">
+            <span class="material-symbols-outlined">credit_score</span>
+            Tu plan de pagos
+          </h2>
+          <div class="plan__row plan__row--highlight">
+            <span>Pago inicial</span>
+            <span class="plan__strong">{{ q.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="plan__row">
+            <span>{{ q.creditWeeks }} pagos semanales de</span>
+            <span class="plan__strong">{{ q.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          @if (q.lastPayment != null && q.lastPayment !== q.weeklyPayment) {
+            <div class="plan__row">
+              <span>Último pago</span>
+              <span class="plan__strong">{{ q.lastPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
+          <p class="plan__note">
+            El mueble se entrega una vez cubierto el pago inicial.
+            Los abonos semanales se reciben en efectivo o transferencia.
+          </p>
+        </section>
+      }
+
+      @if (q.paymentMethod === 'layaway') {
+        <section class="plan plan--layaway">
+          <h2 class="plan__title">
+            <span class="material-symbols-outlined">event_available</span>
+            Sistema de Apartado
+          </h2>
+          <div class="plan__row plan__row--highlight">
+            <span>Abono inicial mínimo</span>
+            <span class="plan__strong">{{ q.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          @if (q.layawayDeadline) {
+            <div class="plan__row">
+              <span>Conserva este precio hasta</span>
+              <span class="plan__strong">{{ q.layawayDeadline | date:'d \'de\' MMMM \'de\' y' }}</span>
+            </div>
+          }
+          <p class="plan__note">
+            Abona la cantidad que desees. Si no liquidas antes de la fecha límite,
+            se aplica el precio de crédito. El mueble se entrega al cubrir el total.
+          </p>
+        </section>
+      }
+
+      <footer class="quote-sheet__foot">
+        <p class="validity">
+          <span class="material-symbols-outlined">event_available</span>
+          Válida hasta el {{ q.expiresAt | date:'d \'de\' MMMM \'de\' y' }}
+        </p>
+        <p class="note">
+          Precios en {{ schemeLabel(q.paymentMethod) }}, sujetos a disponibilidad.
+          Para confirmar tu pedido responde por WhatsApp a tu vendedor.
+        </p>
+      </footer>
+    </article>
+  }
+</div>

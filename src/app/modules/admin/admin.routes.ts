@@ -69,12 +69,20 @@ export const adminRoutes: Routes = [
         title: 'Venta - Panel Admin',
       },
       {
-        path: 'cotizar-envio',
+        path: 'cotizaciones',
         loadComponent: () =>
-          import('../seller/shipping-quote/shipping-quote.component').then(
-            (m) => m.ShippingQuoteComponent,
+          import('../seller/quotes/quote-list/quote-list.component').then(
+            (m) => m.QuoteListComponent,
           ),
-        title: 'Cotizar envío - Panel Admin',
+        title: 'Cotizaciones - Panel Admin',
+      },
+      {
+        path: 'cotizaciones/nueva',
+        loadComponent: () =>
+          import('../seller/quotes/quote-create/quote-create.component').then(
+            (m) => m.QuoteCreateComponent,
+          ),
+        title: 'Nueva cotización - Panel Admin',
       },
       {
         path: 'finanzas',

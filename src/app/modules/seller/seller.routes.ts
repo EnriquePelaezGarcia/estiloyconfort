@@ -21,10 +21,16 @@ export const sellerRoutes: Routes = [
         title: 'Nuevo pedido - Vendedor',
       },
       {
-        path: 'cotizar-envio',
+        path: 'cotizaciones',
         loadComponent: () =>
-          import('./shipping-quote/shipping-quote.component').then((m) => m.ShippingQuoteComponent),
-        title: 'Cotizar envío - Vendedor',
+          import('./quotes/quote-list/quote-list.component').then((m) => m.QuoteListComponent),
+        title: 'Cotizaciones - Vendedor',
+      },
+      {
+        path: 'cotizaciones/nueva',
+        loadComponent: () =>
+          import('./quotes/quote-create/quote-create.component').then((m) => m.QuoteCreateComponent),
+        title: 'Nueva cotización - Vendedor',
       },
       {
         path: 'catalogo',

@@ -1,4 +1,4 @@
-@use '../../../../styles/variables' as vars;
+@use '../../../../../styles/variables' as vars;
 
 .banner {
   display: flex;
@@ -6,35 +6,16 @@
   gap: vars.$spacing-sm;
   margin-bottom: vars.$spacing-md;
   padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid #dc2626;
   border-radius: vars.$radius-md;
+  background: color-mix(in srgb, #dc2626 8%, white);
   font-size: 0.85rem;
+  color: vars.$color-text;
 
-  &--warn {
-    border: 1px solid vars.$color-gold;
-    background: color-mix(in srgb, vars.$color-gold 10%, white);
-    color: vars.$color-text;
-
-    .material-symbols-outlined { color: vars.$color-gold; }
-  }
-
-  &--error {
-    border: 1px solid #dc2626;
-    background: color-mix(in srgb, #dc2626 8%, white);
-    color: vars.$color-text;
-
-    .material-symbols-outlined { color: #dc2626; }
-  }
-
-  &--info {
-    border: 1px solid vars.$color-primary;
-    background: color-mix(in srgb, vars.$color-primary 8%, white);
-    color: vars.$color-text;
-
-    .material-symbols-outlined { color: vars.$color-primary; }
-  }
+  .material-symbols-outlined { color: #dc2626; }
 }
 
-.order-grid {
+.quote-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: vars.$spacing-lg;
@@ -45,11 +26,12 @@
   }
 }
 
-.order-col {
+.quote-col {
   display: flex;
   flex-direction: column;
 }
 
+// ===== Buscador de productos =====
 .results {
   margin-top: vars.$spacing-sm;
   max-height: 320px;
@@ -77,8 +59,6 @@
   &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   &__name { font-weight: 600; font-size: 0.9rem; color: vars.$color-text; }
   &__sku { font-size: 0.78rem; color: vars.$color-text-secondary; }
-  &__price { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
-  &__price.muted { color: vars.$color-text-secondary; font-weight: 500; font-size: 0.78rem; }
 
   // Miniatura cuadrada: `cover` recorta al centro para que fotos verticales y
   // horizontales ocupen el mismo espacio y la lista no baile.
@@ -104,14 +84,9 @@
   }
 
   .material-symbols-outlined { color: vars.$color-primary; }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-    .material-symbols-outlined { color: vars.$color-text-secondary; }
-  }
 }
 
+// ===== Líneas de la cotización =====
 .cart-line {
   display: flex;
   align-items: center;
@@ -127,26 +102,81 @@
   &__price--alert { color: #dc2626; font-weight: 600; }
   &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }
 
-  &__fabrication {
+  &__material,
+  &__color {
+    margin-top: 2px;
+    padding: 0.2rem 0.35rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    font-size: 0.78rem;
+    background: white;
+  }
+
+  &__warn {
     display: flex;
     align-items: center;
     gap: 0.3rem;
     margin-top: 2px;
     font-size: 0.75rem;
+    font-weight: 600;
+    color: #dc2626;
+
+    .material-symbols-outlined { font-size: 1rem; }
+  }
+}
+
+// ===== Plan de crédito / apartado (previsualización para el vendedor) =====
+.plan {
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.95rem;
+    color: vars.$color-primary;
+  }
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+
+    &--highlight {
+      margin: 0.2rem 0;
+      padding: 0.4rem 0;
+      border-top: 1px dashed vars.$color-border;
+      border-bottom: 1px dashed vars.$color-border;
+      font-size: 1rem;
+    }
+  }
+
+  &__note {
+    margin: vars.$spacing-sm 0 0;
+    font-size: 0.76rem;
     color: vars.$color-text-secondary;
-    cursor: pointer;
-
-    input[type='checkbox'] { accent-color: vars.$color-primary; cursor: pointer; }
   }
 
-  &__lock-icon {
-    font-size: 1.1rem;
+  &__empty {
+    margin-bottom: vars.$spacing-md;
+    font-size: 0.85rem;
     color: vars.$color-text-secondary;
   }
 
-  &--locked {
-    opacity: 0.7;
+  &--layaway {
+    border-color: vars.$color-gold;
+    background: color-mix(in srgb, vars.$color-gold 8%, white);
+
+    .plan__title { color: vars.$color-gold; }
   }
+
+  .strong { font-weight: 700; }
 }
 
 .qty {
@@ -157,6 +187,24 @@
   &__value { min-width: 28px; text-align: center; font-weight: 600; }
 }
 
+.cart__note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.05rem; color: vars.$color-primary; }
+}
+
+.muted { font-size: 0.78rem; color: vars.$color-text-secondary; }
+
+// ===== Totales (mismo lenguaje visual que el POS) =====
 .cart-total {
   display: flex;
   align-items: center;
@@ -166,9 +214,17 @@
   font-weight: 600;
 
   &__amount { font-size: 1.4rem; color: vars.$color-primary; }
+
+  &--sub {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    padding-bottom: vars.$spacing-sm;
+    margin-bottom: 0;
+
+    .cart-total__amount { font-size: 1.1rem; }
+  }
 }
 
-// ===== Envío: badge en "Entrega y pago" =====
 .shipping-badge {
   display: flex;
   align-items: center;
@@ -178,7 +234,7 @@
   border: 1px solid vars.$color-success;
   border-radius: vars.$radius-md;
   background: color-mix(in srgb, vars.$color-success 8%, white);
-  animation: shipping-fade-in 0.2s ease;
+  animation: quote-fade-in 0.2s ease;
 
   .material-symbols-outlined { color: vars.$color-success; }
 
@@ -200,16 +256,6 @@
       border-radius: vars.$radius-full;
     }
   }
-}
-
-// ===== Envío: desglose en el carrito =====
-.cart-total--sub {
-  font-size: 0.9rem;
-  opacity: 0.8;
-  padding-bottom: vars.$spacing-sm;
-  margin-bottom: 0;
-
-  .cart-total__amount { font-size: 1.1rem; }
 }
 
 .shipping-row {
@@ -257,79 +303,6 @@
   }
 }
 
-@keyframes shipping-fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.msi-note {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 vars.$spacing-md;
-  padding: vars.$spacing-sm vars.$spacing-md;
-  border: 1px solid vars.$color-border;
-  border-radius: vars.$radius-md;
-  background: vars.$color-bg;
-  font-size: 0.8rem;
-  color: vars.$color-text-secondary;
-
-  .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-primary; }
-}
-
-.credit-plan {
-  margin-bottom: vars.$spacing-md;
-  padding: vars.$spacing-md;
-  border: 1px solid vars.$color-border;
-  border-radius: vars.$radius-md;
-  background: vars.$color-bg;
-
-  &__title {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin: 0 0 vars.$spacing-sm;
-    font-size: 0.95rem;
-    color: vars.$color-primary;
-  }
-
-  &__row {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.3rem 0;
-    font-size: 0.9rem;
-
-    &--highlight {
-      border-top: 1px dashed vars.$color-border;
-      border-bottom: 1px dashed vars.$color-border;
-      margin: 0.2rem 0;
-      font-size: 1rem;
-    }
-  }
-
-  &__note {
-    margin: vars.$spacing-sm 0 0;
-    font-size: 0.76rem;
-    color: vars.$color-text-secondary;
-  }
-
-  &__empty {
-    margin-bottom: vars.$spacing-md;
-    font-size: 0.85rem;
-    color: vars.$color-text-secondary;
-  }
-
-  &--layaway {
-    border-color: vars.$color-gold;
-    background: color-mix(in srgb, vars.$color-gold 8%, white);
-
-    .credit-plan__title { color: vars.$color-gold; }
-  }
-
-  .strong { font-weight: 700; }
-}
-
-// ===== Servicio de armado =====
 .assembly-field {
   .assembly-check {
     display: flex;
@@ -345,4 +318,65 @@
       cursor: pointer;
     }
   }
+}
+
+// ===== Pantalla de compartir (post-creación) =====
+.share {
+  max-width: 620px;
+  margin: 0 auto;
+  text-align: center;
+
+  &__icon {
+    font-size: 3rem;
+    color: vars.$color-success;
+  }
+
+  &__title {
+    margin: vars.$spacing-sm 0 0;
+    font-size: 1.15rem;
+    color: vars.$color-text;
+  }
+
+  &__total {
+    margin: vars.$spacing-xs 0 vars.$spacing-sm;
+    font-size: 2rem;
+    font-weight: 800;
+    color: vars.$color-primary;
+  }
+
+  &__hint {
+    margin: 0 auto vars.$spacing-md;
+    max-width: 46ch;
+    font-size: 0.82rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__link {
+    display: flex;
+    gap: vars.$spacing-sm;
+    margin-bottom: vars.$spacing-md;
+
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 0.55rem vars.$spacing-sm;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-md;
+      background: vars.$color-bg;
+      font-size: 0.82rem;
+      color: vars.$color-text-secondary;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: vars.$spacing-sm;
+  }
+}
+
+@keyframes quote-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

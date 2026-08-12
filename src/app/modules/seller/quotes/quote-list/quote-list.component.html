@@ -1,0 +1,136 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Cotizaciones</p>
+    <h1 class="page-head__title">Cotizaciones</h1>
+    <p class="page-head__sub">Presupuestos compartibles por WhatsApp. Vigencia: 15 días hábiles.</p>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="newQuote()">
+    <span class="material-symbols-outlined">add</span>
+    Nueva cotización
+  </button>
+</header>
+
+<div class="toolbar">
+  <div class="tabs">
+    <button type="button" class="tab" [class.tab--active]="activeTab() === 'all'" (click)="setTab('all')">
+      Todas ({{ quotes().length }})
+    </button>
+    <button type="button" class="tab" [class.tab--active]="activeTab() === 'open'" (click)="setTab('open')">
+      Enviadas ({{ openCount() }})
+    </button>
+    <button type="button" class="tab" [class.tab--active]="activeTab() === 'confirmed'" (click)="setTab('confirmed')">
+      Confirmadas ({{ confirmedCount() }})
+    </button>
+    <button type="button" class="tab" [class.tab--active]="activeTab() === 'converted'" (click)="setTab('converted')">
+      Convertidas
+    </button>
+  </div>
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="text" placeholder="Buscar por cliente" (input)="onSearchInput($event)" />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div></div>
+} @else {
+  <div class="quote-cards">
+    @for (q of filtered(); track q.id) {
+      <article class="quote-card" [attr.data-status]="q.status">
+        <div class="quote-card__head">
+          <div class="quote-card__who">
+            <span class="quote-card__name">{{ q.customerName }}</span>
+            <span class="quote-card__meta">
+              {{ q.createdAt | date:'d MMM y' }} · {{ q.itemCount ?? 0 }} producto(s)
+              @if (q.sellerName) { · {{ q.sellerName }} }
+            </span>
+          </div>
+          <span class="badge" [attr.data-status]="q.status">{{ statusLabel(q.status) }}</span>
+        </div>
+
+        <div class="quote-card__body">
+          <span class="quote-card__total">{{ q.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          <span class="quote-card__breakdown">
+            {{ schemeLabel(q.paymentMethod) }} · Productos {{ q.subtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}
+            @if (q.shippingCost > 0) { · Envío {{ q.shippingCost | currency:'MXN':'symbol-narrow':'1.0-0' }} }
+            @if (q.assemblyService) { · Armado {{ q.assemblyCost | currency:'MXN':'symbol-narrow':'1.0-0' }} }
+          </span>
+          <span class="quote-card__expiry" [class.quote-card__expiry--soon]="daysLeft(q) <= 3">
+            <span class="material-symbols-outlined">schedule</span>
+            @if (daysLeft(q) <= 0) {
+              Vence hoy
+            } @else if (daysLeft(q) === 1) {
+              Vence mañana
+            } @else {
+              Vigente {{ daysLeft(q) }} días más
+            }
+          </span>
+        </div>
+
+        <div class="quote-card__actions">
+          <button type="button" class="btn btn--ghost btn--sm" (click)="copyLink(q)">
+            <span class="material-symbols-outlined">{{ copiedId() === q.id ? 'check' : 'link' }}</span>
+            {{ copiedId() === q.id ? 'Copiado' : 'Copiar link' }}
+          </button>
+          <a class="btn btn--ghost btn--sm" [href]="whatsappUrl(q)" target="_blank" rel="noopener">
+            <span class="material-symbols-outlined">share</span>
+            WhatsApp
+          </a>
+
+          @switch (q.status) {
+            @case ('open') {
+              <button type="button" class="btn btn--primary btn--sm" (click)="confirm(q)">
+                <span class="material-symbols-outlined">task_alt</span>
+                Marcar confirmada
+              </button>
+            }
+            @case ('confirmed') {
+              <button type="button" class="btn btn--primary btn--sm" (click)="createOrder(q)">
+                <span class="material-symbols-outlined">point_of_sale</span>
+                Crear pedido
+              </button>
+            }
+            @case ('converted') {
+              <span class="quote-card__done">
+                <span class="material-symbols-outlined">check_circle</span>
+                Pedido levantado
+              </span>
+            }
+          }
+
+          @if (q.status !== 'converted') {
+            <button type="button" class="icon-btn icon-btn--danger" (click)="askDelete(q)" aria-label="Eliminar cotización">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          }
+        </div>
+      </article>
+    } @empty {
+      <p class="empty">
+        @if (searchQuery() || activeTab() !== 'all') {
+          Ninguna cotización coincide con el filtro.
+        } @else {
+          Aún no has creado cotizaciones. Empieza con "Nueva cotización".
+        }
+      </p>
+    }
+  </div>
+}
+
+@if (pendingDelete(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Eliminar cotización</h2>
+        <p class="muted">
+          Se eliminará la cotización de <strong>{{ target.customerName }}</strong>.
+          El link que ya compartiste dejará de funcionar.
+        </p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingDelete.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmDelete()">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

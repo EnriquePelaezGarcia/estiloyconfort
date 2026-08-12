@@ -278,7 +278,7 @@ El vendedor tendría que partir la venta en dos pedidos con dos entregas y dos f
 CREATE TABLE materials (
   id            INT AUTO_INCREMENT PRIMARY KEY,
   code          VARCHAR(40)  NOT NULL UNIQUE,   -- MDF, MELAMINA_BLANCA, MADERA, TELA, PLASTICO
-  label         VARCHAR(80)  NOT NULL,          -- "MDF Pintado", "Madera de pino"
+  label         VARCHAR(80)  NOT NULL,          -- "MDF", "Madera de pino"
   color_policy  ENUM('free','fixed','required') NOT NULL DEFAULT 'free',
   fixed_color   VARCHAR(40)  NULL,              -- solo si color_policy='fixed'
   wholesale_factor DECIMAL(10,4) NULL,          -- M9; NULL = usa el default global
@@ -739,7 +739,7 @@ orders                              order_items
 
    | `code` | `label` | `color_policy` | `fixed_color` | `wholesale_factor` | `sort_order` |
    |---|---|---|---|---|---|
-   | `MDF` | MDF Pintado | `free` | `NULL` | `NULL` → usa el global | 1 |
+   | `MDF` | MDF | `free` | `NULL` | `NULL` → usa el global | 1 |
    | `MELAMINA_BLANCA` | Melamina Blanca | `fixed` | `Blanco` | `NULL` | 2 |
    | `MELAMINA_COLOR` | Melamina Color | `required` | `NULL` | `NULL` | 3 |
    | `MADERA` | Madera | `free` | `NULL` | `NULL` | 4 |
@@ -829,13 +829,13 @@ Se carga **una vez** con `provideAppInitializer` en [app.config.ts](src/app/app.
    Nombre, SKU, Categoría ──► precarga el preset de materiales (M10)
 
 ② ¿En qué materiales se ofrece?          ← el paso nuevo, y el importante
-   ☑ MDF Pintado   ☑ Melamina Blanca   ☑ Melamina Color
+   ☑ MDF           ☑ Melamina Blanca   ☑ Melamina Color
    ☐ Madera        ☐ Tela              ☐ Plástico
    (premarcados por la categoría; se editan libremente)
    ⚠️ Aquí NO se capturan existencias: eso vive en Admin → Inventario (M15)
 
 ③ Costos por fabricante  — solo columnas de lo marcado en ②
-   Fabricante │ MDF Pintado │ Mel. Blanca │ Mel. Color │
+   Fabricante │ MDF         │ Mel. Blanca │ Mel. Color │
    ───────────┼─────────────┼─────────────┼────────────┤
    Perrucho   │  $ 1,350    │  $ 1,950    │  ⚠ falta   │   ← M2: hueco visible
    Carlos     │  $ 1,100    │  $ 1,700    │  $ 2,100   │
@@ -860,7 +860,7 @@ Ropero Génova       [Melamina Blanca ▾]  Color: Blanco (fijo)   x1   $6,340
                     ✓ En existencia
 Base King           [Madera] ← 1 material: sin selector (M5)    x1   $3,120
                     ✓ En existencia
-Cabecera Milán      [MDF Pintado ▾]      Color: [Chocolate  ]   x1   $2,290
+Cabecera Milán      [MDF ▾]              Color: [Chocolate  ]   x1   $2,290
                     ⚠ Sin existencia — se fabrica (15 días)
                                                         Total   $11,750
 ```

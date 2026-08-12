@@ -60,7 +60,7 @@ CREATE TABLE materials (
 -- seis heredan wholesale_factor_default (M9) hasta que el negocio quiera
 -- diferenciar alguno.
 INSERT INTO materials (code, label, color_policy, fixed_color, wholesale_factor, sort_order) VALUES
-  ('MDF',              'MDF Pintado',      'free',     NULL,      NULL, 1),
+  ('MDF',              'MDF',              'free',     NULL,      NULL, 1),
   ('MELAMINA_BLANCA',  'Melamina Blanca',  'fixed',    'Blanco',  NULL, 2),
   ('MELAMINA_COLOR',   'Melamina Color',   'required', NULL,      NULL, 3),
   ('MADERA',           'Madera',           'free',     NULL,      NULL, 4),

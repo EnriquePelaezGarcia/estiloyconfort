@@ -184,6 +184,11 @@ export interface CreateOrderRequest {
   notasFabricante?: string | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
+  /**
+   * Cotización de la que nace este pedido. El backend la marca como
+   * 'converted' dentro de la misma transacción del INSERT.
+   */
+  fromQuoteId?: number | null;
   items: Array<{
     productId: number;
     /** M4: el material se elige POR LÍNEA, ya no hay un material de pedido. */
@@ -236,6 +241,8 @@ export interface InventoryItem {
   availability_days: number;
   /** Override de cantidad mínima de mayoreo; NULL = usa el global (M12). */
   wholesaleMinQty?: number | null;
+  /** Miniatura del buscador; null si el producto aún no tiene imagen cargada. */
+  primaryImage?: string | null;
   /** Un elemento por material DECLARADO (M2), cotizado o no. */
   materialPrices: InventoryMaterialPrice[];
 }

@@ -26,7 +26,7 @@ const CONFIG = {
 // del fixture original usaban 1.334, así que el valor no cambia.
 const WHOLESALE_FACTOR = 1.334;
 
-test('Caso 1 — Espejo Vanity / MDF Pintado', () => {
+test('Caso 1 — Espejo Vanity / MDF', () => {
   const prices = calculatePrices(1350, 29.3, CONFIG);
   assert.equal(prices.price_cash, 2290);
   assert.equal(prices.price_6msi, 2530);

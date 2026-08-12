@@ -3,8 +3,11 @@ import { inject } from '@angular/core';
 import { BehaviorSubject, catchError, filter, switchMap, take, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 
-// Rutas de auth que nunca deben disparar un intento de refresh (evita loops).
-const AUTH_FREE_PATHS = ['/auth/login', '/auth/register', '/auth/refresh'];
+// Rutas que nunca deben disparar un intento de refresh (evita loops).
+// `/quotes/public` es el link que abre el CLIENTE, sin cuenta: si su
+// navegador conserva un token viejo, un 401 no debe arrastrarlo a un
+// refresh/logout en una pantalla que jamás tuvo sesión.
+const AUTH_FREE_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/quotes/public'];
 
 let isRefreshing = false;
 const refreshedToken$ = new BehaviorSubject<string | null>(null);
