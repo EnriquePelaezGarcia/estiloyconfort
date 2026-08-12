@@ -6,6 +6,7 @@ const { testConnection } = require('./config/database');
 const apiRoutes = require('./routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { scheduleQuoteCleanup } = require('./jobs/cleanupExpiredQuotes');
+const { scheduleFixedExpenses } = require('./jobs/generateFixedExpenses');
 
 const app = express();
 
@@ -27,8 +28,9 @@ app.use(errorHandler);
 async function start() {
   try {
     await testConnection();
-    // Requiere la BD viva: se programa después de validar la conexión.
+    // Requieren la BD viva: se programan después de validar la conexión.
     scheduleQuoteCleanup();
+    scheduleFixedExpenses();
     app.listen(env.port, () => {
       console.log(`🚀 API escuchando en http://localhost:${env.port}/api`);
       console.log(`   Entorno: ${env.nodeEnv}`);

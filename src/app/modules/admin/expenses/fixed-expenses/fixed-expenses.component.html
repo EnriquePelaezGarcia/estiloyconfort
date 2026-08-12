@@ -1,0 +1,197 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Gastos fijos</h1>
+    <p class="page-head__sub">Renta, luz, sueldos: se generan solos cada mes</p>
+  </div>
+  <nav class="page-head__tabs">
+    <a routerLink="/admin/gastos" class="btn btn--ghost">
+      <span class="material-symbols-outlined">bolt</span> Captura rápida
+    </a>
+    <a routerLink="/admin/gastos/comisiones" class="btn btn--ghost">
+      <span class="material-symbols-outlined">two_wheeler</span> Comisiones
+    </a>
+    <button type="button" class="btn btn--primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span> Nuevo gasto fijo
+    </button>
+  </nav>
+</header>
+
+<!-- ── PENDIENTES DE PAGAR ESTE MES ──────────────────────────────────────── -->
+<section class="panel pending">
+  <div class="panel__title">
+    <span>Pendientes de pagar este mes</span>
+    <strong class="pending__total">
+      {{ pendingTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+    </strong>
+  </div>
+
+  @if (pending().length) {
+    <p class="pending__note">
+      <span class="material-symbols-outlined">info</span>
+      Estos gastos ya se generaron pero <strong>todavía no cuentan</strong> en el estado de
+      resultados. Entran cuando los marcas pagados.
+    </p>
+    <ul class="pending__list">
+      @for (item of pending(); track item.id) {
+        <li class="pending__item">
+          <span class="material-symbols-outlined pending__icon">{{ item.categoryIcon }}</span>
+          <span class="pending__name">
+            {{ item.templateName }}
+            <small>{{ item.categoryName }} · vence {{ item.expenseDate | date: 'd MMM' }}</small>
+          </span>
+          <span class="pending__amount">
+            {{ item.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+          <button type="button" class="btn btn--success" (click)="markPaid(item)">
+            <span class="material-symbols-outlined">check</span> Marcar pagado
+          </button>
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="empty">
+      Nada pendiente este mes.
+      <button type="button" class="link-btn" (click)="generateNow()">Generar ahora</button>
+    </p>
+  }
+</section>
+
+<!-- ── PLANTILLAS ────────────────────────────────────────────────────────── -->
+<section class="panel">
+  <div class="panel__title">
+    <span>Plantillas mensuales</span>
+    <strong>{{ monthlyTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }} / mes</strong>
+  </div>
+
+  @if (loading()) {
+    <div class="state"><span class="spinner"></span> Cargando...</div>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th>Categoría</th>
+            <th>Día</th>
+            <th>Método</th>
+            <th class="table__num">Monto</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of templates(); track t.id) {
+            <tr [class.row--inactive]="!t.isActive">
+              <td>
+                <strong>{{ t.name }}</strong>
+                @if (t.notes) {
+                  <small class="row__note">{{ t.notes }}</small>
+                }
+              </td>
+              <td>
+                <span class="material-symbols-outlined table__icon">{{ t.categoryIcon }}</span>
+                {{ t.categoryName }}
+              </td>
+              <td>{{ t.dayOfMonth }}</td>
+              <td>{{ paymentLabels[t.paymentMethod] }}</td>
+              <td class="table__num">{{ t.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="badge badge--toggle"
+                  [class.badge--green]="t.isActive"
+                  [class.badge--gray]="!t.isActive"
+                  (click)="toggleActive(t)"
+                >
+                  {{ t.isActive ? 'Activo' : 'Pausado' }}
+                </button>
+              </td>
+              <td class="table__actions">
+                <button type="button" class="icon-btn" (click)="openEdit(t)" title="Editar">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button type="button" class="icon-btn icon-btn--danger" (click)="remove(t)" title="Eliminar">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty">
+                Sin gastos fijos. Da de alta la renta, la luz o los sueldos para que se
+                generen solos cada mes.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<!-- ── MODAL ─────────────────────────────────────────────────────────────── -->
+@if (editingId() !== null) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>{{ editingId() ? 'Editar gasto fijo' : 'Nuevo gasto fijo' }}</h2>
+        <button type="button" class="icon-btn" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <div class="modal__body">
+          <label class="field">
+            <span class="field__label">Concepto</span>
+            <input type="text" formControlName="name" placeholder="Ej. Renta del local" />
+          </label>
+          <label class="field">
+            <span class="field__label">Categoría</span>
+            <select formControlName="categoryId">
+              @for (cat of categories(); track cat.id) {
+                <option [value]="cat.id">{{ cat.name }}</option>
+              }
+            </select>
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">Monto mensual</span>
+              <input type="number" step="0.01" min="0.01" formControlName="amount" />
+            </label>
+            <label class="field">
+              <span class="field__label">Día del mes</span>
+              <select formControlName="dayOfMonth">
+                @for (d of days; track d) {
+                  <option [value]="d">{{ d }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span class="field__label">Método de pago</span>
+            <select formControlName="paymentMethod">
+              @for (m of paymentMethods; track m) {
+                <option [value]="m">{{ paymentLabels[m] }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">Notas (opcional)</span>
+            <input type="text" formControlName="notes" />
+          </label>
+          <p class="modal__note">
+            <span class="material-symbols-outlined">info</span>
+            Solo se puede elegir del 1 al 28: un "día 30" no existe en febrero.
+          </p>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="form.invalid || saving()">
+            Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

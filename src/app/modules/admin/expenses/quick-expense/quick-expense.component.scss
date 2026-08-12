@@ -1,0 +1,362 @@
+@use '../../../../../styles/variables' as vars;
+
+// Captura pensada para el celular con una mano: el monto y las categorías son
+// deliberadamente grandes, y el botón de guardar queda fijo al fondo en móvil
+// para que siga siendo alcanzable con el teclado numérico abierto.
+
+.page-head__tabs {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.quick-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  gap: vars.$spacing-lg;
+  align-items: start;
+
+  @media (max-width: vars.$bp-desktop) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ── MONTO ──────────────────────────────────────────────────────────────────
+.capture__amount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: vars.$spacing-md 0 vars.$spacing-sm;
+  border-bottom: 2px solid vars.$color-border;
+  margin-bottom: vars.$spacing-md;
+}
+
+.capture__currency {
+  font-size: 2rem;
+  font-weight: 700;
+  color: vars.$color-text-secondary;
+}
+
+.capture__amount-input {
+  width: 100%;
+  max-width: 320px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: vars.$font-headline;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: vars.$color-primary;
+  text-align: center;
+
+  &::placeholder { color: rgba(vars.$color-text-secondary, 0.4); }
+
+  // Oculta las flechitas del number: en móvil roban espacio y no se usan.
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button { appearance: none; margin: 0; }
+  appearance: textfield;
+}
+
+// ── FECHA ──────────────────────────────────────────────────────────────────
+.capture__date {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+
+  // Ámbar = la fecha NO es hoy. Señal de un vistazo, sin leer nada.
+  &--warn {
+    background: rgba(vars.$color-gold, 0.16);
+    border-color: vars.$color-gold;
+    color: #8f7509;
+  }
+
+  .material-symbols-outlined { font-size: 1.05rem; }
+}
+
+.chip__hint {
+  font-weight: 500;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+.capture__date-reset {
+  border: 0;
+  background: transparent;
+  color: vars.$color-primary;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.capture__date-picker {
+  padding: vars.$spacing-sm vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+}
+
+.capture__date-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: vars.$color-text-secondary;
+}
+
+// ── CATEGORÍAS ─────────────────────────────────────────────────────────────
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+
+  &--secondary { margin-top: vars.$spacing-sm; }
+}
+
+.cat-btn {
+  // 64px mínimo: es el objetivo táctil cómodo para el pulgar.
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: vars.$spacing-sm 0.35rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-fast;
+
+  .material-symbols-outlined { font-size: 1.6rem; }
+
+  &:hover {
+    border-color: vars.$color-primary;
+    color: vars.$color-primary;
+  }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+    box-shadow: vars.$shadow-md;
+  }
+
+  &--sm {
+    min-height: 60px;
+    .material-symbols-outlined { font-size: 1.3rem; }
+  }
+}
+
+.cat-btn__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+}
+
+// ── OPCIONES COLAPSADAS ────────────────────────────────────────────────────
+.capture__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.5rem;
+  border: 0;
+  background: transparent;
+  color: vars.$color-primary;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  .material-symbols-outlined { font-size: 1.1rem; }
+}
+
+.capture__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-md;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+  margin-bottom: vars.$spacing-sm;
+}
+
+.seg {
+  display: flex;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  overflow: hidden;
+}
+
+.seg__btn {
+  flex: 1;
+  padding: 0.6rem 0.4rem;
+  border: 0;
+  background: vars.$color-surface;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-fast;
+
+  & + & { border-left: 1px solid vars.$color-border; }
+
+  &--active {
+    background: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+// ── GUARDAR ────────────────────────────────────────────────────────────────
+.capture__save {
+  margin-top: vars.$spacing-md;
+  justify-content: center;
+
+  // En móvil se pega al fondo del viewport para que el teclado numérico no lo
+  // empuje fuera de alcance. `sticky` y no `fixed` para que no tape la lista.
+  @media (max-width: vars.$bp-desktop) {
+    position: sticky;
+    bottom: vars.$spacing-sm;
+    z-index: 5;
+    box-shadow: vars.$shadow-lg;
+  }
+}
+
+// ── PANEL DE HOY ───────────────────────────────────────────────────────────
+.today__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: vars.$spacing-sm;
+  border-bottom: 1px solid vars.$color-border;
+  margin-bottom: vars.$spacing-sm;
+}
+
+.today__label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: vars.$color-text-secondary;
+}
+
+.today__total {
+  font-family: vars.$font-headline;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: vars.$color-primary;
+}
+
+.today__count {
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+}
+
+.today__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.today__item {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(vars.$color-border, 0.6);
+
+  &:last-child { border-bottom: 0; }
+}
+
+.today__icon {
+  font-size: 1.25rem;
+  color: vars.$color-secondary;
+  flex-shrink: 0;
+}
+
+.today__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+
+  small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.today__amount {
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+// ── TABLA DEL PERÍODO ──────────────────────────────────────────────────────
+.month { margin-top: vars.$spacing-lg; }
+
+.filters__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.table__num { text-align: right; }
+.table__actions { white-space: nowrap; text-align: right; }
+
+.table__icon {
+  font-size: 1.05rem;
+  vertical-align: middle;
+  margin-right: 0.25rem;
+  color: vars.$color-secondary;
+}
+
+.modal__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: vars.$spacing-sm 0 0;
+  padding: vars.$spacing-sm;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1rem; flex-shrink: 0; }
+}

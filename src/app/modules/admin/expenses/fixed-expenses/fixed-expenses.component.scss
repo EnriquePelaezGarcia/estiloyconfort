@@ -1,0 +1,136 @@
+@use '../../../../../styles/variables' as vars;
+
+.page-head__tabs {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+// ── PENDIENTES DEL MES ─────────────────────────────────────────────────────
+// Se destaca en ámbar porque es lo accionable de la pantalla: mientras un
+// gasto siga aquí, no está en el estado de resultados.
+.pending {
+  border-left: 3px solid vars.$color-gold;
+  margin-bottom: vars.$spacing-lg;
+}
+
+.pending__total {
+  color: vars.$color-gold;
+  font-size: 1.15rem;
+}
+
+.pending__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm;
+  background: rgba(vars.$color-gold, 0.08);
+  border-radius: vars.$radius-md;
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1rem; flex-shrink: 0; }
+}
+
+.pending__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.pending__item {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+
+  @media (max-width: vars.$bp-tablet) {
+    flex-wrap: wrap;
+  }
+}
+
+.pending__icon {
+  font-size: 1.4rem;
+  color: vars.$color-secondary;
+  flex-shrink: 0;
+}
+
+.pending__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+
+  small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+  }
+}
+
+.pending__amount {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+// ── TABLA ──────────────────────────────────────────────────────────────────
+.table__num { text-align: right; }
+.table__actions { white-space: nowrap; text-align: right; }
+
+.table__icon {
+  font-size: 1.05rem;
+  vertical-align: middle;
+  margin-right: 0.25rem;
+  color: vars.$color-secondary;
+}
+
+// Una plantilla pausada sigue visible pero atenuada: no genera gastos, pero
+// borrarla perdería el histórico de por qué existía.
+.row--inactive {
+  opacity: 0.55;
+}
+
+.row__note {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: vars.$color-text-secondary;
+}
+
+.badge--toggle {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: vars.$color-primary;
+  font-weight: 600;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.modal__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: vars.$spacing-sm 0 0;
+  padding: vars.$spacing-sm;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1rem; flex-shrink: 0; }
+}

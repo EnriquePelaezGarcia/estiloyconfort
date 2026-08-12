@@ -12,6 +12,7 @@ const manufacturerRoutes = require('./manufacturerRoutes');
 const manufacturingRoutes = require('./manufacturingRoutes');
 const shippingRoutes = require('./shippingRoutes');
 const quotesRoutes = require('./quotesRoutes');
+const expensesRoutes = require('./expensesRoutes');
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/manufacturer', manufacturerRoutes);
 router.use('/manufacturing', manufacturingRoutes);
 router.use('/shipping', shippingRoutes);
 router.use('/quotes', quotesRoutes);
+router.use('/expenses', expensesRoutes);
 
 module.exports = router;

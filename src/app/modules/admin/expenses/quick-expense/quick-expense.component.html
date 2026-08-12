@@ -1,0 +1,319 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Gastos</h1>
+    <p class="page-head__sub">Captura en segundos lo que se gasta en la calle</p>
+  </div>
+  <nav class="page-head__tabs">
+    <a routerLink="/admin/gastos/fijos" class="btn btn--ghost">
+      <span class="material-symbols-outlined">event_repeat</span> Gastos fijos
+    </a>
+    <a routerLink="/admin/gastos/comisiones" class="btn btn--ghost">
+      <span class="material-symbols-outlined">two_wheeler</span> Comisiones
+    </a>
+  </nav>
+</header>
+
+<div class="quick-layout">
+  <!-- ── CAPTURA RÁPIDA: monto → categoría → guardar ───────────────────── -->
+  <section class="capture panel">
+    <form [formGroup]="form" (ngSubmit)="save()">
+      <div class="capture__amount">
+        <span class="capture__currency">$</span>
+        <input
+          #amountInput
+          type="number"
+          inputmode="decimal"
+          step="0.01"
+          min="0"
+          placeholder="0"
+          autocomplete="off"
+          formControlName="amount"
+          class="capture__amount-input"
+          aria-label="Monto del gasto"
+        />
+      </div>
+
+      <!-- Fecha: default hoy, siempre visible, siempre editable. Ámbar si no es hoy. -->
+      <div class="capture__date">
+        <button
+          type="button"
+          class="chip chip--date"
+          [class.chip--warn]="isBackdated()"
+          (click)="toggleDatePicker()"
+        >
+          <span class="material-symbols-outlined">calendar_today</span>
+          @if (isBackdated()) {
+            {{ expenseDate() | date: 'd MMM' }}
+          } @else {
+            Hoy
+          }
+          <span class="chip__hint">cambiar</span>
+        </button>
+        @if (isBackdated()) {
+          <button type="button" class="capture__date-reset" (click)="resetDateToToday()">
+            Volver a hoy
+          </button>
+        }
+      </div>
+
+      @if (showDatePicker()) {
+        <div class="capture__date-picker">
+          <label class="field">
+            <span class="field__label">Fecha en que se gastó</span>
+            <input
+              type="date"
+              [value]="expenseDate()"
+              [max]="todayStr"
+              (change)="onDateChange($event)"
+            />
+          </label>
+          <p class="capture__date-note">
+            Se guarda con esta fecha aunque lo captures días después.
+          </p>
+        </div>
+      }
+
+      <!-- Categorías: un tap. Las de acceso rápido primero. -->
+      <div class="cat-grid">
+        @for (cat of quickCategories(); track cat.id) {
+          <button
+            type="button"
+            class="cat-btn"
+            [class.cat-btn--active]="selectedCategoryId() === cat.id"
+            (click)="selectCategory(cat.id)"
+          >
+            <span class="material-symbols-outlined">{{ cat.icon }}</span>
+            <span class="cat-btn__label">{{ cat.name }}</span>
+          </button>
+        }
+      </div>
+
+      @if (otherCategories().length) {
+        <button type="button" class="capture__toggle" (click)="toggleAllCategories()">
+          {{ showAllCategories() ? 'Ocultar' : 'Ver todas las categorías' }}
+          <span class="material-symbols-outlined">
+            {{ showAllCategories() ? 'expand_less' : 'expand_more' }}
+          </span>
+        </button>
+        @if (showAllCategories()) {
+          <div class="cat-grid cat-grid--secondary">
+            @for (cat of otherCategories(); track cat.id) {
+              <button
+                type="button"
+                class="cat-btn cat-btn--sm"
+                [class.cat-btn--active]="selectedCategoryId() === cat.id"
+                (click)="selectCategory(cat.id)"
+              >
+                <span class="material-symbols-outlined">{{ cat.icon }}</span>
+                <span class="cat-btn__label">{{ cat.name }}</span>
+              </button>
+            }
+          </div>
+        }
+      }
+
+      <!-- Todo lo opcional, colapsado: pedirlo en el momento mata la captura. -->
+      <button type="button" class="capture__toggle" (click)="toggleAdvanced()">
+        {{ showAdvanced() ? 'Menos opciones' : 'Método de pago y nota' }}
+        <span class="material-symbols-outlined">
+          {{ showAdvanced() ? 'expand_less' : 'expand_more' }}
+        </span>
+      </button>
+
+      @if (showAdvanced()) {
+        <div class="capture__advanced">
+          <div class="seg">
+            @for (m of paymentMethods; track m) {
+              <button
+                type="button"
+                class="seg__btn"
+                [class.seg__btn--active]="form.controls.paymentMethod.value === m"
+                (click)="selectPaymentMethod(m)"
+              >
+                {{ paymentLabels[m] }}
+              </button>
+            }
+          </div>
+          <label class="field">
+            <span class="field__label">Nota (opcional)</span>
+            <input type="text" formControlName="description" placeholder="Ej. comida del equipo" />
+          </label>
+        </div>
+      }
+
+      <button
+        type="submit"
+        class="btn btn--primary btn--block btn--lg capture__save"
+        [disabled]="!canSave()"
+      >
+        @if (saving()) {
+          <span class="spinner spinner--sm"></span> Guardando...
+        } @else {
+          <span class="material-symbols-outlined">check</span> Guardar gasto
+        }
+      </button>
+    </form>
+  </section>
+
+  <!-- ── HOY: total y lista, con borrar por si fue un dedazo ───────────── -->
+  <section class="panel today">
+    @if (today(); as t) {
+      <div class="today__head">
+        <div>
+          <span class="today__label">Hoy</span>
+          <strong class="today__total">{{ t.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+        </div>
+        <span class="today__count">{{ t.count }} gasto(s)</span>
+      </div>
+      @if (t.items.length) {
+        <ul class="today__list">
+          @for (e of t.items; track e.id) {
+            <li class="today__item">
+              <span class="material-symbols-outlined today__icon">{{ e.categoryIcon }}</span>
+              <span class="today__name">
+                {{ e.categoryName }}
+                @if (e.description) {
+                  <small>{{ e.description }}</small>
+                }
+              </span>
+              <span class="today__amount">{{ e.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+              <button type="button" class="icon-btn" (click)="openEdit(e)" title="Editar">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button type="button" class="icon-btn icon-btn--danger" (click)="remove(e)" title="Eliminar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="empty">Sin gastos capturados hoy.</p>
+      }
+    }
+  </section>
+</div>
+
+<!-- ── TABLA DEL PERÍODO (desktop) ───────────────────────────────────────── -->
+<section class="panel month">
+  <div class="panel__title">
+    <span>Gastos del período</span>
+    <strong>{{ monthTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters__periods">
+      <button type="button" class="chip" [class.chip--active]="period() === 'week'" (click)="selectPeriod('week')">Esta semana</button>
+      <button type="button" class="chip" [class.chip--active]="period() === 'month'" (click)="selectPeriod('month')">Este mes</button>
+      <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
+    </div>
+    <select class="filter-select" (change)="onFilterCategory($event)">
+      <option value="">Todas las categorías</option>
+      @for (cat of categories(); track cat.id) {
+        <option [value]="cat.id">{{ cat.name }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Categoría</th>
+          <th>Nota</th>
+          <th>Método</th>
+          <th>Estado</th>
+          <th class="table__num">Monto</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (e of monthExpenses(); track e.id) {
+          <tr>
+            <td>{{ e.expenseDate | date: 'dd/MM/yyyy' }}</td>
+            <td>
+              <span class="material-symbols-outlined table__icon">{{ e.categoryIcon }}</span>
+              {{ e.categoryName }}
+            </td>
+            <td>{{ e.description ?? '—' }}</td>
+            <td>{{ paymentLabels[e.paymentMethod] }}</td>
+            <td><span class="badge" [class]="statusTone[e.status]">{{ statusLabels[e.status] }}</span></td>
+            <td class="table__num">{{ e.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+            <td class="table__actions">
+              <button type="button" class="icon-btn" (click)="openEdit(e)" title="Editar">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button type="button" class="icon-btn icon-btn--danger" (click)="remove(e)" title="Eliminar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="7" class="empty">Sin gastos en este período.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── MODAL DE EDICIÓN ──────────────────────────────────────────────────── -->
+@if (editing(); as e) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>Editar gasto</h2>
+        <button type="button" class="icon-btn" (click)="closeEdit()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form [formGroup]="editForm" (ngSubmit)="saveEdit()">
+        <div class="modal__body">
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">Monto</span>
+              <input type="number" step="0.01" min="0.01" formControlName="amount" />
+            </label>
+            <label class="field">
+              <span class="field__label">Fecha del gasto</span>
+              <input type="date" [max]="todayStr" formControlName="expenseDate" />
+            </label>
+          </div>
+          <label class="field">
+            <span class="field__label">Categoría</span>
+            <select formControlName="categoryId">
+              @for (cat of categories(); track cat.id) {
+                <option [value]="cat.id">{{ cat.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">Método de pago</span>
+            <select formControlName="paymentMethod">
+              @for (m of paymentMethods; track m) {
+                <option [value]="m">{{ paymentLabels[m] }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">Nota</span>
+            <input type="text" formControlName="description" />
+          </label>
+          <p class="modal__note">
+            <span class="material-symbols-outlined">info</span>
+            Si cambias la fecha, el gasto se mueve de mes en el estado de resultados.
+            Capturado el {{ e.createdAt | date: 'dd/MM/yyyy' }}.
+          </p>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeEdit()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="editForm.invalid || saving()">
+            Guardar cambios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

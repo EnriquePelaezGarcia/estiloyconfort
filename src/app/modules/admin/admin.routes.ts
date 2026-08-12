@@ -91,6 +91,22 @@ export const adminRoutes: Routes = [
         title: 'Finanzas - Panel Admin',
       },
       {
+        path: 'gastos',
+        loadComponent: () =>
+          import('./expenses/quick-expense/quick-expense.component').then(
+            (m) => m.QuickExpenseComponent,
+          ),
+        title: 'Gastos - Panel Admin',
+      },
+      {
+        path: 'gastos/fijos',
+        loadComponent: () =>
+          import('./expenses/fixed-expenses/fixed-expenses.component').then(
+            (m) => m.FixedExpensesComponent,
+          ),
+        title: 'Gastos fijos - Panel Admin',
+      },
+      {
         path: 'finanzas/detalle/:metric',
         loadComponent: () =>
           import('./finances/finance-detail/finance-detail.component').then(

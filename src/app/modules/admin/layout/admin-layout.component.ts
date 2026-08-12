@@ -42,6 +42,7 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Cotizaciones', icon: 'request_quote', route: 'cotizaciones' },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
+    { label: 'Gastos', icon: 'receipt_long', route: 'gastos' },
     { label: 'Todos los pedidos', icon: 'local_shipping', route: 'pedidos' },
     { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },
