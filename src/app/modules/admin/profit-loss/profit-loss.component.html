@@ -1,0 +1,225 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Estado de resultados</h1>
+    <p class="page-head__sub">Base flujo de efectivo: lo que entró menos lo que salió</p>
+  </div>
+  <nav class="page-head__tabs no-print">
+    <button type="button" class="btn btn--ghost" (click)="exportCsv()">
+      <span class="material-symbols-outlined">download</span> Exportar CSV
+    </button>
+    <button type="button" class="btn btn--ghost" (click)="print()">
+      <span class="material-symbols-outlined">print</span> Imprimir
+    </button>
+  </nav>
+</header>
+
+<section class="filters no-print">
+  <div class="filters__periods">
+    <button type="button" class="chip" [class.chip--active]="period() === 'month'" (click)="selectPeriod('month')">Este mes</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'lastMonth'" (click)="selectPeriod('lastMonth')">Mes anterior</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'quarter'" (click)="selectPeriod('quarter')">Últimos 3 meses</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
+  </div>
+  <div class="filters__range">
+    <label class="filters__field">
+      <span>Desde</span>
+      <input type="date" [value]="from()" (change)="onFrom($event)" />
+    </label>
+    <label class="filters__field">
+      <span>Hasta</span>
+      <input type="date" [value]="to()" (change)="onTo($event)" />
+    </label>
+    <button type="button" class="btn btn--primary" (click)="load()">
+      <span class="material-symbols-outlined">filter_alt</span> Aplicar
+    </button>
+  </div>
+</section>
+
+<p class="period-tag">
+  Período: <strong>{{ from() | date: 'd MMM y' }} al {{ to() | date: 'd MMM y' }}</strong>
+  <span class="period-tag__hint">({{ periodLabel() }})</span>
+</p>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span> Calculando...</div>
+} @else if (report(); as r) {
+  <div class="pnl">
+    <!-- ── INGRESOS ─────────────────────────────────────────────────────── -->
+    <section class="panel block block--income">
+      <div class="block__head">
+        <h2>Ingresos</h2>
+        <strong class="block__total">
+          {{ r.income.collected | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </strong>
+      </div>
+      <p class="block__sub">Cobrado en el período (pagos y abonos recibidos)</p>
+
+      @if (r.income.byMethod.length) {
+        <div class="breakdown">
+          @for (m of r.income.byMethod; track m.method) {
+            <div class="breakdown__row">
+              <span class="breakdown__label">{{ methodLabels[m.method] ?? m.method }}</span>
+              <span class="breakdown__bar">
+                <span
+                  class="breakdown__fill breakdown__fill--income"
+                  [style.width.%]="r.income.collected > 0 ? (m.total / r.income.collected) * 100 : 0"
+                ></span>
+              </span>
+              <span class="breakdown__value">
+                {{ m.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                <small>{{ m.count }} mov.</small>
+              </span>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- ── EGRESOS ──────────────────────────────────────────────────────── -->
+    <section class="panel block block--expense">
+      <div class="block__head">
+        <h2>Egresos</h2>
+        <strong class="block__total">
+          {{ r.expenses.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </strong>
+      </div>
+      <p class="block__sub">Dinero que salió de la caja en el período</p>
+
+      <div class="breakdown">
+        <div class="breakdown__row">
+          <span class="breakdown__label">
+            Pagos a fabricantes
+            <small>{{ r.expenses.manufacturerBatches }} pago(s), pedidos y OCs</small>
+          </span>
+          <span class="breakdown__bar">
+            <span class="breakdown__fill" [style.width.%]="percentOf(r.expenses.manufacturers)"></span>
+          </span>
+          <span class="breakdown__value">
+            {{ r.expenses.manufacturers | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+        </div>
+        <div class="breakdown__row">
+          <span class="breakdown__label">
+            Comisiones de repartidores
+            <small>armados pagados</small>
+          </span>
+          <span class="breakdown__bar">
+            <span class="breakdown__fill" [style.width.%]="percentOf(r.expenses.commissions)"></span>
+          </span>
+          <span class="breakdown__value">
+            {{ r.expenses.commissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+        </div>
+        <div class="breakdown__row">
+          <span class="breakdown__label">Gastos variables</span>
+          <span class="breakdown__bar">
+            <span class="breakdown__fill" [style.width.%]="percentOf(r.expenses.variable)"></span>
+          </span>
+          <span class="breakdown__value">
+            {{ r.expenses.variable | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+        </div>
+        <div class="breakdown__row">
+          <span class="breakdown__label">Gastos fijos</span>
+          <span class="breakdown__bar">
+            <span class="breakdown__fill" [style.width.%]="percentOf(r.expenses.fixed)"></span>
+          </span>
+          <span class="breakdown__value">
+            {{ r.expenses.fixed | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+        </div>
+      </div>
+
+      @if (r.expenses.byCategory.length) {
+        <details class="detail-toggle">
+          <summary>Ver desglose por categoría</summary>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Categoría</th>
+                  <th>Tipo</th>
+                  <th class="table__num">Movimientos</th>
+                  <th class="table__num">Total</th>
+                  <th class="table__num">% del egreso</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of r.expenses.byCategory; track c.categoryId) {
+                  <tr>
+                    <td>
+                      <span class="material-symbols-outlined table__icon">{{ c.icon }}</span>
+                      {{ c.name }}
+                    </td>
+                    <td>{{ c.kind === 'fixed' ? 'Fijo' : 'Variable' }}</td>
+                    <td class="table__num">{{ c.count }}</td>
+                    <td class="table__num">{{ c.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+                    <td class="table__num">{{ c.percent }}%</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </details>
+      }
+    </section>
+
+    <!-- ── UTILIDAD ─────────────────────────────────────────────────────── -->
+    <section class="panel block block--profit" [class.block--loss]="r.netProfit < 0">
+      <div class="block__head">
+        <h2>{{ r.netProfit < 0 ? 'Pérdida neta' : 'Utilidad neta' }}</h2>
+        <strong class="block__total block__total--big">
+          {{ r.netProfit | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </strong>
+      </div>
+      <p class="block__sub">
+        Margen sobre lo cobrado: <strong>{{ r.margin }}%</strong>
+      </p>
+      <p class="formula">
+        {{ r.income.collected | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }} cobrado
+        &minus; {{ r.expenses.total | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }} pagado
+      </p>
+    </section>
+  </div>
+
+  <!-- ── INFORMATIVOS ───────────────────────────────────────────────────── -->
+  <section class="panel informative">
+    <div class="panel__title"><span>Informativo — fuera del flujo de efectivo</span></div>
+    <p class="informative__note">
+      <span class="material-symbols-outlined">info</span>
+      Estos montos <strong>no entran</strong> en la utilidad de arriba porque el dinero todavía
+      no se mueve. Son el puente entre la caja y lo que realmente se debe y te deben.
+    </p>
+    <div class="stat-grid">
+      <div class="stat-card stat-card--gold">
+        <span class="stat-card__icon"><span class="material-symbols-outlined">pending</span></span>
+        <span class="stat-card__label">Por cobrar a clientes</span>
+        <span class="stat-card__value">
+          {{ r.informative.receivableFromCustomers | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </span>
+      </div>
+      <div class="stat-card stat-card--danger">
+        <span class="stat-card__icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
+        <span class="stat-card__label">Por pagar a fabricantes</span>
+        <span class="stat-card__value">
+          {{ r.informative.payableToManufacturers | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__icon"><span class="material-symbols-outlined">two_wheeler</span></span>
+        <span class="stat-card__label">Comisiones pendientes</span>
+        <span class="stat-card__value">
+          {{ r.informative.pendingCommissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__icon"><span class="material-symbols-outlined">event_repeat</span></span>
+        <span class="stat-card__label">Gastos fijos sin pagar</span>
+        <span class="stat-card__value">
+          {{ r.informative.pendingFixedExpenses | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </span>
+      </div>
+    </div>
+  </section>
+}

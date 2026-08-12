@@ -44,6 +44,7 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
     { label: 'Gastos', icon: 'receipt_long', route: 'gastos' },
     { label: 'Por pagar', icon: 'account_balance_wallet', route: 'cuentas-por-pagar' },
+    { label: 'Estado de resultados', icon: 'query_stats', route: 'estado-resultados' },
     { label: 'Todos los pedidos', icon: 'local_shipping', route: 'pedidos' },
     { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },

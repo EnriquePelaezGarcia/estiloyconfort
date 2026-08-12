@@ -8,6 +8,7 @@ import {
   Expense,
   ExpenseCategory,
   ExpenseListResponse,
+  ProfitLossReport,
   RecurringExpense,
   RecurringListResponse,
   TodaySummary,
@@ -128,6 +129,15 @@ export class ExpensesService {
         '/expenses/commissions/backfill',
         {},
       )
+      .pipe(map((r) => r.data));
+  }
+
+  // ─── ESTADO DE RESULTADOS ──────────────────────────────────────────────────
+
+  /** Base flujo de efectivo: lo que entró menos lo que salió en el período. */
+  pnl(filters: ExpenseFilters = {}): Observable<ProfitLossReport> {
+    return this.api
+      .get<{ data: ProfitLossReport }>('/expenses/pnl', toParams(filters))
       .pipe(map((r) => r.data));
   }
 }

@@ -1,0 +1,247 @@
+@use '../../../../styles/variables' as vars;
+
+.page-head__tabs {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+// ── Filtros (mismo patrón visual que Finanzas) ─────────────────────────────
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+
+  &__periods { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+  &__range {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: vars.$spacing-sm;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+
+    input {
+      padding: 0.45rem 0.6rem;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-md;
+      font-size: 0.9rem;
+    }
+  }
+}
+
+.chip {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.period-tag {
+  margin: 0 0 vars.$spacing-md;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+
+  strong { color: vars.$color-primary; }
+  &__hint { margin-left: 0.3rem; font-size: 0.78rem; }
+}
+
+// ── Los tres bloques del estado de resultados ──────────────────────────────
+.pnl {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-md;
+}
+
+.block {
+  // La franja de color a la izquierda es lo que hace legible de un vistazo
+  // qué bloque es cuál al imprimir en blanco y negro... y en pantalla.
+  border-left: 4px solid vars.$color-border;
+
+  &--income { border-left-color: vars.$color-success; }
+  &--expense { border-left-color: vars.$color-error; }
+  &--profit { border-left-color: vars.$color-primary; }
+  &--loss { border-left-color: vars.$color-error; }
+}
+
+.block__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0;
+    font-family: vars.$font-headline;
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: vars.$color-text-secondary;
+  }
+}
+
+.block__total {
+  font-family: vars.$font-headline;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: vars.$color-primary;
+
+  &--big { font-size: 2.2rem; }
+}
+
+.block--income .block__total { color: vars.$color-success; }
+.block--expense .block__total { color: vars.$color-error; }
+.block--loss .block__total { color: vars.$color-error; }
+
+.block__sub {
+  margin: 0.15rem 0 vars.$spacing-md;
+  font-size: 0.82rem;
+  color: vars.$color-text-secondary;
+}
+
+.formula {
+  margin: 0;
+  padding-top: vars.$spacing-sm;
+  border-top: 1px dashed vars.$color-border;
+  font-size: 0.82rem;
+  color: vars.$color-text-secondary;
+}
+
+// ── Barras del desglose (CSS puro, sin librería de gráficas) ───────────────
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.breakdown__row {
+  display: grid;
+  grid-template-columns: 200px 1fr 170px;
+  align-items: center;
+  gap: vars.$spacing-md;
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
+.breakdown__label {
+  font-weight: 600;
+  font-size: 0.88rem;
+
+  small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.72rem;
+    color: vars.$color-text-secondary;
+  }
+}
+
+.breakdown__bar {
+  height: 12px;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-full;
+  overflow: hidden;
+  border: 1px solid vars.$color-border;
+}
+
+.breakdown__fill {
+  display: block;
+  height: 100%;
+  background: vars.$color-error;
+  border-radius: vars.$radius-full;
+  transition: width vars.$transition-base;
+
+  &--income { background: vars.$color-success; }
+}
+
+.breakdown__value {
+  text-align: right;
+  font-weight: 700;
+  font-size: 0.9rem;
+
+  small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.72rem;
+    color: vars.$color-text-secondary;
+  }
+}
+
+.detail-toggle {
+  margin-top: vars.$spacing-md;
+
+  summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: vars.$color-primary;
+    padding: 0.35rem 0;
+  }
+}
+
+.table__num { text-align: right; }
+
+.table__icon {
+  font-size: 1.05rem;
+  vertical-align: middle;
+  margin-right: 0.25rem;
+  color: vars.$color-secondary;
+}
+
+// ── Informativos ───────────────────────────────────────────────────────────
+.informative {
+  margin-top: vars.$spacing-lg;
+  border-left: 4px solid vars.$color-secondary;
+}
+
+.informative__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm;
+  background: vars.$color-bg;
+  border-radius: vars.$radius-md;
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1rem; flex-shrink: 0; }
+}
+
+// Este reporte se imprime para llevarlo al contador.
+@media print {
+  .no-print,
+  .filters { display: none !important; }
+
+  .detail-toggle { // el desglose debe salir abierto en papel
+    &[open] summary, summary { display: none; }
+  }
+
+  .panel { break-inside: avoid; box-shadow: none; }
+}

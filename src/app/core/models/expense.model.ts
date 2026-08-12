@@ -143,6 +143,46 @@ export interface CommissionPayee {
   fullName: string;
 }
 
+/**
+ * Estado de resultados en base FLUJO DE EFECTIVO: solo el dinero que entró y
+ * salió en el período. Por eso el costo de mercancía es lo que se le PAGÓ al
+ * fabricante, no el costo devengado que muestra la pantalla de Finanzas.
+ */
+export interface ProfitLossReport {
+  period: { from: string | null; to: string | null; kind?: string };
+  income: {
+    collected: number;
+    byMethod: { method: string; total: number; count: number }[];
+  };
+  expenses: {
+    manufacturers: number;
+    manufacturerBatches: number;
+    /** Renglón propio: es de los costos más grandes y variables del mes. */
+    commissions: number;
+    variable: number;
+    fixed: number;
+    total: number;
+    byCategory: {
+      categoryId: number;
+      name: string;
+      kind: ExpenseKind;
+      icon: string;
+      total: number;
+      count: number;
+      percent: number;
+    }[];
+  };
+  netProfit: number;
+  margin: number;
+  /** Fuera del flujo: el puente entre la caja y lo devengado. */
+  informative: {
+    receivableFromCustomers: number;
+    payableToManufacturers: number;
+    pendingCommissions: number;
+    pendingFixedExpenses: number;
+  };
+}
+
 export interface CommissionListResponse {
   data: DeliveryCommission[];
   meta: {

@@ -24,6 +24,8 @@ router.post('/recurring/generate', expensesController.generateRecurring);
 router.put('/recurring/:id', expensesController.updateRecurring);
 router.delete('/recurring/:id', expensesController.removeRecurring);
 
+router.get('/pnl', expensesController.pnl);
+
 router.get('/commissions', expensesController.listCommissions);
 router.post('/commissions/backfill', expensesController.backfillCommissions);
 

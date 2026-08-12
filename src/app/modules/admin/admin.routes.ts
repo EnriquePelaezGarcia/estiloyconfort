@@ -123,6 +123,12 @@ export const adminRoutes: Routes = [
         title: 'Cuentas por pagar - Panel Admin',
       },
       {
+        path: 'estado-resultados',
+        loadComponent: () =>
+          import('./profit-loss/profit-loss.component').then((m) => m.ProfitLossComponent),
+        title: 'Estado de resultados - Panel Admin',
+      },
+      {
         path: 'cuentas-por-pagar/:manufacturerId',
         loadComponent: () =>
           import('./payables/payable-detail/payable-detail.component').then(

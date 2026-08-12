@@ -2,6 +2,7 @@ const Expense = require('../models/Expense');
 const ExpenseCategory = require('../models/ExpenseCategory');
 const RecurringExpense = require('../models/RecurringExpense');
 const DeliveryCommission = require('../models/DeliveryCommission');
+const ProfitLoss = require('../models/ProfitLoss');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { periodFromQuery } = require('../utils/periods');
@@ -197,6 +198,15 @@ const expensesController = {
       data: result,
       message: `${result.created} comisión(es) generadas de ${result.scanned} entregas`,
     });
+  }),
+
+  // ─── ESTADO DE RESULTADOS ──────────────────────────────────────────────────
+
+  // GET /api/expenses/pnl?period&date&from&to — base flujo de efectivo
+  pnl: asyncHandler(async (req, res) => {
+    const { from, to, period } = periodFromQuery(req.query);
+    const report = await ProfitLoss.report({ from, to });
+    res.json({ data: { ...report, period: { from, to, kind: period } } });
   }),
 };
 
