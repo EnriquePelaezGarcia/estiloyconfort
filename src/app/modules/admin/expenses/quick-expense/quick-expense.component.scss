@@ -81,7 +81,9 @@
   cursor: pointer;
   transition: all vars.$transition-base;
 
-  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+  // Mismo motivo que en .cat-btn: sin el :not(), el hover del chip activo lo
+  // deja con texto morado sobre fondo morado.
+  &:not(.chip--active):hover { border-color: vars.$color-primary; color: vars.$color-primary; }
 
   &--active {
     background: vars.$color-primary;
@@ -157,7 +159,10 @@
 
   .material-symbols-outlined { font-size: 1.6rem; }
 
-  &:hover {
+  // `:not(--active)` es obligatorio: `.cat-btn:hover` tiene MÁS especificidad
+  // (0,2,0) que `.cat-btn--active` (0,1,0), así que sin esto el hover pinta el
+  // texto de morado sobre el fondo morado del seleccionado y desaparece.
+  &:not(.cat-btn--active):hover {
     border-color: vars.$color-primary;
     color: vars.$color-primary;
   }
@@ -240,6 +245,16 @@
 .capture__save {
   margin-top: vars.$spacing-md;
   justify-content: center;
+
+  // Bootstrap define `.btn:disabled` (0,2,0) y le gana a `.btn--primary`
+  // (0,1,0), dejando el fondo TRANSPARENTE. En un botón normal solo se ve
+  // deslavado, pero éste es sticky y flota sobre la cuadrícula de categorías:
+  // sin fondo, su texto se encima con el de los botones de abajo y no se lee.
+  // Por eso se fuerza el color aquí en vez de tocar el sistema de diseño.
+  &:disabled {
+    background: vars.$color-primary;
+    color: #fff;
+  }
 
   // En móvil se pega al fondo del viewport para que el teclado numérico no lo
   // empuje fuera de alcance. `sticky` y no `fixed` para que no tape la lista.

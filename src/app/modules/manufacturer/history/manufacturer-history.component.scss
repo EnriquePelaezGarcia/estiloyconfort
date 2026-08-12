@@ -23,7 +23,10 @@
   cursor: pointer;
   transition: all vars.$transition-base;
 
-  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+  // `:not(--active)` obligatorio: `.chip:hover` (0,2,0) gana sobre
+  // `.chip--active` (0,1,0) y dejaria el chip activo con texto morado sobre
+  // fondo morado.
+  &:not(.chip--active):hover { border-color: vars.$color-primary; color: vars.$color-primary; }
 
   &--active {
     background: vars.$color-primary;
