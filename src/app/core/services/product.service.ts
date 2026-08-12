@@ -30,10 +30,10 @@ export class ProductService {
     return this.api.get<ProductListResponse>('/products', params);
   }
 
-  getProduct(idOrSlug: string | number): Observable<Product> {
-    return this.api.get<{ data: Product }>(`/products/${idOrSlug}`).pipe(
-      map(r => r.data)
-    );
+  getProduct(idOrSlug: string | number, includeInactive = false): Observable<Product> {
+    return this.api
+      .get<{ data: Product }>(`/products/${idOrSlug}`, includeInactive ? { includeInactive: 'true' } : undefined)
+      .pipe(map(r => r.data));
   }
 
   search(q: string): Observable<Product[]> {

@@ -474,54 +474,72 @@ export class CatalogComponent implements OnInit {
     this.costRows.set(this.buildCostRows());
   }
 
+  /**
+   * La fila que llega desde la tabla (GET /products, listado) NO trae
+   * `materialPrices`: esa lista solo se arma en `Product.findById` (backend).
+   * Sin este refetch, M2 (casillas de material) y los costos por fabricante
+   * se abrían siempre vacíos, aunque ya estuvieran guardados — el producto
+   * en edición se recarga completo antes de armar nada del formulario.
+   */
   protected openEdit(product: Product): void {
     this.editing.set(product);
     this.pendingImages.set([]);
-    this.productImages.set(product.images ?? []);
+    this.productImages.set([]);
     this.priceMode.set('margin');
-
-    // M2: los materiales declarados llegan con el producto (materialPrices).
-    const declaredIds = (product.materialPrices ?? []).map((mp) => mp.material_id);
-    this.selectedMaterialIds.set(new Set(declaredIds));
-    this.targetMaterialId.set(declaredIds[0] ?? null);
-
-    // Los costos por fabricante viven en su propia tabla; se cargan aparte.
-    this.costRows.set(this.buildCostRows());
+    this.selectedMaterialIds.set(new Set());
+    this.targetMaterialId.set(null);
+    this.costRows.set([]);
     this.loadingCosts.set(true);
-    this.productService.getManufacturerPrices(product.id).subscribe({
-      next: (res) => {
-        this.costRows.set(this.buildCostRows(res.data));
-        this.loadingCosts.set(false);
+
+    this.productService.getProduct(product.id, true).subscribe({
+      next: (full) => {
+        this.editing.set(full);
+        this.productImages.set(full.images ?? []);
+
+        // M2: los materiales declarados llegan con el producto (materialPrices).
+        const declaredIds = (full.materialPrices ?? []).map((mp) => mp.material_id);
+        this.selectedMaterialIds.set(new Set(declaredIds));
+        this.targetMaterialId.set(declaredIds[0] ?? null);
+
+        this.form.reset({
+          name: full.name,
+          categoryId: full.category_id,
+          description: full.description ?? '',
+          color: full.color ?? '',
+          length: full.dimensions_length,
+          width: full.dimensions_width,
+          height: full.dimensions_height,
+          weight: full.weight_volumetric,
+          availabilityDays: full.availability_days,
+          marginPercentage: full.margin_percentage,
+          targetCashPrice: null,
+          wholesaleMinQty: full.wholesale_min_qty,
+          stockAlertLevel: full.stock_alert_level,
+          isFeatured: full.is_featured,
+          isActive: full.is_active,
+        });
+
+        // Los costos por fabricante viven en su propia tabla; se cargan aparte,
+        // ya con los materiales declarados en selectedMaterialIds (buildCostRows
+        // solo arma columnas para esos ids).
+        this.costRows.set(this.buildCostRows());
+        this.productService.getManufacturerPrices(full.id).subscribe({
+          next: (res) => {
+            this.costRows.set(this.buildCostRows(res.data));
+            this.loadingCosts.set(false);
+          },
+          error: () => {
+            this.loadingCosts.set(false);
+            this.notification.error('No se pudieron cargar los costos por fabricante');
+          },
+        });
       },
       error: () => {
         this.loadingCosts.set(false);
-        this.notification.error('No se pudieron cargar los costos por fabricante');
+        this.notification.error('No se pudo cargar el producto');
+        this.closeModal();
       },
     });
-    this.form.reset({
-      name: product.name,
-      categoryId: product.category_id,
-      description: product.description ?? '',
-      color: product.color ?? '',
-      length: product.dimensions_length,
-      width: product.dimensions_width,
-      height: product.dimensions_height,
-      weight: product.weight_volumetric,
-      availabilityDays: product.availability_days,
-      marginPercentage: product.margin_percentage,
-      targetCashPrice: null,
-      wholesaleMinQty: product.wholesale_min_qty,
-      stockAlertLevel: product.stock_alert_level,
-      isFeatured: product.is_featured,
-      isActive: product.is_active,
-    });
-
-    if (!product.images) {
-      this.productService.getProduct(product.id).subscribe({
-        next: (full) => this.productImages.set(full.images ?? []),
-        error: () => {},
-      });
-    }
   }
 
   protected closeModal(): void {

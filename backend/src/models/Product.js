@@ -301,6 +301,17 @@ async function syncProductMaterials(conn, productId, materialIds) {
         [productId, row.material_id],
       );
     } else {
+      // Sin existencia no hay nada que conservar: se borra la declaración Y
+      // los costos por fabricante de ESE material quedan huérfanos si no se
+      // limpian aquí — product_manufacturer_costs no tiene FK a
+      // product_materials, así que un DELETE aquí sin este segundo DELETE
+      // deja costos viejos invisibles que reaparecen sin avisar si el
+      // material se vuelve a marcar más adelante (el bug real detrás de
+      // "el precio que manda" con un número que nadie capturó en esta sesión).
+      await conn.execute(
+        'DELETE FROM product_manufacturer_costs WHERE product_id = ? AND material_id = ?',
+        [productId, row.material_id],
+      );
       await conn.execute(
         'DELETE FROM product_materials WHERE product_id = ? AND material_id = ?',
         [productId, row.material_id],

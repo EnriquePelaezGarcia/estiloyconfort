@@ -78,9 +78,13 @@ const productController = {
 
   async getOne(req, res, next) {
     try {
+      // includeInactive: el catálogo público nunca lo manda (un producto
+      // desactivado no debe poder verse por su id/slug desde afuera); el
+      // admin sí, para poder reabrir su ficha y editarlo aunque esté apagado.
+      const includeInactive = req.query.includeInactive === 'true';
       const product = isNaN(req.params.id)
         ? await Product.findBySlug(req.params.id)
-        : await Product.findById(req.params.id);
+        : await Product.findById(req.params.id, { includeInactive });
       if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
       res.json({ data: product });
     } catch (err) { next(err); }
