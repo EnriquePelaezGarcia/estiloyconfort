@@ -19,10 +19,12 @@ const CONFIG = {
   credit_interest: 22,
   credit_initial_pct: 35,
   credit_weeks: 12,
-  wholesale_factor_mdf: 1.334,
-  wholesale_factor_blanca: 1.334,
-  wholesale_factor_color: 1.334,
 };
+
+// M9 del plan de catálogo de materiales: calculateWholesalePrice ya no busca
+// el factor por material en CONFIG, lo recibe resuelto. Todos los materiales
+// del fixture original usaban 1.334, así que el valor no cambia.
+const WHOLESALE_FACTOR = 1.334;
 
 test('Caso 1 — Espejo Vanity / MDF Pintado', () => {
   const prices = calculatePrices(1350, 29.3, CONFIG);
@@ -34,7 +36,7 @@ test('Caso 1 — Espejo Vanity / MDF Pintado', () => {
   assert.equal(credit.downPayment, 980);
   assert.equal(credit.weeklyPayment, 152);
 
-  const wholesale = calculateWholesalePrice(1350, 'MDF', CONFIG);
+  const wholesale = calculateWholesalePrice(1350, WHOLESALE_FACTOR);
   assert.equal(wholesale, 1801);
 
   const profitPerrucho = profitByCost(1350, prices, CONFIG);
@@ -62,12 +64,12 @@ test('Caso 2 — Espejo Vanity / Melamina Blanca (costoBase = costo + 600)', () 
   assert.equal(credit.downPayment, 1414);
   assert.equal(credit.weeklyPayment, 219);
 
-  const wholesale = calculateWholesalePrice(1950, 'MELAMINA_BLANCA', CONFIG);
+  const wholesale = calculateWholesalePrice(1950, WHOLESALE_FACTOR);
   assert.equal(wholesale, 2602);
 });
 
 test('RN-15 — utilidad de mayoreo sin IVA ni comisión', () => {
-  const wholesale = calculateWholesalePrice(1350, 'MDF', CONFIG);
+  const wholesale = calculateWholesalePrice(1350, WHOLESALE_FACTOR);
   const profit = wholesaleProfit(1350, wholesale);
   // Ni IVA ni comisión de tarjeta entran aquí: es venta de contado entre negocios.
   assert.equal(profit.profit, wholesale - 1350);
@@ -80,8 +82,8 @@ test('RN-03 — margen o costo inválido no produce precio negativo, produce nul
 });
 
 test('calculateWholesalePrice — material sin costo (RN-03) devuelve null', () => {
-  assert.equal(calculateWholesalePrice(null, 'MDF', CONFIG), null);
-  assert.equal(calculateWholesalePrice(0, 'MDF', CONFIG), null);
+  assert.equal(calculateWholesalePrice(null, WHOLESALE_FACTOR), null);
+  assert.equal(calculateWholesalePrice(0, WHOLESALE_FACTOR), null);
 });
 
 function round2(n) { return Math.round(n * 100) / 100; }

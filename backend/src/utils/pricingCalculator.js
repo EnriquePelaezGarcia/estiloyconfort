@@ -225,37 +225,27 @@ function profitByCost(cost, prices, config) {
   };
 }
 
-/** Los 3 materiales, en orden de presentación. Fuente única de verdad. */
-const MATERIALS = ['MDF', 'MELAMINA_BLANCA', 'MELAMINA_COLOR'];
-
-/** Clave del factor de mayoreo en pricing_config, por material (RN-10). */
-const WHOLESALE_FACTOR_KEY = {
-  MDF: 'wholesale_factor_mdf',
-  MELAMINA_BLANCA: 'wholesale_factor_blanca',
-  MELAMINA_COLOR: 'wholesale_factor_color',
-};
-
 /**
- * RN-10 — Precio de mayoreo.
- *   precioMayoreo = CEILING(costoBase(material) * factorMayoreo[material], 1)
+ * RN-10 — Precio de mayoreo (M9 del plan de catálogo de materiales).
+ *   precioMayoreo = CEILING(costoBase * factor, 1)
  *
  * Se calcula DIRECTO sobre el costo base: no pasa por %ganancia, no lleva IVA
  * y no absorbe comisión de terminal. Redondeo al peso, no al múltiplo de 10:
  * el mayorista compra por volumen y la lista se maneja al peso exacto.
  *
- * Varía por material por dos vías independientes: el costo base ya es distinto
- * por material y el factor es propio de cada material.
+ * `factor` ya viene resuelto por quien llama:
+ *   factor = material.wholesale_factor ?? pricing_config.wholesale_factor_default
+ * Esta función no sabe de materiales ni de pricing_config — recibe el número.
  *
- * @returns {number|null} null si el material no se cotiza (RN-03) o falta el factor.
+ * @returns {number|null} null si no hay costo o no hay factor.
  */
-function calculateWholesalePrice(baseCost, material, config) {
+function calculateWholesalePrice(baseCost, factor) {
   const C = Number(baseCost);
+  const F = Number(factor);
   if (!Number.isFinite(C) || C <= 0) return null;
+  if (!Number.isFinite(F) || F <= 0) return null;
 
-  const factor = Number(config[WHOLESALE_FACTOR_KEY[material]]);
-  if (!Number.isFinite(factor) || factor <= 0) return null;
-
-  return ceilTo(C * factor, 1);
+  return ceilTo(C * F, 1);
 }
 
 /**
@@ -279,7 +269,5 @@ module.exports = {
   profitByCost,
   calculateWholesalePrice,
   wholesaleProfit,
-  MATERIALS,
-  WHOLESALE_FACTOR_KEY,
   ceilTo,
 };

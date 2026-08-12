@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const adminController = require('../controllers/adminController');
 const pricingController = require('../controllers/pricingController');
+const materialsController = require('../controllers/materialsController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -11,6 +12,17 @@ router.use(authenticate, authorize('admin'));
 
 router.get('/dashboard', adminController.getDashboard);
 router.get('/health/pricing', adminController.getPricingHealth);
+
+// Catálogo de materiales (M1, M8) — DELETE no existe, se desactiva con PUT.
+router.get('/materials', materialsController.getAll);
+router.post('/materials', materialsController.create);
+router.put('/materials/:id', materialsController.update);
+router.put('/materials/:id/deactivate', materialsController.deactivate);
+router.put('/materials/:id/activate', materialsController.activate);
+router.get('/materials/:id/usage', materialsController.getUsage);
+
+// M2: materiales declarados sin costo capturado por ningún fabricante.
+router.get('/pricing-gaps', materialsController.getPricingGaps);
 
 // Reglas de precios (configuración global)
 router.get('/pricing-config', pricingController.getConfig);

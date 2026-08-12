@@ -27,9 +27,13 @@ router.patch('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.setP
 // Precios por material — admin y vendedor (el POS los necesita para cotizar)
 router.get('/:id/material-prices', authenticate, authorize('admin', 'seller'), ctrl.getMaterialPrices);
 
-// Rutas admin — costos por fabricante (tabla manufacturers)
-router.get('/:id/manufacturer-prices', authenticate, authorize('admin'), ctrl.getManufacturerPrices);
-router.put('/:id/manufacturer-prices/:manufacturerId', authenticate, authorize('admin'), ctrl.setManufacturerPrice);
-router.delete('/:id/manufacturer-prices/:manufacturerId', authenticate, authorize('admin'), ctrl.removeManufacturerPrice);
+// Materiales declarados del producto (M2)
+router.get('/:id/materials', authenticate, authorize('admin'), ctrl.getMaterials);
+router.put('/:id/materials', authenticate, authorize('admin'), ctrl.setMaterials);
+
+// Rutas admin — costos por fabricante × material, en filas (M3)
+router.get('/:id/manufacturer-costs', authenticate, authorize('admin'), ctrl.getManufacturerPrices);
+router.put('/:id/manufacturer-costs/:manufacturerId', authenticate, authorize('admin'), ctrl.setManufacturerPrice);
+router.delete('/:id/manufacturer-costs/:manufacturerId', authenticate, authorize('admin'), ctrl.removeManufacturerPrice);
 
 module.exports = router;

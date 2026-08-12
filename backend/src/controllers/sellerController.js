@@ -37,11 +37,17 @@ async function validateStockOnlyChange(existing, newItems, userId) {
       err.statusCode = 400;
       throw err;
     }
+    // M15: el stock es por (producto, material) — la línea trae su propio
+    // material, ya no hay un stock_quantity único del producto.
     const [[product]] = await pool.execute(
-      'SELECT name, stock_quantity FROM products WHERE id = ?', [ni.productId],
+      `SELECT p.name, pm.stock_quantity
+         FROM products p
+         LEFT JOIN product_materials pm ON pm.product_id = p.id AND pm.material_id = ?
+        WHERE p.id = ?`,
+      [ni.materialId, ni.productId],
     );
     if (!product || Number(product.stock_quantity) < Number(ni.quantity)) {
-      const err = new Error('No hay stock suficiente para el producto seleccionado');
+      const err = new Error('No hay stock suficiente para el producto/material seleccionado');
       err.statusCode = 400;
       throw err;
     }
@@ -230,21 +236,26 @@ const sellerController = {
   }),
 
   // GET /api/seller/inventory — disponibilidad de productos para armar pedidos.
-  // Trae los 3 precios por material (product_material_prices) en
-  // `materialPrices`: el POS (Fase 6.1) elige el material ANTES de buscar
-  // productos y resuelve el precio de cada línea desde aquí, nunca de un
-  // precio plano de products (D6).
+  // Trae UN precio por material DECLARADO (M2) en `materialPrices`: el POS
+  // (M4) elige el material POR LÍNEA y resuelve el precio de cada una desde
+  // aquí, nunca de un precio plano de products. Cada material trae su
+  // política de color (M6) y su existencia (M15), para que el POS avise
+  // "sin existencia — se fabrica" sin una llamada aparte.
   inventory: asyncHandler(async (req, res) => {
     const { search } = req.query;
     const params = [];
     let where = 'WHERE p.is_active = TRUE';
     if (search) { where += ' AND (p.name LIKE ? OR p.sku LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     const [rows] = await pool.execute(
-      `SELECT p.id, p.name, p.sku, p.stock_quantity, p.availability_days,
-              mp.material, mp.price_cash, mp.price_6msi, mp.price_mayoreo, mp.base_cost
+      `SELECT p.id, p.name, p.sku, p.availability_days, p.wholesale_min_qty,
+              pm.material_id, mat.code, mat.label, mat.color_policy, mat.fixed_color,
+              pm.stock_quantity,
+              mp.price_cash, mp.price_6msi, mp.price_mayoreo, mp.base_cost
        FROM products p
-       LEFT JOIN product_material_prices mp ON mp.product_id = p.id AND mp.base_cost IS NOT NULL
-       ${where} ORDER BY p.name LIMIT 50`,
+       JOIN product_materials pm ON pm.product_id = p.id AND pm.is_active = TRUE
+       JOIN materials mat ON mat.id = pm.material_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = pm.product_id AND mp.material_id = pm.material_id
+       ${where} ORDER BY p.name, mat.sort_order LIMIT 300`,
       params,
     );
     const byProduct = new Map();
@@ -252,18 +263,25 @@ const sellerController = {
       if (!byProduct.has(r.id)) {
         byProduct.set(r.id, {
           id: r.id, name: r.name, sku: r.sku,
-          stock_quantity: r.stock_quantity, availability_days: r.availability_days,
+          availability_days: r.availability_days,
+          wholesaleMinQty: r.wholesale_min_qty != null ? Number(r.wholesale_min_qty) : null,
           materialPrices: [],
         });
       }
-      if (r.material) {
-        byProduct.get(r.id).materialPrices.push({
-          material: r.material,
-          priceCash: Number(r.price_cash),
-          price6msi: Number(r.price_6msi),
-          priceMayoreo: r.price_mayoreo != null ? Number(r.price_mayoreo) : null,
-        });
-      }
+      // isQuoted = false (base_cost NULL): el hueco de M2, se muestra "no
+      // aplica" en el POS, nunca $0.
+      byProduct.get(r.id).materialPrices.push({
+        materialId: r.material_id,
+        code: r.code,
+        label: r.label,
+        colorPolicy: r.color_policy,
+        fixedColor: r.fixed_color,
+        stockQuantity: r.stock_quantity,
+        isQuoted: r.base_cost != null,
+        priceCash: r.price_cash != null ? Number(r.price_cash) : null,
+        price6msi: r.price_6msi != null ? Number(r.price_6msi) : null,
+        priceMayoreo: r.price_mayoreo != null ? Number(r.price_mayoreo) : null,
+      });
     }
     res.json({ data: [...byProduct.values()] });
   }),

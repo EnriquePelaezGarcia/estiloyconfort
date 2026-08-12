@@ -68,9 +68,12 @@ const manufacturerController = {
     const manufacturerId = await manufacturerIdOf(req.user.id);
     if (!manufacturerId) return res.json({ data: [] });
 
+    // M4: el material y el color ya no son del pedido, son de CADA línea —
+    // van en el item, no en la fila de orders.
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
     const [items] = await pool.query(
-      `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready
+      `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
+              oi.material_id, oi.material_label, oi.color
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        WHERE o.order_status IN (${placeholders})
@@ -84,7 +87,7 @@ const manufacturerController = {
     const orderIds = [...new Set(items.map((it) => it.order_id))];
     const [orders] = await pool.query(
       `SELECT id, order_number, customer_name, order_status, expected_delivery_date,
-              manufacturer_due_date, created_at, material, color, notas_fabricante
+              manufacturer_due_date, created_at, notas_fabricante
        FROM orders WHERE id IN (?)
        ORDER BY manufacturer_due_date IS NULL, manufacturer_due_date ASC, created_at ASC`,
       [orderIds],
@@ -97,6 +100,9 @@ const manufacturerController = {
         productSku: it.product_sku,
         quantity: it.quantity,
         isReady: !!it.is_ready,
+        materialId: it.material_id,
+        materialLabel: it.material_label,
+        color: it.color,
       });
     }
     res.json({ data: [...byOrder.values()] });
@@ -152,25 +158,27 @@ const manufacturerController = {
     // Sin JOIN a product_material_prices ni a las vistas: si la consulta no
     // puede alcanzar los precios de venta, no puede filtrarlos por error.
     const [rows] = await pool.execute(
-      `SELECT p.id AS product_id, p.name, p.sku,
-              pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color
-         FROM product_manufacturer_prices pmp
-         JOIN products p ON p.id = pmp.product_id
-        WHERE pmp.manufacturer_id = ? AND pmp.is_active = TRUE
-          AND (pmp.cost_mdf IS NOT NULL OR pmp.cost_melamina_blanca IS NOT NULL OR pmp.cost_melamina_color IS NOT NULL)
-        ORDER BY p.name`,
+      `SELECT p.id AS product_id, p.name, p.sku, pmc.material_id, mat.code, mat.label, pmc.cost
+         FROM product_manufacturer_costs pmc
+         JOIN products p ON p.id = pmc.product_id
+         JOIN materials mat ON mat.id = pmc.material_id
+        WHERE pmc.manufacturer_id = ? AND pmc.is_active = TRUE AND pmc.cost IS NOT NULL
+        ORDER BY p.name, mat.sort_order`,
       [manufacturerId],
     );
-    res.json({
-      data: rows.map((r) => ({
-        productId: r.product_id,
-        name: r.name,
-        sku: r.sku,
-        costMdf: r.cost_mdf != null ? Number(r.cost_mdf) : null,
-        costMelaminaBlanca: r.cost_melamina_blanca != null ? Number(r.cost_melamina_blanca) : null,
-        costMelaminaColor: r.cost_melamina_color != null ? Number(r.cost_melamina_color) : null,
-      })),
-    });
+    const byProduct = new Map();
+    for (const r of rows) {
+      if (!byProduct.has(r.product_id)) {
+        byProduct.set(r.product_id, { productId: r.product_id, name: r.name, sku: r.sku, costs: [] });
+      }
+      byProduct.get(r.product_id).costs.push({
+        materialId: r.material_id,
+        materialCode: r.code,
+        materialLabel: r.label,
+        cost: Number(r.cost),
+      });
+    }
+    res.json({ data: [...byProduct.values()] });
   }),
 
   // PATCH /api/manufacturer/orders/:id/start — mover de 'pending' a 'fabricating'

@@ -27,6 +27,11 @@ const CONFIG: PricingConfigMap = {
   min_margin_alert: 20,
 };
 
+// M9 del plan de catálogo de materiales: calculateWholesalePrice ya no busca
+// el factor por material en CONFIG, lo recibe resuelto. Todos los materiales
+// del fixture original usaban 1.334, el valor no cambia.
+const WHOLESALE_FACTOR = 1.334;
+
 describe('PricingService — paridad con el backend', () => {
   it('Caso 1 — Espejo Vanity / MDF Pintado', () => {
     const prices = PricingService.calculatePrices(1350, 29.3, CONFIG);
@@ -38,7 +43,7 @@ describe('PricingService — paridad con el backend', () => {
     expect(credit?.downPayment).toBe(980);
     expect(credit?.weeklyPayment).toBe(152);
 
-    const wholesale = PricingService.calculateWholesalePrice(1350, 'MDF', CONFIG);
+    const wholesale = PricingService.calculateWholesalePrice(1350, WHOLESALE_FACTOR);
     expect(wholesale).toBe(1801);
 
     const profitPerrucho = PricingService.profitByCost(1350, prices, CONFIG);
@@ -62,12 +67,12 @@ describe('PricingService — paridad con el backend', () => {
     expect(credit?.downPayment).toBe(1414);
     expect(credit?.weeklyPayment).toBe(219);
 
-    const wholesale = PricingService.calculateWholesalePrice(1950, 'MELAMINA_BLANCA', CONFIG);
+    const wholesale = PricingService.calculateWholesalePrice(1950, WHOLESALE_FACTOR);
     expect(wholesale).toBe(2602);
   });
 
   it('RN-15 — utilidad de mayoreo sin IVA ni comisión', () => {
-    const wholesale = PricingService.calculateWholesalePrice(1350, 'MDF', CONFIG);
+    const wholesale = PricingService.calculateWholesalePrice(1350, WHOLESALE_FACTOR);
     const profit = PricingService.wholesaleProfit(1350, wholesale);
     expect(profit?.profit).toBe((wholesale ?? 0) - 1350);
   });
@@ -78,7 +83,7 @@ describe('PricingService — paridad con el backend', () => {
   });
 
   it('calculateWholesalePrice — material sin costo (RN-03) devuelve null', () => {
-    expect(PricingService.calculateWholesalePrice(null, 'MDF', CONFIG)).toBeNull();
-    expect(PricingService.calculateWholesalePrice(0, 'MDF', CONFIG)).toBeNull();
+    expect(PricingService.calculateWholesalePrice(null, WHOLESALE_FACTOR)).toBeNull();
+    expect(PricingService.calculateWholesalePrice(0, WHOLESALE_FACTOR)).toBeNull();
   });
 });

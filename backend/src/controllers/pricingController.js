@@ -1,5 +1,6 @@
 const PricingConfig = require('../models/PricingConfig');
-const { calculatePrices, calculateWholesalePrice, MATERIALS } = require('../utils/pricingCalculator');
+const Material = require('../models/Material');
+const { calculatePrices, calculateWholesalePrice } = require('../utils/pricingCalculator');
 const { syncMaterialPricesAndReprice } = require('../utils/productPricing');
 const { pool } = require('../config/database');
 
@@ -37,11 +38,15 @@ const pricingController = {
    */
   async preview(req, res, next) {
     try {
-      const { base_cost, margin_percentage, material } = req.body || {};
+      const { base_cost, margin_percentage, materialId } = req.body || {};
       const config = await PricingConfig.getMap();
       const prices = calculatePrices(base_cost, margin_percentage, config);
-      const mat = MATERIALS.includes(material) ? material : 'MDF';
-      const price_mayoreo = calculateWholesalePrice(base_cost, mat, config);
+      // M9: el factor de mayoreo se resuelve por material_id; sin uno
+      // explícito se usa el default global (previsualización genérica).
+      const factor = materialId
+        ? await Material.resolveWholesaleFactor(materialId, config)
+        : Number(config.wholesale_factor_default);
+      const price_mayoreo = calculateWholesalePrice(base_cost, factor);
       res.json({ data: { ...prices, price_mayoreo } });
     } catch (err) { next(err); }
   },

@@ -1,69 +1,84 @@
 const { pool } = require('../config/database');
 const PricingConfig = require('../models/PricingConfig');
-const { calculatePrices, calculateWholesalePrice, MATERIALS } = require('./pricingCalculator');
+const Material = require('../models/Material');
+const { calculatePrices, calculateWholesalePrice } = require('./pricingCalculator');
 
 /**
- * Recalcula los precios de un producto en LOS TRES MATERIALES (RN-01…RN-03,
- * RN-10) y los persiste en `product_material_prices`, que es la ÚNICA fuente
- * de verdad de precios (D6 del plan de precios por material y mayoreo).
+ * Recalcula los precios de un producto en LOS MATERIALES QUE DECLARA
+ * (product_materials, M2) y los persiste en `product_material_prices`, que es
+ * la ÚNICA fuente de verdad de precios.
  *
- * Por cada material:
- *   costoBase = MAX(cost_<material>) de los fabricantes activos con
- *               affects_base_cost = TRUE, ignorando NULLs (RN-02 por material, D3).
- *   Si todos son NULL -> el material NO se cotiza: la fila queda con todo en
- *   NULL y la UI debe mostrar "No aplica", nunca $0 (RN-03 / RN-16).
+ * Por cada material declarado:
+ *   costoBase = MAX(cost) de los fabricantes activos con
+ *               affects_base_cost = TRUE, ignorando ausencias (RN-02, M3).
+ *   Si nadie cotiza ese material -> la fila queda con todo en NULL: "no se
+ *   cotiza" (RN-03), nunca $0. Esto YA NO es lo mismo que "no se ofrece": un
+ *   material declarado sin costo es el hueco de captura de M2, visible en
+ *   /api/admin/pricing-gaps — la ausencia de la FILA en product_materials es
+ *   lo que dice "no se ofrece".
  *
- * @returns {Record<string, {baseCost:number|null, prices:object|null}>}
+ * @returns {Record<number, {baseCost:number|null, prices:object|null, priceMayoreo:number|null}>|null}
+ *   keyed por material_id.
  */
 async function syncMaterialPricesAndReprice(productId) {
-  const [[maxRow]] = await pool.execute(
-    `SELECT MAX(cost_mdf)             AS max_mdf,
-            MAX(cost_melamina_blanca) AS max_blanca,
-            MAX(cost_melamina_color)  AS max_color
-       FROM product_manufacturer_prices
-      WHERE product_id = ? AND is_active = TRUE AND affects_base_cost = TRUE`,
-    [productId],
-  );
-
   const [[product]] = await pool.execute(
     'SELECT margin_percentage FROM products WHERE id = ?',
     [productId],
   );
   if (!product) return null;
 
-  const config = await PricingConfig.getMap();
-  const maxByMaterial = {
-    MDF: maxRow?.max_mdf != null ? Number(maxRow.max_mdf) : null,
-    MELAMINA_BLANCA: maxRow?.max_blanca != null ? Number(maxRow.max_blanca) : null,
-    MELAMINA_COLOR: maxRow?.max_color != null ? Number(maxRow.max_color) : null,
-  };
+  const [declaredMaterials] = await pool.execute(
+    'SELECT material_id FROM product_materials WHERE product_id = ?',
+    [productId],
+  );
 
+  const config = await PricingConfig.getMap();
   const result = {};
 
-  for (const material of MATERIALS) {
-    const baseCost = maxByMaterial[material];
-    const validCost = Number.isFinite(baseCost) && baseCost > 0 ? baseCost : null;
+  // Los materiales que el producto YA NO declara se limpian de
+  // product_material_prices: si se desmarcó, no debe seguir cotizado.
+  if (declaredMaterials.length) {
+    const ids = declaredMaterials.map((r) => r.material_id);
+    await pool.execute(
+      `DELETE FROM product_material_prices
+        WHERE product_id = ? AND material_id NOT IN (${ids.map(() => '?').join(',')})`,
+      [productId, ...ids],
+    );
+  } else {
+    await pool.execute('DELETE FROM product_material_prices WHERE product_id = ?', [productId]);
+  }
 
-    const prices = validCost != null
-      ? calculatePrices(validCost, product.margin_percentage, config)
+  for (const { material_id: materialId } of declaredMaterials) {
+    const [[maxRow]] = await pool.execute(
+      `SELECT MAX(cost) AS max_cost
+         FROM product_manufacturer_costs
+        WHERE product_id = ? AND material_id = ? AND is_active = TRUE AND affects_base_cost = TRUE`,
+      [productId, materialId],
+    );
+
+    const rawCost = maxRow?.max_cost != null ? Number(maxRow.max_cost) : null;
+    const baseCost = Number.isFinite(rawCost) && rawCost > 0 ? rawCost : null;
+
+    const prices = baseCost != null
+      ? calculatePrices(baseCost, product.margin_percentage, config)
       : null;
-    const priceMayoreo = validCost != null
-      ? calculateWholesalePrice(validCost, material, config)
-      : null;
 
-    result[material] = { baseCost: validCost, prices, priceMayoreo };
+    const factor = baseCost != null ? await Material.resolveWholesaleFactor(materialId, config) : null;
+    const priceMayoreo = baseCost != null ? calculateWholesalePrice(baseCost, factor) : null;
 
-    // REPLACE INTO deja las 3 filas siempre, aunque queden en NULL: convierte
+    result[materialId] = { baseCost, prices, priceMayoreo };
+
+    // REPLACE INTO deja la fila siempre, aunque quede en NULL: convierte
     // "no se cotiza" en un dato en vez de una ausencia (evita que los JOIN
     // tengan que distinguir "no aplica" de "todavía no se ha calculado").
     await pool.execute(
       `REPLACE INTO product_material_prices
-         (product_id, material, base_cost, price_cash, price_6msi, price_credit, price_mayoreo)
+         (product_id, material_id, base_cost, price_cash, price_6msi, price_credit, price_mayoreo)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         productId,
-        material,
-        validCost,
+        materialId,
+        baseCost,
         prices?.price_cash ?? null,
         prices?.price_6msi ?? null,
         prices?.price_credit ?? null,

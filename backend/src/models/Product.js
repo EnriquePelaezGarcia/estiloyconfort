@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { syncMaterialPricesAndReprice } = require('../utils/productPricing');
 
 const Product = {
   async findAll({ categoryId, search, minPrice, maxPrice, featured, includeInactive = false, page = 1, limit = 12, sort = 'created_at' } = {}) {
@@ -84,9 +85,20 @@ const Product = {
       'SELECT * FROM product_variants WHERE product_id = ? AND is_active = TRUE ORDER BY variant_type, variant_value',
       [id]
     );
-    // D7: la ficha de producto muestra los 3 precios, uno por material.
+    // D7: la ficha de producto muestra un precio por material declarado
+    // (M2). materialId sale de product_materials, no de product_material_prices,
+    // para que un material declarado sin costo capturado (el hueco de M2)
+    // también aparezca, con sus precios en NULL en vez de estar ausente.
     const [materialPrices] = await pool.execute(
-      'SELECT material, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
+      `SELECT pm.material_id, mat.code, mat.label, mat.color_policy, mat.fixed_color,
+              pm.stock_quantity,
+              mp.base_cost, mp.price_cash, mp.price_6msi, mp.price_credit, mp.price_mayoreo
+         FROM product_materials pm
+         JOIN materials mat ON mat.id = pm.material_id
+         LEFT JOIN product_material_prices mp
+                ON mp.product_id = pm.product_id AND mp.material_id = pm.material_id
+        WHERE pm.product_id = ? AND pm.is_active = TRUE
+        ORDER BY mat.sort_order`,
       [id]
     );
 
@@ -112,32 +124,103 @@ const Product = {
     return rows;
   },
 
-  async create(data) {
-    const fields = ['name','slug','sku','category_id','manufacturer_id','description',
-      'material','color',
+  /**
+   * Crea el producto y declara sus materiales (M2) en la MISMA transacción:
+   * un producto nunca debe existir sin su declaración de materiales, aunque
+   * sea vacía. `materialIds` llega marcado a mano desde el paso ② del alta
+   * (§4.2 del plan) — nunca se infiere de dónde hay costo capturado.
+   *
+   * No captura existencias aquí (M15): las filas de product_materials nacen
+   * con stock_quantity = 0; las existencias se capturan aparte, en
+   * *Admin → Inventario*.
+   */
+  async create(data, materialIds = []) {
+    const fields = ['name','slug','sku','category_id','manufacturer_id','description', 'color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
-      'availability_days','margin_percentage',
-      'stock_quantity','stock_alert_level','is_featured'];
+      'availability_days','margin_percentage','wholesale_min_qty',
+      'stock_alert_level','is_featured'];
     const values = fields.map(f => data[f] ?? null);
-    const [result] = await pool.execute(
-      `INSERT INTO products (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`,
-      values
-    );
-    return this.findById(result.insertId, { includeInactive: true });
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [result] = await conn.execute(
+        `INSERT INTO products (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`,
+        values
+      );
+      await syncProductMaterials(conn, result.insertId, materialIds);
+      await conn.commit();
+      // Sin costos de fabricante todavía, las filas quedan en NULL: correcto,
+      // el producto "no se cotiza" hasta que se le asigne un costo (M2).
+      await syncMaterialPricesAndReprice(result.insertId);
+      return this.findById(result.insertId, { includeInactive: true });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   },
 
-  async update(id, data) {
-    const allowed = ['name','slug','sku','category_id','manufacturer_id','description',
-      'material','color',
+  /**
+   * `materialIds`, si se manda, reemplaza la declaración completa de M2 en la
+   * misma transacción que los demás campos. Si se omite, la declaración no
+   * se toca (permite updates parciales — p.ej. solo el margen — sin tener
+   * que reenviar la lista de materiales cada vez).
+   */
+  async update(id, data, materialIds = null) {
+    const allowed = ['name','slug','sku','category_id','manufacturer_id','description', 'color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
-      'availability_days','margin_percentage',
-      'stock_quantity','stock_alert_level','is_featured','is_active'];
+      'availability_days','margin_percentage','wholesale_min_qty',
+      'stock_alert_level','is_featured','is_active'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
-    if (!entries.length) return this.findById(id, { includeInactive: true });
-    const set = entries.map(([k]) => `${k} = ?`).join(', ');
-    await pool.execute(`UPDATE products SET ${set} WHERE id = ?`, [...entries.map(([,v]) => v), id]);
+    if (!entries.length && materialIds === null) return this.findById(id, { includeInactive: true });
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      if (entries.length) {
+        const set = entries.map(([k]) => `${k} = ?`).join(', ');
+        await conn.execute(`UPDATE products SET ${set} WHERE id = ?`, [...entries.map(([,v]) => v), id]);
+      }
+      if (materialIds !== null) {
+        await syncProductMaterials(conn, id, materialIds);
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    // Si cambió la declaración de materiales, product_material_prices debe
+    // ganar/perder filas de inmediato (no esperar a que alguien capture un
+    // costo): un material recién desmarcado no debe seguir cotizado.
+    if (materialIds !== null) await syncMaterialPricesAndReprice(id);
     // includeInactive: tras desactivar (is_active = FALSE) seguimos devolviendo la fila.
     return this.findById(id, { includeInactive: true });
+  },
+
+  /**
+   * Materiales declarados con su existencia (M2 + M15), pensado para la
+   * advertencia de "este material tiene stock ≠ 0" antes de desmarcarlo en
+   * el formulario de alta/edición (§4.2).
+   */
+  async getDeclaredMaterials(id) {
+    const [rows] = await pool.execute(
+      `SELECT pm.material_id, mat.code, mat.label, pm.is_active, pm.stock_quantity
+         FROM product_materials pm
+         JOIN materials mat ON mat.id = pm.material_id
+        WHERE pm.product_id = ?
+        ORDER BY mat.sort_order`,
+      [id],
+    );
+    return rows.map((r) => ({
+      materialId: r.material_id,
+      code: r.code,
+      label: r.label,
+      isActive: !!r.is_active,
+      stockQuantity: r.stock_quantity,
+    }));
   },
 
   async delete(id) {
@@ -176,5 +259,54 @@ const Product = {
     return image || null;
   },
 };
+
+/**
+ * Reemplaza la declaración de materiales de un producto (M2) dentro de una
+ * transacción. Nunca borra a ciegas:
+ *   - Material recién marcado, sin fila previa -> INSERT (stock_quantity = 0).
+ *   - Material ya presente -> is_active = TRUE (por si estaba desmarcado).
+ *   - Material desmarcado CON existencia -> se conserva la fila, solo
+ *     is_active = FALSE. Perder stock_quantity en silencio sería el bug de
+ *     M15 otra vez, esta vez por el lado del alta.
+ *   - Material desmarcado SIN existencia -> DELETE, no queda basura.
+ */
+async function syncProductMaterials(conn, productId, materialIds) {
+  const wanted = new Set((materialIds || []).map(Number));
+
+  const [existing] = await conn.execute(
+    'SELECT material_id, stock_quantity FROM product_materials WHERE product_id = ?',
+    [productId],
+  );
+  const existingIds = new Set(existing.map((r) => r.material_id));
+
+  for (const materialId of wanted) {
+    if (existingIds.has(materialId)) {
+      await conn.execute(
+        'UPDATE product_materials SET is_active = TRUE WHERE product_id = ? AND material_id = ?',
+        [productId, materialId],
+      );
+    } else {
+      await conn.execute(
+        'INSERT INTO product_materials (product_id, material_id, is_active, stock_quantity) VALUES (?, ?, TRUE, 0)',
+        [productId, materialId],
+      );
+    }
+  }
+
+  for (const row of existing) {
+    if (wanted.has(row.material_id)) continue;
+    if (Number(row.stock_quantity) !== 0) {
+      await conn.execute(
+        'UPDATE product_materials SET is_active = FALSE WHERE product_id = ? AND material_id = ?',
+        [productId, row.material_id],
+      );
+    } else {
+      await conn.execute(
+        'DELETE FROM product_materials WHERE product_id = ? AND material_id = ?',
+        [productId, row.material_id],
+      );
+    }
+  }
+}
 
 module.exports = Product;

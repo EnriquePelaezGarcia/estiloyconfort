@@ -27,9 +27,8 @@ function mapDelivery(row) {
     assemblyService: !!row.assembly_service,
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
-    // Especificaciones y notas visibles para el repartidor.
-    material: row.material ?? null,
-    color: row.color ?? null,
+    // M4: el material y el color ya no son del pedido, son de cada línea —
+    // ver `items[].materialLabel` / `items[].color` (findById los agrega).
     notasFabricante: row.notas_fabricante ?? null,
     notasPedido: row.notas_pedido ?? null,
     instruccionesEntrega: row.instrucciones_entrega ?? null,
@@ -41,7 +40,7 @@ const BASE_SELECT = `
          o.delivery_address_lat, o.delivery_address_lng, o.google_maps_url, o.payment_status,
          o.payment_method, o.total_amount, o.payment_amount,
          o.assembly_service, o.assembly_floors, o.assembly_cost,
-         o.material, o.color, o.notas_fabricante, o.notas_pedido, o.instrucciones_entrega
+         o.notas_fabricante, o.notas_pedido, o.instrucciones_entrega
   FROM deliveries dv
   JOIN orders o ON o.id = dv.order_id
 `;
@@ -63,7 +62,7 @@ const Delivery = {
     if (!row) return null;
     const delivery = mapDelivery(row);
     const [items] = await pool.execute(
-      'SELECT id, product_name, product_sku, quantity, variant_selections FROM order_items WHERE order_id = ?',
+      'SELECT id, product_name, product_sku, quantity, variant_selections, material_label, color FROM order_items WHERE order_id = ?',
       [delivery.orderId],
     );
     delivery.items = items.map((it) => ({
@@ -71,6 +70,9 @@ const Delivery = {
       productName: it.product_name,
       productSku: it.product_sku,
       quantity: it.quantity,
+      // M4: material y color son por línea, ya no del pedido completo.
+      materialLabel: it.material_label,
+      color: it.color,
     }));
     return delivery;
   },

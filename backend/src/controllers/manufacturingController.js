@@ -73,8 +73,8 @@ const manufacturingController = {
     const [rows] = await pool.execute(
       `SELECT m.*,
               (SELECT COUNT(*) FROM users u WHERE u.manufacturer_id = m.id) AS user_count,
-              (SELECT COUNT(*) FROM product_manufacturer_prices pmp
-                WHERE pmp.manufacturer_id = m.id AND pmp.is_active = TRUE) AS product_count
+              (SELECT COUNT(DISTINCT pmc.product_id) FROM product_manufacturer_costs pmc
+                WHERE pmc.manufacturer_id = m.id AND pmc.is_active = TRUE) AS product_count
        FROM manufacturers m ${where} ORDER BY m.name`,
     );
     res.json({ data: rows.map(mapManufacturer) });
@@ -245,75 +245,82 @@ const manufacturingController = {
   // ─── CATÁLOGO POR FABRICANTE ─────────────────────────────────────────────────
   // GET /api/manufacturing/catalog?manufacturerId=
   // Un mismo producto se le compra a varios fabricantes, así que aparece una vez
-  // bajo CADA uno, con LOS TRES costos de ese fabricante (D1) y el isBaseCost
-  // calculado POR MATERIAL (D3): un fabricante puede mandar el precio en MDF y
-  // no mandarlo en Melamina Color, aunque sea el mismo producto.
+  // bajo CADA uno, con SUS costos por material (M3) y el isBaseCost calculado
+  // POR MATERIAL (RN-02): un fabricante puede mandar el costo en MDF y no en
+  // Melamina Color, aunque sea el mismo producto.
   catalogByManufacturer: asyncHandler(async (req, res) => {
     const { manufacturerId } = req.query;
-    const conditions = ['p.is_active = TRUE', 'pmp.is_active = TRUE'];
+    const conditions = ['p.is_active = TRUE', 'pmc.is_active = TRUE'];
     const params = [];
-    if (manufacturerId) { conditions.push('pmp.manufacturer_id = ?'); params.push(Number(manufacturerId)); }
+    if (manufacturerId) { conditions.push('pmc.manufacturer_id = ?'); params.push(Number(manufacturerId)); }
     const where = `WHERE ${conditions.join(' AND ')}`;
     const [rows] = await pool.execute(
-      `SELECT p.id, p.name, p.sku, p.stock_quantity,
-              pmp.cost_mdf, pmp.cost_melamina_blanca, pmp.cost_melamina_color,
-              pmp.manufacturer_id, m.name AS manufacturer_name,
+      `SELECT p.id, p.name, p.sku,
+              pmc.material_id, mat.code, mat.label, pmc.cost,
+              pmc.manufacturer_id, m.name AS manufacturer_name,
               c.name AS category_name
        FROM products p
-       JOIN product_manufacturer_prices pmp ON pmp.product_id = p.id
-       JOIN manufacturers m ON m.id = pmp.manufacturer_id
+       JOIN product_manufacturer_costs pmc ON pmc.product_id = p.id
+       JOIN materials mat ON mat.id = pmc.material_id
+       JOIN manufacturers m ON m.id = pmc.manufacturer_id
        LEFT JOIN categories c ON c.id = p.category_id
        ${where}
-       ORDER BY m.name, p.name`,
+       ORDER BY m.name, p.name, mat.sort_order`,
       params,
     );
 
     const productIds = [...new Set(rows.map((r) => r.id))];
-    let baseCostByProduct = new Map();
+    const priceByKey = new Map();
+    const stockByProduct = new Map();
     if (productIds.length) {
       const [mpRows] = await pool.query(
-        `SELECT product_id, material, base_cost, price_cash
+        `SELECT product_id, material_id, base_cost, price_cash
            FROM product_material_prices WHERE product_id IN (?)`,
         [productIds],
       );
-      baseCostByProduct = new Map();
       for (const r of mpRows) {
-        if (!baseCostByProduct.has(r.product_id)) baseCostByProduct.set(r.product_id, {});
-        baseCostByProduct.get(r.product_id)[r.material] = {
+        priceByKey.set(`${r.product_id}:${r.material_id}`, {
           baseCost: r.base_cost != null ? Number(r.base_cost) : null,
           priceCash: r.price_cash != null ? Number(r.price_cash) : null,
-        };
+        });
       }
+      const [stockRows] = await pool.query(
+        `SELECT product_id, SUM(stock_quantity) AS total_stock
+           FROM product_materials WHERE product_id IN (?) GROUP BY product_id`,
+        [productIds],
+      );
+      for (const r of stockRows) stockByProduct.set(r.product_id, Number(r.total_stock));
     }
 
-    const MATERIAL_COLUMN = { MDF: 'cost_mdf', MELAMINA_BLANCA: 'cost_melamina_blanca', MELAMINA_COLOR: 'cost_melamina_color' };
-
-    res.json({
-      data: rows.map((r) => {
-        const materialInfo = baseCostByProduct.get(r.id) || {};
-        const materials = {};
-        for (const [material, column] of Object.entries(MATERIAL_COLUMN)) {
-          const cost = r[column] != null ? Number(r[column]) : null;
-          const mi = materialInfo[material];
-          materials[material] = {
-            cost,
-            isBaseCost: cost != null && mi?.baseCost != null && cost === mi.baseCost,
-            priceCash: mi?.priceCash ?? null,
-            unitMargin: cost != null && mi?.priceCash != null ? Math.round((mi.priceCash - cost) * 100) / 100 : null,
-          };
-        }
-        return {
-          id: r.id,
-          name: r.name,
-          sku: r.sku,
-          stockQuantity: Number(r.stock_quantity),
+    // Un fabricante × producto puede tener costo en varios materiales: se
+    // agrupa por (producto, fabricante) y cada uno trae su desglose por
+    // material, igual que antes.
+    const grouped = new Map();
+    for (const r of rows) {
+      const key = `${r.id}:${r.manufacturer_id}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          id: r.id, name: r.name, sku: r.sku,
+          stockQuantity: stockByProduct.get(r.id) ?? 0,
           manufacturerId: r.manufacturer_id,
           manufacturerName: r.manufacturer_name,
           categoryName: r.category_name ?? null,
-          materials,
-        };
-      }),
-    });
+          materials: {},
+        });
+      }
+      const cost = r.cost != null ? Number(r.cost) : null;
+      const mi = priceByKey.get(`${r.id}:${r.material_id}`);
+      grouped.get(key).materials[r.material_id] = {
+        code: r.code,
+        label: r.label,
+        cost,
+        isBaseCost: cost != null && mi?.baseCost != null && cost === mi.baseCost,
+        priceCash: mi?.priceCash ?? null,
+        unitMargin: cost != null && mi?.priceCash != null ? Math.round((mi.priceCash - cost) * 100) / 100 : null,
+      };
+    }
+
+    res.json({ data: [...grouped.values()] });
   }),
 };
 
