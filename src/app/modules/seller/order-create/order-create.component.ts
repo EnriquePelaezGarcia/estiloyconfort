@@ -7,18 +7,28 @@ import { SellerService } from '../../../core/services/seller.service';
 import { PricingService } from '../../../core/services/pricing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ShippingService } from '../../../core/services/shipping.service';
-import { AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem, MATERIAL_LABELS, OrderItem, OrderStatus, ProductMaterial, SaleScheme } from '../../../core/models/order.model';
+import { MaterialsStore } from '../../../core/services/materials.store';
+import {
+  AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem,
+  InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme,
+} from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
+/**
+ * M4 del plan de catálogo de materiales: cada línea del carrito lleva y
+ * congela su PROPIO material y color — ya no hay un material único de
+ * pedido que repreciara todas las líneas. Es el cambio de UX central de
+ * esta pantalla.
+ */
 interface CartLine {
   product: InventoryItem;
+  materialId: number;
+  color: string | null;
   quantity: number;
-  /** ¿Se fabrica sobre pedido? Nace apagado; lo marca quien vende (D3). */
-  requiresFabrication: boolean;
 }
 
-/** Resumen del cambio de producto para el diálogo de confirmación (D en edición no-pendiente). */
+/** Resumen del cambio de producto para el diálogo de confirmación (edición no-pendiente). */
 interface ChangeSummary {
   removed: OrderItem[];
   added: CartLine[];
@@ -39,6 +49,7 @@ export class OrderCreateComponent implements OnInit {
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  protected materialsStore = inject(MaterialsStore);
 
   protected saving = signal(false);
   protected searchResults = signal<InventoryItem[]>([]);
@@ -58,15 +69,26 @@ export class OrderCreateComponent implements OnInit {
     () => this.isEditing() && this.orderStatus() !== null && this.orderStatus() !== 'pending',
   );
 
-  /** Resultados del buscador visibles: en edición restringida, solo con stock disponible. */
+  /** ¿Tiene el producto AL MENOS UN material con existencia? (edición restringida) */
+  private hasAnyStock(product: InventoryItem): boolean {
+    return product.materialPrices.some((mp) => mp.stockQuantity > 0);
+  }
+
+  /** Resultados del buscador visibles: en edición restringida, solo con stock disponible en algún material. */
   protected availableSearchResults = computed(() =>
     this.isRestrictedEdit()
-      ? this.searchResults().filter((p) => p.stock_quantity > 0)
+      ? this.searchResults().filter((p) => this.hasAnyStock(p))
       : this.searchResults(),
   );
 
+  /** M15.4: se deriva del stock del material ELEGIDO en la línea — nunca se captura a mano. */
+  protected lineRequiresFabrication(line: CartLine): boolean {
+    const mp = line.product.materialPrices.find((m) => m.materialId === line.materialId);
+    return !mp || mp.stockQuantity <= 0;
+  }
+
   /** ¿El carrito tiene algún mueble que se fabrica sobre pedido? */
-  protected hasFabricationLines = computed(() => this.lines().some((l) => l.requiresFabrication));
+  protected hasFabricationLines = computed(() => this.lines().some((l) => this.lineRequiresFabrication(l)));
 
   /**
    * No se puede asignar repartidor mientras el pedido tenga muebles sobre
@@ -85,7 +107,7 @@ export class OrderCreateComponent implements OnInit {
   protected changeSummary = computed<ChangeSummary | null>(() => {
     if (!this.isRestrictedEdit()) return null;
     const oldStock = this.originalItems().filter((it) => !it.requiresFabrication);
-    const newStockLines = this.lines().filter((l) => !l.requiresFabrication);
+    const newStockLines = this.lines().filter((l) => !this.lineRequiresFabrication(l));
     const removed = oldStock.filter(
       (oi) => !newStockLines.some((l) => l.product.id === oi.productId),
     );
@@ -115,9 +137,6 @@ export class OrderCreateComponent implements OnInit {
     assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     expectedDeliveryDate: [''],
-    // Especificaciones del producto y logística de entrega.
-    material: ['MDF' as ProductMaterial, Validators.required],
-    color: ['blanco', Validators.required],
     notasFabricante: [''],
     notasPedido: [''],
     instruccionesEntrega: [''],
@@ -154,43 +173,31 @@ export class OrderCreateComponent implements OnInit {
   protected isLayaway = computed(() => this.paymentMethodSig() === 'layaway');
   /** ¿El método de pago es 6 Meses sin intereses? */
   protected isMsi = computed(() => this.paymentMethodSig() === 'msi');
-  /** RN-10/D5 — venta de contado entre negocios: sin IVA ni comisiones. */
+  /** RN-10/M11-M13 — venta de contado entre negocios: sin IVA ni comisiones (mientras esté activo). */
   protected isWholesale = computed(() => this.paymentMethodSig() === 'wholesale');
 
-  /**
-   * Material activo, como signal (Fase 6.1): es el cambio de UX central de
-   * esta pantalla — elegirlo reprecia TODAS las líneas ya capturadas, sin
-   * recargar ni volver a buscar el producto.
-   */
-  private materialSigRaw = toSignal(this.form.controls.material.valueChanges, {
-    initialValue: this.form.controls.material.value,
-  });
-  protected materialSig = computed<ProductMaterial>(() => this.materialSigRaw() ?? 'MDF');
-  protected readonly materialLabels = MATERIAL_LABELS;
-
-  /** Fila de precios del producto para el material activo, o null si no se cotiza ahí (RN-03). */
-  protected lineMaterialPrice(product: InventoryItem) {
-    const material = this.materialSig();
-    return product.materialPrices.find((mp) => mp.material === material) ?? null;
+  /** Fila de precios de un producto EN EL MATERIAL de esa línea, o null si no se cotiza ahí (RN-03). */
+  protected lineMaterialPrice(line: CartLine): InventoryMaterialPrice | null {
+    return line.product.materialPrices.find((mp) => mp.materialId === line.materialId) ?? null;
   }
 
-  /** Precio unitario según esquema de venta Y material activo. null = no se cotiza (RN-03). */
-  protected unitPrice(product: InventoryItem): number | null {
-    const mp = this.lineMaterialPrice(product);
-    if (!mp) return null;
+  /** Precio unitario según esquema de venta Y material de la línea. null = no se cotiza (RN-03). */
+  protected unitPrice(line: CartLine): number | null {
+    const mp = this.lineMaterialPrice(line);
+    if (!mp || !mp.isQuoted) return null;
     if (this.isWholesale()) return mp.priceMayoreo;
-    if (this.isMsi() && mp.price6msi > 0) return mp.price6msi;
+    if (this.isMsi() && mp.price6msi != null && mp.price6msi > 0) return mp.price6msi;
     return mp.priceCash;
   }
 
-  /** Líneas cuyo producto no se cotiza en el material activo (RN-03): se marcan en rojo, no se borran solas. */
+  /** Líneas cuyo producto no se cotiza en el material elegido (RN-03): se marcan en rojo, no se borran solas. */
   protected unquotedLines = computed(() =>
-    this.lines().filter((l) => this.unitPrice(l.product) === null),
+    this.lines().filter((l) => this.unitPrice(l) === null),
   );
   protected hasUnquotedLines = computed(() => this.unquotedLines().length > 0);
 
   protected total = computed(() =>
-    this.lines().reduce((sum, l) => sum + (this.unitPrice(l.product) ?? 0) * l.quantity, 0),
+    this.lines().reduce((sum, l) => sum + (this.unitPrice(l) ?? 0) * l.quantity, 0),
   );
 
   protected layawayDeadline = computed(() => {
@@ -219,22 +226,6 @@ export class OrderCreateComponent implements OnInit {
         } else {
           floors.setValue(0);
           floors.disable();
-        }
-      });
-
-    // Coherencia material ↔ color (D15 / §6.1b): la melamina blanca solo
-    // existe en blanco, así que el campo se fija y se bloquea. El backend
-    // valida lo mismo (Order.js) — esto es solo la primera defensa.
-    this.form.controls.material.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe((material) => {
-        const color = this.form.controls.color;
-        if (material === 'MELAMINA_BLANCA') {
-          color.setValue('blanco');
-          color.disable();
-        } else {
-          color.enable();
-          if (color.value === 'blanco') color.setValue('');
         }
       });
   }
@@ -292,8 +283,6 @@ export class OrderCreateComponent implements OnInit {
           expectedDeliveryDate: data.expectedDeliveryDate
             ? String(data.expectedDeliveryDate).slice(0, 10)
             : '',
-          material: data.material ?? 'MDF',
-          color: data.color ?? 'blanco',
           notasFabricante: data.notasFabricante ?? '',
           notasPedido: data.notasPedido ?? '',
           instruccionesEntrega: data.instruccionesEntrega ?? '',
@@ -306,24 +295,34 @@ export class OrderCreateComponent implements OnInit {
           this.shippingCp.set(cp);
           if (cp.length === 5) this.fetchShippingQuote(cp);
         }
-        // Nota: al editar, cada línea solo "conoce" el precio que ya tenía
-        // congelado (su material original). Si el vendedor cambia el material
-        // del pedido, estas líneas viejas se marcan como no cotizadas —
-        // deberá quitarlas y volver a buscar el producto en el nuevo material.
+        // M4/M7: cada línea trae su propio material_id + material_label + color
+        // ya congelados — se reconstruye un InventoryItem de una sola fila para
+        // que la línea siga funcionando con el precio que ya tenía.
         this.lines.set(
           (data.items ?? []).map((it) => ({
             product: {
               id: it.productId,
               name: it.productName ?? '',
               sku: it.productSku ?? '',
-              stock_quantity: 0,
               availability_days: 0,
               materialPrices: [
-                { material: data.material ?? 'MDF', priceCash: it.unitPrice, price6msi: it.unitPrice, priceMayoreo: null },
+                {
+                  materialId: it.materialId,
+                  code: '',
+                  label: it.materialLabel ?? '',
+                  colorPolicy: 'free' as const,
+                  fixedColor: null,
+                  stockQuantity: it.requiresFabrication ? 0 : 1,
+                  isQuoted: true,
+                  priceCash: it.unitPrice,
+                  price6msi: it.unitPrice,
+                  priceMayoreo: null,
+                },
               ],
             },
+            materialId: it.materialId,
+            color: it.color ?? null,
             quantity: it.quantity,
-            requiresFabrication: !!it.requiresFabrication,
           })),
         );
       },
@@ -364,55 +363,73 @@ export class OrderCreateComponent implements OnInit {
     });
   }
 
-  /** ¿Se puede modificar (cantidad/quitar/checkbox) esta línea del carrito? */
+  /** ¿Se puede modificar (cantidad/quitar/material) esta línea del carrito? */
   protected canEditLine(line: CartLine): boolean {
-    return !this.isRestrictedEdit() || !line.requiresFabrication;
+    return !this.isRestrictedEdit() || !this.lineRequiresFabrication(line);
   }
 
+  /**
+   * Agrega un producto: trae su material por defecto (M5) — el único
+   * declarado, o el primero cotizado — sin preguntar. El buscador ya NO
+   * deshabilita productos por material: cualquiera se puede agregar.
+   */
   protected addProduct(product: InventoryItem): void {
-    if (this.isRestrictedEdit() && product.stock_quantity <= 0) return;
-    if (!this.lineMaterialPrice(product)) {
-      this.notification.error(`No disponible en ${this.materialLabels[this.materialSig()]}`);
+    if (this.isRestrictedEdit() && !this.hasAnyStock(product)) return;
+    const quoted = product.materialPrices.filter((mp) => mp.isQuoted);
+    if (!quoted.length) {
+      this.notification.error(`"${product.name}" no tiene costo capturado en ningún material.`);
       return;
     }
+    const defaultMaterial = quoted.length === 1 ? quoted[0] : quoted[0];
     this.lines.update((lines) => {
-      const existing = lines.find((l) => l.product.id === product.id);
+      const existing = lines.find((l) => l.product.id === product.id && l.materialId === defaultMaterial.materialId);
       if (existing) {
         if (!this.canEditLine(existing)) return lines;
         return lines.map((l) =>
-          l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l,
+          l === existing ? { ...l, quantity: l.quantity + 1 } : l,
         );
       }
-      // Siempre nace apagado: "se fabrica sobre pedido" lo decide quien vende,
-      // no una heurística. Igual para vendedor y admin.
-      return [...lines, { product, quantity: 1, requiresFabrication: false }];
+      return [...lines, {
+        product,
+        materialId: defaultMaterial.materialId,
+        color: defaultMaterial.colorPolicy === 'fixed' ? defaultMaterial.fixedColor : null,
+        quantity: 1,
+      }];
     });
   }
 
-  protected changeQty(productId: number, delta: number): void {
+  /** Cambia el material de ESA línea (M4): solo esa línea reprecia, no el resto del pedido. */
+  protected changeLineMaterial(index: number, event: Event): void {
+    const materialId = Number((event.target as HTMLSelectElement).value);
     this.lines.update((lines) =>
-      lines.map((l) =>
-        l.product.id === productId && this.canEditLine(l)
+      lines.map((l, i) => {
+        if (i !== index) return l;
+        const mp = l.product.materialPrices.find((m) => m.materialId === materialId);
+        // Al cambiar de material la política de color puede cambiar (M6 §6.2.4):
+        // un color incompatible no se conserva en silencio.
+        const color = mp?.colorPolicy === 'fixed' ? mp.fixedColor : (mp?.colorPolicy === 'required' ? null : l.color);
+        return { ...l, materialId, color };
+      }),
+    );
+  }
+
+  protected changeLineColor(index: number, event: Event): void {
+    const color = (event.target as HTMLInputElement).value;
+    this.lines.update((lines) => lines.map((l, i) => (i === index ? { ...l, color } : l)));
+  }
+
+  protected changeQty(index: number, delta: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) =>
+        i === index && this.canEditLine(l)
           ? { ...l, quantity: Math.max(1, l.quantity + delta) }
           : l,
       ),
     );
   }
 
-  protected removeLine(productId: number): void {
-    this.lines.update((lines) =>
-      lines.filter((l) => l.product.id !== productId || !this.canEditLine(l)),
-    );
-  }
-
-  /** Marca/desmarca "Se fabrica sobre pedido" (D3). Bloqueado en edición restringida. */
-  protected toggleFabrication(productId: number): void {
-    if (this.isRestrictedEdit()) return;
-    this.lines.update((lines) =>
-      lines.map((l) =>
-        l.product.id === productId ? { ...l, requiresFabrication: !l.requiresFabrication } : l,
-      ),
-    );
+  protected removeLine(index: number): void {
+    this.lines.update((lines) => lines.filter((l, i) => i !== index || !this.canEditLine(l)));
   }
 
   protected submit(): void {
@@ -432,8 +449,8 @@ export class OrderCreateComponent implements OnInit {
     }
     if (this.hasUnquotedLines()) {
       this.notification.error(
-        `Estos muebles no se cotizan en ${this.materialLabels[this.materialSig()]}: ` +
-          `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material.`,
+        `Estos muebles no se cotizan en el material elegido: ` +
+          `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material de esa línea.`,
       );
       return;
     }
@@ -452,18 +469,20 @@ export class OrderCreateComponent implements OnInit {
       // El servidor calcula el costo del armado con las tarifas vigentes.
       assemblyService: !!raw.assemblyService,
       assemblyFloors: this.assemblyFloorsValue(),
-      material: raw.material ?? null,
-      color: raw.color?.trim() || 'blanco',
       notasFabricante: raw.notasFabricante?.trim() || null,
       notasPedido: raw.notasPedido?.trim() || null,
       instruccionesEntrega: raw.instruccionesEntrega?.trim() || null,
+      // M4: cada línea manda su propio material_id + color. requiresFabrication
+      // NO se manda: el backend lo DERIVA del stock (producto,material) al
+      // crear la línea (M15.4) — capturarlo a mano ya no tiene sentido.
       items: this.lines().map((l) => ({
         productId: l.product.id,
+        materialId: l.materialId,
+        color: l.color,
         quantity: l.quantity,
         // El backend recalcula el precio autoritativo por esquema y material
         // (RN-01…RN-10); este valor es solo para no romper el tipo del payload.
-        unitPrice: this.unitPrice(l.product) ?? 0,
-        requiresFabrication: l.requiresFabrication,
+        unitPrice: this.unitPrice(l) ?? 0,
       })),
     };
 
