@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { AdminService } from '../../../core/services/admin.service';
+import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { ProfitMatrixRow } from '../../../core/models/order.model';
@@ -19,10 +20,14 @@ import { ProfitMatrixRow } from '../../../core/models/order.model';
 })
 export class ProfitMatrixComponent implements OnInit {
   private adminService = inject(AdminService);
+  private sellerService = inject(SellerService);
   private notification = inject(NotificationService);
   private materialsStore = inject(MaterialsStore);
 
   protected readonly materials = this.materialsStore.active;
+
+  /** M11 — la columna Mayoreo se oculta mientras el módulo esté apagado. */
+  protected wholesaleEnabled = signal(false);
 
   protected rows = signal<ProfitMatrixRow[]>([]);
   protected minMarginAlert = signal(20);
@@ -46,6 +51,10 @@ export class ProfitMatrixComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.sellerService.getCreditConfig().subscribe({
+      next: ({ data }) => this.wholesaleEnabled.set(data.wholesaleEnabled),
+      error: () => {},
+    });
   }
 
   protected load(): void {

@@ -21,9 +21,10 @@ const CONFIG: PricingConfigMap = {
   credit_weeks: 12,
   assembly_base: 150,
   assembly_per_floor: 50,
-  wholesale_factor_mdf: 1.334,
-  wholesale_factor_blanca: 1.334,
-  wholesale_factor_color: 1.334,
+  wholesale_factor_default: 1.334,
+  wholesale_enabled: 0,
+  wholesale_min_qty: 6,
+  wholesale_price_includes_iva: 0,
   min_margin_alert: 20,
 };
 

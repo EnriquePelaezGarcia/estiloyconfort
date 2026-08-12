@@ -39,7 +39,9 @@
         <tr>
           <th>Producto</th><th>Material</th><th>Fabricante</th><th class="num">Costo</th>
           <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">6 MSI</th>
-          <th class="num">Crédito</th><th class="num">Mayoreo</th><th class="num">Margen</th>
+          <th class="num">Crédito</th>
+          @if (wholesaleEnabled()) { <th class="num">Mayoreo</th> }
+          <th class="num">Margen</th>
         </tr>
       </thead>
       <tbody>
@@ -56,9 +58,11 @@
             <td data-label="Tarjeta" class="num">{{ r.card | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="6 MSI" class="num">{{ r.msi | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Crédito" class="num">{{ r.credit | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
-            <td data-label="Mayoreo" class="num">
-              @if (r.wholesale !== null) { {{ r.wholesale | currency:'MXN':'symbol-narrow':'1.2-2' }} } @else { — }
-            </td>
+            @if (wholesaleEnabled()) {
+              <td data-label="Mayoreo" class="num">
+                @if (r.wholesale !== null) { {{ r.wholesale | currency:'MXN':'symbol-narrow':'1.2-2' }} } @else { — }
+              </td>
+            }
             <td data-label="Margen" class="num">
               <span class="badge" [class]="r.alertLow ? 'badge--red' : 'badge--green'">
                 {{ r.marginPct }}%

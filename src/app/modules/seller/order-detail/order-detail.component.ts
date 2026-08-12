@@ -104,6 +104,27 @@ export class OrderDetailComponent implements OnInit {
   /** ¿El pedido es Apartado? */
   protected isLayaway = computed(() => this.order()?.paymentMethod === 'layaway');
 
+  /** ¿El pedido se vendió a Mayoreo? */
+  protected isWholesale = computed(() => this.order()?.paymentMethod === 'wholesale');
+
+  /**
+   * M13 — % de IVA vigente y si el precio de mayoreo ya lo incluye. Se
+   * consulta al cargar (no viaja congelado en el pedido): es la tasa actual,
+   * igual que en el POS al vender.
+   */
+  private ivaRate = signal(16);
+  protected wholesalePriceIncludesIva = signal(false);
+
+  /**
+   * M13 — desglose del ticket cuando el esquema es Mayoreo: el precio de
+   * lista es SIN IVA por default, así que el ticket lo suma siempre, aunque
+   * el cliente no pida factura.
+   */
+  protected wholesaleIvaAmount = computed(() => {
+    if (!this.isWholesale() || this.wholesalePriceIncludesIva()) return 0;
+    return this.productsSubtotal() * (this.ivaRate() / 100);
+  });
+
   /** Pago inicial pendiente por cubrir (0 si ya está cubierto o no es crédito). */
   protected downPaymentRemaining = computed(() => {
     const o = this.order();
@@ -180,6 +201,14 @@ export class OrderDetailComponent implements OnInit {
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.load(id);
+
+    this.sellerService.getCreditConfig().subscribe({
+      next: ({ data }) => {
+        this.ivaRate.set(data.iva);
+        this.wholesalePriceIncludesIva.set(data.wholesalePriceIncludesIva);
+      },
+      error: () => {},
+    });
   }
 
   protected get isAdmin(): boolean {

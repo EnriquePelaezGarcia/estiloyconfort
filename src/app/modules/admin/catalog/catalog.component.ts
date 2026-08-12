@@ -106,6 +106,8 @@ export class CatalogComponent implements OnInit {
   protected canManage = computed(() => this.auth.userRole() === 'admin');
 
   protected pricingConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
+  /** M11 — la fila Mayoreo del modal de costos se oculta mientras el módulo esté apagado. */
+  protected wholesaleEnabled = computed(() => this.pricingConfig().wholesale_enabled === 1);
 
   /** Fabricantes activos, para armar la tabla de costos del modal. */
   protected manufacturers = signal<Manufacturer[]>([]);

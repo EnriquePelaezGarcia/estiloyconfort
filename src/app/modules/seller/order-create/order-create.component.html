@@ -58,7 +58,9 @@
           <option value="msi">Meses sin intereses</option>
           <option value="store_credit">Crédito tienda</option>
           <option value="layaway">Apartado</option>
-          <option value="wholesale">Mayoreo</option>
+          @if (showWholesaleOption()) {
+            <option value="wholesale">Mayoreo</option>
+          }
         </select>
         @if (isWholesale()) {
           <p class="field__hint">Precio de mayoreo — venta de contado entre negocios (sin IVA ni comisión). Solo efectivo o transferencia.</p>
@@ -268,6 +270,12 @@
                 </span>
               }
 
+              @if (lineWholesaleShortfall(l) > 0) {
+                <span class="cart-line__fabrication cart-line__fabrication--alert">
+                  <span class="material-symbols-outlined">warning</span>
+                  Mayoreo exige mínimo {{ l.product.wholesaleMinQty ?? wholesaleMinQtyGlobal() }} — faltan {{ lineWholesaleShortfall(l) }}
+                </span>
+              }
               @if (lineRequiresFabrication(l)) {
                 <span class="cart-line__fabrication cart-line__fabrication--alert">
                   <span class="material-symbols-outlined">schedule</span>
@@ -346,6 +354,22 @@
             <span class="material-symbols-outlined">credit_card</span>
             Se aplica el precio a 6 meses sin intereses del catálogo.
           </p>
+        }
+        @if (isWholesale() && !wholesalePriceIncludesIva()) {
+          <!-- M13: el precio de lista de Mayoreo es SIN IVA — el ticket lo
+               desglosa siempre, aunque el cliente no pida factura. -->
+          <div class="cart-total cart-total--sub">
+            <span>Subtotal Mayoreo (sin IVA)</span>
+            <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="cart-total cart-total--sub">
+            <span>IVA (se suma al facturar)</span>
+            <span class="cart-total__amount">{{ wholesaleIva() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="grand-total">
+            <span>Total con IVA</span>
+            <span class="grand-total__amount">{{ (total() + wholesaleIva()) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
         }
       }
 

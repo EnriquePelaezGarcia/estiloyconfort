@@ -210,6 +210,33 @@ export class OrderCreateComponent implements OnInit {
   /** Parámetros del crédito en tienda (interés, inicial, semanas). */
   private creditConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
 
+  /** M11 — el esquema Mayoreo solo se ofrece si el negocio lo prendió. */
+  protected wholesaleEnabled = computed(() => this.creditConfig().wholesale_enabled === 1);
+  /**
+   * Si se apaga wholesale_enabled después de que un pedido ya se vendió a
+   * Mayoreo, la opción se sigue mostrando (sólo para ese pedido en edición)
+   * — de lo contrario el <select> lo cambiaría de esquema en silencio.
+   */
+  protected showWholesaleOption = computed(() => this.wholesaleEnabled() || this.isWholesale());
+  /** M13 — el precio de mayoreo es SIN IVA (default): el ticket lo desglosa. */
+  protected wholesalePriceIncludesIva = computed(() => this.creditConfig().wholesale_price_includes_iva === 1);
+  private ivaRate = computed(() => this.creditConfig().iva);
+  /** M13 — desglose del total cuando el esquema es Mayoreo y el precio no incluye IVA. */
+  protected wholesaleIva = computed(() =>
+    this.isWholesale() && !this.wholesalePriceIncludesIva() ? this.total() * (this.ivaRate() / 100) : 0,
+  );
+
+  /** M12 — mínimo de mayoreo por línea (override del producto o el global). */
+  protected wholesaleMinQtyGlobal = computed(() => this.creditConfig().wholesale_min_qty);
+  protected lineWholesaleShortfall(line: CartLine): number {
+    if (!this.isWholesale()) return 0;
+    const min = line.product.wholesaleMinQty ?? this.wholesaleMinQtyGlobal();
+    return Math.max(0, min - line.quantity);
+  }
+  protected wholesaleShortLines = computed(() =>
+    this.isWholesale() ? this.lines().filter((l) => this.lineWholesaleShortfall(l) > 0) : [],
+  );
+
   /** Plan de crédito calculado en vivo a partir del total de contado. */
   protected creditQuote = computed(() =>
     this.isCredit() ? PricingService.calculateCredit(this.total(), this.creditConfig()) : null,
@@ -258,6 +285,10 @@ export class OrderCreateComponent implements OnInit {
           credit_initial_pct: data.creditInitialPct,
           credit_weeks: data.creditWeeks,
           rounding_step: data.roundingStep,
+          iva: data.iva,
+          wholesale_enabled: data.wholesaleEnabled ? 1 : 0,
+          wholesale_min_qty: data.wholesaleMinQty,
+          wholesale_price_includes_iva: data.wholesalePriceIncludesIva ? 1 : 0,
         }),
       error: () => {},
     });
@@ -452,6 +483,15 @@ export class OrderCreateComponent implements OnInit {
         `Estos muebles no se cotizan en el material elegido: ` +
           `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material de esa línea.`,
       );
+      return;
+    }
+    // M12 — se valida también aquí, en vivo, aunque el backend es la defensa
+    // real: no es la única (§5.2 del plan).
+    if (this.wholesaleShortLines().length) {
+      const detail = this.wholesaleShortLines()
+        .map((l) => `${l.product.name} (faltan ${this.lineWholesaleShortfall(l)})`)
+        .join(', ');
+      this.notification.error(`Mayoreo exige cantidad mínima por línea: ${detail}.`);
       return;
     }
     const raw = this.form.getRawValue();

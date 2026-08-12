@@ -201,7 +201,8 @@ const sellerController = {
     res.status(201).json({ data: result, message: 'Pago registrado' });
   }),
 
-  // GET /api/seller/credit-config — parámetros del crédito en tienda para el POS
+  // GET /api/seller/credit-config — parámetros del crédito en tienda y de
+  // Mayoreo (M11-M13) para el POS y el ticket.
   creditConfig: asyncHandler(async (req, res) => {
     const config = await PricingConfig.getMap();
     res.json({
@@ -210,6 +211,10 @@ const sellerController = {
         creditInitialPct: Number(config.credit_initial_pct),
         creditWeeks: Number(config.credit_weeks),
         roundingStep: Number(config.rounding_step),
+        iva: Number(config.iva),
+        wholesaleEnabled: Number(config.wholesale_enabled) === 1,
+        wholesaleMinQty: Number(config.wholesale_min_qty),
+        wholesalePriceIncludesIva: Number(config.wholesale_price_includes_iva) === 1,
       },
     });
   }),

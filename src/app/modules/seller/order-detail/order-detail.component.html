@@ -115,7 +115,15 @@
             <span>{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
         }
-        <div class="totals__row"><span>{{ isCredit() ? 'Precio a crédito' : 'Total' }}</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        @if (isWholesale() && !wholesalePriceIncludesIva()) {
+          <!-- M13: el precio de lista de Mayoreo es SIN IVA — el ticket lo
+               desglosa siempre, aunque el cliente no pida factura. -->
+          <div class="totals__row"><span>Subtotal Mayoreo (sin IVA)</span><span>{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+          <div class="totals__row"><span>IVA (se suma al facturar)</span><span>{{ wholesaleIvaAmount() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+          <div class="totals__row"><span>Total con IVA</span><span class="totals__amount">{{ (o.totalAmount + wholesaleIvaAmount()) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        } @else {
+          <div class="totals__row"><span>{{ isCredit() ? 'Precio a crédito' : 'Total' }}</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+        }
         <div class="totals__row"><span>Pagado</span><span>{{ o.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         <div class="totals__row totals__row--balance"><span>Saldo</span><span>{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
       </div>

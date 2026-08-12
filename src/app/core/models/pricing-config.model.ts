@@ -97,10 +97,21 @@ export interface CreditQuote {
   weeks: number;
 }
 
-/** Parámetros del crédito en tienda que consume el Punto de Venta. */
+/**
+ * Parámetros del crédito en tienda y de Mayoreo (M11-M13) que consume el
+ * Punto de Venta y el ticket — es el subconjunto de `pricing_config`
+ * accesible a vendedor (no solo admin).
+ */
 export interface CreditConfig {
   creditInterest: number;
   creditInitialPct: number;
   creditWeeks: number;
   roundingStep: number;
+  iva: number;
+  /** M11 — con esto en false, "Mayoreo" no aparece como condición de venta. */
+  wholesaleEnabled: boolean;
+  /** M12 — mínimo global (products.wholesaleMinQty lo puede sobreescribir). */
+  wholesaleMinQty: number;
+  /** M13 — false (default): el precio de mayoreo es SIN IVA y se suma al facturar. */
+  wholesalePriceIncludesIva: boolean;
 }

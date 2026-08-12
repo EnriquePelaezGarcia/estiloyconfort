@@ -16,7 +16,7 @@
     </a>
 
     <nav class="sidebar__nav">
-      @for (item of navItems; track item.label) {
+      @for (item of navItems(); track item.label) {
         @if (item.soon) {
           <span class="nav-link nav-link--disabled" aria-disabled="true">
             <span class="material-symbols-outlined">{{ item.icon }}</span>

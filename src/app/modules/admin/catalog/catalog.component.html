@@ -359,12 +359,14 @@
               <span class="costs__profit">{{ money(computedPricesByMaterial()[materialId].price_credit) }}</span>
             }
           </div>
-          <div class="costs__row costs__row--summary">
-            <span class="costs__name">Mayoreo</span>
-            @for (materialId of selectedMaterialIdsList(); track materialId) {
-              <span class="costs__profit">{{ money(computedWholesaleByMaterial()[materialId]) }}</span>
-            }
-          </div>
+          @if (wholesaleEnabled()) {
+            <div class="costs__row costs__row--summary">
+              <span class="costs__name">Mayoreo</span>
+              @for (materialId of selectedMaterialIdsList(); track materialId) {
+                <span class="costs__profit">{{ money(computedWholesaleByMaterial()[materialId]) }}</span>
+              }
+            </div>
+          }
         </div>
         @if (targetMaterialIdValue() !== null && computedCreditByMaterial()[targetMaterialIdValue()!]; as credit) {
           <p class="price-preview__hint">
