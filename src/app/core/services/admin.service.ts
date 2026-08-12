@@ -14,12 +14,12 @@ import {
   FinanceMetric,
   FinancesSummary,
   InventoryReportRow,
+  Material,
   Order,
   OrderStatus,
   Paginated,
   PaymentTypeBreakdown,
   PriceListRow,
-  ProductMaterial,
   ProfitMatrixRow,
   SalesReportRow,
   Transaction,
@@ -28,9 +28,33 @@ import {
 
 /** Filtros comunes a las 3 listas de precios por material (Fase 5). */
 export interface MaterialListFilters {
-  material?: ProductMaterial;
+  materialId?: number;
   search?: string;
   categoria?: string;
+}
+
+/** Fila de inventario por (producto, material) — M15. */
+export interface InventoryRow {
+  productId: number;
+  name: string;
+  sku: string;
+  materialId: number;
+  materialCode: string;
+  materialLabel: string;
+  stockQuantity: number;
+  baseCost: number | null;
+  priceCash: number | null;
+  stockValue: number | null;
+}
+
+/** Material declarado sin costo capturado por ningún fabricante (M2). */
+export interface PricingGapRow {
+  productId: number;
+  productName: string;
+  sku: string | null;
+  materialId: number;
+  materialCode: string;
+  materialLabel: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -161,7 +185,7 @@ export class AdminService {
 
   private materialParams(filters: MaterialListFilters): Record<string, string> {
     const params: Record<string, string> = {};
-    if (filters.material) params['material'] = filters.material;
+    if (filters.materialId) params['materialId'] = String(filters.materialId);
     if (filters.search) params['search'] = filters.search;
     if (filters.categoria) params['categoria'] = filters.categoria;
     return params;
@@ -188,5 +212,61 @@ export class AdminService {
       '/admin/profit-matrix',
       this.materialParams(filters),
     );
+  }
+
+  // ===== Materiales (M1, M8) =====
+
+  getMaterials(includeInactive = false): Observable<{ data: Material[] }> {
+    return this.api.get<{ data: Material[] }>(
+      '/admin/materials',
+      includeInactive ? { includeInactive: 'true' } : undefined,
+    );
+  }
+
+  createMaterial(payload: {
+    code: string; label: string; colorPolicy: string; fixedColor?: string | null;
+    wholesaleFactor?: number | null; sortOrder?: number;
+  }): Observable<{ data: Material }> {
+    return this.api.post<{ data: Material }>('/admin/materials', payload);
+  }
+
+  updateMaterial(id: number, payload: Partial<{
+    label: string; colorPolicy: string; fixedColor: string | null;
+    wholesaleFactor: number | null; sortOrder: number;
+  }>): Observable<{ data: Material }> {
+    return this.api.put<{ data: Material }>(`/admin/materials/${id}`, payload);
+  }
+
+  /** M8: nunca DELETE — se desactiva/activa. */
+  deactivateMaterial(id: number): Observable<{ data: Material }> {
+    return this.api.put<{ data: Material }>(`/admin/materials/${id}/deactivate`, {});
+  }
+
+  activateMaterial(id: number): Observable<{ data: Material }> {
+    return this.api.put<{ data: Material }>(`/admin/materials/${id}/activate`, {});
+  }
+
+  /** "Usado en N productos, M pedidos" antes de desactivar (M8). */
+  getMaterialUsage(id: number): Observable<{ data: { products: number; orders: number } }> {
+    return this.api.get<{ data: { products: number; orders: number } }>(`/admin/materials/${id}/usage`);
+  }
+
+  /** Materiales declarados sin costo capturado por ningún fabricante (M2). */
+  getPricingGaps(): Observable<{ data: PricingGapRow[] }> {
+    return this.api.get<{ data: PricingGapRow[] }>('/admin/pricing-gaps');
+  }
+
+  // ===== Inventario por (producto, material) — M15 =====
+
+  getInventory(filters: { search?: string; materialId?: number; onlyWithStock?: boolean } = {}): Observable<{ data: InventoryRow[]; totalValue: number }> {
+    const params: Record<string, string> = {};
+    if (filters.search) params['search'] = filters.search;
+    if (filters.materialId) params['materialId'] = String(filters.materialId);
+    if (filters.onlyWithStock) params['onlyWithStock'] = 'true';
+    return this.api.get<{ data: InventoryRow[]; totalValue: number }>('/admin/inventory', params);
+  }
+
+  updateInventory(items: Array<{ productId: number; materialId: number; stockQuantity: number }>): Observable<{ message: string }> {
+    return this.api.put<{ message: string }>('/admin/inventory', { items });
   }
 }

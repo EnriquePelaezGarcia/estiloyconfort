@@ -18,7 +18,8 @@ export type PaymentMethod = 'cash' | 'card' | 'msi' | 'store_credit' | 'transfer
 
 /**
  * Condición de venta del pedido (qué precio aplica y qué reglas de cobro).
- * 'wholesale' (RN-10, D5) aún no tiene UI en el POS — el backend ya la acepta.
+ * 'wholesale' (RN-10, M9-M13) aún no tiene UI en el POS — el backend ya la
+ * acepta, apagada detrás de `wholesale_enabled` (M11).
  */
 export type SaleScheme = 'cash' | 'msi' | 'store_credit' | 'layaway' | 'wholesale';
 
@@ -26,22 +27,34 @@ export type SaleScheme = 'cash' | 'msi' | 'store_credit' | 'layaway' | 'wholesal
 export type PaymentInstrument = 'cash' | 'card' | 'transfer' | 'msi';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
-/**
- * Material del mueble (mismo ENUM en orders, products y order_items).
- * Define el precio de venta (RN-01…RN-03 del motor de precios): un mismo
- * producto tiene hasta 3 costos/precios distintos, uno por material.
- */
-export type ProductMaterial = 'MDF' | 'MELAMINA_BLANCA' | 'MELAMINA_COLOR';
-
-/** Orden de presentación en selects y tablas. Fuente única de verdad. */
-export const MATERIALS: readonly ProductMaterial[] = ['MDF', 'MELAMINA_BLANCA', 'MELAMINA_COLOR'];
-
-export const MATERIAL_LABELS: Record<ProductMaterial, string> = {
-  MDF: 'MDF Pintado',
-  MELAMINA_BLANCA: 'Melamina Blanca',
-  MELAMINA_COLOR: 'Melamina Color',
-};
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+/**
+ * Política de captura de color de un material (M6 §6.2): dato, no código.
+ *   - 'fixed'    -> el campo se rellena con `fixedColor` y se deshabilita.
+ *   - 'required' -> obligatorio.
+ *   - 'free'     -> editable y opcional.
+ */
+export type ColorPolicy = 'free' | 'fixed' | 'required';
+
+/**
+ * Catálogo dinámico de materiales (M1 del plan de catálogo de materiales).
+ * Reemplaza el `ENUM('MDF','MELAMINA_BLANCA','MELAMINA_COLOR')` cableado:
+ * dar de alta un material nuevo es un registro en `materials`, no una
+ * migración. Las llaves foráneas del resto del sistema usan `id`.
+ */
+export interface Material {
+  id: number;
+  code: string;
+  label: string;
+  colorPolicy: ColorPolicy;
+  fixedColor: string | null;
+  /** M9: NULL = usa `wholesale_factor_default` de pricing_config. */
+  wholesaleFactor: number | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+}
 
 export interface OrderItem {
   id?: number;
@@ -57,14 +70,22 @@ export interface OrderItem {
   /** Quién marcó listo el item y cuándo (null si nadie lo ha marcado). */
   readyByName?: string | null;
   readyAt?: string | null;
-  /** TRUE si el mueble se fabrica sobre pedido (no admite cambio en pedidos ya cobrados). */
+  /**
+   * Material y color, elegidos y CONGELADOS por línea (M4/M7) — ya no son
+   * del pedido completo. `materialLabel` es el snapshot histórico: renombrar
+   * un material en el catálogo no reescribe los tickets ya impresos.
+   */
+  materialId: number;
+  materialLabel?: string;
+  color?: string | null;
+  /** TRUE si el mueble se fabrica sobre pedido; se DERIVA del stock de (producto, material) al crear la línea (M15.4), no se captura a mano. */
   requiresFabrication?: boolean;
   /** Fabricante al que se le compra este item, si el admin ya lo asignó. */
   manufacturerId?: number | null;
   manufacturerName?: string | null;
   /** Costo congelado al asignar el fabricante. */
   unitCost?: number | null;
-  /** Fabricantes con costo registrado para este producto (solo en el detalle de admin). */
+  /** Fabricantes con costo registrado para este producto EN ESE MATERIAL (solo en el detalle de admin). */
   manufacturerOptions?: ManufacturerOption[];
 }
 
@@ -120,10 +141,6 @@ export interface Order {
   assemblyFloors?: number;
   /** Costo del armado cobrado en el pedido (snapshot de la tarifa vigente). */
   assemblyCost?: number;
-  /** Material del mueble (MDF o Melamina). */
-  material?: ProductMaterial | null;
-  /** Color de pintura (MDF) o acabado/veta (Melamina). */
-  color?: string | null;
   /** Especificaciones para quien surte o almacena el producto terminado. */
   notasFabricante?: string | null;
   /** Notas del pedido; se imprimen en el ticket del cliente. */
@@ -164,17 +181,17 @@ export interface CreateOrderRequest {
   /** El servidor calcula el costo del armado con las tarifas vigentes; solo se envía flag + pisos. */
   assemblyService?: boolean;
   assemblyFloors?: number;
-  material?: ProductMaterial | null;
-  color?: string | null;
   notasFabricante?: string | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
   items: Array<{
     productId: number;
+    /** M4: el material se elige POR LÍNEA, ya no hay un material de pedido. */
+    materialId: number;
+    color?: string | null;
     quantity: number;
     unitPrice: number;
     variantSelections?: Record<string, string> | null;
-    requiresFabrication?: boolean;
   }>;
 }
 
@@ -198,9 +215,17 @@ export interface SellerDashboard {
 
 /** Precio de un producto en un material concreto, para el buscador del POS. */
 export interface InventoryMaterialPrice {
-  material: ProductMaterial;
-  priceCash: number;
-  price6msi: number;
+  materialId: number;
+  code: string;
+  label: string;
+  colorPolicy: ColorPolicy;
+  fixedColor: string | null;
+  /** Existencia de ESTE material (M15). 0 o negativo -> se fabrica (M15.4), nunca bloquea la venta. */
+  stockQuantity: number;
+  /** false = declarado pero sin costo capturado por ningún fabricante (M2) o no cotizado (RN-03). */
+  isQuoted: boolean;
+  priceCash: number | null;
+  price6msi: number | null;
   priceMayoreo: number | null;
 }
 
@@ -208,9 +233,10 @@ export interface InventoryItem {
   id: number;
   name: string;
   sku: string;
-  stock_quantity: number;
   availability_days: number;
-  /** Los materiales en los que este producto SÍ se cotiza (RN-03). */
+  /** Override de cantidad mínima de mayoreo; NULL = usa el global (M12). */
+  wholesaleMinQty?: number | null;
+  /** Un elemento por material DECLARADO (M2), cotizado o no. */
   materialPrices: InventoryMaterialPrice[];
 }
 
@@ -238,12 +264,18 @@ export interface DeliveryAssignment {
   assemblyService?: boolean;
   assemblyFloors?: number;
   assemblyCost?: number;
-  material?: ProductMaterial | null;
-  color?: string | null;
   notasFabricante?: string | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
-  items?: Array<{ id: number; productName: string; productSku: string; quantity: number }>;
+  /** M4: material y color son por línea, ya no del pedido completo. */
+  items?: Array<{
+    id: number;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    materialLabel?: string | null;
+    color?: string | null;
+  }>;
 }
 
 /** Tarifas vigentes del servicio de armado. */
@@ -299,10 +331,18 @@ export interface ManufacturerOrder {
   /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. */
   manufacturer_due_date: string | null;
   created_at: string;
-  material?: ProductMaterial | null;
-  color?: string | null;
   notas_fabricante?: string | null;
-  items: Array<{ id: number; productName: string; productSku: string; quantity: number; isReady: boolean }>;
+  /** M4: material y color son por línea (item), ya no del pedido. */
+  items: Array<{
+    id: number;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    isReady: boolean;
+    materialId?: number | null;
+    materialLabel?: string | null;
+    color?: string | null;
+  }>;
 }
 
 // ===== Admin (Fase 4 diferida) =====
@@ -386,30 +426,34 @@ export interface SalesReportRow {
   seller: string | null;
 }
 
+/**
+ * M15.5: una fila por (producto, material) CON EXISTENCIA, no una por
+ * producto. Un producto con stock en 2 materiales aporta 2 renglones.
+ */
 export interface InventoryReportRow {
   sku: string;
   name: string;
   category: string | null;
+  material_code: string;
+  material_label: string;
   stock_quantity: number;
   stock_alert_level: number;
-  /** null = el producto no se cotiza en el material de su stock (RN-03). */
+  /** null = existencia sin costo capturado por ningún fabricante (M2/RN-03). */
   base_cost: number | null;
   price_cash: number | null;
   stock_value: number;
 }
 
 /**
- * Fila del catálogo propio del fabricante (D14, portal de solo lectura):
- * SOLO sus 3 costos por material. Nunca precio de venta, costo base ni
- * margen — esas columnas no existen en esta respuesta.
+ * Fila del catálogo propio del fabricante (H7, portal de solo lectura):
+ * SOLO sus costos por material declarado. Nunca precio de venta, costo base
+ * ni margen — esas columnas no existen en esta respuesta.
  */
 export interface ManufacturerOwnCatalogItem {
   productId: number;
   name: string;
   sku: string | null;
-  costMdf: number | null;
-  costMelaminaBlanca: number | null;
-  costMelaminaColor: number | null;
+  costs: Array<{ materialId: number; materialCode: string; materialLabel: string; cost: number }>;
 }
 
 // ===== Fase 5 — listas de precios por material =====
@@ -420,7 +464,9 @@ export interface PriceListRow {
   name: string;
   sku: string | null;
   categoryName: string | null;
-  material: ProductMaterial;
+  materialId: number;
+  materialCode: string;
+  materialLabel: string;
   priceCash: number;
   price6msi: number | null;
   priceCredit: number | null;
@@ -436,7 +482,9 @@ export interface WholesalePriceListRow {
   name: string;
   sku: string | null;
   categoryName: string | null;
-  material: ProductMaterial;
+  materialId: number;
+  materialCode: string;
+  materialLabel: string;
   priceCash: number;
   priceMayoreo: number;
   savingsPct: number | null;
@@ -447,7 +495,9 @@ export interface ProfitMatrixRow {
   productId: number;
   name: string;
   sku: string | null;
-  material: ProductMaterial;
+  materialId: number;
+  materialCode: string;
+  materialLabel: string;
   manufacturerId: number;
   manufacturerName: string;
   cost: number;

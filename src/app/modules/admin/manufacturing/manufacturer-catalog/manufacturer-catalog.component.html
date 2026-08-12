@@ -71,8 +71,8 @@
         <thead>
           <tr>
             <th>Producto</th><th>SKU</th><th>Fabricante</th><th>Categoría</th>
-            @for (material of materials; track material) {
-              <th class="num">{{ materialLabels[material] }}</th>
+            @for (material of materials(); track material.id) {
+              <th class="num">{{ material.label }}</th>
             }
             <th class="num">Stock</th>
           </tr>
@@ -84,10 +84,10 @@
               <td data-label="SKU" class="muted">{{ p.sku ?? '—' }}</td>
               <td data-label="Fabricante">{{ p.manufacturerName ?? '—' }}</td>
               <td data-label="Categoría" class="muted">{{ p.categoryName ?? '—' }}</td>
-              @for (material of materials; track material) {
-                <td [attr.data-label]="materialLabels[material]" class="num" [class.strong]="p.materials[material].isBaseCost">
-                  @if (p.materials[material].cost !== null) {
-                    {{ p.materials[material].cost | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              @for (material of materials(); track material.id) {
+                <td [attr.data-label]="material.label" class="num" [class.strong]="p.materials[material.id]?.isBaseCost">
+                  @if (p.materials[material.id]?.cost != null) {
+                    {{ p.materials[material.id].cost | currency:'MXN':'symbol-narrow':'1.2-2' }}
                   } @else {
                     <span class="muted">No aplica</span>
                   }

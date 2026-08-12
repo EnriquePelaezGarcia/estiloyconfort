@@ -33,10 +33,8 @@
           <th>Producto</th>
           <th>SKU</th>
           <th>Categoría</th>
-          <th class="num">Contado</th>
-          <th class="num">6 MSI</th>
-          <th class="num">Créd. Tienda</th>
-          <th class="num">Stock</th>
+          <th class="num">Desde</th>
+          <th class="num">Materiales</th>
           <th>Estado</th>
           @if (canManage()) {
             <th class="actions-col">Acciones</th>
@@ -49,10 +47,14 @@
             <td data-label="Producto" class="strong">{{ product.name }}</td>
             <td data-label="SKU" class="muted">{{ product.sku || '—' }}</td>
             <td data-label="Categoría">{{ product.category_name || '—' }}</td>
-            <td data-label="Contado" class="num">{{ money(product.price_cash) }}</td>
-            <td data-label="6 MSI" class="num">{{ money(product.price_6msi) }}</td>
-            <td data-label="Créd. Tienda" class="num">{{ money(product.price_credit) }}</td>
-            <td data-label="Stock" class="num">{{ product.stock_quantity }}</td>
+            <td data-label="Desde" class="num">
+              @if ((product.quoted_materials ?? 0) > 0) {
+                {{ money(product.price_from ?? null) }}
+              } @else {
+                <span class="muted">Sin cotizar</span>
+              }
+            </td>
+            <td data-label="Materiales" class="num">{{ product.quoted_materials ?? 0 }}</td>
             <td data-label="Estado">
               @if (canManage()) {
                 <button
@@ -90,7 +92,7 @@
           </tr>
         } @empty {
           <tr>
-            <td [attr.colspan]="canManage() ? 9 : 8" class="empty">No se encontraron productos.</td>
+            <td [attr.colspan]="canManage() ? 6 : 5" class="empty">No se encontraron productos.</td>
           </tr>
         }
       </tbody>
@@ -148,26 +150,33 @@
           <textarea id="description" formControlName="description" rows="2"></textarea>
         </div>
 
-        <div class="field-row">
-          <div class="field">
-            <label for="material">Material del stock</label>
-            <select id="material" formControlName="material">
-              <option [ngValue]="null">Selecciona…</option>
-              @for (material of materials; track material) {
-                <option [value]="material">{{ materialLabels[material] }}</option>
-              }
-            </select>
-            <p class="field__hint">De qué material es el mueble que tienes en bodega. No limita en qué materiales se vende (eso lo definen los costos por fabricante de abajo).</p>
-          </div>
-          <div class="field">
-            <label for="color">Color / Acabado</label>
-            <input
-              id="color"
-              type="text"
-              formControlName="color"
-              placeholder="Ej. Blanco, Chocolate, Vetado Nogal, Gris texturizado..."
-            />
-          </div>
+        <div class="field">
+          <label for="color">Color / Acabado por defecto</label>
+          <input
+            id="color"
+            type="text"
+            formControlName="color"
+            placeholder="Ej. Blanco, Chocolate, Vetado Nogal, Gris texturizado..."
+          />
+        </div>
+
+        <p class="form-section">② ¿En qué materiales se ofrece? *</p>
+        <p class="field__hint">
+          Marca a mano en qué materiales se vende este mueble — nunca se
+          deduce de dónde hay costo capturado (M2). Aquí NO se capturan
+          existencias: eso vive en <em>Admin → Inventario</em>.
+        </p>
+        <div class="materials-checklist">
+          @for (material of allMaterials(); track material.id) {
+            <label class="checkbox">
+              <input
+                type="checkbox"
+                [checked]="selectedMaterialIds().has(material.id)"
+                (change)="toggleMaterial(material.id, $any($event.target).checked)"
+              />
+              <span>{{ material.label }}</span>
+            </label>
+          }
         </div>
 
         <p class="form-section">Dimensiones y peso</p>
@@ -190,9 +199,11 @@
           </div>
         </div>
 
-        <p class="form-section">Costos por fabricante</p>
+        <p class="form-section">③ Costos por fabricante</p>
 
-        @if (loadingCosts()) {
+        @if (!selectedMaterialIdsList().length) {
+          <p class="costs__empty">Marca al menos un material en el paso ② para capturar costos.</p>
+        } @else if (loadingCosts()) {
           <p class="costs__empty">Cargando costos…</p>
         } @else if (!manufacturers().length) {
           <p class="costs__empty">
@@ -201,17 +212,17 @@
           </p>
         } @else {
           <p class="costs__hint">
-            Captura lo que te cuesta el mueble con cada fabricante. Deja vacío el de
-            quien no te lo surta. El <strong>costo más alto</strong> es el que define
-            el precio de venta, para que la ganancia nunca quede corta si te toca
-            surtir con el caro.
+            Captura lo que te cuesta el mueble con cada fabricante, solo en los
+            materiales marcados en ②. Deja vacío el de quien no te lo surta. El
+            <strong>costo más alto</strong> es el que define el precio de venta,
+            para que la ganancia nunca quede corta si te toca surtir con el caro.
           </p>
 
           <div class="costs">
             <div class="costs__head">
               <span>Fabricante</span>
-              @for (material of materials; track material) {
-                <span>{{ materialLabels[material] }}</span>
+              @for (materialId of selectedMaterialIdsList(); track materialId) {
+                <span>{{ materialsStore.labelOf(materialId) }}</span>
               }
               <span>Define precio</span>
             </div>
@@ -219,10 +230,10 @@
             @for (row of costRowsWithProfit(); track row.manufacturerId) {
               <div class="costs__row">
                 <span class="costs__name">{{ row.manufacturerName }}</span>
-                @for (material of materials; track material) {
+                @for (materialId of selectedMaterialIdsList(); track materialId) {
                   <div
                     class="costs__material-cell"
-                    [class.costs__material-cell--base]="row.materials[material].isBaseCost"
+                    [class.costs__material-cell--base]="row.materials[materialId].isBaseCost"
                   >
                     <input
                       type="number"
@@ -230,16 +241,16 @@
                       min="0"
                       step="0.01"
                       placeholder="No aplica"
-                      [value]="row.materials[material].cost ?? ''"
-                      (input)="onCostChange(row.manufacturerId, material, $event)"
+                      [value]="row.materials[materialId].cost ?? ''"
+                      (input)="onCostChange(row.manufacturerId, materialId, $event)"
                     />
-                    @if (row.materials[material].isBaseCost) {
+                    @if (row.materials[materialId].isBaseCost) {
                       <span class="costs__badge" title="Su costo define el precio de venta en este material">manda</span>
-                    } @else if (row.materials[material].cost !== null && !row.affectsBaseCost) {
+                    } @else if (row.materials[materialId].cost !== null && !row.affectsBaseCost) {
                       <span class="costs__badge costs__badge--muted" title="Este costo no mueve el precio al público">sin precio</span>
                     }
-                    @if (row.materials[material].profitCash !== null) {
-                      <span class="costs__profit">Ganancia: {{ money(row.materials[material].profitCash) }}</span>
+                    @if (row.materials[materialId].profitCash !== null) {
+                      <span class="costs__profit">Ganancia: {{ money(row.materials[materialId].profitCash) }}</span>
                     }
                   </div>
                 }
@@ -295,13 +306,23 @@
           </div>
         } @else {
           <div class="field">
-            <label for="targetCashPrice">Precio de contado deseado ({{ materialLabels[form.value.material ?? 'MDF'] }})</label>
+            <label for="targetMaterial">Material de referencia</label>
+            <select id="targetMaterial" (change)="onTargetMaterialChange($event)">
+              @for (materialId of selectedMaterialIdsList(); track materialId) {
+                <option [value]="materialId" [selected]="targetMaterialIdValue() === materialId">
+                  {{ materialsStore.labelOf(materialId) }}
+                </option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="targetCashPrice">Precio de contado deseado</label>
             <input id="targetCashPrice" type="number" formControlName="targetCashPrice" min="0" step="10" />
             <p class="field__hint">
               @if (effectiveMargin() !== null) {
                 Margen que lo produce: <strong>{{ effectiveMargin() }} %</strong>
               } @else {
-                Debe ser mayor que el costo base del material del stock.
+                Debe ser mayor que el costo base del material de referencia.
               }
             </p>
           </div>
@@ -310,44 +331,44 @@
         <div class="costs costs--summary">
           <div class="costs__head">
             <span>Precio</span>
-            @for (material of materials; track material) {
-              <span>{{ materialLabels[material] }}</span>
+            @for (materialId of selectedMaterialIdsList(); track materialId) {
+              <span>{{ materialsStore.labelOf(materialId) }}</span>
             }
           </div>
           <div class="costs__row costs__row--summary">
             <span class="costs__name">Costo base</span>
-            @for (material of materials; track material) {
-              <span class="costs__profit">{{ money(derivedBaseCosts()[material]) }}</span>
+            @for (materialId of selectedMaterialIdsList(); track materialId) {
+              <span class="costs__profit">{{ money(derivedBaseCosts()[materialId]) }}</span>
             }
           </div>
           <div class="costs__row costs__row--summary">
             <span class="costs__name">Contado</span>
-            @for (material of materials; track material) {
-              <span class="costs__profit">{{ money(computedPricesByMaterial()[material].price_cash) }}</span>
+            @for (materialId of selectedMaterialIdsList(); track materialId) {
+              <span class="costs__profit">{{ money(computedPricesByMaterial()[materialId].price_cash) }}</span>
             }
           </div>
           <div class="costs__row costs__row--summary">
             <span class="costs__name">6 MSI</span>
-            @for (material of materials; track material) {
-              <span class="costs__profit">{{ money(computedPricesByMaterial()[material].price_6msi) }}</span>
+            @for (materialId of selectedMaterialIdsList(); track materialId) {
+              <span class="costs__profit">{{ money(computedPricesByMaterial()[materialId].price_6msi) }}</span>
             }
           </div>
           <div class="costs__row costs__row--summary">
             <span class="costs__name">Crédito Tienda</span>
-            @for (material of materials; track material) {
-              <span class="costs__profit">{{ money(computedPricesByMaterial()[material].price_credit) }}</span>
+            @for (materialId of selectedMaterialIdsList(); track materialId) {
+              <span class="costs__profit">{{ money(computedPricesByMaterial()[materialId].price_credit) }}</span>
             }
           </div>
           <div class="costs__row costs__row--summary">
             <span class="costs__name">Mayoreo</span>
-            @for (material of materials; track material) {
-              <span class="costs__profit">{{ money(computedWholesaleByMaterial()[material]) }}</span>
+            @for (materialId of selectedMaterialIdsList(); track materialId) {
+              <span class="costs__profit">{{ money(computedWholesaleByMaterial()[materialId]) }}</span>
             }
           </div>
         </div>
-        @if (computedCreditByMaterial()[form.value.material ?? 'MDF']; as credit) {
+        @if (targetMaterialIdValue() !== null && computedCreditByMaterial()[targetMaterialIdValue()!]; as credit) {
           <p class="price-preview__hint">
-            Crédito en {{ materialLabels[form.value.material ?? 'MDF'] }}: enganche de <strong>{{ money(credit.downPayment) }}</strong>,
+            Crédito en {{ materialsStore.labelOf(targetMaterialIdValue()) }}: enganche de <strong>{{ money(credit.downPayment) }}</strong>,
             {{ credit.weeks - 1 }} abonos de <strong>{{ money(credit.weeklyPayment) }}</strong>
             y un último de <strong>{{ money(credit.lastPayment) }}</strong>.
           </p>
@@ -357,19 +378,22 @@
           <a routerLink="/admin/reglas-precios">reglas de precios</a>.
         </p>
 
-        <p class="form-section">Inventario y disponibilidad</p>
+        <p class="form-section">Disponibilidad y mayoreo</p>
+        <p class="field__hint">
+          Las existencias por material se capturan en <em>Admin → Inventario</em> (M15), no aquí.
+        </p>
         <div class="field-grid">
           <div class="field">
-            <label for="stockQuantity">Stock</label>
-            <input id="stockQuantity" type="number" formControlName="stockQuantity" min="0" step="1" />
-          </div>
-          <div class="field">
-            <label for="stockAlertLevel">Alerta de stock</label>
+            <label for="stockAlertLevel">Alerta de stock total</label>
             <input id="stockAlertLevel" type="number" formControlName="stockAlertLevel" min="0" step="1" />
           </div>
           <div class="field">
             <label for="availabilityDays">Días de fabricación</label>
             <input id="availabilityDays" type="number" formControlName="availabilityDays" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="wholesaleMinQty">Mínimo de mayoreo</label>
+            <input id="wholesaleMinQty" type="number" formControlName="wholesaleMinQty" min="1" step="1" placeholder="Usa el global" />
           </div>
         </div>
 

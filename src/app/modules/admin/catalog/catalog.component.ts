@@ -9,18 +9,11 @@ import { PricingService } from '../../../core/services/pricing.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { MaterialsStore } from '../../../core/services/materials.store';
 import { Product, ProductImage, ProductManufacturerPrice, ProductPayload } from '../../../core/models/product.model';
 import { Manufacturer } from '../../../core/models/manufacturing.model';
-import { MATERIAL_LABELS, MATERIALS, ProductMaterial } from '../../../core/models/order.model';
 import { Category } from '../../../core/models/category.model';
 import { CalculatedPrices, DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
-
-/** Un valor por material — el molde que reutilizan costos, precios y mayoreo. */
-type ByMaterial<T> = Record<ProductMaterial, T>;
-
-function emptyByMaterial<T>(value: T): ByMaterial<T> {
-  return { MDF: value, MELAMINA_BLANCA: value, MELAMINA_COLOR: value };
-}
 
 function slugify(value: string): string {
   return value
@@ -68,22 +61,24 @@ interface PendingImage {
 
 /**
  * Fila editable de costos por fabricante dentro del modal de producto.
- * UN costo por material (D1): no hay relación aritmética entre ellos, cada
- * uno se captura por separado. `null` = a este fabricante no se le compra
- * este mueble EN ESE MATERIAL (RN-03).
+ * UN costo por material DECLARADO (M2/M3): no hay relación aritmética entre
+ * ellos, cada uno se captura por separado. `null` = a este fabricante no se
+ * le compra este mueble EN ESE MATERIAL (RN-03).
  */
 interface CostRow {
   manufacturerId: number;
   manufacturerName: string;
-  costs: ByMaterial<number | null>;
+  costs: Record<number, number | null>;
   /**
-   * false = los 3 costos sirven para asignar y para calcular la utilidad real,
+   * false = los costos sirven para asignar y para calcular la utilidad real,
    * pero quedan fuera del máximo que define el precio al público. Es cómo se
    * absorbe el excedente de una compra única sin mover el precio de mostrador.
+   * Se aplica a todos los materiales de esta fila (el backend lo admite por
+   * material, pero un solo interruptor por fabricante alcanza en la práctica).
    */
   affectsBaseCost: boolean;
   /** Valores que tenía al abrir el modal, para saber qué cambió al guardar. */
-  originalCosts: ByMaterial<number | null>;
+  originalCosts: Record<number, number | null>;
   originalAffectsBaseCost: boolean;
 }
 
@@ -104,6 +99,7 @@ export class CatalogComponent implements OnInit {
   private notification = inject(NotificationService);
   private auth = inject(AuthService);
   private fb = inject(FormBuilder);
+  protected materialsStore = inject(MaterialsStore);
 
   /** Solo el administrador puede crear, editar o eliminar productos.
    *  El vendedor accede al mismo catálogo en modo de solo lectura. */
@@ -119,11 +115,39 @@ export class CatalogComponent implements OnInit {
 
   private marginInput = signal<number | null>(null);
   private targetPriceInput = signal<number | null>(null);
-  /** Material de referencia para el modo "precio final": el del stock. */
-  private materialInput = signal<ProductMaterial>('MDF');
 
-  protected readonly materials = MATERIALS;
-  protected readonly materialLabels = MATERIAL_LABELS;
+  /** Catálogo completo de materiales, para el paso ② (casillas del alta). */
+  protected readonly allMaterials = this.materialsStore.active;
+
+  /**
+   * M2: en qué materiales se ofrece el producto — casillas marcadas a mano,
+   * NUNCA deducidas de dónde hay costo capturado. Determina qué columnas
+   * aparecen en el paso ③ (costos) y qué materiales trae el payload.
+   */
+  protected selectedMaterialIds = signal<Set<number>>(new Set());
+  protected selectedMaterialIdsList = computed(() => [...this.selectedMaterialIds()]);
+
+  /** Material de referencia para el modo "precio final" (M5: cualquiera de los declarados). */
+  private targetMaterialId = signal<number | null>(null);
+
+  protected toggleMaterial(materialId: number, checked: boolean): void {
+    this.selectedMaterialIds.update((set) => {
+      const next = new Set(set);
+      if (checked) next.add(materialId); else next.delete(materialId);
+      return next;
+    });
+    if (checked && this.targetMaterialId() === null) this.targetMaterialId.set(materialId);
+    if (!checked && this.targetMaterialId() === materialId) {
+      const remaining = [...this.selectedMaterialIds()];
+      this.targetMaterialId.set(remaining[0] ?? null);
+    }
+    // Un fabricante nuevo en la fila de costos no aparece solo: hay que
+    // reconstruir las filas para que traigan la columna del material recién marcado.
+    this.costRows.update((rows) => rows.map((r) => ({
+      ...r,
+      costs: { ...r.costs, [materialId]: r.costs[materialId] ?? null },
+    })));
+  }
 
   /**
    * El precio se puede definir de dos maneras: capturando el margen, o
@@ -134,7 +158,7 @@ export class CatalogComponent implements OnInit {
   protected priceMode = signal<PriceMode>('margin');
 
   /**
-   * Costo base POR MATERIAL (D3, RN-02): el MÁXIMO de los costos de sus
+   * Costo base POR MATERIAL declarado (RN-02): el MÁXIMO de los costos de sus
    * fabricantes en cada material. No se captura, se deriva. Es un criterio
    * conservador: si un fabricante sube su precio, el de venta sube aunque se
    * siga surtiendo con el otro, de modo que el margen nunca queda corto si
@@ -142,51 +166,55 @@ export class CatalogComponent implements OnInit {
    *
    * Los costos marcados como que no definen el precio quedan fuera del máximo.
    */
-  protected derivedBaseCosts = computed<ByMaterial<number | null>>(() => {
+  protected derivedBaseCosts = computed<Record<number, number | null>>(() => {
     const rows = this.costRows().filter((r) => r.affectsBaseCost);
-    const result = emptyByMaterial<number | null>(null) as ByMaterial<number | null>;
-    for (const material of MATERIALS) {
+    const result: Record<number, number | null> = {};
+    for (const materialId of this.selectedMaterialIdsList()) {
       const costs = rows
-        .map((r) => r.costs[material])
-        .filter((c): c is number => c !== null && c > 0);
-      result[material] = costs.length ? Math.max(...costs) : null;
+        .map((r) => r.costs[materialId])
+        .filter((c): c is number => c !== null && c !== undefined && c > 0);
+      result[materialId] = costs.length ? Math.max(...costs) : null;
     }
     return result;
   });
 
   /**
    * Margen efectivo: el capturado, o el despejado desde el precio objetivo.
-   * Uno solo para los 3 materiales (D4): es del producto, no del material.
+   * Uno solo para todos los materiales: es del producto, no del material.
    */
   protected effectiveMargin = computed(() => {
     if (this.priceMode() === 'margin') return this.marginInput();
+    const materialId = this.targetMaterialId();
+    if (materialId === null) return null;
     const solved = PricingService.marginFromCashPrice(
-      this.derivedBaseCosts()[this.materialInput()],
+      this.derivedBaseCosts()[materialId],
       this.targetPriceInput(),
       this.pricingConfig(),
     );
     return solved?.marginPercentage ?? null;
   });
 
-  /** Precios calculados en vivo, uno por material, a partir del costo base y el margen efectivo. */
-  protected computedPricesByMaterial = computed<ByMaterial<CalculatedPrices>>(() => {
+  /** Precios calculados en vivo, uno por material declarado, a partir del costo base y el margen efectivo. */
+  protected computedPricesByMaterial = computed<Record<number, CalculatedPrices>>(() => {
     const margin = this.effectiveMargin();
     const config = this.pricingConfig();
     const baseCosts = this.derivedBaseCosts();
-    const result = {} as ByMaterial<CalculatedPrices>;
-    for (const material of MATERIALS) {
-      result[material] = PricingService.calculatePrices(baseCosts[material], margin, config);
+    const result: Record<number, CalculatedPrices> = {};
+    for (const materialId of this.selectedMaterialIdsList()) {
+      result[materialId] = PricingService.calculatePrices(baseCosts[materialId], margin, config);
     }
     return result;
   });
 
-  /** RN-10 — precio de mayoreo por material: directo sobre el costo base. */
-  protected computedWholesaleByMaterial = computed<ByMaterial<number | null>>(() => {
+  /** RN-10 — precio de mayoreo por material: directo sobre el costo base, con el factor de ESE material (M9). */
+  protected computedWholesaleByMaterial = computed<Record<number, number | null>>(() => {
     const config = this.pricingConfig();
     const baseCosts = this.derivedBaseCosts();
-    const result = {} as ByMaterial<number | null>;
-    for (const material of MATERIALS) {
-      result[material] = PricingService.calculateWholesalePrice(baseCosts[material], material, config);
+    const byId = this.materialsStore.byId();
+    const result: Record<number, number | null> = {};
+    for (const materialId of this.selectedMaterialIdsList()) {
+      const factor = byId.get(materialId)?.wholesaleFactor ?? config.wholesale_factor_default;
+      result[materialId] = PricingService.calculateWholesalePrice(baseCosts[materialId], factor);
     }
     return result;
   });
@@ -195,9 +223,9 @@ export class CatalogComponent implements OnInit {
   protected computedCreditByMaterial = computed(() => {
     const prices = this.computedPricesByMaterial();
     const config = this.pricingConfig();
-    const result = {} as ByMaterial<ReturnType<typeof PricingService.calculateCredit>>;
-    for (const material of MATERIALS) {
-      result[material] = PricingService.calculateCredit(prices[material].price_cash, config);
+    const result: Record<number, ReturnType<typeof PricingService.calculateCredit>> = {};
+    for (const materialId of this.selectedMaterialIdsList()) {
+      result[materialId] = PricingService.calculateCredit(prices[materialId].price_cash, config);
     }
     return result;
   });
@@ -209,20 +237,15 @@ export class CatalogComponent implements OnInit {
    */
   protected costRowsWithProfit = computed(() => {
     const prices = this.computedPricesByMaterial();
-    const wholesale = this.computedWholesaleByMaterial();
     const config = this.pricingConfig();
     const baseCosts = this.derivedBaseCosts();
     return this.costRows().map((row) => {
-      const materials = {} as ByMaterial<{
-        cost: number | null;
-        isBaseCost: boolean;
-        profitCash: number | null;
-      }>;
-      for (const material of MATERIALS) {
-        const cost = row.costs[material];
-        const isBaseCost = row.affectsBaseCost && cost !== null && cost === baseCosts[material];
-        const profit = cost !== null ? PricingService.profitByCost(cost, prices[material], config) : null;
-        materials[material] = { cost, isBaseCost, profitCash: profit?.cash ?? null };
+      const materials: Record<number, { cost: number | null; isBaseCost: boolean; profitCash: number | null }> = {};
+      for (const materialId of this.selectedMaterialIdsList()) {
+        const cost = row.costs[materialId] ?? null;
+        const isBaseCost = row.affectsBaseCost && cost !== null && cost === baseCosts[materialId];
+        const profit = cost !== null ? PricingService.profitByCost(cost, prices[materialId], config) : null;
+        materials[materialId] = { cost, isBaseCost, profitCash: profit?.cash ?? null };
       }
       return { ...row, materials };
     });
@@ -233,7 +256,6 @@ export class CatalogComponent implements OnInit {
       this.marginInput.set(v.marginPercentage ?? null);
       this.targetPriceInput.set(v.targetCashPrice ?? null);
       this.nameInput.set(v.name ?? '');
-      this.materialInput.set((v.material as ProductMaterial) ?? 'MDF');
     });
   }
 
@@ -277,19 +299,18 @@ export class CatalogComponent implements OnInit {
     name: ['', [Validators.required, Validators.minLength(3)]],
     categoryId: [null as number | null],
     description: [''],
-    material: [null as ProductMaterial | null],
-    color: ['blanco'],
+    color: [''],
     length: [null as number | null, [Validators.min(0)]],
     width: [null as number | null, [Validators.min(0)]],
     height: [null as number | null, [Validators.min(0)]],
     weight: [null as number | null, [Validators.min(0)]],
     availabilityDays: [0, [Validators.required, Validators.min(0)]],
     // No hay campo de costo base: se deriva del máximo de los costos por
-    // fabricante (ver derivedBaseCost).
+    // fabricante (ver derivedBaseCosts).
     marginPercentage: [null as number | null, [Validators.min(0), Validators.max(99)]],
     /** Modo inverso: precio de contado deseado, del que se despeja el margen. */
     targetCashPrice: [null as number | null, [Validators.min(0)]],
-    stockQuantity: [0, [Validators.required, Validators.min(0)]],
+    wholesaleMinQty: [null as number | null, [Validators.min(1)]],
     stockAlertLevel: [5, [Validators.required, Validators.min(0)]],
     isFeatured: [false],
     isActive: [true],
@@ -329,31 +350,32 @@ export class CatalogComponent implements OnInit {
 
   /** Arma una fila por fabricante activo, con los costos que ya tuviera guardados. */
   private buildCostRows(saved: ProductManufacturerPrice[] = []): CostRow[] {
+    const materialIds = this.selectedMaterialIdsList();
     return this.manufacturers().map((m) => {
       const match = saved.find((s) => s.manufacturerId === m.id);
       // Un costo nuevo define el precio salvo que se diga lo contrario.
-      const affectsBaseCost = match?.affectsBaseCost ?? true;
-      const costs = emptyByMaterial<number | null>(null) as ByMaterial<number | null>;
-      for (const material of MATERIALS) costs[material] = match?.costs?.[material]?.cost ?? null;
+      const anyMaterialAffects = materialIds.some((id) => match?.costs?.[id]?.affectsBaseCost ?? true);
+      const costs: Record<number, number | null> = {};
+      for (const materialId of materialIds) costs[materialId] = match?.costs?.[materialId]?.cost ?? null;
       return {
         manufacturerId: m.id,
         manufacturerName: m.name,
         costs,
-        affectsBaseCost,
+        affectsBaseCost: anyMaterialAffects,
         originalCosts: { ...costs },
-        originalAffectsBaseCost: affectsBaseCost,
+        originalAffectsBaseCost: anyMaterialAffects,
       };
     });
   }
 
-  protected onCostChange(manufacturerId: number, material: ProductMaterial, event: Event): void {
+  protected onCostChange(manufacturerId: number, materialId: number, event: Event): void {
     const raw = (event.target as HTMLInputElement).value;
     const cost = raw === '' ? null : Number(raw);
     const value = cost !== null && Number.isFinite(cost) && cost > 0 ? cost : null;
     this.costRows.update((rows) =>
       rows.map((r) =>
         r.manufacturerId === manufacturerId
-          ? { ...r, costs: { ...r.costs, [material]: value } }
+          ? { ...r, costs: { ...r.costs, [materialId]: value } }
           : r,
       ),
     );
@@ -378,15 +400,25 @@ export class CatalogComponent implements OnInit {
   protected setPriceMode(mode: PriceMode): void {
     if (mode === this.priceMode()) return;
 
+    const materialId = this.targetMaterialId();
     if (mode === 'price') {
-      const currentPrice = this.computedPricesByMaterial()[this.materialInput()].price_cash;
+      const currentPrice = materialId !== null ? this.computedPricesByMaterial()[materialId]?.price_cash : null;
       this.priceMode.set(mode);
-      this.form.patchValue({ targetCashPrice: currentPrice });
+      this.form.patchValue({ targetCashPrice: currentPrice ?? null });
     } else {
       const solvedMargin = this.effectiveMargin();
       this.priceMode.set(mode);
       if (solvedMargin !== null) this.form.patchValue({ marginPercentage: solvedMargin });
     }
+  }
+
+  protected onTargetMaterialChange(event: Event): void {
+    const value = Number((event.target as HTMLSelectElement).value);
+    this.targetMaterialId.set(Number.isFinite(value) ? value : null);
+  }
+
+  protected targetMaterialIdValue(): number | null {
+    return this.targetMaterialId();
   }
 
   protected loadProducts(): void {
@@ -414,12 +446,16 @@ export class CatalogComponent implements OnInit {
     this.editing.set(null);
     this.productImages.set([]);
     this.pendingImages.set([]);
+    // M10: premarca los materiales del preset de la categoría (si la hubiera).
+    // Sin preset todavía integrado en este formulario, arranca vacío: el
+    // admin marca a mano las casillas del paso ②.
+    this.selectedMaterialIds.set(new Set());
+    this.targetMaterialId.set(null);
     this.form.reset({
       name: '',
       categoryId: null,
       description: '',
-      material: null,
-      color: 'blanco',
+      color: '',
       length: null,
       width: null,
       height: null,
@@ -427,7 +463,7 @@ export class CatalogComponent implements OnInit {
       availabilityDays: 0,
       marginPercentage: null,
       targetCashPrice: null,
-      stockQuantity: 0,
+      wholesaleMinQty: null,
       stockAlertLevel: 5,
       isFeatured: false,
       isActive: true,
@@ -441,6 +477,11 @@ export class CatalogComponent implements OnInit {
     this.pendingImages.set([]);
     this.productImages.set(product.images ?? []);
     this.priceMode.set('margin');
+
+    // M2: los materiales declarados llegan con el producto (materialPrices).
+    const declaredIds = (product.materialPrices ?? []).map((mp) => mp.material_id);
+    this.selectedMaterialIds.set(new Set(declaredIds));
+    this.targetMaterialId.set(declaredIds[0] ?? null);
 
     // Los costos por fabricante viven en su propia tabla; se cargan aparte.
     this.costRows.set(this.buildCostRows());
@@ -459,8 +500,7 @@ export class CatalogComponent implements OnInit {
       name: product.name,
       categoryId: product.category_id,
       description: product.description ?? '',
-      material: product.material ?? null,
-      color: product.color ?? 'blanco',
+      color: product.color ?? '',
       length: product.dimensions_length,
       width: product.dimensions_width,
       height: product.dimensions_height,
@@ -468,7 +508,7 @@ export class CatalogComponent implements OnInit {
       availabilityDays: product.availability_days,
       marginPercentage: product.margin_percentage,
       targetCashPrice: null,
-      stockQuantity: product.stock_quantity,
+      wholesaleMinQty: product.wholesale_min_qty,
       stockAlertLevel: product.stock_alert_level,
       isFeatured: product.is_featured,
       isActive: product.is_active,
@@ -488,6 +528,7 @@ export class CatalogComponent implements OnInit {
     this.pendingImages.set([]);
     this.costRows.set([]);
     this.priceMode.set('margin');
+    this.selectedMaterialIds.set(new Set());
   }
 
   protected save(): void {
@@ -496,8 +537,14 @@ export class CatalogComponent implements OnInit {
       return;
     }
 
+    const materialIds = this.selectedMaterialIdsList();
+    if (!materialIds.length) {
+      this.notification.error('Marca en qué materiales se ofrece el producto (paso ②)');
+      return;
+    }
+
     const baseCosts = this.derivedBaseCosts();
-    if (MATERIALS.every((m) => baseCosts[m] === null)) {
+    if (materialIds.every((id) => baseCosts[id] === null)) {
       this.notification.error('Captura el costo de al menos un fabricante en algún material');
       return;
     }
@@ -518,21 +565,21 @@ export class CatalogComponent implements OnInit {
       sku: this.generatedSku() || null,
       category_id: raw.categoryId ?? null,
       description: raw.description?.trim() || null,
-      material: raw.material ?? null,
-      color: raw.color?.trim() || 'blanco',
+      color: raw.color?.trim() || null,
       dimensions_length: raw.length ?? null,
       dimensions_width: raw.width ?? null,
       dimensions_height: raw.height ?? null,
       weight_volumetric: raw.weight ?? null,
       availability_days: raw.availabilityDays ?? 0,
-      // Sin base_cost ni precios (D6): son derivados de los costos por
+      wholesale_min_qty: raw.wholesaleMinQty ?? null,
+      // Sin base_cost ni precios (M2/M14): son derivados de los costos por
       // fabricante que se guardan aparte en saveCosts(); el backend los ignora
-      // si se envían.
+      // si se envían. Tampoco captura existencias (M15): eso vive en Admin → Inventario.
       margin_percentage: margin,
-      stock_quantity: raw.stockQuantity ?? 0,
       stock_alert_level: raw.stockAlertLevel ?? 5,
       is_featured: raw.isFeatured ?? false,
       is_active: raw.isActive ?? true,
+      materialIds,
     };
 
     this.saving.set(true);
@@ -565,21 +612,25 @@ export class CatalogComponent implements OnInit {
 
   /** Envía solo las filas que cambiaron; las que se vaciaron por completo se eliminan. */
   private saveCosts(product: Product) {
+    const materialIds = this.selectedMaterialIdsList();
     const operations = this.costRows()
       .filter((row) => {
-        const costsChanged = MATERIALS.some((m) => row.costs[m] !== row.originalCosts[m]);
-        const hasAnyCost = MATERIALS.some((m) => row.costs[m] !== null);
+        const costsChanged = materialIds.some((id) => row.costs[id] !== row.originalCosts[id]);
+        const hasAnyCost = materialIds.some((id) => row.costs[id] !== null && row.costs[id] !== undefined);
         // Cambiar solo la casilla en una fila sin ningún costo no es nada que guardar.
         return costsChanged || (hasAnyCost && row.affectsBaseCost !== row.originalAffectsBaseCost);
       })
       .map((row) => {
-        const hasAnyCost = MATERIALS.some((m) => row.costs[m] !== null);
+        const hasAnyCost = materialIds.some((id) => row.costs[id] !== null && row.costs[id] !== undefined);
         return hasAnyCost
           ? this.productService.setManufacturerPrice(
               product.id,
               row.manufacturerId,
-              row.costs,
-              row.affectsBaseCost,
+              materialIds.map((materialId) => ({
+                materialId,
+                cost: row.costs[materialId] ?? null,
+                affectsBaseCost: row.affectsBaseCost,
+              })),
             )
           : this.productService.removeManufacturerPrice(product.id, row.manufacturerId);
       });

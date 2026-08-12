@@ -1,13 +1,15 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { Cart, CartItem, CartVariantSelection } from '../models/cart.model';
 import { Product } from '../models/product.model';
-import { MATERIAL_LABELS, ProductMaterial } from '../models/order.model';
+import { MaterialsStore } from './materials.store';
 
 const CART_KEY = 'ec_cart';
 const CART_TTL_DAYS = 30;
 
 @Injectable({ providedIn: 'root' })
 export class CartService {
+  private readonly materialsStore = inject(MaterialsStore);
+
   private _cart = signal<Cart>(this.loadFromStorage());
 
   readonly items = computed(() => this._cart().items);
@@ -20,27 +22,26 @@ export class CartService {
 
   /**
    * Agrega un producto EN UN MATERIAL concreto. El precio se toma de
-   * `product.materialPrices` (uno por material, D2/D3) — nunca de
-   * `product.price_cash`, que es el precio del material del STOCK, no
-   * necesariamente el que el cliente eligió (D6).
+   * `product.materialPrices` (uno por material declarado, M2) — nunca de un
+   * precio plano del producto, que ya no existe.
    *
-   * @param material Debe venir de un material COTIZADO (`materialPrices` con
-   *   `base_cost` no nulo); quien llama es responsable de no ofrecer los que
-   *   no lo están (RN-03).
+   * @param materialId Debe venir de un material COTIZADO (`materialPrices`
+   *   con `base_cost` no nulo); quien llama es responsable de no ofrecer los
+   *   que no lo están (RN-03).
    */
   addItem(
     product: Product,
-    material: ProductMaterial,
+    materialId: number,
     quantity = 1,
     variantSelections: CartVariantSelection = {},
     variantPriceModifier = 0
   ): void {
-    const materialPrice = product.materialPrices?.find((mp) => mp.material === material);
-    const priceCash = materialPrice?.price_cash ?? product.price_cash ?? 0;
-    const price6msi = materialPrice?.price_6msi ?? product.price_6msi ?? 0;
+    const materialPrice = product.materialPrices?.find((mp) => mp.material_id === materialId);
+    const priceCash = materialPrice?.price_cash ?? 0;
+    const price6msi = materialPrice?.price_6msi ?? 0;
 
     this._cart.update(cart => {
-      const existing = cart.items.find((i) => this.sameLine(i, product.id, material, variantSelections));
+      const existing = cart.items.find((i) => this.sameLine(i, product.id, materialId, variantSelections));
       const items = existing
         ? cart.items.map(i =>
             i === existing ? { ...i, quantity: i.quantity + quantity } : i
@@ -52,7 +53,7 @@ export class CartService {
               name: product.name,
               slug: product.slug,
               primaryImage: product.primary_image,
-              material,
+              materialId,
               priceCash,
               price6msi,
               quantity,
@@ -68,37 +69,37 @@ export class CartService {
 
   updateQuantity(
     productId: number,
-    material: ProductMaterial,
+    materialId: number,
     variantSelections: CartVariantSelection,
     quantity: number,
   ): void {
-    if (quantity <= 0) { this.removeItem(productId, material, variantSelections); return; }
+    if (quantity <= 0) { this.removeItem(productId, materialId, variantSelections); return; }
     this._cart.update(cart => ({
       ...cart,
       items: cart.items.map(i =>
-        this.sameLine(i, productId, material, variantSelections) ? { ...i, quantity } : i
+        this.sameLine(i, productId, materialId, variantSelections) ? { ...i, quantity } : i
       ),
     }));
     this.persist();
   }
 
-  removeItem(productId: number, material: ProductMaterial, variantSelections: CartVariantSelection = {}): void {
+  removeItem(productId: number, materialId: number, variantSelections: CartVariantSelection = {}): void {
     this._cart.update(cart => ({
       ...cart,
-      items: cart.items.filter((i) => !this.sameLine(i, productId, material, variantSelections)),
+      items: cart.items.filter((i) => !this.sameLine(i, productId, materialId, variantSelections)),
     }));
     this.persist();
   }
 
-  /** El mismo mueble en dos materiales son dos líneas distintas (Fase 4bis.3). */
+  /** El mismo mueble en dos materiales son dos líneas distintas. */
   private sameLine(
     item: CartItem,
     productId: number,
-    material: ProductMaterial,
+    materialId: number,
     variantSelections: CartVariantSelection,
   ): boolean {
     return item.productId === productId
-      && item.material === material
+      && item.materialId === materialId
       && JSON.stringify(item.variantSelections) === JSON.stringify(variantSelections);
   }
 
@@ -117,7 +118,7 @@ export class CartService {
       const price = ((i.priceCash + i.variantPriceModifier) * i.quantity).toLocaleString('es-MX', {
         style: 'currency', currency: 'MXN',
       });
-      const materialLabel = MATERIAL_LABELS[i.material];
+      const materialLabel = this.materialsStore.labelOf(i.materialId);
       return `▸ ${i.name} (${materialLabel}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
     });
     const total = this.total().toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });

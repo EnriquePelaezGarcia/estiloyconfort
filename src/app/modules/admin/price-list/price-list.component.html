@@ -20,8 +20,8 @@
   </div>
   <select class="filter-select" (change)="onMaterialChange($event)">
     <option value="">Todos los materiales</option>
-    @for (material of materials; track material) {
-      <option [value]="material">{{ materialLabels[material] }}</option>
+    @for (material of materials(); track material.id) {
+      <option [value]="material.id">{{ material.label }}</option>
     }
   </select>
 </div>
@@ -41,13 +41,13 @@
         </tr>
       </thead>
       <tbody>
-        @for (r of filteredRows(); track r.productId + r.material) {
+        @for (r of filteredRows(); track r.productId + '-' + r.materialId) {
           <tr>
             <td data-label="Producto" class="strong">
               {{ r.name }}
               @if (r.sku) { <span class="muted"> · {{ r.sku }}</span> }
             </td>
-            <td data-label="Material">{{ materialLabels[r.material] }}</td>
+            <td data-label="Material">{{ r.materialLabel }}</td>
             <td data-label="Contado" class="num">{{ r.priceCash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="6 MSI" class="num">{{ r.price6msi | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Crédito" class="num">{{ r.priceCredit | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>

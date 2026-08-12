@@ -21,10 +21,17 @@ export type PricingConfigKey =
   | 'credit_weeks'
   | 'assembly_base'
   | 'assembly_per_floor'
-  // RN-10 — factor de mayoreo, uno por material.
-  | 'wholesale_factor_mdf'
-  | 'wholesale_factor_blanca'
-  | 'wholesale_factor_color'
+  // M9 del plan de catálogo de materiales: un único factor global; cada
+  // material puede tener el suyo propio en materials.wholesaleFactor.
+  | 'wholesale_factor_default'
+  // M11: booleano (0/1) — con esto en 0 el mayoreo no aparece en POS ni
+  // reportes, aunque price_mayoreo se sigue calculando en todo el catálogo.
+  | 'wholesale_enabled'
+  // M12 — mínimo global; products.wholesaleMinQty lo puede sobreescribir.
+  | 'wholesale_min_qty'
+  // M13: booleano (0/1). En 0 (default) el precio de mayoreo es SIN IVA y se
+  // suma al facturar.
+  | 'wholesale_price_includes_iva'
   // Umbral visual del semáforo de utilidades. No bloquea nada.
   | 'min_margin_alert';
 
@@ -41,9 +48,10 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   credit_weeks: 12,
   assembly_base: 150,
   assembly_per_floor: 50,
-  wholesale_factor_mdf: 1.334,
-  wholesale_factor_blanca: 1.334,
-  wholesale_factor_color: 1.334,
+  wholesale_factor_default: 1.334,
+  wholesale_enabled: 0,
+  wholesale_min_qty: 6,
+  wholesale_price_includes_iva: 0,
   min_margin_alert: 20,
 };
 

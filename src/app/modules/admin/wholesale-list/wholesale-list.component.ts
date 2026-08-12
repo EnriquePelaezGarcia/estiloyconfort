@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe } from '@angular/common';
 import { AdminService } from '../../../core/services/admin.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { MATERIAL_LABELS, MATERIALS, ProductMaterial } from '../../../core/models/order.model';
+import { MaterialsStore } from '../../../core/services/materials.store';
 import { WholesalePriceListRow } from '../../../core/models/order.model';
 
 /**
@@ -19,14 +19,14 @@ import { WholesalePriceListRow } from '../../../core/models/order.model';
 export class WholesaleListComponent implements OnInit {
   private adminService = inject(AdminService);
   private notification = inject(NotificationService);
+  private materialsStore = inject(MaterialsStore);
 
-  protected readonly materials = MATERIALS;
-  protected readonly materialLabels = MATERIAL_LABELS;
+  protected readonly materials = this.materialsStore.active;
 
   protected rows = signal<WholesalePriceListRow[]>([]);
   protected loading = signal(true);
   protected search = signal('');
-  protected materialFilter = signal<ProductMaterial | ''>('');
+  protected materialFilter = signal<number | ''>('');
 
   protected filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -42,7 +42,7 @@ export class WholesaleListComponent implements OnInit {
 
   protected load(): void {
     this.loading.set(true);
-    this.adminService.getWholesalePriceList({ material: this.materialFilter() || undefined }).subscribe({
+    this.adminService.getWholesalePriceList({ materialId: this.materialFilter() || undefined }).subscribe({
       next: (res) => {
         this.rows.set(res.data);
         this.loading.set(false);
@@ -59,7 +59,8 @@ export class WholesaleListComponent implements OnInit {
   }
 
   protected onMaterialChange(event: Event): void {
-    this.materialFilter.set((event.target as HTMLSelectElement).value as ProductMaterial | '');
+    const value = (event.target as HTMLSelectElement).value;
+    this.materialFilter.set(value ? Number(value) : '');
     this.load();
   }
 

@@ -120,9 +120,9 @@ export class CatalogComponent implements OnInit {
       return;
     }
     this.productService.getProduct(product.slug).subscribe((full) => {
-      const material = full.materialPrices?.find((m) => m.base_cost != null)?.material;
-      if (!material) { this.router.navigate(['/producto', product.slug]); return; }
-      this.cartService.addItem(full, material, 1);
+      const materialId = full.materialPrices?.find((m) => m.base_cost != null)?.material_id;
+      if (materialId == null) { this.router.navigate(['/producto', product.slug]); return; }
+      this.cartService.addItem(full, materialId, 1);
       this.addedProductId.set(product.id);
       setTimeout(() => this.addedProductId.set(null), 1500);
     });

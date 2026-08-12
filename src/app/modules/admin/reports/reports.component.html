@@ -85,13 +85,14 @@
     <div class="table-wrap">
       <table class="table table--cards">
         <thead>
-          <tr><th>SKU</th><th>Producto</th><th>Categoría</th><th class="num">Stock</th><th class="num">Costo</th><th class="num">Precio</th><th class="num">Valor stock</th></tr>
+          <tr><th>SKU</th><th>Producto</th><th>Material</th><th>Categoría</th><th class="num">Stock</th><th class="num">Costo</th><th class="num">Precio</th><th class="num">Valor stock</th></tr>
         </thead>
         <tbody>
-          @for (r of inventoryRows(); track r.sku) {
+          @for (r of inventoryRows(); track r.sku + '-' + r.material_code) {
             <tr>
               <td data-label="SKU" class="strong">{{ r.sku }}</td>
               <td data-label="Producto">{{ r.name }}</td>
+              <td data-label="Material">{{ r.material_label }}</td>
               <td data-label="Categoría" class="muted">{{ r.category ?? '—' }}</td>
               <td data-label="Stock" class="num" [class.low]="r.stock_quantity <= r.stock_alert_level">{{ r.stock_quantity }}</td>
               <td data-label="Costo" class="num">{{ r.base_cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>

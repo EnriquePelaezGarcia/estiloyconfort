@@ -1,5 +1,4 @@
 // Modelos del módulo Fabricante (panel admin).
-import { ProductMaterial } from './order.model';
 
 export type PurchaseOrderStatus =
   | 'draft'
@@ -92,6 +91,10 @@ export interface FactoryOrderItemRow {
   productId: number | null;
   productName: string;
   productSku: string | null;
+  /** Material y color de la línea (M4/M7) — ya no del pedido completo. */
+  materialId: number;
+  materialLabel: string;
+  color: string | null;
   quantity: number;
   isReady: boolean;
   /** Quién marcó listo el item: distingue "el fabricante reportó" de "el admin lo recibió". */
@@ -104,7 +107,7 @@ export interface FactoryOrderItemRow {
   unitCost: number | null;
   /** Utilidad unitaria = precio de venta − costo congelado. */
   unitProfit: number | null;
-  /** Fabricantes con costo registrado para este producto. */
+  /** Fabricantes con costo registrado para este producto EN ESE MATERIAL. */
   manufacturerOptions: ManufacturerOption[];
 }
 
@@ -112,8 +115,10 @@ export interface FactoryOrderItemRow {
  * Producto del catálogo bajo un fabricante. Un mismo producto aparece una vez
  * por cada fabricante que lo surte, con el costo específico de ese fabricante.
  */
-/** Costo de este fabricante EN UN MATERIAL concreto (D1), con su margen. */
+/** Costo de este fabricante EN UN MATERIAL concreto (M3), con su margen. */
 export interface ManufacturerCatalogMaterialCost {
+  code: string;
+  label: string;
   cost: number | null;
   /** true si su costo es el más alto en ESE material (RN-02) y por tanto define el precio de venta. */
   isBaseCost: boolean;
@@ -129,8 +134,8 @@ export interface ManufacturerCatalogProduct {
   manufacturerId: number | null;
   manufacturerName: string | null;
   categoryName: string | null;
-  /** Los 3 costos de este fabricante para el producto (D1/RN-03). */
-  materials: Record<ProductMaterial, ManufacturerCatalogMaterialCost>;
+  /** Los costos de este fabricante para el producto, uno por material declarado (M2/M3). Llave = materialId. */
+  materials: Record<number, ManufacturerCatalogMaterialCost>;
 }
 
 export const PURCHASE_ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {

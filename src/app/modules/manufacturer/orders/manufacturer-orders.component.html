@@ -59,21 +59,22 @@
                 <span class="order__status-label">Piezas a fabricar:</span>
                 <span class="field__qty">{{ it.quantity }}</span>
               </dd>
+              <!-- M4: material y color son de ESTA línea, no del pedido completo. -->
+              @if (it.materialLabel) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Material:</span>
+                  <span class="field__qty">{{ it.materialLabel }}</span>
+                </dd>
+              }
+              @if (it.color) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Color/Acabado:</span>
+                  <span class="field__qty">{{ it.color }}</span>
+                </dd>
+              }
             </div>
           }
 
-          @if (o.material) {
-            <div class="field">
-              <dt class="field__label">Material</dt>
-              <dd class="field__value">{{ o.material }}</dd>
-            </div>
-          }
-          @if (o.color) {
-            <div class="field">
-              <dt class="field__label">Color/Acabado</dt>
-              <dd class="field__value">{{ o.color }}</dd>
-            </div>
-          }
           @if (o.notas_fabricante) {
             <div class="field">
               <dt class="field__label">Notas fabricante</dt>

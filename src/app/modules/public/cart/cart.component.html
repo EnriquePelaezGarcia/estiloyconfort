@@ -30,7 +30,7 @@
                 <a [routerLink]="['/producto', item.slug]" class="cart-item__name">
                   {{ item.name }}
                 </a>
-                <p class="cart-item__variants">{{ materialLabels[item.material] }}@if (variantLabel(item)) {, {{ variantLabel(item) }}}</p>
+                <p class="cart-item__variants">{{ materialLabel(item) }}@if (variantLabel(item)) {, {{ variantLabel(item) }}}</p>
                 @if (item.availabilityDays > 0) {
                   <span class="cart-item__lead">{{ item.availabilityDays }} días de fabricación</span>
                 }

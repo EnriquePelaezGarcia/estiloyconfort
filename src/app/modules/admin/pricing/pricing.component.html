@@ -98,20 +98,35 @@
 
         <p class="form-section">Mayoreo</p>
         <p class="field__hint">
-          Cambiar un factor reprecia el mayoreo de todo el catálogo en ese material.
+          El módulo calcula y guarda el precio de mayoreo de todo el catálogo
+          aunque esté apagado — al prenderlo, ya está listo (M11). Un material
+          puede tener su propio factor en <em>Admin → Materiales</em>; sin uno
+          propio hereda el default de aquí.
         </p>
 
-        <div class="field">
-          <label for="wholesaleMdf">{{ itemMeta('wholesale_factor_mdf')?.label ?? 'Factor Mayoreo — MDF Pintado' }}</label>
-          <input id="wholesaleMdf" type="number" formControlName="wholesale_factor_mdf" min="0.01" step="0.001" />
+        <div class="field field--checkbox">
+          <label for="wholesaleEnabled">
+            <input id="wholesaleEnabled" type="checkbox" formControlName="wholesale_enabled" />
+            {{ itemMeta('wholesale_enabled')?.label ?? 'Mayoreo activo' }}
+          </label>
+          <p class="field__hint">{{ itemMeta('wholesale_enabled')?.description }}</p>
         </div>
         <div class="field">
-          <label for="wholesaleBlanca">{{ itemMeta('wholesale_factor_blanca')?.label ?? 'Factor Mayoreo — Melamina Blanca' }}</label>
-          <input id="wholesaleBlanca" type="number" formControlName="wholesale_factor_blanca" min="0.01" step="0.001" />
+          <label for="wholesaleFactor">{{ itemMeta('wholesale_factor_default')?.label ?? 'Factor Mayoreo (default)' }}</label>
+          <input id="wholesaleFactor" type="number" formControlName="wholesale_factor_default" min="0.01" step="0.001" />
+          <p class="field__hint">{{ itemMeta('wholesale_factor_default')?.description }}</p>
         </div>
         <div class="field">
-          <label for="wholesaleColor">{{ itemMeta('wholesale_factor_color')?.label ?? 'Factor Mayoreo — Melamina Color' }}</label>
-          <input id="wholesaleColor" type="number" formControlName="wholesale_factor_color" min="0.01" step="0.001" />
+          <label for="wholesaleMinQty">{{ itemMeta('wholesale_min_qty')?.label ?? 'Cantidad mínima Mayoreo' }}</label>
+          <input id="wholesaleMinQty" type="number" formControlName="wholesale_min_qty" min="1" step="1" />
+          <p class="field__hint">{{ itemMeta('wholesale_min_qty')?.description }}</p>
+        </div>
+        <div class="field field--checkbox">
+          <label for="wholesaleIva">
+            <input id="wholesaleIva" type="checkbox" formControlName="wholesale_price_includes_iva" />
+            {{ itemMeta('wholesale_price_includes_iva')?.label ?? 'Precio de mayoreo incluye IVA' }}
+          </label>
+          <p class="field__hint">{{ itemMeta('wholesale_price_includes_iva')?.description }}</p>
         </div>
         <div class="field">
           <label for="minMarginAlert">{{ itemMeta('min_margin_alert')?.label ?? 'Alerta de margen mínimo' }} (%)</label>
@@ -145,9 +160,10 @@
           </div>
           <div class="field">
             <label for="simMaterial">Material</label>
-            <select id="simMaterial" formControlName="material">
-              @for (material of materials; track material) {
-                <option [value]="material">{{ materialLabels[material] }}</option>
+            <select id="simMaterial" formControlName="materialId">
+              <option [ngValue]="null">(usar el factor default)</option>
+              @for (material of materials(); track material.id) {
+                <option [ngValue]="material.id">{{ material.label }}</option>
               }
             </select>
           </div>

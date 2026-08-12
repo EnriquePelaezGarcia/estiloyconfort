@@ -74,34 +74,36 @@
           </span>
         }
 
-        <!-- Material: obligatorio antes de cotizar (D2/D3) -->
-        <div class="detail__variants">
-          <p class="detail__variants-label">Material *</p>
-          <div class="detail__variants-options">
-            @for (option of materialOptions(); track option.material) {
-              <button
-                type="button"
-                class="variant-btn"
-                [class.variant-btn--active]="selectedMaterial() === option.material"
-                [disabled]="!option.isQuoted"
-                [title]="option.isQuoted ? '' : 'No disponible en ' + materialLabels[option.material]"
-                (click)="selectMaterial(option.material)"
-              >
-                {{ materialLabels[option.material] }}
-                @if (!option.isQuoted) {
-                  <span class="variant-btn__extra">No disponible</span>
-                }
-              </button>
-            }
+        <!-- Material: M5 — con un solo material declarado, la ficha no pregunta -->
+        @if (materialOptions().length > 1) {
+          <div class="detail__variants">
+            <p class="detail__variants-label">Material *</p>
+            <div class="detail__variants-options">
+              @for (option of materialOptions(); track option.material_id) {
+                <button
+                  type="button"
+                  class="variant-btn"
+                  [class.variant-btn--active]="selectedMaterial() === option.material_id"
+                  [disabled]="!option.isQuoted"
+                  [title]="option.isQuoted ? '' : 'No disponible en ' + option.label"
+                  (click)="selectMaterial(option.material_id)"
+                >
+                  {{ option.label }}
+                  @if (!option.isQuoted) {
+                    <span class="variant-btn__extra">No disponible</span>
+                  }
+                </button>
+              }
+            </div>
           </div>
-        </div>
+        }
 
         <app-price-display
           [priceCash]="finalPriceCash()"
           [price6msi]="finalPrice6msi()"
           layout="detail"
         />
-        @if (!selectedMaterial()) {
+        @if (!selectedMaterial() && materialOptions().length > 1) {
           <p class="detail__badge detail__badge--order">Elige un material para ver el precio</p>
         }
 

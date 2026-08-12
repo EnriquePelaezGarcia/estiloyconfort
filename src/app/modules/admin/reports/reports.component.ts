@@ -80,15 +80,16 @@ export class ReportsComponent implements OnInit {
     const isSales = this.reportType() === 'sales';
     const headers = isSales
       ? ['Pedido', 'Cliente', 'Vendedor', 'Estado', 'Pago', 'Metodo', 'Total', 'Fecha']
-      : ['SKU', 'Producto', 'Categoria', 'Stock', 'Alerta', 'Costo', 'Precio', 'Valor stock'];
+      : ['SKU', 'Producto', 'Material', 'Categoria', 'Stock', 'Alerta', 'Costo', 'Precio', 'Valor stock'];
 
     const rows = isSales
       ? this.salesRows().map((r) => [
           r.order_number, r.customer_name, r.seller ?? '', ORDER_STATUS_LABELS[r.order_status],
           PAYMENT_STATUS_LABELS[r.payment_status], r.payment_method, r.total_amount, r.order_date,
         ])
+      // M15.5: una fila por (producto, material) con existencia, no una por producto.
       : this.inventoryRows().map((r) => [
-          r.sku, r.name, r.category ?? '', r.stock_quantity, r.stock_alert_level,
+          r.sku, r.name, r.material_label, r.category ?? '', r.stock_quantity, r.stock_alert_level,
           r.base_cost ?? 'No aplica', r.price_cash ?? 'No aplica', r.stock_value,
         ]);
 

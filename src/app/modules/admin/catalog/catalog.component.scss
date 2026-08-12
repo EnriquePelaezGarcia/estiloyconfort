@@ -97,7 +97,8 @@
   a { color: vars.$color-primary; font-weight: 600; text-decoration: underline; }
 }
 
-.checkbox-row {
+.checkbox-row,
+.materials-checklist {
   display: flex;
   flex-wrap: wrap;
   gap: vars.$spacing-lg;

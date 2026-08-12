@@ -5,13 +5,13 @@ import { ApiService } from './api.service';
 import { Category } from '../models/category.model';
 import {
   Product,
+  ProductDeclaredMaterial,
   ProductFilters,
   ProductImage,
   ProductListResponse,
   ProductManufacturerPricesResponse,
   ProductPayload,
 } from '../models/product.model';
-import { ProductMaterial } from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
@@ -90,33 +90,47 @@ export class ProductService {
       .pipe(map(r => r.data));
   }
 
-  // ===== Costos por fabricante =====
+  // ===== Materiales declarados del producto (M2) =====
+
+  getProductMaterials(productId: number): Observable<ProductDeclaredMaterial[]> {
+    return this.api
+      .get<{ data: ProductDeclaredMaterial[] }>(`/products/${productId}/materials`)
+      .pipe(map((r) => r.data));
+  }
+
+  setProductMaterials(productId: number, materialIds: number[]): Observable<ProductDeclaredMaterial[]> {
+    return this.api
+      .put<{ data: ProductDeclaredMaterial[] }>(`/products/${productId}/materials`, { materialIds })
+      .pipe(map((r) => r.data));
+  }
+
+  // ===== Costos por fabricante × material, en filas (M3) =====
 
   getManufacturerPrices(productId: number): Observable<ProductManufacturerPricesResponse> {
     return this.api.get<ProductManufacturerPricesResponse>(
-      `/products/${productId}/manufacturer-prices`,
+      `/products/${productId}/manufacturer-costs`,
     );
   }
 
   /**
-   * Fija los 3 costos de un fabricante (D1: uno por material, sin relación
-   * aritmética entre ellos). `null` explícito en un material = "este
-   * fabricante no hace el mueble en ese material" (RN-03). El backend
-   * recalcula el costo base POR MATERIAL (el máximo de todos los fabricantes)
-   * y reprecia el producto en los 3.
+   * Fija los costos de un fabricante, uno por material DECLARADO (M2), sin
+   * relación aritmética entre ellos. `cost: null` explícito en un material =
+   * "este fabricante no hace el mueble en ese material" (RN-03) — borra la
+   * fila. El backend recalcula el costo base POR MATERIAL (el máximo de
+   * todos los fabricantes) y reprecia el producto en cada uno.
    *
-   * Con `affectsBaseCost` en false los 3 costos quedan fuera de ese máximo:
-   * sirven para asignar y para la utilidad real, pero no mueven el precio al público.
+   * Con `affectsBaseCost` en false ESE costo queda fuera del máximo de ESE
+   * material: sirve para asignar y para la utilidad real, pero no mueve el
+   * precio al público (M3, más fino que antes: era por producto × fabricante).
    */
   setManufacturerPrice(
     productId: number,
     manufacturerId: number,
-    costs: Partial<Record<ProductMaterial, number | null>>,
-    affectsBaseCost = true,
+    costs: Array<{ materialId: number; cost: number | null; affectsBaseCost?: boolean }>,
   ): Observable<ProductManufacturerPricesResponse> {
     return this.api.put<ProductManufacturerPricesResponse>(
-      `/products/${productId}/manufacturer-prices/${manufacturerId}`,
-      { costs, affectsBaseCost },
+      `/products/${productId}/manufacturer-costs/${manufacturerId}`,
+      { costs },
     );
   }
 
@@ -125,7 +139,7 @@ export class ProductService {
     manufacturerId: number,
   ): Observable<ProductManufacturerPricesResponse> {
     return this.api.delete<ProductManufacturerPricesResponse>(
-      `/products/${productId}/manufacturer-prices/${manufacturerId}`,
+      `/products/${productId}/manufacturer-costs/${manufacturerId}`,
     );
   }
 }

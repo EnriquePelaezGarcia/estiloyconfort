@@ -15,7 +15,6 @@ import {
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUS_TONE,
 } from '../../../../core/models/manufacturing.model';
-import { MATERIALS } from '../../../../core/models/order.model';
 
 @Component({
   selector: 'app-purchase-orders',
@@ -165,16 +164,15 @@ export class PurchaseOrdersComponent implements OnInit {
       productName: product?.name ?? '',
       productSku: product?.sku ?? '',
       // Este formulario aún no pregunta el material de la compra; se prefiere
-      // el costo en MDF y, si no aplica, el primero que sí esté cotizado. El
-      // admin puede corregirlo a mano antes de guardar.
+      // el primer costo cotizado (en el orden del catálogo). El admin puede
+      // corregirlo a mano antes de guardar.
       unitCost: product ? this.firstQuotedCost(product) : 0,
     });
     this.recalcTotal();
   }
 
   private firstQuotedCost(product: ManufacturerCatalogProduct): number {
-    if (product.materials.MDF.cost !== null) return product.materials.MDF.cost;
-    const found = MATERIALS.map((m) => product.materials[m].cost).find((c) => c !== null);
+    const found = Object.values(product.materials).map((m) => m.cost).find((c) => c !== null);
     return found ?? 0;
   }
 

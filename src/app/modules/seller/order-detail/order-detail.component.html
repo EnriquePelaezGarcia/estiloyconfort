@@ -48,7 +48,7 @@
         <table class="table">
           <thead>
             <tr>
-              <th>Producto</th><th class="num">Cantidad</th><th class="num">P. unitario</th><th class="num">Subtotal</th>
+              <th>Producto</th><th>Material</th><th class="num">Cantidad</th><th class="num">P. unitario</th><th class="num">Subtotal</th>
               @if (isAdmin) { <th>Fabricante</th> }
             </tr>
           </thead>
@@ -58,6 +58,10 @@
                 <td>
                   <span class="strong">{{ it.productName }}</span>
                   <span class="muted"> · {{ it.productSku }}</span>
+                </td>
+                <td data-label="Material">
+                  {{ it.materialLabel }}
+                  @if (it.color) { <span class="muted"> · {{ it.color }}</span> }
                 </td>
                 <td class="num">{{ it.quantity }}</td>
                 <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
@@ -164,8 +168,6 @@
         <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
         @if (o.expectedDeliveryDate) { <div><dt>Entrega estimada</dt><dd>{{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}</dd></div> }
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
-        @if (o.material) { <div><dt>Material</dt><dd>{{ o.material }}</dd></div> }
-        @if (o.color) { <div><dt>Color / Acabado</dt><dd>{{ o.color }}</dd></div> }
         @if (o.notasFabricante) { <div class="no-print"><dt>Notas fabricante</dt><dd>{{ o.notasFabricante }}</dd></div> }
         @if (o.notasPedido) { <div><dt>Notas del pedido</dt><dd>{{ o.notasPedido }}</dd></div> }
         @if (o.instruccionesEntrega) { <div class="no-print"><dt>Instrucciones de entrega</dt><dd>{{ o.instruccionesEntrega }}</dd></div> }

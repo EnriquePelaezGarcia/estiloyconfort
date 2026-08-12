@@ -8,7 +8,7 @@ import {
   ManufacturerCatalogProduct,
   ManufacturerInput,
 } from '../../../../core/models/manufacturing.model';
-import { MATERIAL_LABELS, MATERIALS } from '../../../../core/models/order.model';
+import { MaterialsStore } from '../../../../core/services/materials.store';
 
 @Component({
   selector: 'app-manufacturer-catalog',
@@ -21,13 +21,13 @@ export class ManufacturerCatalogComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
+  private materialsStore = inject(MaterialsStore);
 
   protected manufacturers = signal<Manufacturer[]>([]);
   protected products = signal<ManufacturerCatalogProduct[]>([]);
   protected loading = signal(true);
   protected selectedManufacturer = signal<number | null>(null);
-  protected readonly materials = MATERIALS;
-  protected readonly materialLabels = MATERIAL_LABELS;
+  protected readonly materials = this.materialsStore.active;
 
   /** Fabricante en edición (null = formulario cerrado, 0 = alta nueva). */
   protected editing = signal<number | null>(null);

@@ -8,7 +8,7 @@ import {
   PricingConfigItem,
   PricingConfigMap,
 } from '../../../core/models/pricing-config.model';
-import { MATERIAL_LABELS, MATERIALS, ProductMaterial } from '../../../core/models/order.model';
+import { MaterialsStore } from '../../../core/services/materials.store';
 
 @Component({
   selector: 'app-admin-pricing',
@@ -21,6 +21,7 @@ export class PricingComponent implements OnInit {
   private pricingService = inject(PricingService);
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
+  private materialsStore = inject(MaterialsStore);
 
   protected loading = signal(true);
   protected saving = signal(false);
@@ -36,38 +37,46 @@ export class PricingComponent implements OnInit {
     credit_weeks: [DEFAULT_PRICING_CONFIG.credit_weeks, [Validators.required, Validators.min(1), Validators.max(104)]],
     assembly_base: [DEFAULT_PRICING_CONFIG.assembly_base, [Validators.required, Validators.min(0)]],
     assembly_per_floor: [DEFAULT_PRICING_CONFIG.assembly_per_floor, [Validators.required, Validators.min(0)]],
-    // RN-10 — factor de mayoreo, uno por material.
-    wholesale_factor_mdf: [DEFAULT_PRICING_CONFIG.wholesale_factor_mdf, [Validators.required, Validators.min(0.01)]],
-    wholesale_factor_blanca: [DEFAULT_PRICING_CONFIG.wholesale_factor_blanca, [Validators.required, Validators.min(0.01)]],
-    wholesale_factor_color: [DEFAULT_PRICING_CONFIG.wholesale_factor_color, [Validators.required, Validators.min(0.01)]],
+    // M9 — un solo factor global; cada material puede tener el suyo en
+    // *Admin → Materiales*. M11-M13 — el módulo de Mayoreo.
+    wholesale_factor_default: [DEFAULT_PRICING_CONFIG.wholesale_factor_default, [Validators.required, Validators.min(0.01)]],
+    wholesale_enabled: [DEFAULT_PRICING_CONFIG.wholesale_enabled],
+    wholesale_min_qty: [DEFAULT_PRICING_CONFIG.wholesale_min_qty, [Validators.required, Validators.min(1)]],
+    wholesale_price_includes_iva: [DEFAULT_PRICING_CONFIG.wholesale_price_includes_iva],
     min_margin_alert: [DEFAULT_PRICING_CONFIG.min_margin_alert, [Validators.required, Validators.min(0), Validators.max(100)]],
   });
 
-  protected readonly materials = MATERIALS;
-  protected readonly materialLabels = MATERIAL_LABELS;
+  protected readonly materials = this.materialsStore.active;
 
   // ===== Simulador en vivo =====
   protected simForm = this.fb.group({
     baseCost: [1350 as number | null],
     margin: [29.3 as number | null],
-    material: ['MDF' as ProductMaterial],
+    materialId: [null as number | null],
   });
 
   private formValue = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
-  private simValue = signal<{ baseCost: number | null; margin: number | null; material: ProductMaterial }>({
+  private simValue = signal<{ baseCost: number | null; margin: number | null; materialId: number | null }>({
     baseCost: 1350,
     margin: 29.3,
-    material: 'MDF',
+    materialId: null,
   });
 
   protected simResult = computed(() =>
     PricingService.calculatePrices(this.simValue().baseCost, this.simValue().margin, this.formValue()),
   );
 
-  /** RN-10 — precio de mayoreo simulado: directo sobre el costo, sin margen ni IVA. */
-  protected simWholesale = computed(() =>
-    PricingService.calculateWholesalePrice(this.simValue().baseCost, this.simValue().material, this.formValue()),
-  );
+  /**
+   * RN-10 — precio de mayoreo simulado: directo sobre el costo, sin margen
+   * ni IVA. El factor es el del material elegido (si tiene el suyo, M9) o el
+   * default global; sin material elegido usa directo el default.
+   */
+  protected simWholesale = computed(() => {
+    const materialId = this.simValue().materialId;
+    const material = materialId != null ? this.materialsStore.byId().get(materialId) : null;
+    const factor = material?.wholesaleFactor ?? this.formValue().wholesale_factor_default;
+    return PricingService.calculateWholesalePrice(this.simValue().baseCost, factor);
+  });
 
   /** Plan de crédito en tienda calculado sobre el precio de contado simulado. */
   protected creditResult = computed(() =>
@@ -99,9 +108,10 @@ export class PricingComponent implements OnInit {
         credit_weeks: v.credit_weeks ?? DEFAULT_PRICING_CONFIG.credit_weeks,
         assembly_base: v.assembly_base ?? DEFAULT_PRICING_CONFIG.assembly_base,
         assembly_per_floor: v.assembly_per_floor ?? DEFAULT_PRICING_CONFIG.assembly_per_floor,
-        wholesale_factor_mdf: v.wholesale_factor_mdf ?? DEFAULT_PRICING_CONFIG.wholesale_factor_mdf,
-        wholesale_factor_blanca: v.wholesale_factor_blanca ?? DEFAULT_PRICING_CONFIG.wholesale_factor_blanca,
-        wholesale_factor_color: v.wholesale_factor_color ?? DEFAULT_PRICING_CONFIG.wholesale_factor_color,
+        wholesale_factor_default: v.wholesale_factor_default ?? DEFAULT_PRICING_CONFIG.wholesale_factor_default,
+        wholesale_enabled: v.wholesale_enabled ? 1 : 0,
+        wholesale_min_qty: v.wholesale_min_qty ?? DEFAULT_PRICING_CONFIG.wholesale_min_qty,
+        wholesale_price_includes_iva: v.wholesale_price_includes_iva ? 1 : 0,
         min_margin_alert: v.min_margin_alert ?? DEFAULT_PRICING_CONFIG.min_margin_alert,
       });
     });
@@ -110,7 +120,7 @@ export class PricingComponent implements OnInit {
       this.simValue.set({
         baseCost: v.baseCost ?? null,
         margin: v.margin ?? null,
-        material: (v.material as ProductMaterial) ?? 'MDF',
+        materialId: v.materialId ?? null,
       });
     });
   }
