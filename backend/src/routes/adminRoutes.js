@@ -2,6 +2,7 @@ const { Router } = require('express');
 const adminController = require('../controllers/adminController');
 const pricingController = require('../controllers/pricingController');
 const materialsController = require('../controllers/materialsController');
+const inventoryController = require('../controllers/inventoryController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -23,6 +24,11 @@ router.get('/materials/:id/usage', materialsController.getUsage);
 
 // M2: materiales declarados sin costo capturado por ningún fabricante.
 router.get('/pricing-gaps', materialsController.getPricingGaps);
+
+// Inventario por (producto, material) — M15. Las existencias se capturan
+// aquí, nunca en el alta/edición del producto.
+router.get('/inventory', inventoryController.list);
+router.put('/inventory', inventoryController.update);
 
 // Reglas de precios (configuración global)
 router.get('/pricing-config', pricingController.getConfig);
