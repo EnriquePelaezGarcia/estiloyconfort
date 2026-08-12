@@ -1,13 +1,22 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ProductService } from '../../../core/services/product.service';
+import { AdminService, InventoryRow } from '../../../core/services/admin.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LabelPrintService } from '../../../core/services/label-print.service';
-import { Product } from '../../../core/models/product.model';
+import { MaterialsStore } from '../../../core/services/materials.store';
 
 type StockState = 'ok' | 'low' | 'out';
 type StockFilter = 'all' | 'low' | 'out';
 
+/**
+ * Inventario por (producto, material) — M15. El stock dejó de ser un solo
+ * número por producto (`products.stock_quantity`, eliminada en Fase 1) y
+ * pasó a vivir en `product_materials`, una fila por combinación declarada.
+ * Un mismo producto con existencia en 2 materiales aporta 2 renglones aquí.
+ *
+ * Las existencias se capturan EXCLUSIVAMENTE en esta pantalla (M15,
+ * confirmado con el dueño): el alta/edición del producto ya no las pide.
+ */
 @Component({
   selector: 'app-admin-inventory',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -16,27 +25,28 @@ type StockFilter = 'all' | 'low' | 'out';
   imports: [ReactiveFormsModule],
 })
 export class InventoryComponent implements OnInit {
-  private productService = inject(ProductService);
+  private adminService = inject(AdminService);
   private notification = inject(NotificationService);
   private labelPrint = inject(LabelPrintService);
   private fb = inject(FormBuilder);
+  protected materialsStore = inject(MaterialsStore);
 
-  protected products = signal<Product[]>([]);
+  protected rows = signal<InventoryRow[]>([]);
   protected loading = signal(true);
   protected saving = signal(false);
   protected search = signal('');
   protected filter = signal<StockFilter>('all');
+  protected materialFilter = signal<number | ''>('');
 
-  /** Producto cuyo stock se está ajustando (null = modal cerrado). */
-  protected adjusting = signal<Product | null>(null);
+  /** Fila cuyo stock se está ajustando (null = modal cerrado). */
+  protected adjusting = signal<InventoryRow | null>(null);
 
-  /** Producto del que se imprimirán etiquetas QR (null = modal cerrado). */
-  protected labeling = signal<Product | null>(null);
+  /** Fila de la que se imprimirán etiquetas QR (null = modal cerrado). */
+  protected labeling = signal<InventoryRow | null>(null);
   protected printingLabels = signal(false);
 
   protected form = this.fb.group({
-    stockQuantity: [0, [Validators.required, Validators.min(0)]],
-    stockAlertLevel: [5, [Validators.required, Validators.min(0)]],
+    stockQuantity: [0, [Validators.required]],
   });
 
   protected labelForm = this.fb.group({
@@ -44,33 +54,36 @@ export class InventoryComponent implements OnInit {
   });
 
   // ===== KPIs =====
-  protected totalProducts = computed(() => this.products().length);
+  protected totalRows = computed(() => this.rows().length);
 
   protected lowStockCount = computed(
-    () => this.products().filter((p) => this.stockState(p) === 'low').length,
+    () => this.rows().filter((r) => this.stockState(r) === 'low').length,
   );
 
   protected outOfStockCount = computed(
-    () => this.products().filter((p) => this.stockState(p) === 'out').length,
+    () => this.rows().filter((r) => this.stockState(r) === 'out').length,
   );
 
-  // base_cost es null cuando el producto no se cotiza en el material de su
-  // stock (ningún fabricante lo tiene capturado ahí): cuenta como $0, no NaN.
+  // M15.5: el valor de inventario SUMA todas las filas (producto, material)
+  // con existencia — nunca una sola fila por producto. baseCost null (hueco
+  // de M2) cuenta como $0, no NaN.
   protected inventoryValue = computed(() =>
-    this.products().reduce((sum, p) => sum + (p.base_cost ?? 0) * p.stock_quantity, 0),
+    this.rows().reduce((sum, r) => sum + (r.stockValue ?? 0), 0),
   );
 
-  protected filteredProducts = computed(() => {
+  protected filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
     const filter = this.filter();
-    return this.products().filter((p) => {
-      if (filter === 'low' && this.stockState(p) !== 'low') return false;
-      if (filter === 'out' && this.stockState(p) !== 'out') return false;
+    const materialId = this.materialFilter();
+    return this.rows().filter((r) => {
+      if (materialId && r.materialId !== materialId) return false;
+      if (filter === 'low' && this.stockState(r) !== 'low') return false;
+      if (filter === 'out' && this.stockState(r) !== 'out') return false;
       if (!term) return true;
       return (
-        p.name.toLowerCase().includes(term) ||
-        (p.sku?.toLowerCase().includes(term) ?? false) ||
-        (p.category_name?.toLowerCase().includes(term) ?? false)
+        r.name.toLowerCase().includes(term) ||
+        (r.sku?.toLowerCase().includes(term) ?? false) ||
+        r.materialLabel.toLowerCase().includes(term)
       );
     });
   });
@@ -81,9 +94,9 @@ export class InventoryComponent implements OnInit {
 
   protected loadInventory(): void {
     this.loading.set(true);
-    this.productService.getProductsAdmin().subscribe({
-      next: (products) => {
-        this.products.set(products);
+    this.adminService.getInventory().subscribe({
+      next: (res) => {
+        this.rows.set(res.data);
         this.loading.set(false);
       },
       error: () => {
@@ -93,9 +106,12 @@ export class InventoryComponent implements OnInit {
     });
   }
 
-  protected stockState(product: Product): StockState {
-    if (product.stock_quantity <= 0) return 'out';
-    if (product.stock_quantity <= product.stock_alert_level) return 'low';
+  /** Sin costo capturado (base_cost null, el hueco de M2): no se cuenta como agotado ni sobrado a propósito. */
+  protected stockState(row: InventoryRow): StockState {
+    if (row.stockQuantity <= 0) return 'out';
+    // Sin un punto de reorden por material (M15.3: los días son del producto,
+    // no hay umbral por material), "bajo" es un margen fijo de referencia.
+    if (row.stockQuantity <= 3) return 'low';
     return 'ok';
   }
 
@@ -109,13 +125,18 @@ export class InventoryComponent implements OnInit {
     this.filter.set(filter);
   }
 
+  protected onMaterialFilterChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.materialFilter.set(value ? Number(value) : '');
+  }
+
   // ===== Etiquetas QR =====
-  protected openLabels(product: Product): void {
-    if (!product.sku) {
+  protected openLabels(row: InventoryRow): void {
+    if (!row.sku) {
       this.notification.error('El producto no tiene SKU; asígnale uno en el catálogo para etiquetarlo');
       return;
     }
-    this.labeling.set(product);
+    this.labeling.set(row);
     this.labelForm.reset({ copies: 1 });
   }
 
@@ -124,25 +145,26 @@ export class InventoryComponent implements OnInit {
   }
 
   protected printLabels(): void {
-    const product = this.labeling();
-    if (!product || this.labelForm.invalid) {
+    const row = this.labeling();
+    if (!row || this.labelForm.invalid) {
       this.labelForm.markAllAsTouched();
       return;
     }
     const copies = this.labelForm.getRawValue().copies ?? 1;
     this.printingLabels.set(true);
     this.labelPrint
-      .print([{ name: product.name, sku: product.sku!, copies }])
+      .print([{ name: row.name, sku: row.sku!, copies }])
       .then(() => this.closeLabels())
       .catch(() => this.notification.error('No se pudieron generar las etiquetas'))
       .finally(() => this.printingLabels.set(false));
   }
 
-  /** Imprime una etiqueta por cada producto visible en el filtro actual. */
+  /** Imprime una etiqueta por cada fila visible en el filtro actual (una por producto, sin repetir SKU). */
   protected printFilteredLabels(): void {
-    const items = this.filteredProducts()
-      .filter((p) => !!p.sku)
-      .map((p) => ({ name: p.name, sku: p.sku!, copies: 1 }));
+    const seen = new Set<string>();
+    const items = this.filteredRows()
+      .filter((r) => !!r.sku && !seen.has(r.sku) && seen.add(r.sku))
+      .map((r) => ({ name: r.name, sku: r.sku!, copies: 1 }));
     if (items.length === 0) {
       this.notification.error('No hay productos con SKU en el filtro actual');
       return;
@@ -155,12 +177,9 @@ export class InventoryComponent implements OnInit {
   }
 
   // ===== Ajuste de stock =====
-  protected openAdjust(product: Product): void {
-    this.adjusting.set(product);
-    this.form.reset({
-      stockQuantity: product.stock_quantity,
-      stockAlertLevel: product.stock_alert_level,
-    });
+  protected openAdjust(row: InventoryRow): void {
+    this.adjusting.set(row);
+    this.form.reset({ stockQuantity: row.stockQuantity });
   }
 
   protected closeAdjust(): void {
@@ -168,24 +187,21 @@ export class InventoryComponent implements OnInit {
   }
 
   protected saveAdjust(): void {
-    const product = this.adjusting();
-    if (!product || this.form.invalid) {
+    const row = this.adjusting();
+    if (!row || this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
     const raw = this.form.getRawValue();
     this.saving.set(true);
-    this.productService
-      .updateProduct(product.id, {
-        stock_quantity: raw.stockQuantity ?? 0,
-        stock_alert_level: raw.stockAlertLevel ?? 0,
-      })
+    this.adminService
+      .updateInventory([{ productId: row.productId, materialId: row.materialId, stockQuantity: raw.stockQuantity ?? 0 }])
       .subscribe({
-        next: (updated) => {
-          this.products.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+        next: () => {
           this.saving.set(false);
           this.notification.success('Stock actualizado');
           this.closeAdjust();
+          this.loadInventory();
         },
         error: (err: { error?: { message?: string } }) => {
           this.saving.set(false);

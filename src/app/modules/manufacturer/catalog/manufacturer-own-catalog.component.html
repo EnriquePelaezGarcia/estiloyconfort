@@ -26,8 +26,7 @@
     <table class="table table--cards">
       <thead>
         <tr>
-          <th>Producto</th><th>SKU</th>
-          <th class="num">MDF Pintado</th><th class="num">Melamina Blanca</th><th class="num">Melamina Color</th>
+          <th>Producto</th><th>SKU</th><th>Costos por material</th>
         </tr>
       </thead>
       <tbody>
@@ -35,17 +34,14 @@
           <tr>
             <td data-label="Producto" class="strong">{{ item.name }}</td>
             <td data-label="SKU" class="muted">{{ item.sku ?? '—' }}</td>
-            <td data-label="MDF Pintado" class="num">
-              @if (item.costMdf !== null) { {{ item.costMdf | currency:'MXN':'symbol-narrow':'1.2-2' }} }
-              @else { <span class="muted">No aplica</span> }
-            </td>
-            <td data-label="Melamina Blanca" class="num">
-              @if (item.costMelaminaBlanca !== null) { {{ item.costMelaminaBlanca | currency:'MXN':'symbol-narrow':'1.2-2' }} }
-              @else { <span class="muted">No aplica</span> }
-            </td>
-            <td data-label="Melamina Color" class="num">
-              @if (item.costMelaminaColor !== null) { {{ item.costMelaminaColor | currency:'MXN':'symbol-narrow':'1.2-2' }} }
-              @else { <span class="muted">No aplica</span> }
+            <td data-label="Costos por material">
+              @for (c of item.costs; track c.materialId) {
+                <span class="cost-chip">
+                  {{ c.materialLabel }}: {{ c.cost | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                </span>
+              } @empty {
+                <span class="muted">No aplica</span>
+              }
             </td>
           </tr>
         }

@@ -1,5 +1,11 @@
 @use '../../../../styles/variables' as vars;
 
+// M15.4: negativo = vendido y pendiente de fabricar, no es un error.
+.negative {
+  color: vars.$color-error;
+  font-weight: 700;
+}
+
 // ===== Chips de filtro =====
 .chips {
   display: flex;

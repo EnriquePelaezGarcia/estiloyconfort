@@ -1,1 +1,11 @@
 // Sin estilos propios: reutiliza las clases globales de tabla/página (_business.scss).
+
+.cost-chip {
+  display: inline-block;
+  margin: 0.15rem 0.35rem 0.15rem 0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
