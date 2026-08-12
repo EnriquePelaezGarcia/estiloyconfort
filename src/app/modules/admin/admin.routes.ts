@@ -107,6 +107,14 @@ export const adminRoutes: Routes = [
         title: 'Gastos fijos - Panel Admin',
       },
       {
+        path: 'gastos/comisiones',
+        loadComponent: () =>
+          import('./expenses/delivery-commissions/delivery-commissions.component').then(
+            (m) => m.DeliveryCommissionsComponent,
+          ),
+        title: 'Comisiones de repartidor - Panel Admin',
+      },
+      {
         path: 'finanzas/detalle/:metric',
         loadComponent: () =>
           import('./finances/finance-detail/finance-detail.component').then(

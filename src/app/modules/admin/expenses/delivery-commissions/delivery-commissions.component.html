@@ -1,0 +1,148 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Comisiones de repartidor</h1>
+    <p class="page-head__sub">El cobro de armado que le corresponde a quien entregó</p>
+  </div>
+  <nav class="page-head__tabs">
+    <a routerLink="/admin/gastos" class="btn btn--ghost">
+      <span class="material-symbols-outlined">bolt</span> Captura rápida
+    </a>
+    <a routerLink="/admin/gastos/fijos" class="btn btn--ghost">
+      <span class="material-symbols-outlined">event_repeat</span> Gastos fijos
+    </a>
+    <button type="button" class="btn btn--ghost" (click)="backfill()" title="Genera las comisiones de entregas anteriores">
+      <span class="material-symbols-outlined">history</span> Generar histórico
+    </button>
+  </nav>
+</header>
+
+<section class="toolbar">
+  <div class="filters__periods">
+    <button type="button" class="chip" [class.chip--active]="period() === 'week'" (click)="selectPeriod('week')">Esta semana</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'month'" (click)="selectPeriod('month')">Este mes</button>
+    <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
+  </div>
+  <select class="filter-select" (change)="onPayeeChange($event)">
+    <option value="">Todos los repartidores</option>
+    @for (p of payees(); track p.id) {
+      <option [value]="p.id">{{ p.fullName }}</option>
+    }
+  </select>
+</section>
+
+<p class="period-tag">
+  Semana lunes a domingo ·
+  <strong>{{ rangeFrom() | date: 'd MMM' }} al {{ rangeTo() | date: 'd MMM y' }}</strong>
+</p>
+
+<section class="stat-grid">
+  <div class="stat-card">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">two_wheeler</span></span>
+    <span class="stat-card__label">Comisiones del período</span>
+    <span class="stat-card__value">{{ total() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">{{ commissions().length }} entrega(s) con armado</span>
+  </div>
+  <div class="stat-card stat-card--gold">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">pending</span></span>
+    <span class="stat-card__label">Pendiente de pagar</span>
+    <span class="stat-card__value">{{ pendingTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">{{ pendingItems().length }} sin pagar</span>
+  </div>
+  <div class="stat-card stat-card--success">
+    <span class="stat-card__icon"><span class="material-symbols-outlined">check_circle</span></span>
+    <span class="stat-card__label">Seleccionado</span>
+    <span class="stat-card__value">{{ selectedTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    <span class="stat-card__hint">listo para pagar</span>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel__title">
+    <span>Detalle</span>
+    @if (pendingItems().length) {
+      <button
+        type="button"
+        class="btn btn--success"
+        [disabled]="!selected().size || saving()"
+        (click)="paySelected()"
+      >
+        @if (saving()) {
+          <span class="spinner spinner--sm"></span> Pagando...
+        } @else {
+          <span class="material-symbols-outlined">payments</span>
+          Pagar seleccionadas ({{ selected().size }})
+        }
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="state"><span class="spinner"></span> Cargando...</div>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="table__check">
+              @if (pendingItems().length) {
+                <input
+                  type="checkbox"
+                  [checked]="allPendingSelected()"
+                  (change)="toggleAll()"
+                  title="Seleccionar todas las pendientes"
+                />
+              }
+            </th>
+            <th>Entrega</th>
+            <th>Pedido</th>
+            <th>Cliente</th>
+            <th>Repartidor</th>
+            <th class="table__num">Armado</th>
+            <th class="table__num">Comisión</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of commissions(); track c.expenseId) {
+            <tr [class.row--paid]="c.status === 'paid'">
+              <td class="table__check">
+                @if (c.status === 'pending') {
+                  <input
+                    type="checkbox"
+                    [checked]="isSelected(c.expenseId)"
+                    (change)="toggle(c)"
+                  />
+                }
+              </td>
+              <td>{{ c.expenseDate | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ c.orderNumber ?? '—' }}</td>
+              <td>{{ c.customerName ?? '—' }}</td>
+              <td>{{ c.payeeName ?? '—' }}</td>
+              <td class="table__num">
+                {{ c.assemblyCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+                @if (c.assemblyFloors) {
+                  <small class="table__hint">{{ c.assemblyFloors }} piso(s)</small>
+                }
+              </td>
+              <td class="table__num"><strong>{{ c.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+              <td>
+                <span class="badge" [class]="statusTone[c.status]">{{ statusLabels[c.status] }}</span>
+                @if (c.status === 'paid' && c.paidDate) {
+                  <small class="table__hint">{{ c.paidDate | date: 'dd/MM' }}</small>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" class="empty">
+                Sin comisiones en este período. Se generan solas al completar una entrega
+                con servicio de armado.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

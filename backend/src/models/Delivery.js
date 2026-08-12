@@ -90,7 +90,28 @@ const Delivery = {
       const [[d]] = await pool.execute('SELECT order_id FROM deliveries WHERE id = ?', [id]);
       if (d) await pool.execute("UPDATE orders SET order_status = 'delivered' WHERE id = ?", [d.order_id]);
     }
-    return this.findById(id);
+
+    // Comisión del repartidor por armado. El require va aquí adentro y no en la
+    // cabecera para romper el ciclo DeliveryCommission → PricingConfig → ...;
+    // el módulo ya está cargado en memoria, así que no cuesta nada.
+    const DeliveryCommission = require('./DeliveryCommission');
+    const delivery = await this.findById(id);
+    try {
+      if (status === 'completed') {
+        await DeliveryCommission.generateForDelivery(id);
+      } else {
+        // Si la entrega deja de estar completada, la comisión se revierte SOLO
+        // si sigue pendiente: si ya se pagó, el dinero salió y borrarla
+        // descuadraría un mes posiblemente ya revisado.
+        const { keptPaid } = await DeliveryCommission.revertForDelivery(id);
+        if (keptPaid && delivery) delivery.commissionKeptPaid = true;
+      }
+    } catch (err) {
+      // La comisión es contabilidad, no operación: si falla, la entrega debe
+      // guardarse igual. Queda en el log para regenerarla con el backfill.
+      console.error(`⚠️  No se pudo actualizar la comisión de la entrega ${id}:`, err.message);
+    }
+    return delivery;
   },
 
   /**
@@ -99,12 +120,18 @@ const Delivery = {
    * armado corresponde al repartidor encargado de la entrega.
    */
   async earningsByPerson(deliveryPersonId, { from, to }) {
+    // El LEFT JOIN a expenses trae el estado de pago de la comisión, para que
+    // el repartidor vea qué ya se le pagó y qué sigue pendiente. Es LEFT
+    // porque las entregas sin armado no generan comisión.
     const [rows] = await pool.execute(
       `SELECT dv.id, dv.order_id, dv.delivered_at,
               o.order_number, o.customer_name, o.delivery_address,
-              o.assembly_service, o.assembly_floors, o.assembly_cost
+              o.assembly_service, o.assembly_floors, o.assembly_cost,
+              e.id AS commission_id, e.amount AS commission_amount,
+              e.status AS commission_status, e.paid_date AS commission_paid_date
        FROM deliveries dv
        JOIN orders o ON o.id = dv.order_id
+       LEFT JOIN expenses e ON e.delivery_id = dv.id
        WHERE dv.delivery_person_id = ?
          AND dv.delivery_status = 'completed'
          AND dv.delivered_at >= ?
@@ -122,8 +149,17 @@ const Delivery = {
       assemblyService: !!r.assembly_service,
       assemblyFloors: r.assembly_floors != null ? Number(r.assembly_floors) : 0,
       assemblyCost: r.assembly_cost != null ? Number(r.assembly_cost) : 0,
+      commissionAmount: r.commission_amount != null ? Number(r.commission_amount) : null,
+      commissionStatus: r.commission_status ?? null,
+      commissionPaidDate: r.commission_paid_date ?? null,
     }));
     const assemblyTotal = deliveries.reduce((sum, d) => sum + d.assemblyCost, 0);
+    const paidTotal = deliveries
+      .filter((d) => d.commissionStatus === 'paid')
+      .reduce((sum, d) => sum + (d.commissionAmount ?? 0), 0);
+    const pendingTotal = deliveries
+      .filter((d) => d.commissionStatus === 'pending')
+      .reduce((sum, d) => sum + (d.commissionAmount ?? 0), 0);
     return {
       from,
       to,
@@ -132,6 +168,8 @@ const Delivery = {
         deliveredCount: deliveries.length,
         assemblyCount: deliveries.filter((d) => d.assemblyService).length,
         assemblyTotal: Math.round(assemblyTotal * 100) / 100,
+        paidTotal: Math.round(paidTotal * 100) / 100,
+        pendingTotal: Math.round(pendingTotal * 100) / 100,
       },
     };
   },

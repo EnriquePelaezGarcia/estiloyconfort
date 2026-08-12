@@ -1,0 +1,57 @@
+@use '../../../../../styles/variables' as vars;
+
+.page-head__tabs {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.filters__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: all vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.period-tag {
+  margin: 0 0 vars.$spacing-md;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+
+  strong { color: vars.$color-primary; }
+}
+
+.table__num { text-align: right; }
+.table__check { width: 40px; text-align: center; }
+
+.table__hint {
+  display: block;
+  font-size: 0.72rem;
+  color: vars.$color-text-secondary;
+  font-weight: 400;
+}
+
+// Una comisión ya pagada se atenúa: sigue visible para el histórico, pero no
+// es accionable (no tiene checkbox).
+.row--paid {
+  opacity: 0.6;
+}

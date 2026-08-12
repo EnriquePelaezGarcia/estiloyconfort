@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import {
+  CommissionListResponse,
   CreateExpenseRequest,
   Expense,
   ExpenseCategory,
@@ -110,6 +111,23 @@ export class ExpensesService {
   generateRecurring(): Observable<{ created: number }> {
     return this.api
       .post<{ data: { created: number } }>('/expenses/recurring/generate', {})
+      .pipe(map((r) => r.data));
+  }
+
+  // ─── COMISIONES DE REPARTIDOR ──────────────────────────────────────────────
+
+  /** Default del backend: la semana en curso (lunes-domingo). */
+  commissions(filters: ExpenseFilters = {}): Observable<CommissionListResponse> {
+    return this.api.get<CommissionListResponse>('/expenses/commissions', toParams(filters));
+  }
+
+  /** Genera las comisiones de entregas ya completadas. Idempotente. */
+  backfillCommissions(): Observable<{ scanned: number; created: number; skipped: number }> {
+    return this.api
+      .post<{ data: { scanned: number; created: number; skipped: number } }>(
+        '/expenses/commissions/backfill',
+        {},
+      )
       .pipe(map((r) => r.data));
   }
 }

@@ -116,3 +116,42 @@ export interface RecurringListResponse {
 
 /** Período unificado (semana = lunes a domingo en todas las pantallas). */
 export type PeriodKind = 'day' | 'week' | 'month' | 'year' | 'custom';
+
+/**
+ * Comisión del repartidor por armado. Se genera sola al completar la entrega
+ * y nace pendiente: entra al estado de resultados cuando se marca pagada.
+ */
+export interface DeliveryCommission {
+  expenseId: number;
+  amount: number;
+  expenseDate: string;
+  status: ExpenseStatus;
+  paidDate: string | null;
+  orderId: number | null;
+  orderNumber: string | null;
+  customerName: string | null;
+  assemblyCost: number;
+  assemblyFloors: number;
+  deliveryId: number | null;
+  deliveredAt: string | null;
+  payeeUserId: number | null;
+  payeeName: string | null;
+}
+
+export interface CommissionPayee {
+  id: number;
+  fullName: string;
+}
+
+export interface CommissionListResponse {
+  data: DeliveryCommission[];
+  meta: {
+    period: string;
+    from: string;
+    to: string;
+    payees: CommissionPayee[];
+    total: number;
+    pendingTotal: number;
+    count: number;
+  };
+}
