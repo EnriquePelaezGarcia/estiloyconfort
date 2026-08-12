@@ -1,0 +1,157 @@
+<div class="panel cart order-summary">
+  <h2 class="panel__title">Resumen ({{ store.lines().length }})</h2>
+
+  <div class="summary-lines">
+    @for (l of store.lines(); track l.product.id + '-' + l.materialId) {
+      <div class="summary-line">
+        <span class="summary-line__name">
+          {{ l.quantity }}× {{ l.product.name }}
+          @if (store.lineMaterialPrice(l); as mp) {
+            <span class="muted"> · {{ mp.label }}</span>
+          }
+        </span>
+        <span class="summary-line__amount">
+          @if (store.unitPrice(l) !== null) {
+            {{ store.unitPrice(l)! * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}
+          } @else { — }
+        </span>
+      </div>
+    }
+  </div>
+
+  @if (store.shippingQuote() || store.hasAssembly()) {
+    <div class="cart-total cart-total--sub">
+      <span>{{ store.isMsi() ? 'Subtotal a 6 MSI' : 'Subtotal productos' }}</span>
+      <span class="cart-total__amount">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+    @if (store.shippingQuote(); as shipping) {
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">local_shipping</span>
+          Envío · {{ shipping.zone }}
+        </span>
+        @if (shipping.isFree) {
+          <span class="shipping-row__free">GRATIS</span>
+        } @else {
+          <span class="shipping-row__price">{{ shipping.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        }
+      </div>
+    }
+    @if (store.hasAssembly()) {
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">handyman</span>
+          Servicio de armado (piso {{ store.assemblyFloorsValue() }})
+        </span>
+        <span class="shipping-row__price">{{ store.assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+    }
+    <div class="grand-total">
+      <span>Total a pagar</span>
+      <span class="grand-total__amount">{{ store.grandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+  } @else {
+    <div class="cart-total">
+      <span>{{ store.isMsi() ? 'Total a 6 MSI' : 'Total' }}</span>
+      <span class="cart-total__amount">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+  }
+  @if (store.isMsi()) {
+    <p class="msi-note">
+      <span class="material-symbols-outlined">credit_card</span>
+      Se aplica el precio a 6 meses sin intereses del catálogo.
+    </p>
+  }
+  @if (store.isWholesale() && !store.wholesalePriceIncludesIva()) {
+    <!-- M13: el precio de lista de Mayoreo es SIN IVA — el ticket lo
+         desglosa siempre, aunque el cliente no pida factura. -->
+    <div class="cart-total cart-total--sub">
+      <span>Subtotal Mayoreo (sin IVA)</span>
+      <span class="cart-total__amount">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+    <div class="cart-total cart-total--sub">
+      <span>IVA (se suma al facturar)</span>
+      <span class="cart-total__amount">{{ store.wholesaleIva() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+    <div class="grand-total">
+      <span>Total con IVA</span>
+      <span class="grand-total__amount">{{ (store.total() + store.wholesaleIva()) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+    </div>
+  }
+
+  @if (store.isLayaway()) {
+    <div class="credit-plan credit-plan--layaway">
+      <h3 class="credit-plan__title">
+        <span class="material-symbols-outlined">event_available</span> Sistema de Apartado
+      </h3>
+      <div class="credit-plan__row credit-plan__row--highlight">
+        <span>Precio de contado</span>
+        <span class="strong">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+      <div class="credit-plan__row">
+        <span>Abono inicial mínimo</span>
+        <span class="strong">$500</span>
+      </div>
+      <div class="credit-plan__row">
+        <span>Plazo al precio de contado</span>
+        <span class="strong">3 meses</span>
+      </div>
+      @if (store.layawayDeadline()) {
+        <div class="credit-plan__row">
+          <span>Fecha límite</span>
+          <span class="strong">{{ store.layawayDeadline() }}</span>
+        </div>
+      }
+      <p class="credit-plan__note">
+        El cliente abona la cantidad que desee (mínimo $500 al apartar).
+        Si no liquida antes del {{ store.layawayDeadline() }}, se aplica el precio de crédito.
+        El mueble se entrega hasta cubrir el pago total.
+      </p>
+    </div>
+  }
+
+  @if (store.isCredit()) {
+    @if (store.creditQuote(); as credit) {
+      <div class="credit-plan">
+        <h3 class="credit-plan__title">
+          <span class="material-symbols-outlined">credit_score</span> Plan de Crédito en Tienda
+        </h3>
+        <div class="credit-plan__row">
+          <span>Precio a crédito</span>
+          <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+        <div class="credit-plan__row credit-plan__row--highlight">
+          <span>Pago inicial</span>
+          <span class="strong">{{ credit.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+        <div class="credit-plan__row">
+          <span>{{ credit.weeks }} cuotas semanales de</span>
+          <span class="strong">{{ credit.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+        <p class="credit-plan__note">
+          El mueble no se envía hasta cubrir el pago inicial. Los abonos semanales
+          sólo se reciben en efectivo o transferencia.
+        </p>
+      </div>
+    } @else {
+      <p class="credit-plan__empty">Agrega productos para calcular el plan de crédito.</p>
+    }
+  }
+
+  @if (store.isRestrictedEdit() && store.changeSummary(); as summary) {
+    @if (summary.diff > 0) {
+      <p class="field__hint">Se cobrará la diferencia: {{ summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }}.</p>
+    } @else if (summary.diff < 0) {
+      <p class="field__hint">El cliente tiene un saldo a favor de {{ -summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }} — se anotará en el pedido.</p>
+    }
+  }
+
+  <button type="button" class="btn btn--primary btn--block btn--lg" [disabled]="store.saving()" (click)="submit()">
+    @if (store.saving()) {
+      <span class="spinner spinner--sm"></span> {{ store.isEditing() ? 'Guardando…' : 'Creando…' }}
+    } @else {
+      <span class="material-symbols-outlined">check_circle</span>
+      {{ store.isEditing() ? 'Guardar cambios' : 'Crear pedido' }}
+    }
+  </button>
+</div>

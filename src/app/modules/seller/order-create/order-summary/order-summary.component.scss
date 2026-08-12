@@ -1,0 +1,36 @@
+@use '../../../../../styles/variables' as vars;
+
+// En escritorio el resumen queda fijo mientras se llena el formulario del
+// paso 2 (D4 del plan). En móvil/tablet fluye normal, debajo del formulario.
+:host {
+  display: block;
+
+  @media (min-width: vars.$bp-desktop) {
+    position: sticky;
+    top: vars.$spacing-lg;
+  }
+}
+
+.summary-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: vars.$spacing-sm;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.summary-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: vars.$spacing-sm;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid vars.$color-border;
+  font-size: 0.85rem;
+
+  &__name { flex: 1; min-width: 0; }
+  &__amount { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
+
+  .muted { color: vars.$color-text-secondary; font-weight: 400; }
+}

@@ -226,6 +226,20 @@
                     Mayoreo exige mínimo {{ l.product.wholesaleMinQty ?? wholesaleMinQtyGlobal() }} — faltan {{ lineWholesaleShortfall(l) }}
                   </span>
                 }
+
+                <!-- Piezas disponibles del material YA SELECCIONADO en esta línea: se
+                     actualiza solo al cambiar el material (mismo dato que el precio). -->
+                @if (lineMaterialPrice(l); as stockMp) {
+                  @if (stockMp.stockQuantity > 0) {
+                    <span class="cart-line__stock cart-line__stock--available">
+                      {{ stockMp.stockQuantity }} disponibles
+                    </span>
+                  } @else {
+                    <span class="cart-line__stock cart-line__stock--out">
+                      Agotado — se fabrica ({{ l.product.availability_days }} días)
+                    </span>
+                  }
+                }
               </div>
               <div class="qty">
                 <button type="button" class="icon-btn" (click)="changeQty(i, -1)" aria-label="Quitar uno">

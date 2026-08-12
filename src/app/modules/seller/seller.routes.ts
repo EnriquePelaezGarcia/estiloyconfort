@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { unsavedChangesGuard } from '../../core/guards/unsaved-changes.guard';
 
 // Fase 4: Módulo Vendedor
 export const sellerRoutes: Routes = [
@@ -19,6 +20,7 @@ export const sellerRoutes: Routes = [
         loadComponent: () =>
           import('./order-create/order-create.component').then((m) => m.OrderCreateComponent),
         title: 'Nuevo pedido - Vendedor',
+        canDeactivate: [unsavedChangesGuard],
       },
       {
         path: 'cotizaciones',

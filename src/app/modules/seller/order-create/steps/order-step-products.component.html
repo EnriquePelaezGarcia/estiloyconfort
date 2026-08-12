@@ -1,0 +1,210 @@
+<div class="order-col">
+  <div class="panel">
+    <h2 class="panel__title">Condición de venta</h2>
+    <div class="field">
+      <label for="paymentMethod">Condición de venta *</label>
+      <select id="paymentMethod" [formControl]="store.form.controls.paymentMethod">
+        <option value="cash">Contado</option>
+        <option value="msi">Meses sin intereses</option>
+        <option value="store_credit">Crédito tienda</option>
+        <option value="layaway">Apartado</option>
+        @if (store.showWholesaleOption()) {
+          <option value="wholesale">Mayoreo</option>
+        }
+      </select>
+      @if (store.isWholesale()) {
+        <p class="field__hint">Precio de mayoreo — venta de contado entre negocios (sin IVA ni comisión). Solo efectivo o transferencia.</p>
+      } @else {
+        <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
+      }
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2 class="panel__title">Productos</h2>
+    <div class="search">
+      <span class="material-symbols-outlined">search</span>
+      <input type="text" placeholder="Buscar producto por nombre o SKU" (input)="store.onSearchInput($event)" />
+    </div>
+
+    <div class="results">
+      @if (store.searching()) {
+        <div class="state"><div class="spinner"></div></div>
+      } @else {
+        @for (p of store.availableSearchResults(); track p.id) {
+          <button type="button" class="result" (click)="store.addProduct(p)">
+            @if (p.primaryImage) {
+              <img class="result__thumb" [src]="p.primaryImage" [alt]="p.name" loading="lazy" />
+            } @else {
+              <span class="result__thumb result__thumb--empty">
+                <span class="material-symbols-outlined">chair</span>
+              </span>
+            }
+            <span class="result__info">
+              <span class="result__name">{{ p.name }}</span>
+              <span class="result__sku">{{ p.sku }} · {{ p.materialPrices.length }} material(es)</span>
+            </span>
+            <span class="material-symbols-outlined">add_circle</span>
+          </button>
+        } @empty {
+          <p class="empty">Sin resultados.</p>
+        }
+      }
+    </div>
+  </div>
+
+  <div class="panel cart">
+    <h2 class="panel__title">Pedido ({{ store.lines().length }})</h2>
+    @if (store.lines().length === 0) {
+      <p class="empty">Agrega productos desde el buscador.</p>
+    } @else {
+      @for (l of store.lines(); track l.product.id + '-' + l.materialId; let i = $index) {
+        <div class="cart-line" [class.cart-line--locked]="!store.canEditLine(l)" [class.cart-line--alert]="store.unitPrice(l) === null">
+          <div class="cart-line__info">
+            <span class="cart-line__name">{{ l.product.name }}</span>
+
+            <!-- M4: material y color son de ESTA línea. -->
+            @if (l.product.materialPrices.length > 1) {
+              <select class="cart-line__material" [disabled]="!store.canEditLine(l)" (change)="store.changeLineMaterial(i, $event)">
+                @for (mp of l.product.materialPrices; track mp.materialId) {
+                  <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
+                    {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
+                  </option>
+                }
+              </select>
+            } @else if (l.product.materialPrices[0]; as onlyMaterial) {
+              <span class="muted">{{ onlyMaterial.label }}</span>
+            }
+
+            @if (store.lineMaterialPrice(l); as mp) {
+              <!-- M6: siempre visible y editable salvo color fijo ('fixed').
+                   'free' (p.ej. MDF) trae "Blanco" por default pero
+                   el vendedor puede escribir otro color por línea. -->
+              <input
+                type="text"
+                class="cart-line__color"
+                [value]="l.color ?? ''"
+                [disabled]="mp.colorPolicy === 'fixed' || !store.canEditLine(l)"
+                [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
+                (input)="store.changeLineColor(i, $event)"
+              />
+            }
+
+            @if (store.unitPrice(l) !== null) {
+              <span class="cart-line__price">{{ store.unitPrice(l) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
+            } @else {
+              <span class="cart-line__price cart-line__price--alert">
+                No se cotiza en este material — quítalo o cambia el material
+              </span>
+            }
+
+            @if (store.lineWholesaleShortfall(l) > 0) {
+              <span class="cart-line__fabrication cart-line__fabrication--alert">
+                <span class="material-symbols-outlined">warning</span>
+                Mayoreo exige mínimo {{ l.product.wholesaleMinQty ?? store.wholesaleMinQtyGlobal() }} — faltan {{ store.lineWholesaleShortfall(l) }}
+              </span>
+            }
+            <!-- Piezas disponibles del material YA SELECCIONADO en esta línea: se
+                 actualiza solo al cambiar el material (mismo dato que el precio). -->
+            @if (store.lineMaterialPrice(l); as stockMp) {
+              @if (stockMp.stockQuantity > 0) {
+                <span class="cart-line__stock cart-line__stock--available">
+                  {{ stockMp.stockQuantity }} disponibles
+                </span>
+              } @else {
+                <span class="cart-line__stock cart-line__stock--out">
+                  Agotado — se fabrica ({{ l.product.availability_days }} días)
+                </span>
+              }
+            }
+          </div>
+          <div class="qty">
+            <button type="button" class="icon-btn" [disabled]="!store.canEditLine(l)" (click)="store.changeQty(i, -1)" aria-label="Quitar uno">
+              <span class="material-symbols-outlined">remove</span>
+            </button>
+            <span class="qty__value">{{ l.quantity }}</span>
+            <button type="button" class="icon-btn" [disabled]="!store.canEditLine(l)" (click)="store.changeQty(i, 1)" aria-label="Agregar uno">
+              <span class="material-symbols-outlined">add</span>
+            </button>
+          </div>
+          <span class="cart-line__subtotal">
+            @if (store.unitPrice(l) !== null) {
+              {{ store.unitPrice(l)! * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}
+            } @else { — }
+          </span>
+          @if (store.canEditLine(l)) {
+            <button type="button" class="icon-btn icon-btn--danger" (click)="store.removeLine(i)" aria-label="Eliminar">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          } @else {
+            <span class="material-symbols-outlined cart-line__lock-icon" title="Mueble en fabricación, no se puede quitar">lock</span>
+          }
+        </div>
+      }
+
+      <div class="cart-total">
+        <span>{{ store.isMsi() ? 'Subtotal a 6 MSI' : 'Subtotal productos' }}</span>
+        <span class="cart-total__amount">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+
+      @if (store.isLayaway()) {
+        <div class="credit-plan credit-plan--layaway">
+          <h3 class="credit-plan__title">
+            <span class="material-symbols-outlined">event_available</span> Sistema de Apartado
+          </h3>
+          <div class="credit-plan__row credit-plan__row--highlight">
+            <span>Precio de contado</span>
+            <span class="strong">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="credit-plan__row">
+            <span>Abono inicial mínimo</span>
+            <span class="strong">$500</span>
+          </div>
+          <div class="credit-plan__row">
+            <span>Plazo al precio de contado</span>
+            <span class="strong">3 meses</span>
+          </div>
+          @if (store.layawayDeadline()) {
+            <div class="credit-plan__row">
+              <span>Fecha límite</span>
+              <span class="strong">{{ store.layawayDeadline() }}</span>
+            </div>
+          }
+          <p class="credit-plan__note">
+            El cliente abona la cantidad que desee (mínimo $500 al apartar).
+            Si no liquida antes del {{ store.layawayDeadline() }}, se aplica el precio de crédito.
+            El mueble se entrega hasta cubrir el pago total.
+          </p>
+        </div>
+      }
+
+      @if (store.isCredit()) {
+        @if (store.creditQuote(); as credit) {
+          <div class="credit-plan">
+            <h3 class="credit-plan__title">
+              <span class="material-symbols-outlined">credit_score</span> Plan de Crédito en Tienda
+            </h3>
+            <div class="credit-plan__row">
+              <span>Precio a crédito</span>
+              <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+            <div class="credit-plan__row credit-plan__row--highlight">
+              <span>Pago inicial</span>
+              <span class="strong">{{ credit.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+            <div class="credit-plan__row">
+              <span>{{ credit.weeks }} cuotas semanales de</span>
+              <span class="strong">{{ credit.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+            <p class="credit-plan__note">
+              El mueble no se envía hasta cubrir el pago inicial. Los abonos semanales
+              sólo se reciben en efectivo o transferencia.
+            </p>
+          </div>
+        } @else {
+          <p class="credit-plan__empty">Agrega productos para calcular el plan de crédito.</p>
+        }
+      }
+    }
+  </div>
+</div>

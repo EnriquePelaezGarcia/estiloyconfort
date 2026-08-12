@@ -1,0 +1,108 @@
+@use '../../../../../styles/variables' as vars;
+
+.results {
+  margin-top: vars.$spacing-sm;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  width: 100%;
+  padding: 0.6rem vars.$spacing-sm;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-md;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background vars.$transition-fast;
+
+  &:hover { background: vars.$color-bg; border-color: vars.$color-border; }
+
+  &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  &__name { font-weight: 600; font-size: 0.9rem; color: vars.$color-text; }
+  &__sku { font-size: 0.78rem; color: vars.$color-text-secondary; }
+  &__price { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
+  &__price.muted { color: vars.$color-text-secondary; font-weight: 500; font-size: 0.78rem; }
+
+  // Miniatura cuadrada: `cover` recorta al centro para que fotos verticales y
+  // horizontales ocupen el mismo espacio y la lista no baile.
+  &__thumb {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+
+    &--empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .material-symbols-outlined {
+        font-size: 1.3rem;
+        color: vars.$color-text-secondary;
+      }
+    }
+  }
+
+  .material-symbols-outlined { color: vars.$color-primary; }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    .material-symbols-outlined { color: vars.$color-text-secondary; }
+  }
+}
+
+.cart-line {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm 0;
+  border-bottom: 1px solid vars.$color-border;
+
+  &--alert { background: color-mix(in srgb, #dc2626 6%, white); }
+
+  &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  &__name { font-weight: 600; font-size: 0.88rem; }
+  &__price { font-size: 0.78rem; color: vars.$color-text-secondary; }
+  &__price--alert { color: #dc2626; font-weight: 600; }
+  &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }
+
+  &__fabrication {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    input[type='checkbox'] { accent-color: vars.$color-primary; cursor: pointer; }
+  }
+
+  &__lock-icon {
+    font-size: 1.1rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &--locked {
+    opacity: 0.7;
+  }
+}
+
+.qty {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+
+  &__value { min-width: 28px; text-align: center; font-weight: 600; }
+}

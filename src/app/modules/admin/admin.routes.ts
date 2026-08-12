@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { unsavedChangesGuard } from '../../core/guards/unsaved-changes.guard';
 
 // Fase 3: Panel de Administrador
 export const adminRoutes: Routes = [
@@ -61,6 +62,7 @@ export const adminRoutes: Routes = [
         loadComponent: () =>
           import('../seller/order-create/order-create.component').then((m) => m.OrderCreateComponent),
         title: 'Nuevo pedido - Panel Admin',
+        canDeactivate: [unsavedChangesGuard],
       },
       {
         path: 'punto-venta/:id',

@@ -1,0 +1,69 @@
+@use '../../../../../styles/variables' as vars;
+
+.step2-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-lg;
+  align-items: start;
+
+  @media (max-width: vars.$bp-desktop) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ===== Envío: badge en "Entrega" =====
+.shipping-badge {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin-top: vars.$spacing-sm;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-success;
+  border-radius: vars.$radius-md;
+  background: color-mix(in srgb, vars.$color-success 8%, white);
+  animation: shipping-fade-in 0.2s ease;
+
+  .material-symbols-outlined { color: vars.$color-success; }
+
+  &__info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  &__zone { font-size: 0.875rem; font-weight: 600; color: vars.$color-text; }
+  &__label { font-size: 0.75rem; color: vars.$color-text-secondary; }
+
+  &__price {
+    font-size: 1rem;
+    font-weight: 700;
+    color: vars.$color-text;
+    white-space: nowrap;
+
+    &--free {
+      color: vars.$color-success;
+      font-size: 0.8rem;
+      border: 1px solid vars.$color-success;
+      padding: 2px 8px;
+      border-radius: vars.$radius-full;
+    }
+  }
+}
+
+@keyframes shipping-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+// ===== Servicio de armado =====
+.assembly-field {
+  .assembly-check {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    cursor: pointer;
+    font-weight: 600;
+
+    input[type='checkbox'] {
+      width: 1.05rem;
+      height: 1.05rem;
+      accent-color: vars.$color-primary;
+      cursor: pointer;
+    }
+  }
+}

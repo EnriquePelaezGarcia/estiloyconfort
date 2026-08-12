@@ -1,484 +1,105 @@
 <header class="page-head">
   <div>
-    <p class="page-head__overline">Nuevo pedido</p>
-    <h1 class="page-head__title">{{ isEditing() ? 'Editar pedido' : 'Nuevo pedido' }}</h1>
+    <p class="page-head__overline">{{ store.isEditing() ? 'Editar pedido' : 'Nuevo pedido' }}</p>
+    <h1 class="page-head__title">{{ store.isEditing() ? 'Editar pedido' : 'Nuevo pedido' }}</h1>
   </div>
 </header>
 
-@if (fromQuote()) {
+@if (store.fromQuote()) {
   <div class="banner banner--info">
     <span class="material-symbols-outlined">request_quote</span>
-    Pedido a partir de la cotización de <strong>{{ quoteCustomerName() }}</strong>.
+    Pedido a partir de la cotización de <strong>{{ store.quoteCustomerName() }}</strong>.
     Completa dirección, forma de pago y datos faltantes; la cotización se cerrará al guardar.
   </div>
 }
-@if (isRestrictedEdit()) {
+@if (store.isRestrictedEdit()) {
   <div class="banner banner--warn">
     <span class="material-symbols-outlined">info</span>
     Este pedido ya fue cobrado. Solo puedes cambiar muebles de stock por otros muebles de stock.
   </div>
 }
-@if (hasUnquotedLines()) {
+@if (store.hasUnquotedLines()) {
   <div class="banner banner--error">
     <span class="material-symbols-outlined">error</span>
-    {{ unquotedLines().length }} línea(s) no se cotizan en el material elegido: quítalas o cambia el material de esa línea antes de continuar.
+    {{ store.unquotedLines().length }} línea(s) no se cotizan en el material elegido: quítalas o cambia el material de esa línea antes de continuar.
   </div>
 }
 
-<form [formGroup]="form" (ngSubmit)="submit()" class="order-grid">
+<!-- Stepper: siempre clicable en ambos sentidos (§9 del plan). -->
+<nav class="stepper" aria-label="Pasos del pedido">
+  <button
+    type="button"
+    class="step-chip"
+    [class.step-chip--active]="paso() === 1"
+    (click)="store.goToStep(1)"
+  >
+    <span class="step-chip__number">1</span>
+    Venta
+    @if (store.step1Incomplete()) {
+      <span class="step-chip__badge" title="Faltan datos en este paso"></span>
+    }
+  </button>
+  <span class="step-connector"></span>
+  <button
+    type="button"
+    class="step-chip"
+    [class.step-chip--active]="paso() === 2"
+    (click)="store.goToStep(2)"
+  >
+    <span class="step-chip__number">2</span>
+    Cliente y entrega
+    @if (store.step2Incomplete()) {
+      <span class="step-chip__badge" title="Faltan datos en este paso"></span>
+    }
+  </button>
+</nav>
 
-  <!-- ===== Columna izquierda: datos ===== -->
-  <div class="order-col">
-    <div class="panel">
-      <h2 class="panel__title">Datos del cliente</h2>
-      <div class="field" [class.field--error]="form.controls.customerName.touched && form.controls.customerName.invalid">
-        <label for="customerName">Nombre completo *</label>
-        <input id="customerName" type="text" formControlName="customerName" placeholder="Nombre del cliente" />
-        @if (form.controls.customerName.touched && form.controls.customerName.invalid) {
-          <p class="field__error">Ingresa el nombre (mínimo 3 caracteres).</p>
-        }
-      </div>
-      <div class="field-row">
-        <div class="field" [class.field--error]="form.controls.customerEmail.touched && form.controls.customerEmail.invalid">
-          <label for="customerEmail">Email</label>
-          <input id="customerEmail" type="email" formControlName="customerEmail" placeholder="correo@ejemplo.com" />
-          @if (form.controls.customerEmail.touched && form.controls.customerEmail.invalid) {
-            <p class="field__error">Ingresa un correo válido.</p>
-          }
-        </div>
-        <div class="field" [class.field--error]="form.controls.customerPhone.touched && form.controls.customerPhone.invalid">
-          <label for="customerPhone">Teléfono *</label>
-          <input id="customerPhone" type="tel" formControlName="customerPhone" placeholder="2221234567" />
-          @if (form.controls.customerPhone.touched && form.controls.customerPhone.invalid) {
-            <p class="field__error">Ingresa el teléfono del cliente.</p>
-          }
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2 class="panel__title">Detalles del pedido</h2>
-      <div class="field">
-        <label for="paymentMethod">Condición de venta *</label>
-        <select id="paymentMethod" formControlName="paymentMethod">
-          <option value="cash">Contado</option>
-          <option value="msi">Meses sin intereses</option>
-          <option value="store_credit">Crédito tienda</option>
-          <option value="layaway">Apartado</option>
-          @if (showWholesaleOption()) {
-            <option value="wholesale">Mayoreo</option>
-          }
-        </select>
-        @if (isWholesale()) {
-          <p class="field__hint">Precio de mayoreo — venta de contado entre negocios (sin IVA ni comisión). Solo efectivo o transferencia.</p>
-        } @else {
-          <p class="field__hint">Define el precio y las reglas de cobro. El medio de pago (efectivo, tarjeta, transferencia) se registra al cobrar.</p>
-        }
-      </div>
-      <div class="field">
-        <label for="notasFabricante">Notas para el Fabricante</label>
-        <textarea
-          id="notasFabricante"
-          formControlName="notasFabricante"
-          placeholder="Ej. Solicitar repuestos de herrajes, detalles de empaque especial..."
-        ></textarea>
-      </div>
-      <div class="field">
-        <label for="deliveryPersonId">Asignar repartidor</label>
-        <select id="deliveryPersonId" formControlName="deliveryPersonId" [disabled]="deliveryAssignmentBlocked()">
-          <option [ngValue]="null">Sin asignar</option>
-          @for (dp of deliveryPeople(); track dp.id) {
-            <option [ngValue]="dp.id">{{ dp.fullName }}</option>
-          }
-        </select>
-        @if (deliveryAssignmentBlocked()) {
-          <p class="field__hint">No disponible: el pedido tiene muebles sobre pedido. Podrás asignar repartidor hasta que el fabricante los marque listos.</p>
-        } @else {
-          <p class="field__hint">Opcional. Al asignarlo, el pedido pasa a "En entrega" y aparece en las entregas del repartidor.</p>
-        }
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2 class="panel__title">Datos de entrega</h2>
-      <div class="field" [class.field--error]="form.controls.deliveryAddress.touched && form.controls.deliveryAddress.invalid">
-        <label for="deliveryAddress">Dirección de entrega *</label>
-        <textarea id="deliveryAddress" formControlName="deliveryAddress" placeholder="Calle, número, colonia, ciudad"></textarea>
-        @if (form.controls.deliveryAddress.touched && form.controls.deliveryAddress.invalid) {
-          <p class="field__error">Ingresa la dirección de entrega.</p>
-        }
-      </div>
-      <div class="field" [class.field--error]="submitAttempted() && shippingCp().length !== 5">
-        <label for="shippingCp">Código postal de entrega *</label>
-        <input
-          id="shippingCp"
-          type="text"
-          inputmode="numeric"
-          maxlength="5"
-          autocomplete="off"
-          placeholder="72000"
-          [value]="shippingCp()"
-          (input)="onShippingCpInput($event)"
-        />
-        <p class="field__hint">Ingresa el CP para calcular el costo de envío automáticamente.</p>
-        @if (submitAttempted() && shippingCp().length !== 5) {
-          <p class="field__error">Ingresa el código postal de entrega (5 dígitos).</p>
-        }
-
-        @if (shippingQuote(); as quote) {
-          <div class="shipping-badge">
-            <span class="material-symbols-outlined">local_shipping</span>
-            <div class="shipping-badge__info">
-              <span class="shipping-badge__zone">{{ quote.zone }} · CP {{ shippingCp() }}</span>
-              <span class="shipping-badge__label">{{ quote.label }}</span>
-            </div>
-            @if (quote.isFree) {
-              <span class="shipping-badge__price shipping-badge__price--free">GRATIS</span>
-            } @else {
-              <span class="shipping-badge__price">{{ quote.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            }
-          </div>
-        }
-        @if (shippingCp().length === 5 && !shippingQuote()) {
-          <p class="field__error">CP fuera de la zona de cobertura.</p>
-        }
-      </div>
-      <div class="field">
-        <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
-        <input
-          id="googleMapsUrl"
-          type="url"
-          formControlName="googleMapsUrl"
-          placeholder="https://maps.google.com/?q=..."
-        />
-        <p class="field__hint">Pega el enlace de Google Maps; el repartidor podrá abrirlo con un clic.</p>
-      </div>
-      <div class="field">
-        <label for="instruccionesEntrega">Instrucciones de Entrega</label>
-        <textarea
-          id="instruccionesEntrega"
-          formControlName="instruccionesEntrega"
-          placeholder="Ej. Casa azul frente al parque, entregar de 6 a 12 am, dejar en portería..."
-        ></textarea>
-        <p class="field__hint">Referencias de fachada, navegación y horarios para el repartidor.</p>
-      </div>
-      <div class="field assembly-field">
-        <label class="assembly-check">
-          <input type="checkbox" formControlName="assemblyService" />
-          <span>Incluye servicio de armado</span>
-        </label>
-        <p class="field__hint">Subida por pisos y armado del mueble. Un solo cargo por pedido; con o sin elevador se cobra igual.</p>
-
-        @if (hasAssembly()) {
-          <div class="field">
-            <label for="assemblyFloors">Piso de entrega</label>
-            <input id="assemblyFloors" type="number" formControlName="assemblyFloors" min="0" step="1" />
-            <p class="field__hint">0 = planta baja (solo tarifa base).</p>
-          </div>
-          @if (assemblyRates(); as rates) {
-            <div class="shipping-badge">
-              <span class="material-symbols-outlined">handyman</span>
-              <div class="shipping-badge__info">
-                <span class="shipping-badge__zone">Servicio de armado · Piso {{ assemblyFloorsValue() }}</span>
-                <span class="shipping-badge__label">Base {{ rates.base | currency:'MXN':'symbol-narrow':'1.2-2' }} + {{ rates.perFloor | currency:'MXN':'symbol-narrow':'1.2-2' }} por piso</span>
-              </div>
-              <span class="shipping-badge__price">{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
-          }
-        }
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="expectedDeliveryDate">Fecha estimada de entrega</label>
-          <input id="expectedDeliveryDate" type="date" formControlName="expectedDeliveryDate" />
-        </div>
-      </div>
-      <div class="field">
-        <label for="notasPedido">Notas del Pedido</label>
-        <textarea
-          id="notasPedido"
-          formControlName="notasPedido"
-          placeholder="Ej. Dejar 2 manijas de repuesto, llevarse la basura del empaque..."
-        ></textarea>
-        <p class="field__hint">Este texto se imprimirá en el ticket.</p>
-      </div>
-    </div>
+@if (paso() === 1) {
+  <app-order-step-products />
+  <div class="step-nav">
+    <span></span>
+    <button type="button" class="btn btn--primary" (click)="store.continueToStep2()">
+      Continuar
+      <span class="material-symbols-outlined">arrow_forward</span>
+    </button>
+  </div>
+} @else {
+  <app-order-step-customer />
+  <div class="step-nav">
+    <button type="button" class="btn btn--ghost" (click)="store.goToStep(1)">
+      <span class="material-symbols-outlined">arrow_back</span>
+      Volver a productos
+    </button>
+    <span></span>
   </div>
 
-  <!-- ===== Columna derecha: productos ===== -->
-  <div class="order-col">
-    <div class="panel">
-      <h2 class="panel__title">Productos</h2>
-      <div class="search">
-        <span class="material-symbols-outlined">search</span>
-        <input type="text" placeholder="Buscar producto por nombre o SKU" (input)="onSearchInput($event)" />
-      </div>
-
-      <div class="results">
-        @if (searching()) {
-          <div class="state"><div class="spinner"></div></div>
-        } @else {
-          @for (p of availableSearchResults(); track p.id) {
-            <button type="button" class="result" (click)="addProduct(p)">
-              @if (p.primaryImage) {
-                <img class="result__thumb" [src]="p.primaryImage" [alt]="p.name" loading="lazy" />
-              } @else {
-                <span class="result__thumb result__thumb--empty">
-                  <span class="material-symbols-outlined">chair</span>
-                </span>
-              }
-              <span class="result__info">
-                <span class="result__name">{{ p.name }}</span>
-                <span class="result__sku">{{ p.sku }} · {{ p.materialPrices.length }} material(es)</span>
-              </span>
-              <span class="material-symbols-outlined">add_circle</span>
-            </button>
-          } @empty {
-            <p class="empty">Sin resultados.</p>
-          }
-        }
-      </div>
+  <!-- Barra fija de móvil: total + acción siempre visibles mientras se llena el formulario. -->
+  <div class="step-bar">
+    <div class="step-bar__total">
+      <span>Total a pagar</span>
+      <span>{{ store.grandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
     </div>
-
-    <div class="panel cart">
-      <h2 class="panel__title">Pedido ({{ lines().length }})</h2>
-      @if (lines().length === 0) {
-        <p class="empty">Agrega productos desde el buscador.</p>
+    <button type="button" class="btn btn--primary" [disabled]="store.saving()" (click)="submit()">
+      @if (store.saving()) {
+        <span class="spinner spinner--sm"></span>
       } @else {
-        @for (l of lines(); track l.product.id + '-' + l.materialId; let i = $index) {
-          <div class="cart-line" [class.cart-line--locked]="!canEditLine(l)" [class.cart-line--alert]="unitPrice(l) === null">
-            <div class="cart-line__info">
-              <span class="cart-line__name">{{ l.product.name }}</span>
-
-              <!-- M4: material y color son de ESTA línea. -->
-              @if (l.product.materialPrices.length > 1) {
-                <select class="cart-line__material" [disabled]="!canEditLine(l)" (change)="changeLineMaterial(i, $event)">
-                  @for (mp of l.product.materialPrices; track mp.materialId) {
-                    <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
-                      {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
-                    </option>
-                  }
-                </select>
-              } @else if (l.product.materialPrices[0]; as onlyMaterial) {
-                <span class="muted">{{ onlyMaterial.label }}</span>
-              }
-
-              @if (lineMaterialPrice(l); as mp) {
-                <!-- M6: siempre visible y editable salvo color fijo ('fixed').
-                     'free' (p.ej. MDF) trae "Blanco" por default pero
-                     el vendedor puede escribir otro color por línea. -->
-                <input
-                  type="text"
-                  class="cart-line__color"
-                  [value]="l.color ?? ''"
-                  [disabled]="mp.colorPolicy === 'fixed' || !canEditLine(l)"
-                  [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
-                  (input)="changeLineColor(i, $event)"
-                />
-              }
-
-              @if (unitPrice(l) !== null) {
-                <span class="cart-line__price">{{ unitPrice(l) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
-              } @else {
-                <span class="cart-line__price cart-line__price--alert">
-                  No se cotiza en este material — quítalo o cambia el material
-                </span>
-              }
-
-              @if (lineWholesaleShortfall(l) > 0) {
-                <span class="cart-line__fabrication cart-line__fabrication--alert">
-                  <span class="material-symbols-outlined">warning</span>
-                  Mayoreo exige mínimo {{ l.product.wholesaleMinQty ?? wholesaleMinQtyGlobal() }} — faltan {{ lineWholesaleShortfall(l) }}
-                </span>
-              }
-              @if (lineRequiresFabrication(l)) {
-                <span class="cart-line__fabrication cart-line__fabrication--alert">
-                  <span class="material-symbols-outlined">schedule</span>
-                  Sin existencia — se fabrica ({{ l.product.availability_days }} días)
-                </span>
-              } @else {
-                <span class="cart-line__fabrication">
-                  <span class="material-symbols-outlined">check_circle</span>
-                  En existencia
-                </span>
-              }
-            </div>
-            <div class="qty">
-              <button type="button" class="icon-btn" [disabled]="!canEditLine(l)" (click)="changeQty(i, -1)" aria-label="Quitar uno">
-                <span class="material-symbols-outlined">remove</span>
-              </button>
-              <span class="qty__value">{{ l.quantity }}</span>
-              <button type="button" class="icon-btn" [disabled]="!canEditLine(l)" (click)="changeQty(i, 1)" aria-label="Agregar uno">
-                <span class="material-symbols-outlined">add</span>
-              </button>
-            </div>
-            <span class="cart-line__subtotal">
-              @if (unitPrice(l) !== null) {
-                {{ unitPrice(l)! * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}
-              } @else { — }
-            </span>
-            @if (canEditLine(l)) {
-              <button type="button" class="icon-btn icon-btn--danger" (click)="removeLine(i)" aria-label="Eliminar">
-                <span class="material-symbols-outlined">delete</span>
-              </button>
-            } @else {
-              <span class="material-symbols-outlined cart-line__lock-icon" title="Mueble en fabricación, no se puede quitar">lock</span>
-            }
-          </div>
-        }
-
-        @if (shippingQuote() || hasAssembly()) {
-          <div class="cart-total cart-total--sub">
-            <span>{{ isMsi() ? 'Subtotal a 6 MSI' : 'Subtotal productos' }}</span>
-            <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-          @if (shippingQuote(); as shipping) {
-            <div class="shipping-row">
-              <span class="shipping-row__label">
-                <span class="material-symbols-outlined">local_shipping</span>
-                Envío · {{ shipping.zone }}
-              </span>
-              @if (shipping.isFree) {
-                <span class="shipping-row__free">GRATIS</span>
-              } @else {
-                <span class="shipping-row__price">{{ shipping.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-              }
-            </div>
-          }
-          @if (hasAssembly()) {
-            <div class="shipping-row">
-              <span class="shipping-row__label">
-                <span class="material-symbols-outlined">handyman</span>
-                Servicio de armado (piso {{ assemblyFloorsValue() }})
-              </span>
-              <span class="shipping-row__price">{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
-          }
-          <div class="grand-total">
-            <span>Total a pagar</span>
-            <span class="grand-total__amount">{{ grandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-        } @else {
-          <div class="cart-total">
-            <span>{{ isMsi() ? 'Total a 6 MSI' : 'Total' }}</span>
-            <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-        }
-        @if (isMsi()) {
-          <p class="msi-note">
-            <span class="material-symbols-outlined">credit_card</span>
-            Se aplica el precio a 6 meses sin intereses del catálogo.
-          </p>
-        }
-        @if (isWholesale() && !wholesalePriceIncludesIva()) {
-          <!-- M13: el precio de lista de Mayoreo es SIN IVA — el ticket lo
-               desglosa siempre, aunque el cliente no pida factura. -->
-          <div class="cart-total cart-total--sub">
-            <span>Subtotal Mayoreo (sin IVA)</span>
-            <span class="cart-total__amount">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-          <div class="cart-total cart-total--sub">
-            <span>IVA (se suma al facturar)</span>
-            <span class="cart-total__amount">{{ wholesaleIva() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-          <div class="grand-total">
-            <span>Total con IVA</span>
-            <span class="grand-total__amount">{{ (total() + wholesaleIva()) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-        }
+        {{ store.isEditing() ? 'Guardar' : 'Crear pedido' }}
       }
-
-      @if (isLayaway()) {
-        <div class="credit-plan credit-plan--layaway">
-          <h3 class="credit-plan__title">
-            <span class="material-symbols-outlined">event_available</span> Sistema de Apartado
-          </h3>
-          <div class="credit-plan__row credit-plan__row--highlight">
-            <span>Precio de contado</span>
-            <span class="strong">{{ total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          </div>
-          <div class="credit-plan__row">
-            <span>Abono inicial mínimo</span>
-            <span class="strong">$500</span>
-          </div>
-          <div class="credit-plan__row">
-            <span>Plazo al precio de contado</span>
-            <span class="strong">3 meses</span>
-          </div>
-          @if (layawayDeadline()) {
-            <div class="credit-plan__row">
-              <span>Fecha límite</span>
-              <span class="strong">{{ layawayDeadline() }}</span>
-            </div>
-          }
-          <p class="credit-plan__note">
-            El cliente abona la cantidad que desee (mínimo $500 al apartar).
-            Si no liquida antes del {{ layawayDeadline() }}, se aplica el precio de crédito.
-            El mueble se entrega hasta cubrir el pago total.
-          </p>
-        </div>
-      }
-
-      @if (isCredit()) {
-        @if (creditQuote(); as credit) {
-          <div class="credit-plan">
-            <h3 class="credit-plan__title">
-              <span class="material-symbols-outlined">credit_score</span> Plan de Crédito en Tienda
-            </h3>
-            <div class="credit-plan__row">
-              <span>Precio a crédito</span>
-              <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
-            <div class="credit-plan__row credit-plan__row--highlight">
-              <span>Pago inicial</span>
-              <span class="strong">{{ credit.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
-            <div class="credit-plan__row">
-              <span>{{ credit.weeks }} cuotas semanales de</span>
-              <span class="strong">{{ credit.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
-            <p class="credit-plan__note">
-              El mueble no se envía hasta cubrir el pago inicial. Los abonos semanales
-              sólo se reciben en efectivo o transferencia.
-            </p>
-          </div>
-        } @else {
-          <p class="credit-plan__empty">Agrega productos para calcular el plan de crédito.</p>
-        }
-      }
-
-      @if (isRestrictedEdit() && changeSummary(); as summary) {
-        @if (summary.diff > 0) {
-          <p class="field__hint">Se cobrará la diferencia: {{ summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }}.</p>
-        } @else if (summary.diff < 0) {
-          <p class="field__hint">El cliente tiene un saldo a favor de {{ -summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }} — se anotará en el pedido.</p>
-        }
-      }
-
-      <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
-        @if (saving()) {
-          <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
-        } @else {
-          <span class="material-symbols-outlined">check_circle</span>
-          {{ isEditing() ? 'Guardar cambios' : 'Crear pedido' }}
-        }
-      </button>
-    </div>
+    </button>
   </div>
+}
 
-</form>
-
-@if (confirmDialogOpen()) {
+@if (store.confirmDialogOpen()) {
   <div class="modal-backdrop">
     <div class="modal modal--sm">
       <div class="modal__body">
         <h2 class="panel__title">Confirmar cambio de producto</h2>
-        @if (changeSummary(); as summary) {
+        @if (store.changeSummary(); as summary) {
           @if (summary.removed.length) {
-            <p class="muted">Se quita: {{ removedNames(summary) }}</p>
+            <p class="muted">Se quita: {{ store.removedNames(summary) }}</p>
           }
           @if (summary.added.length) {
-            <p class="muted">Se agrega: {{ addedNames(summary) }}</p>
+            <p class="muted">Se agrega: {{ store.addedNames(summary) }}</p>
           }
           @if (summary.diff > 0) {
             <p class="strong">Se cobrará la diferencia: {{ summary.diff | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
@@ -487,8 +108,8 @@
           }
         }
         <div class="modal__foot">
-          <button type="button" class="btn btn--ghost" (click)="confirmDialogOpen.set(false)">Cancelar</button>
-          <button type="button" class="btn btn--primary" (click)="confirmChange()">Confirmar cambio</button>
+          <button type="button" class="btn btn--ghost" (click)="store.confirmDialogOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--primary" (click)="store.confirmChange()">Confirmar cambio</button>
         </div>
       </div>
     </div>

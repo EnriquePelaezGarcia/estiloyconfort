@@ -440,6 +440,256 @@
   border-radius: 0 0 vars.$radius-lg vars.$radius-lg;
 }
 
+// ===== Punto de venta en 2 pasos (Docs/plan-punto-venta-2-pasos.md) =====
+// Compartidas entre order-step-products, order-step-customer y order-summary
+// para no duplicar el mismo bloque en dos componentes.
+.order-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.cart-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: vars.$spacing-md 0;
+  margin-bottom: vars.$spacing-md;
+  font-weight: 600;
+
+  &__amount { font-size: 1.4rem; color: vars.$color-primary; }
+
+  &--sub {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    padding-bottom: vars.$spacing-sm;
+    margin-bottom: 0;
+
+    .cart-total__amount { font-size: 1.1rem; }
+  }
+}
+
+.shipping-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: vars.$spacing-sm 0;
+  border-top: 1px dashed vars.$color-border;
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-xs;
+    font-size: 0.875rem;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+  }
+
+  &__free {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: vars.$color-success;
+    background: color-mix(in srgb, vars.$color-success 10%, white);
+    padding: 2px 8px;
+    border-radius: vars.$radius-full;
+  }
+
+  &__price { font-weight: 600; color: vars.$color-text; }
+}
+
+.grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: vars.$spacing-md 0 vars.$spacing-sm;
+  margin: vars.$spacing-xs 0 vars.$spacing-md;
+  border-top: 2px solid vars.$color-primary;
+  font-weight: 700;
+
+  &__amount {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: vars.$color-primary;
+  }
+}
+
+.msi-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  font-size: 0.8rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-primary; }
+}
+
+.credit-plan {
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.95rem;
+    color: vars.$color-primary;
+  }
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+
+    &--highlight {
+      border-top: 1px dashed vars.$color-border;
+      border-bottom: 1px dashed vars.$color-border;
+      margin: 0.2rem 0;
+      font-size: 1rem;
+    }
+  }
+
+  &__note {
+    margin: vars.$spacing-sm 0 0;
+    font-size: 0.76rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__empty {
+    margin-bottom: vars.$spacing-md;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &--layaway {
+    border-color: vars.$color-gold;
+    background: color-mix(in srgb, vars.$color-gold 8%, white);
+
+    .credit-plan__title { color: vars.$color-gold; }
+  }
+
+  .strong { font-weight: 700; }
+}
+
+// ===== Piezas disponibles del material elegido (línea del carrito / cotización) =====
+// Compartida entre Punto de venta y Cotizaciones — mismo dato
+// (InventoryMaterialPrice.stockQuantity), mismo badge en las dos pantallas.
+.cart-line__stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  &--available { color: vars.$color-success; }
+  &--out { color: vars.$color-text; }
+}
+
+// ===== Stepper (paso 1 / paso 2) =====
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-lg;
+  flex-wrap: wrap;
+}
+
+.step-chip {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: 0.55rem 1rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-surface;
+  color: vars.$color-text-secondary;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background vars.$transition-fast, border-color vars.$transition-fast, color vars.$transition-fast;
+
+  &:hover { border-color: vars.$color-primary; }
+
+  &__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: vars.$color-bg;
+    color: vars.$color-text-secondary;
+    font-size: 0.78rem;
+  }
+
+  &--active {
+    border-color: vars.$color-primary;
+    background: color-mix(in srgb, vars.$color-primary 8%, white);
+    color: vars.$color-primary;
+
+    .step-chip__number { background: vars.$color-primary; color: #fff; }
+  }
+
+  &__badge {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: vars.$color-gold;
+  }
+}
+
+.step-connector {
+  width: 24px;
+  height: 1px;
+  background: vars.$color-border;
+}
+
+// ===== Barra de navegación entre pasos (Atrás / Continuar) =====
+.step-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  margin-top: vars.$spacing-md;
+}
+
+// ===== Barra fija de móvil con el total + acción (paso 2) =====
+.step-bar {
+  display: none;
+
+  @media (max-width: vars.$bp-desktop) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: vars.$spacing-md;
+    position: sticky;
+    bottom: 0;
+    margin: vars.$spacing-md calc(-1 * vars.$spacing-lg) calc(-1 * vars.$spacing-lg);
+    padding: vars.$spacing-sm vars.$spacing-lg;
+    background: vars.$color-surface;
+    border-top: 1px solid vars.$color-border;
+    box-shadow: vars.$shadow-md;
+  }
+
+  &__total {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+
+    span:first-child { font-size: 0.72rem; color: vars.$color-text-secondary; }
+    span:last-child { font-size: 1.1rem; font-weight: 700; color: vars.$color-primary; }
+  }
+}
+
 // ===== Back link =====
 .back-link {
   display: inline-flex;
