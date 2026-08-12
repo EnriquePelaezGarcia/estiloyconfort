@@ -819,11 +819,25 @@ const Order = {
    * @param {number|null} userId usuario autenticado que hace el cambio
    */
   async markItemReady(orderId, itemId, isReady = true, userId = null) {
+    // `ready_at` se limpia al desmarcar (es el estado actual del check), pero
+    // `manufacturer_delivered_at` se sella la PRIMERA vez y nunca se borra:
+    // es la fecha de devengo del adeudo con el fabricante. Sin esto, corregir
+    // un check descuadraría un corte ya pagado. El COALESCE preserva el valor
+    // original aunque se marque y desmarque diez veces.
     await pool.execute(
       `UPDATE order_items
-          SET is_ready = ?, ready_by = ?, ready_at = ?
+          SET is_ready = ?, ready_by = ?, ready_at = ?,
+              manufacturer_delivered_at = IF(?, COALESCE(manufacturer_delivered_at, ?), manufacturer_delivered_at)
         WHERE id = ? AND order_id = ?`,
-      [isReady ? 1 : 0, isReady ? userId : null, isReady ? new Date() : null, itemId, orderId],
+      [
+        isReady ? 1 : 0,
+        isReady ? userId : null,
+        isReady ? new Date() : null,
+        isReady ? 1 : 0,
+        new Date(),
+        itemId,
+        orderId,
+      ],
     );
     const [[{ pending }]] = await pool.execute(
       'SELECT SUM(is_ready = FALSE) AS pending FROM order_items WHERE order_id = ?', [orderId],
