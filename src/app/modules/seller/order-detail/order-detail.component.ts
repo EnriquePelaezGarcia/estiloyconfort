@@ -5,6 +5,7 @@ import { CurrencyInputDirective } from '../../../shared/directives/currency-inpu
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
+import { TicketsService } from '../../../core/services/tickets.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -45,6 +46,7 @@ interface AbonoReceipt {
 })
 export class OrderDetailComponent implements OnInit {
   private sellerService = inject(SellerService);
+  private ticketsService = inject(TicketsService);
   private adminService = inject(AdminService);
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
@@ -407,6 +409,57 @@ export class OrderDetailComponent implements OnInit {
       error: (err: { error?: { message?: string } }) => {
         this.cancelModalOpen.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo cancelar');
+      },
+    });
+  }
+
+  /** Está emitiendo el link del ticket para WhatsApp. */
+  protected sharing = signal(false);
+
+  /**
+   * Manda el ticket al cliente por WhatsApp: pide el link público al backend y
+   * abre el chat con el mensaje ya escrito.
+   *
+   * WhatsApp no admite imágenes dentro de un mensaje de texto, así que el
+   * ticket "bonito" vive en la página pública y el mensaje lleva el link. Sin
+   * teléfono capturado se abre el selector de contactos, que es justo lo que
+   * el vendedor necesita en ese caso — mismo criterio que en cotizaciones.
+   *
+   * La ventana se abre ANTES de la petición y luego se le asigna la URL:
+   * abrirla dentro del callback la convierte en un popup no originado por el
+   * clic, y Safari/iOS la bloquea — que es donde más se usa esto.
+   */
+  protected shareWhatsApp(): void {
+    const order = this.order();
+    if (!order || this.sharing()) return;
+
+    const win = window.open('', '_blank');
+    this.sharing.set(true);
+
+    this.ticketsService.createShareUrl(order.id).subscribe({
+      next: (url) => {
+        this.sharing.set(false);
+        const phone = (order.customerPhone ?? '').replace(/\D/g, '');
+        const saldo = this.balance() > 0
+          ? `\nSaldo pendiente: ${this.money(this.balance())}`
+          : '\nPedido liquidado. ¡Gracias!';
+        const text = encodeURIComponent(
+          `Hola ${order.customerName}, gracias por tu compra en Mueblería Estilo y Confort.\n\n` +
+          `Pedido: ${order.orderNumber}\n` +
+          `Total: ${this.money(order.totalAmount)}${saldo}\n\n` +
+          `Consulta tu comprobante aquí:\n${url}`,
+        );
+        const wa = phone
+          ? `https://wa.me/52${phone}?text=${text}`
+          : `https://wa.me/?text=${text}`;
+
+        if (win) win.location.href = wa;
+        else window.open(wa, '_blank');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.sharing.set(false);
+        win?.close();
+        this.notification.error(err?.error?.message ?? 'No se pudo generar el link del ticket');
       },
     });
   }

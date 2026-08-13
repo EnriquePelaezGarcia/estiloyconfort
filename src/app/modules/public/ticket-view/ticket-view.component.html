@@ -1,0 +1,195 @@
+@if (loading()) {
+  <div class="ticket-page">
+    <div class="sheet sheet--state">
+      <span class="ornament">✦</span>
+      <p class="state-text">Abriendo tu comprobante…</p>
+    </div>
+  </div>
+} @else if (notFound()) {
+  <div class="ticket-page">
+    <div class="sheet sheet--state">
+      <span class="ornament">✦</span>
+      <p class="label-overline">Comprobante no disponible</p>
+      <h1 class="state-title">No encontramos este ticket</h1>
+      <p class="state-text">
+        El enlace puede estar incompleto. Escríbenos por WhatsApp y con gusto
+        te lo reenviamos.
+      </p>
+    </div>
+  </div>
+} @else if (ticket(); as t) {
+  <div class="ticket-page">
+    <article class="sheet">
+      <!-- Cabecera en ink: el logo negativo es el que corresponde sobre fondo
+           oscuro, y da la misma entrada que el hero de la página pública. -->
+      <header class="crest">
+        <img
+          class="crest__logo"
+          src="/branding/logo-negativo.png"
+          alt="Mueblería Estilo y Confort"
+          width="1516"
+          height="444"
+        />
+        <span class="ornament ornament--dark">✦</span>
+        <p class="crest__overline">Comprobante de compra</p>
+        <p class="crest__folio">{{ t.orderNumber }}</p>
+      </header>
+
+      <div class="sheet__body">
+        <!-- Para quién y en qué va. Lo primero que confirma el cliente. -->
+        <section class="party">
+          <div class="party__block">
+            <p class="label-overline">Cliente</p>
+            <p class="party__name">{{ t.customerName }}</p>
+          </div>
+          <div class="party__block party__block--end">
+            <p class="label-overline">Estado</p>
+            <p class="party__status">{{ statusLabel(t.orderStatus) }}</p>
+          </div>
+        </section>
+
+        <hr class="rule" />
+
+        <!-- Productos. Nombre en Manrope: la regla de marca reserva Playfair
+             para la tienda y Manrope para los productos. -->
+        <section class="lines">
+          <p class="label-overline">Tu compra</p>
+          @for (it of t.items; track $index) {
+            <div class="line">
+              <div class="line__main">
+                <p class="line__name">{{ it.productName }}</p>
+                <p class="line__spec">
+                  {{ it.materialLabel }}@if (it.color) { · {{ it.color }} }
+                  @if (it.quantity > 1) {
+                    · {{ it.quantity }} × {{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                  }
+                </p>
+              </div>
+              <p class="line__amount">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
+            </div>
+          }
+        </section>
+
+        <hr class="rule" />
+
+        <!-- Totales. Envío y armado se listan aparte para que el cliente vea
+             de dónde sale la diferencia contra la suma de productos. -->
+        <section class="totals">
+          @if (t.shippingCost > 0 || t.assemblyService) {
+            <div class="totals__row">
+              <span>Productos</span>
+              <span>{{ productsSubtotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
+          @if (t.shippingCost > 0) {
+            <div class="totals__row">
+              <span>Envío@if (t.shippingPostalCode) { · CP {{ t.shippingPostalCode }} }</span>
+              <span>{{ t.shippingCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
+          @if (t.assemblyService) {
+            <div class="totals__row">
+              <span>Servicio de armado@if (t.assemblyFloors) { · piso {{ t.assemblyFloors }} }</span>
+              <span>{{ t.assemblyCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
+
+          <div class="totals__row totals__row--grand">
+            <span>Total</span>
+            <span class="totals__grand">{{ t.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="totals__row totals__row--paid">
+            <span>Pagado</span>
+            <span>{{ t.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        </section>
+
+        <!-- El saldo es justo lo que el cliente abre el link a consultar, así
+             que es el número con tratamiento editorial. Liquidado se celebra
+             en vez de mostrar un "$0.00" mudo. -->
+        @if (hasBalance()) {
+          <section class="balance">
+            <p class="label-overline">Saldo pendiente</p>
+            <p class="balance__amount">{{ t.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
+            @if (isCredit() && t.weeklyPayment) {
+              <p class="balance__plan">
+                {{ t.creditWeeks }} pagos semanales de
+                <strong>{{ t.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+              </p>
+            } @else if (isLayaway()) {
+              <p class="balance__plan">Apartado · abona cuando gustes hasta liquidar</p>
+            }
+          </section>
+        } @else {
+          <section class="balance balance--clear">
+            <p class="balance__paid">Liquidado</p>
+            <p class="balance__plan">No tienes saldo pendiente</p>
+          </section>
+        }
+
+        <hr class="rule" />
+
+        <!-- Entrega y datos de la venta. -->
+        <section class="facts">
+          <div class="fact">
+            <p class="label-overline">Fecha</p>
+            <p class="fact__value">{{ t.orderDate | date:'dd/MM/yyyy' }}</p>
+          </div>
+          <div class="fact">
+            <p class="label-overline">Condición</p>
+            <p class="fact__value">{{ schemeLabel(t.paymentMethod) }}</p>
+          </div>
+          <div class="fact">
+            <p class="label-overline">Entrega</p>
+            <p class="fact__value">{{ deliveryLabel(t.deliveryType) }}</p>
+          </div>
+          @if (t.expectedDeliveryDate) {
+            <div class="fact">
+              <p class="label-overline">Fecha estimada</p>
+              <p class="fact__value">{{ t.expectedDeliveryDate | date:'dd/MM/yyyy' }}</p>
+            </div>
+          }
+          @if (t.deliveryAddress) {
+            <div class="fact fact--wide">
+              <p class="label-overline">Dirección</p>
+              <p class="fact__value">{{ t.deliveryAddress }}</p>
+            </div>
+          }
+          @if (t.sellerName) {
+            <div class="fact">
+              <p class="label-overline">Te atendió</p>
+              <p class="fact__value">{{ t.sellerName }}</p>
+            </div>
+          }
+        </section>
+
+        <!-- Historial de abonos: el cliente a crédito quiere ver que sus pagos
+             quedaron registrados. -->
+        @if (t.payments.length > 1) {
+          <hr class="rule" />
+          <section class="history">
+            <p class="label-overline">Tus pagos</p>
+            @for (p of t.payments; track $index) {
+              <div class="history__row">
+                <span>{{ p.paymentDate | date:'dd/MM/yyyy' }}</span>
+                <span>{{ p.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            }
+          </section>
+        }
+
+        <button type="button" class="save-btn no-print" (click)="print()">
+          Guardar comprobante
+        </button>
+      </div>
+
+      <footer class="sheet__foot">
+        <span class="ornament ornament--dark">✦</span>
+        <p class="sheet__thanks">Gracias por tu compra</p>
+        <p class="sheet__legal">
+          Conserva este comprobante para cualquier aclaración o garantía.
+        </p>
+      </footer>
+    </article>
+  </div>
+}

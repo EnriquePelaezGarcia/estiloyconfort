@@ -1,6 +1,26 @@
 @use '../../../../styles/variables' as vars;
 
-.head-actions { display: flex; gap: vars.$spacing-sm; }
+.head-actions { display: flex; gap: vars.$spacing-sm; flex-wrap: wrap; }
+
+// El verde de WhatsApp rompe la paleta a propósito (regla 4 del sistema):
+// señala "esto sale de la aplicación". No usarlo en ningún otro botón.
+.btn--whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  background: #25d366;
+  color: #ffffff;
+
+  &:hover:not(:disabled) { background: #128c7e; }
+  &:disabled { opacity: 0.65; cursor: default; }
+
+  .btn__wa-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    fill: currentColor;
+  }
+}
 
 .detail-grid {
   display: grid;
@@ -142,12 +162,109 @@
   &__ok { color: vars.$color-success; }
 }
 
+// ===== Tickets térmicos (sólo impresión) =====
+//
+// MEDIDAS. Papel térmico de 80mm: el ancho ÚTIL es 72mm — los ~4mm de cada
+// lado son margen mecánico del cabezal y todo lo que caiga ahí se pierde.
+// Para rollo de 58mm el útil es 48mm: cambiar $ticket-width abajo y el
+// `size` del @page es lo único que hay que tocar.
+//
+// La altura es `auto` a propósito: el rollo es continuo, no hay hoja que
+// llenar. Fijarla en una medida haría que la impresora corte a la mitad los
+// pedidos largos o desperdicie papel en los cortos.
+$ticket-width: 72mm;
+
+// Monoespaciada: las impresoras térmicas la rasterizan sin antialiasing y
+// mantiene los importes alineados en columna.
+$ticket-font: 'Courier New', monospace;
+
+.sale-ticket {
+  display: none;
+  width: $ticket-width;
+  margin: 0 auto;
+  font-family: $ticket-font;
+  font-size: 9pt;
+  line-height: 1.35;
+  color: #000;
+
+  hr { border: none; border-top: 1px dashed #000; margin: 5px 0; }
+
+  // El logo lleva morado y beige; en térmica todo sale en un solo tono, así
+  // que se fuerza contraste para que la filigrana de la luna no se pierda en
+  // un gris lavado.
+  &__logo {
+    display: block;
+    width: 48mm;
+    margin: 0 auto 3px;
+    filter: grayscale(1) contrast(1.6) brightness(0.75);
+  }
+
+  &__tagline {
+    margin: 0;
+    text-align: center;
+    font-size: 7pt;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  &__folio {
+    margin: 0 0 4px;
+    text-align: center;
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+    padding: 1px 0;
+
+    // El importe manda: si el concepto es largo, se parte él y el número
+    // siempre queda íntegro y pegado al margen derecho.
+    span:first-child { min-width: 0; overflow-wrap: anywhere; }
+    span:last-child { flex-shrink: 0; white-space: nowrap; }
+
+    &--total {
+      margin-top: 3px;
+      padding-top: 3px;
+      border-top: 1px solid #000;
+      font-size: 11pt;
+      font-weight: 700;
+    }
+
+    &--balance { font-weight: 700; }
+  }
+
+  &__item {
+    padding: 2px 0;
+
+    & + .sale-ticket__item { border-top: 1px dotted #000; }
+  }
+
+  &__item-name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+  &__item-spec { margin: 0; font-size: 7.5pt; }
+
+  &__foot {
+    margin: 4px 0 0;
+    text-align: center;
+    font-weight: 700;
+  }
+
+  &__legal {
+    margin: 2px 0 0;
+    text-align: center;
+    font-size: 7pt;
+  }
+}
+
 // ===== Ticket de abono (sólo impresión) =====
 .abono-ticket {
   display: none;
-  max-width: 320px;
+  width: $ticket-width;
   margin: 0 auto;
-  font-family: 'Courier New', monospace;
+  font-family: $ticket-font;
   color: #000;
 
   hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
@@ -218,11 +335,26 @@
 }
 
 @media print {
+  // Rollo continuo de 80mm sin márgenes: el driver térmico no tiene "hoja",
+  // así que cualquier margen de página desplaza el contenido y lo recorta.
+  // Para rollo de 58mm: size: 58mm auto (y $ticket-width: 48mm arriba).
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
   .no-print { display: none !important; }
   .detail-grid { grid-template-columns: 1fr; }
   .panel { box-shadow: none; border: none; }
 
-  // Al imprimir un abono, ocultamos el detalle y mostramos sólo el ticket.
+  // Sin esto el navegador respeta su fondo por defecto y el ticket sale con
+  // los márgenes del layout de la app alrededor.
+  html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
+
+  // Cada modo de impresión oculta el detalle y deja sólo su ticket.
+  .detail-view.print-order .detail-screen { display: none; }
+  .detail-view.print-order .sale-ticket { display: block; }
+
   .detail-view.print-abono .detail-screen { display: none; }
   .detail-view.print-abono .abono-ticket { display: block; }
 }

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const Quote = require('./Quote');
@@ -134,6 +135,7 @@ function mapOrder(row) {
   return {
     id: row.id,
     orderNumber: row.order_number,
+    shareToken: row.share_token ?? null,
     sellerId: row.seller_id,
     sellerName: row.seller_name ?? null,
     customerName: row.customer_name,
@@ -392,6 +394,35 @@ const Order = {
       params,
     );
     return { data: rows.map(mapOrder), total, page: safePage, limit: safeLimit, pages: Math.ceil(total / safeLimit) };
+  },
+
+  /**
+   * Devuelve el token del link público del pedido, generándolo la primera vez
+   * que se pide (perezoso: los pedidos que nunca se comparten no cargan token).
+   *
+   * El token es la única credencial del link, así que se genera con
+   * randomBytes — nunca derivado del id, que sería adivinable. Es idempotente:
+   * volver a compartir el mismo pedido reusa el token ya emitido, de modo que
+   * un link enviado antes por WhatsApp nunca se invalida.
+   */
+  async ensureShareToken(id) {
+    const [[row]] = await pool.execute(
+      'SELECT share_token FROM orders WHERE id = ?', [id],
+    );
+    if (!row) return null;
+    if (row.share_token) return row.share_token;
+
+    const token = crypto.randomBytes(16).toString('base64url');
+    await pool.execute('UPDATE orders SET share_token = ? WHERE id = ?', [token, id]);
+    return token;
+  },
+
+  /** Vista pública por token (/ticket/:token). Sin sesión: el token es la llave. */
+  async findByShareToken(token) {
+    const [[row]] = await pool.execute(
+      'SELECT id FROM orders WHERE share_token = ?', [token],
+    );
+    return row ? this.findById(row.id) : null;
   },
 
   async findById(id) {

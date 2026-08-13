@@ -22,6 +22,15 @@ export const routes: Routes = [
     title: 'Cotización - Mueblería Estilo y Confort',
   },
   {
+    // Ticket de venta que el vendedor manda por WhatsApp. Sin guard, igual que
+    // la cotización: el cliente no tiene cuenta y el token es la credencial.
+    // A diferencia de la cotización, este link no vence.
+    path: 'ticket/:token',
+    loadComponent: () =>
+      import('./modules/public/ticket-view/ticket-view.component').then((m) => m.TicketViewComponent),
+    title: 'Tu comprobante - Mueblería Estilo y Confort',
+  },
+  {
     path: 'auth',
     loadChildren: () => import('./modules/auth/auth.routes').then((m) => m.authRoutes),
   },
