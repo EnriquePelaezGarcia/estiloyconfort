@@ -508,19 +508,16 @@ export class OrderDetailComponent implements OnInit {
     this.ticketsService.createShareUrl(order.id).subscribe({
       next: (url) => {
         this.sharing.set(false);
-        const phone = (order.customerPhone ?? '').replace(/\D/g, '');
-        const saldo = this.balance() > 0
-          ? `\nSaldo pendiente: ${this.money(this.balance())}`
-          : '\nPedido liquidado. ¡Gracias!';
-        const text = encodeURIComponent(
-          `Hola ${order.customerName}, gracias por tu compra en Mueblería Estilo y Confort.\n\n` +
-          `Pedido: ${order.orderNumber}\n` +
-          `Total: ${this.money(order.totalAmount)}${saldo}\n\n` +
-          `Consulta tu comprobante aquí:\n${url}`,
+        const wa = this.ticketsService.buildWhatsAppUrl(
+          {
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount,
+            balance: this.balance(),
+          },
+          url,
         );
-        const wa = phone
-          ? `https://wa.me/52${phone}?text=${text}`
-          : `https://wa.me/?text=${text}`;
 
         if (win) win.location.href = wa;
         else window.open(wa, '_blank');

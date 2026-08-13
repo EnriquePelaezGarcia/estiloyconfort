@@ -375,8 +375,28 @@ $hairline: rgba(61, 43, 94, 0.12);
   color: $text-secondary;
 }
 
+// En pantalla los envoltorios de columna no existen: `contents` los saca del
+// layout y sus hijos quedan como hijos directos de .sheet__body, apilados como
+// siempre. Solo cobran vida al imprimir.
+.col { display: contents; }
+
 // ===== Impresión: el cliente guarda su comprobante como PDF =====
+//
+// Este comprobante NO se imprime en papel: el PDF existe para mandarse por
+// WhatsApp y verse en pantalla. Por eso se conservan los bloques oscuros de
+// cabecera y pie aunque "gasten tinta" — la tinta es imaginaria aquí.
+//
+// El objetivo es que quepa en UNA hoja. Antes se iba a dos porque el contenido
+// seguía siendo una sola columna estirada a todo lo ancho: el doble de largo
+// de lo necesario, y sin control de cortes los bloques se partían a la mitad.
 @media print {
+  @page {
+    // Sin `size`: Carta (279mm) es más corta que A4 (297mm), así que se maqueta
+    // para Carta y A4 sale sobrado. Fijar `size: letter` rompería en una
+    // impresora configurada en A4.
+    margin: 10mm;
+  }
+
   .no-print { display: none !important; }
 
   .ticket-page { padding: 0; background: #ffffff; }
@@ -384,14 +404,104 @@ $hairline: rgba(61, 43, 94, 0.12);
   .sheet {
     max-width: none;
     border: none;
+    border-radius: 0;
     box-shadow: none;
   }
 
-  // Los fondos oscuros de cabecera y pie solo sobreviven al PDF si se fuerza
-  // la impresión de color; sin esto el logo blanco cae sobre papel blanco.
+  // Los fondos oscuros solo sobreviven al PDF si se fuerza la impresión de
+  // color; sin esto el logo blanco caería sobre papel blanco y la cabecera
+  // desaparecería.
   .crest,
   .sheet__foot {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  // La cabecera se achica: a todo lo ancho de una hoja ocupa vertical que le
+  // hace falta al contenido.
+  .crest {
+    padding: 6mm 8mm 5mm;
+
+    &__logo { max-width: 42mm; margin-bottom: 2mm; }
+  }
+
+  .sheet__foot { padding: 4mm; }
+  .sheet__thanks { font-size: 11pt; }
+  .sheet__legal { font-size: 7pt; }
+
+  // ===== Las dos columnas =====
+  // .party no está dentro de ningún envoltorio: es hijo directo del body y
+  // debe cruzar las dos columnas. Con `wrap` + `flex: 0 0 100%` ocupa el
+  // primer renglón completo y las columnas bajan al siguiente.
+  .sheet__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0 8mm;
+    padding: 6mm 8mm;
+    font-size: 9pt;
+  }
+
+  .party { flex: 0 0 100%; }
+
+  .col {
+    display: block;
+    min-width: 0;
+  }
+
+  // Los productos pesan más que los datos de la venta.
+  .col--main { flex: 1.35; }
+  .col--side { flex: 1; }
+
+  // En papel las reglas sobran: los bordes de cada bloque ya separan, y cada
+  // hr consumía 3mm de vertical.
+  .rule { display: none; }
+
+  // Nada se parte entre páginas.
+  .party,
+  .lines,
+  .totals,
+  .balance,
+  .facts,
+  .history,
+  .line,
+  .fact { break-inside: avoid; }
+
+  // ===== Escala tipográfica de papel =====
+  // La de pantalla está pensada para un celular en la mano; en una hoja se ve
+  // enorme y es la otra mitad de por qué se iba a dos páginas.
+  .party { margin-bottom: 4mm; padding-bottom: 3mm; border-bottom: 1px solid rgba($lavender, 0.35); }
+  .party__name { font-size: 13pt; }
+  .party__status { font-size: 9pt; }
+
+  .lines { margin-bottom: 4mm; }
+  .line { padding: 1.5mm 0; }
+  .line__name { font-size: 9.5pt; }
+  .line__spec { font-size: 7.5pt; }
+  .line__amount { font-size: 9.5pt; }
+
+  .totals__row { font-size: 9pt; }
+  .totals__grand { font-size: 13pt; }
+
+  .balance {
+    margin-top: 0;
+    margin-bottom: 4mm;
+    padding: 4mm;
+
+    &__amount { font-size: 17pt; }
+    &__paid { font-size: 13pt; }
+    &__plan { font-size: 8pt; }
+  }
+
+  // En una columna angosta los datos van en lista vertical, no en rejilla de 2.
+  .facts {
+    grid-template-columns: 1fr;
+    gap: 2.5mm;
+    margin-bottom: 4mm;
+  }
+  .fact__value { font-size: 8.5pt; }
+
+  .history__row { font-size: 8pt; padding: 1mm 0; }
+
+  .label-overline { font-size: 7pt; }
 }

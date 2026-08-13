@@ -15,6 +15,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { DeliveryService } from '../../../core/services/delivery.service';
+import { TicketsService } from '../../../core/services/tickets.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { DeliveryAssignment, PaymentInstrument, PaymentStatus } from '../../../core/models/order.model';
@@ -33,6 +34,7 @@ import {
 })
 export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   private deliveryService = inject(DeliveryService);
+  private ticketsService = inject(TicketsService);
   private notification = inject(NotificationService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -290,6 +292,53 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
 
   protected instrumentLabel(i: PaymentInstrument): string {
     return PAYMENT_INSTRUMENT_LABELS[i];
+  }
+
+  /** Está emitiendo el link del ticket para WhatsApp. */
+  protected sharing = signal(false);
+
+  /**
+   * Manda el ticket al cliente por WhatsApp. El repartidor no carga impresora
+   * térmica, así que el comprobante del cobro en entrega es digital: el mismo
+   * ticket que manda el vendedor al crear el pedido.
+   *
+   * No se genera nada nuevo — la página pública lee datos en vivo, así que el
+   * link ya refleja el cobro que se acaba de registrar.
+   *
+   * La ventana se abre ANTES de la petición y se le asigna la URL después:
+   * abrirla dentro del callback la convierte en un popup no originado por el
+   * clic y Safari/iOS la bloquea, que es justo donde trabaja el repartidor.
+   */
+  protected shareWhatsApp(): void {
+    const a = this.assignment();
+    if (!a || this.sharing()) return;
+
+    const win = window.open('', '_blank');
+    this.sharing.set(true);
+
+    this.deliveryService.createShareUrl(a.id).subscribe({
+      next: (url) => {
+        this.sharing.set(false);
+        const wa = this.ticketsService.buildWhatsAppUrl(
+          {
+            customerName: a.customerName,
+            customerPhone: a.customerPhone,
+            orderNumber: a.orderNumber,
+            totalAmount: a.totalAmount,
+            balance: this.balance(),
+          },
+          url,
+        );
+
+        if (win) win.location.href = wa;
+        else window.open(wa, '_blank');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.sharing.set(false);
+        win?.close();
+        this.notification.error(err?.error?.message ?? 'No se pudo generar el link del ticket');
+      },
+    });
   }
 
   protected submitPayment(): void {

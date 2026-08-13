@@ -50,3 +50,31 @@ h6 {
   line-height: 1;
   user-select: none;
 }
+
+// ===== Impresión =====
+// El shell del sitio nunca debe salir en el papel ni en el PDF: la barra de
+// navegación y el pie son navegación, no documento.
+//
+// Sin esto, el pie del sitio (NAVEGAR / CONTACTO / LEGAL) empujaba el
+// contenido a una segunda hoja. Le pasaba al ticket público (/ticket/:token),
+// que se manda por WhatsApp y debe caber en una sola.
+@media print {
+  app-navbar,
+  app-footer,
+  app-loader,
+  app-toast {
+    display: none !important;
+  }
+
+  // El min-height se calcula contra la altura de la ventana y del pie; una vez
+  // ocultos solo reservaría vertical vacío al principio del documento.
+  .main-content {
+    min-height: 0;
+    flex: none;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+  }
+}

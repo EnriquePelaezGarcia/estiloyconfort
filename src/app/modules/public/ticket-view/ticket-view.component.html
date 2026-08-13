@@ -50,6 +50,13 @@
 
         <hr class="rule" />
 
+        <!-- Dos columnas en el PDF, una sola en pantalla.
+             En pantalla estos envoltorios llevan `display: contents`, así que
+             desaparecen del layout y el celular se ve idéntico a antes. Al
+             imprimir pasan a ser columnas reales, y cada una apila su propio
+             contenido sin arrastrar a la otra — que es lo que hacía que el
+             comprobante se fuera a una segunda hoja. -->
+        <div class="col col--main">
         <!-- Productos. Nombre en Manrope: la regla de marca reserva Playfair
              para la tienda y Manrope para los productos. -->
         <section class="lines">
@@ -103,7 +110,9 @@
             <span>{{ t.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
         </section>
+        </div><!-- /.col--main -->
 
+        <div class="col col--side">
         <!-- El saldo es justo lo que el cliente abre el link a consultar, así
              que es el número con tratamiento editorial. Liquidado se celebra
              en vez de mostrar un "$0.00" mudo. -->
@@ -177,6 +186,8 @@
             }
           </section>
         }
+
+        </div><!-- /.col--side -->
 
         <button type="button" class="save-btn no-print" (click)="print()">
           Guardar comprobante

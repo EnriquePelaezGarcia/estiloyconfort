@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import {
   DeliveryAssignment,
@@ -50,5 +51,18 @@ export class DeliveryService {
     payments: Array<{ amount: number; paymentMethod: PaymentInstrument }>,
   ): Observable<unknown> {
     return this.api.patch(`/delivery/assignments/${id}/payment`, { payments });
+  }
+
+  /**
+   * Emite el link del ticket público para mandarlo por WhatsApp desde la
+   * entrega, y devuelve la URL completa.
+   *
+   * Entra por assignmentId, no por orderId: el backend comprueba que la
+   * entrega sea del repartidor que la pide.
+   */
+  createShareUrl(assignmentId: number): Observable<string> {
+    return this.api
+      .post<{ data: { token: string } }>(`/delivery/assignments/${assignmentId}/share`, {})
+      .pipe(map((res) => `${window.location.origin}/ticket/${res.data.token}`));
   }
 }

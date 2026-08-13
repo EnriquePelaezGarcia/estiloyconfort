@@ -107,6 +107,31 @@ const deliveryController = {
     );
     res.status(201).json({ data: result, message: 'Cobro registrado' });
   }),
+
+  // POST /api/delivery/assignments/:id/share — emite el link del ticket para
+  // mandárselo al cliente por WhatsApp desde la entrega.
+  //
+  // Existe como espejo de POST /api/seller/orders/:id/share porque aquel está
+  // detrás de authorize('seller','admin') y el repartidor recibiría 403.
+  //
+  // Entra por assignmentId y NO por orderId a propósito: así el repartidor no
+  // puede sondear pedidos ajenos cambiando el número de la URL. La
+  // comprobación de propiedad es la misma que en registerPayment.
+  //
+  // No genera un ticket nuevo: la página pública lee datos en vivo, así que el
+  // token que ya existía (si el vendedor lo compartió al crear el pedido) sirve
+  // igual y ya refleja el cobro recién registrado.
+  share: asyncHandler(async (req, res) => {
+    const delivery = await Delivery.findById(req.params.id);
+    if (!delivery) throw ApiError.notFound('Entrega no encontrada');
+    if (delivery.deliveryPersonId !== req.user.id) {
+      throw ApiError.forbidden('Entrega no asignada a ti');
+    }
+
+    const token = await Order.ensureShareToken(delivery.orderId);
+    if (!token) throw ApiError.notFound('Pedido no encontrado');
+    res.json({ data: { token } });
+  }),
 };
 
 module.exports = deliveryController;
