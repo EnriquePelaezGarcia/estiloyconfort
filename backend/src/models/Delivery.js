@@ -88,7 +88,13 @@ const Delivery = {
     // Refleja el estado en el pedido.
     if (status === 'completed') {
       const [[d]] = await pool.execute('SELECT order_id FROM deliveries WHERE id = ?', [id]);
-      if (d) await pool.execute("UPDATE orders SET order_status = 'delivered' WHERE id = ?", [d.order_id]);
+      if (d) {
+        await pool.execute("UPDATE orders SET order_status = 'delivered' WHERE id = ?", [d.order_id]);
+        // Docs/plan-reserva-de-piezas.md §4.3: al entregar, cualquier reserva
+        // activa del pedido pasa a 'fulfilled' (housekeeping).
+        const StockReservation = require('./StockReservation');
+        await StockReservation.fulfillByOrder(d.order_id);
+      }
     }
 
     // Comisión del repartidor por armado. El require va aquí adentro y no en la

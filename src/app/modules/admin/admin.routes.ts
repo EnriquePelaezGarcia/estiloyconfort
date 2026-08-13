@@ -34,6 +34,12 @@ export const adminRoutes: Routes = [
         title: 'Inventario - Panel Admin',
       },
       {
+        path: 'reservas',
+        loadComponent: () =>
+          import('../shared/reservations/reservations.component').then((m) => m.ReservationsComponent),
+        title: 'Reservas - Panel Admin',
+      },
+      {
         path: 'reglas-precios',
         loadComponent: () =>
           import('./pricing/pricing.component').then((m) => m.PricingComponent),
@@ -85,6 +91,14 @@ export const adminRoutes: Routes = [
             (m) => m.QuoteCreateComponent,
           ),
         title: 'Nueva cotización - Panel Admin',
+      },
+      {
+        path: 'cotizaciones/:id/editar',
+        loadComponent: () =>
+          import('../seller/quotes/quote-create/quote-create.component').then(
+            (m) => m.QuoteCreateComponent,
+          ),
+        title: 'Editar cotización - Panel Admin',
       },
       {
         path: 'finanzas',

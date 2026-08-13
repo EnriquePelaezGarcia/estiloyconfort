@@ -1,0 +1,30 @@
+@use '../../../../styles/variables' as vars;
+
+// ===== Chips de filtro (mismo patrón que admin/inventory) =====
+.chips {
+  display: flex;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-surface;
+  color: vars.$color-text-secondary;
+  font-family: vars.$font-body;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background vars.$transition-fast, color vars.$transition-fast,
+    border-color vars.$transition-fast;
+
+  &:hover { background: vars.$color-bg; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}

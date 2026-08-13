@@ -102,14 +102,66 @@
   &__price--alert { color: #dc2626; font-weight: 600; }
   &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }
 
+  // Material y color de la línea (M4/M6): mismo alto, tipografía y borde
+  // para que ambos controles se vean como un solo par alineado en vez de
+  // un <select> del sistema chocando con un <input> a su lado.
+  &__variant {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 4px;
+  }
+
+  &__material-fixed {
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+  }
+
   &__material,
   &__color {
-    margin-top: 2px;
-    padding: 0.2rem 0.35rem;
+    height: 30px;
+    padding: 0 0.55rem;
     border: 1px solid vars.$color-border;
     border-radius: vars.$radius-sm;
+    background: vars.$color-surface;
+    font-family: inherit;
     font-size: 0.78rem;
-    background: white;
+    color: vars.$color-text;
+    line-height: 28px;
+    transition: border-color vars.$transition-fast;
+
+    &:hover:not(:disabled) { border-color: vars.$color-secondary; }
+
+    &:focus {
+      outline: none;
+      border-color: vars.$color-primary;
+      box-shadow: 0 0 0 2px color-mix(in srgb, vars.$color-primary 15%, transparent);
+    }
+
+    &:disabled {
+      background: vars.$color-bg;
+      color: vars.$color-text-secondary;
+      cursor: not-allowed;
+    }
+  }
+
+  &__material {
+    flex: 1 1 160px;
+    max-width: 220px;
+    appearance: none;
+    padding-right: 1.6rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236b6b7b' stroke-width='1.5'%3E%3Cpath d='M5 7l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.4rem center;
+    background-size: 14px;
+  }
+
+  &__color {
+    flex: 1 1 140px;
+    max-width: 180px;
+
+    &::placeholder { color: vars.$color-text-secondary; }
   }
 
   &__warn {

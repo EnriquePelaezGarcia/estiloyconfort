@@ -35,6 +35,22 @@
   }
 }
 
+// Advertencia no bloqueante al ajustar stock por debajo de lo reservado
+// (Docs/plan-reserva-de-piezas.md §6.4/§7.5).
+.field__warning {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: vars.$radius-sm;
+  background: color-mix(in srgb, #f59e0b 12%, white);
+  color: #92400e;
+  font-size: 0.78rem;
+
+  .material-symbols-outlined { font-size: 1rem; }
+}
+
 // ===== Modal ajuste =====
 .adjust-product {
   font-weight: 600;

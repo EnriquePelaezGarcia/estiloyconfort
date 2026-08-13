@@ -19,6 +19,7 @@ router.use(authenticate, authorize('seller', 'admin'));
 router.get('/', quotesController.list);
 router.post('/', quotesController.create);
 router.get('/:id', quotesController.getOne);
+router.patch('/:id', quotesController.update);
 router.patch('/:id/confirm', quotesController.confirm);
 router.delete('/:id', quotesController.remove);
 

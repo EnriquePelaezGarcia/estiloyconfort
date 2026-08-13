@@ -34,6 +34,7 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Usuarios', icon: 'group', route: 'usuarios' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
+    { label: 'Reservas', icon: 'bookmark', route: 'reservas' },
     { label: 'Reglas de precios', icon: 'percent', route: 'reglas-precios' },
     { label: 'Lista de precios', icon: 'sell', route: 'lista-precios' },
     { label: 'Precios mayoreo', icon: 'store', route: 'precios-mayoreo', wholesaleOnly: true },

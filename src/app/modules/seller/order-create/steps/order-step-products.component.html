@@ -64,31 +64,33 @@
             <span class="cart-line__name">{{ l.product.name }}</span>
 
             <!-- M4: material y color son de ESTA línea. -->
-            @if (l.product.materialPrices.length > 1) {
-              <select class="cart-line__material" [disabled]="!store.canEditLine(l)" (change)="store.changeLineMaterial(i, $event)">
-                @for (mp of l.product.materialPrices; track mp.materialId) {
-                  <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
-                    {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
-                  </option>
-                }
-              </select>
-            } @else if (l.product.materialPrices[0]; as onlyMaterial) {
-              <span class="muted">{{ onlyMaterial.label }}</span>
-            }
+            <div class="cart-line__variant">
+              @if (l.product.materialPrices.length > 1) {
+                <select class="cart-line__material" [disabled]="!store.canEditLine(l)" (change)="store.changeLineMaterial(i, $event)">
+                  @for (mp of l.product.materialPrices; track mp.materialId) {
+                    <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
+                      {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
+                    </option>
+                  }
+                </select>
+              } @else if (l.product.materialPrices[0]; as onlyMaterial) {
+                <span class="cart-line__material-fixed">{{ onlyMaterial.label }}</span>
+              }
 
-            @if (store.lineMaterialPrice(l); as mp) {
-              <!-- M6: siempre visible y editable salvo color fijo ('fixed').
-                   'free' (p.ej. MDF) trae "Blanco" por default pero
-                   el vendedor puede escribir otro color por línea. -->
-              <input
-                type="text"
-                class="cart-line__color"
-                [value]="l.color ?? ''"
-                [disabled]="mp.colorPolicy === 'fixed' || !store.canEditLine(l)"
-                [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
-                (input)="store.changeLineColor(i, $event)"
-              />
-            }
+              @if (store.lineMaterialPrice(l); as mp) {
+                <!-- M6: siempre visible y editable salvo color fijo ('fixed').
+                     'free' (p.ej. MDF) trae "Blanco" por default pero
+                     el vendedor puede escribir otro color por línea. -->
+                <input
+                  type="text"
+                  class="cart-line__color"
+                  [value]="l.color ?? ''"
+                  [disabled]="mp.colorPolicy === 'fixed' || !store.canEditLine(l)"
+                  [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
+                  (input)="store.changeLineColor(i, $event)"
+                />
+              }
+            </div>
 
             @if (store.unitPrice(l) !== null) {
               <span class="cart-line__price">{{ store.unitPrice(l) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
@@ -105,16 +107,68 @@
               </span>
             }
             <!-- Piezas disponibles del material YA SELECCIONADO en esta línea: se
-                 actualiza solo al cambiar el material (mismo dato que el precio). -->
+                 actualiza solo al cambiar el material (mismo dato que el precio).
+                 Docs/plan-reserva-de-piezas.md §7.2: "disponible" ya descuenta lo
+                 apartado por otros pedidos — no es el stock físico crudo. -->
             @if (store.lineMaterialPrice(l); as stockMp) {
-              @if (stockMp.stockQuantity > 0) {
+              @if (store.lineAvailableQuantity(l) > 0) {
                 <span class="cart-line__stock cart-line__stock--available">
-                  {{ stockMp.stockQuantity }} disponibles
+                  {{ store.lineAvailableQuantity(l) }} disponibles
+                  @if ((stockMp.reservedQuantity ?? 0) > 0) {
+                    · {{ stockMp.reservedQuantity }} apartada(s)
+                    @if (stockMp.reservations?.length) {
+                      <span class="cart-line__reserved-detail" [title]="store.reservationsTooltip(stockMp)">ⓘ</span>
+                    }
+                  }
                 </span>
               } @else {
                 <span class="cart-line__stock cart-line__stock--out">
                   Agotado — se fabrica ({{ l.product.availability_days }} días)
                 </span>
+              }
+            }
+
+            <!-- Apartar pieza(s) de esta línea (D4/D8): solo si hay pieza física
+                 disponible — no aplica a lo que se va a fabricar (D6). -->
+            @if (!store.lineRequiresFabrication(l)) {
+              <label class="cart-line__reserve-toggle">
+                <input
+                  type="checkbox"
+                  [checked]="!!l.reserve"
+                  [disabled]="!store.canEditLine(l)"
+                  (change)="store.toggleReserve(i, $any($event.target).checked)"
+                />
+                Apartar pieza(s) de esta línea
+              </label>
+              @if (l.reserve; as reserve) {
+                <div class="cart-line__reserve-form">
+                  <label>
+                    Cantidad a apartar
+                    <input
+                      type="number"
+                      min="1"
+                      [max]="store.lineMaxReserve(l) || l.quantity"
+                      [value]="reserve.quantity"
+                      (change)="store.setReserveQuantity(i, +$any($event.target).value)"
+                    />
+                  </label>
+                  <label>
+                    Motivo
+                    <select (change)="store.setReserveReason(i, $any($event.target).value)">
+                      <option value="pagada" [selected]="reserve.reason === 'pagada'">Ya pagada</option>
+                      <option value="color_unico" [selected]="reserve.reason === 'color_unico'">Color único</option>
+                      <option value="fecha_entrega" [selected]="reserve.reason === 'fecha_entrega'">Entrega en fecha específica</option>
+                      <option value="otro" [selected]="reserve.reason === 'otro'">Otro</option>
+                    </select>
+                  </label>
+                  <input
+                    type="text"
+                    class="cart-line__reserve-note"
+                    placeholder="Nota (opcional)"
+                    [value]="reserve.note ?? ''"
+                    (change)="store.setReserveNote(i, $any($event.target).value)"
+                  />
+                </div>
               }
             }
           </div>

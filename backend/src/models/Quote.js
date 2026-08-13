@@ -206,6 +206,125 @@ async function resolveQuoteLine(conn, it, paymentMethod, config) {
   };
 }
 
+/**
+ * Resuelve líneas, envío, armado y plan de financiamiento a partir del
+ * payload crudo — el núcleo compartido por `create` y `update`, para que
+ * editar una cotización recalcule con las MISMAS reglas y tarifas vigentes
+ * que crearla desde cero.
+ */
+async function resolveQuotePricing(conn, data, config) {
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (!items.length) {
+    const err = new Error('La cotización debe incluir al menos un producto');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const paymentMethod = data.paymentMethod ?? 'cash';
+  if (!SALE_SCHEMES.includes(paymentMethod)) {
+    const err = new Error('Condición de venta no válida');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // M11: mayoreo apagado se rechaza aunque el POS ya lo oculte — el
+  // frontend no puede ser la única defensa contra un POST/PATCH directo.
+  if (paymentMethod === 'wholesale' && !Number(config.wholesale_enabled)) {
+    const err = new Error('El esquema de Mayoreo no está activo.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let subtotal = 0;
+  const resolvedItems = [];
+  for (const it of items) {
+    const resolved = await resolveQuoteLine(conn, it, paymentMethod, config);
+    subtotal += resolved.subtotal;
+    resolvedItems.push(resolved);
+  }
+
+  // Envío: se congela la tarifa vigente. Un CP fuera de cobertura no es
+  // un error — se cotiza sin envío y el vendedor lo acuerda aparte.
+  const rawCp = String(data.shippingPostalCode ?? '').replace(/\D/g, '').slice(0, 5);
+  const shippingPostalCode = rawCp.length === 5 ? rawCp : null;
+  let shippingCost = 0;
+  let shippingZoneLabel = null;
+  if (shippingPostalCode) {
+    const quote = await ShippingRate.quoteByPostalCode(shippingPostalCode);
+    if (quote) {
+      shippingCost = quote.price;
+      shippingZoneLabel = quote.label;
+    }
+  }
+
+  const assemblyService = !!data.assemblyService;
+  const assemblyFloors = assemblyService
+    ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0)
+    : 0;
+  const assemblyCost = assemblyService ? computeAssemblyCost(assemblyFloors, config) : 0;
+
+  subtotal = Math.round(subtotal * 100) / 100;
+
+  // Mismo tratamiento por esquema que Order.create: en crédito tienda el
+  // total lleva el interés; en apartado es el de contado y se guarda la
+  // fecha límite para conservarlo.
+  let productsTotal = subtotal;
+  let cashTotal = null;
+  let downPayment = null;
+  let weeklyPayment = null;
+  let lastPayment = null;
+  let creditWeeks = null;
+  let layawayDeadline = null;
+  let wholesaleIva = 0;
+
+  if (paymentMethod === 'store_credit') {
+    const credit = calculateCredit(subtotal, config);
+    if (!credit) {
+      const err = new Error('No se pudo calcular el plan de crédito para esta cotización');
+      err.statusCode = 400;
+      throw err;
+    }
+    productsTotal = credit.creditPrice;
+    cashTotal = credit.cashTotal;
+    downPayment = credit.downPayment;
+    weeklyPayment = credit.weeklyPayment;
+    lastPayment = credit.lastPayment;
+    creditWeeks = credit.weeks;
+  } else if (paymentMethod === 'layaway') {
+    cashTotal = subtotal;
+    downPayment = LAYAWAY_MIN_DEPOSIT;
+    const deadline = new Date();
+    deadline.setMonth(deadline.getMonth() + LAYAWAY_MONTHS);
+    layawayDeadline = deadline.toISOString().slice(0, 10);
+  } else if (paymentMethod === 'wholesale' && !Number(config.wholesale_price_includes_iva)) {
+    // M13: el precio de lista de mayoreo va sin IVA; se congela el monto
+    // a desglosar para que el cliente vea el mismo número que el ticket.
+    wholesaleIva = Math.round(subtotal * (Number(config.iva) / 100) * 100) / 100;
+  }
+
+  const totalAmount = Math.round((productsTotal + shippingCost + assemblyCost) * 100) / 100;
+
+  return {
+    paymentMethod,
+    resolvedItems,
+    subtotal,
+    shippingPostalCode,
+    shippingCost,
+    shippingZoneLabel,
+    assemblyService,
+    assemblyFloors,
+    assemblyCost,
+    totalAmount,
+    cashTotal,
+    downPayment,
+    weeklyPayment,
+    lastPayment,
+    creditWeeks,
+    layawayDeadline,
+    wholesaleIva,
+  };
+}
+
 const Quote = {
   QUOTE_BUSINESS_DAYS,
 
@@ -215,103 +334,12 @@ const Quote = {
    * @param {number} sellerId id del vendedor/admin que cotiza
    */
   async create(data, sellerId) {
-    const items = Array.isArray(data.items) ? data.items : [];
-    if (!items.length) {
-      const err = new Error('La cotización debe incluir al menos un producto');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const paymentMethod = data.paymentMethod ?? 'cash';
-    if (!SALE_SCHEMES.includes(paymentMethod)) {
-      const err = new Error('Condición de venta no válida');
-      err.statusCode = 400;
-      throw err;
-    }
-
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
       const config = await PricingConfig.getMap();
-
-      // M11: mayoreo apagado se rechaza aunque el POS ya lo oculte — el
-      // frontend no puede ser la única defensa contra un POST directo.
-      if (paymentMethod === 'wholesale' && !Number(config.wholesale_enabled)) {
-        const err = new Error('El esquema de Mayoreo no está activo.');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      let subtotal = 0;
-      const resolvedItems = [];
-      for (const it of items) {
-        const resolved = await resolveQuoteLine(conn, it, paymentMethod, config);
-        subtotal += resolved.subtotal;
-        resolvedItems.push(resolved);
-      }
-
-      // Envío: se congela la tarifa vigente. Un CP fuera de cobertura no es
-      // un error — se cotiza sin envío y el vendedor lo acuerda aparte.
-      const rawCp = String(data.shippingPostalCode ?? '').replace(/\D/g, '').slice(0, 5);
-      const shippingPostalCode = rawCp.length === 5 ? rawCp : null;
-      let shippingCost = 0;
-      let shippingZoneLabel = null;
-      if (shippingPostalCode) {
-        const quote = await ShippingRate.quoteByPostalCode(shippingPostalCode);
-        if (quote) {
-          shippingCost = quote.price;
-          shippingZoneLabel = quote.label;
-        }
-      }
-
-      const assemblyService = !!data.assemblyService;
-      const assemblyFloors = assemblyService
-        ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0)
-        : 0;
-      const assemblyCost = assemblyService ? computeAssemblyCost(assemblyFloors, config) : 0;
-
-      subtotal = Math.round(subtotal * 100) / 100;
-
-      // Mismo tratamiento por esquema que Order.create: en crédito tienda el
-      // total lleva el interés; en apartado es el de contado y se guarda la
-      // fecha límite para conservarlo.
-      let productsTotal = subtotal;
-      let cashTotal = null;
-      let downPayment = null;
-      let weeklyPayment = null;
-      let lastPayment = null;
-      let creditWeeks = null;
-      let layawayDeadline = null;
-      let wholesaleIva = 0;
-
-      if (paymentMethod === 'store_credit') {
-        const credit = calculateCredit(subtotal, config);
-        if (!credit) {
-          const err = new Error('No se pudo calcular el plan de crédito para esta cotización');
-          err.statusCode = 400;
-          throw err;
-        }
-        productsTotal = credit.creditPrice;
-        cashTotal = credit.cashTotal;
-        downPayment = credit.downPayment;
-        weeklyPayment = credit.weeklyPayment;
-        lastPayment = credit.lastPayment;
-        creditWeeks = credit.weeks;
-      } else if (paymentMethod === 'layaway') {
-        cashTotal = subtotal;
-        downPayment = LAYAWAY_MIN_DEPOSIT;
-        const deadline = new Date();
-        deadline.setMonth(deadline.getMonth() + LAYAWAY_MONTHS);
-        layawayDeadline = deadline.toISOString().slice(0, 10);
-      } else if (paymentMethod === 'wholesale' && !Number(config.wholesale_price_includes_iva)) {
-        // M13: el precio de lista de mayoreo va sin IVA; se congela el monto
-        // a desglosar para que el cliente vea el mismo número que el ticket.
-        wholesaleIva = Math.round(subtotal * (Number(config.iva) / 100) * 100) / 100;
-      }
-
-      const totalAmount =
-        Math.round((productsTotal + shippingCost + assemblyCost) * 100) / 100;
+      const p = await resolveQuotePricing(conn, data, config);
 
       // 16 bytes en base64url = 22 caracteres sin guiones ni signos, seguros
       // en una URL que se pega en WhatsApp.
@@ -329,18 +357,18 @@ const Quote = {
            status, expires_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          token, sellerId, data.customerName, data.customerPhone ?? null, paymentMethod,
-          shippingPostalCode, shippingCost, shippingZoneLabel,
-          assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
-          subtotal, totalAmount,
-          cashTotal, downPayment, weeklyPayment, lastPayment,
-          creditWeeks, layawayDeadline, wholesaleIva,
+          token, sellerId, data.customerName, data.customerPhone ?? null, p.paymentMethod,
+          p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel,
+          p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
+          p.subtotal, p.totalAmount,
+          p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
+          p.creditWeeks, p.layawayDeadline, p.wholesaleIva,
           'open', expiresAt,
         ],
       );
       const quoteId = result.insertId;
 
-      for (const it of resolvedItems) {
+      for (const it of p.resolvedItems) {
         await conn.execute(
           `INSERT INTO quote_items
             (quote_id, product_id, product_name, product_sku, material_id,
@@ -356,6 +384,77 @@ const Quote = {
 
       await conn.commit();
       return this.findById(quoteId);
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  },
+
+  /**
+   * Edita cliente/condiciones/productos de una cotización que aún no se
+   * convirtió en pedido. Recalcula todo con `resolveQuotePricing` (mismas
+   * reglas que `create`) y reemplaza las líneas; conserva token, status,
+   * `expires_at` y `created_at`.
+   */
+  async update(id, data) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      const [[current]] = await conn.execute('SELECT status FROM quotes WHERE id = ? FOR UPDATE', [id]);
+      if (!current) {
+        const err = new Error('Cotización no encontrada');
+        err.statusCode = 404;
+        throw err;
+      }
+      if (current.status === 'converted') {
+        const err = new Error('Esta cotización ya se convirtió en pedido y no se puede editar');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const config = await PricingConfig.getMap();
+      const p = await resolveQuotePricing(conn, data, config);
+
+      await conn.execute(
+        `UPDATE quotes SET
+           customer_name = ?, customer_phone = ?, payment_method = ?,
+           shipping_postal_code = ?, shipping_cost = ?, shipping_zone_label = ?,
+           assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
+           subtotal = ?, total_amount = ?,
+           cash_total = ?, down_payment = ?, weekly_payment = ?, last_payment = ?,
+           credit_weeks = ?, layaway_deadline = ?, wholesale_iva = ?
+         WHERE id = ?`,
+        [
+          data.customerName, data.customerPhone ?? null, p.paymentMethod,
+          p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel,
+          p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
+          p.subtotal, p.totalAmount,
+          p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
+          p.creditWeeks, p.layawayDeadline, p.wholesaleIva,
+          id,
+        ],
+      );
+
+      await conn.execute('DELETE FROM quote_items WHERE quote_id = ?', [id]);
+      for (const it of p.resolvedItems) {
+        await conn.execute(
+          `INSERT INTO quote_items
+            (quote_id, product_id, product_name, product_sku, material_id,
+             material_label, color, quantity, unit_price, subtotal)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [
+            id, it.productId, it.productName, it.productSku,
+            it.materialId, it.materialLabel, it.color, it.quantity,
+            it.unitPrice, it.subtotal,
+          ],
+        );
+      }
+
+      await conn.commit();
+      return this.findById(id);
     } catch (err) {
       await conn.rollback();
       throw err;

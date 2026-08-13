@@ -22,6 +22,7 @@ import {
   PriceListRow,
   ProfitMatrixRow,
   SalesReportRow,
+  StockReservation,
   Transaction,
   WholesalePriceListRow,
 } from '../models/order.model';
@@ -42,6 +43,9 @@ export interface InventoryRow {
   materialCode: string;
   materialLabel: string;
   stockQuantity: number;
+  /** Reserva de piezas (Docs/plan-reserva-de-piezas.md): cuánto de stockQuantity ya está apartado, y cuánto queda libre. */
+  reservedQuantity: number;
+  availableQuantity: number;
   baseCost: number | null;
   priceCash: number | null;
   stockValue: number | null;
@@ -268,5 +272,21 @@ export class AdminService {
 
   updateInventory(items: Array<{ productId: number; materialId: number; stockQuantity: number }>): Observable<{ message: string }> {
     return this.api.put<{ message: string }>('/admin/inventory', { items });
+  }
+
+  // ===== Reservas de inventario (Docs/plan-reserva-de-piezas.md) =====
+  // D4: no hay creación aquí — toda reserva nace del payload de crear/editar
+  // un pedido (order-create). Esta pantalla es solo lectura + liberar (§7.4).
+
+  listReservations(filters: { status?: string; productId?: number; search?: string } = {}): Observable<{ data: StockReservation[] }> {
+    const params: Record<string, string> = {};
+    if (filters.status) params['status'] = filters.status;
+    if (filters.productId) params['productId'] = String(filters.productId);
+    if (filters.search) params['search'] = filters.search;
+    return this.api.get<{ data: StockReservation[] }>('/inventory/reservations', params);
+  }
+
+  releaseReservation(id: number, releasedReason?: string): Observable<{ data: StockReservation; message: string }> {
+    return this.api.patch<{ data: StockReservation; message: string }>(`/inventory/reservations/${id}/release`, { releasedReason });
   }
 }

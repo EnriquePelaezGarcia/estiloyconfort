@@ -97,7 +97,8 @@ export interface PublicQuote {
 
 export interface CreateQuoteRequest {
   customerName: string;
-  customerPhone?: string | null;
+  /** Obligatorio: 10 dígitos MX. */
+  customerPhone: string;
   paymentMethod: SaleScheme;
   shippingPostalCode?: string | null;
   assemblyService?: boolean;

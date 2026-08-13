@@ -81,6 +81,10 @@
     color: vars.$color-text;
   }
 
+  // Mismo tamaño/color que el nombre — el vendedor debe poder leer el
+  // teléfono tan rápido como el nombre para llamar o mandar WhatsApp.
+  &__phone { margin-top: 1px; }
+
   &__meta {
     font-size: 0.75rem;
     color: vars.$color-text-secondary;

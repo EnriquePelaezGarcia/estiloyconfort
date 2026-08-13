@@ -27,7 +27,7 @@
   </div>
   <div class="search">
     <span class="material-symbols-outlined">search</span>
-    <input type="text" placeholder="Buscar por cliente" (input)="onSearchInput($event)" />
+    <input type="text" placeholder="Buscar por cliente o teléfono" (input)="onSearchInput($event)" />
   </div>
 </div>
 
@@ -40,6 +40,9 @@
         <div class="quote-card__head">
           <div class="quote-card__who">
             <span class="quote-card__name">{{ q.customerName }}</span>
+            @if (q.customerPhone) {
+              <span class="quote-card__name quote-card__phone">{{ q.customerPhone }}</span>
+            }
             <span class="quote-card__meta">
               {{ q.createdAt | date:'d MMM y' }} · {{ q.itemCount ?? 0 }} producto(s)
               @if (q.sellerName) { · {{ q.sellerName }} }
@@ -99,6 +102,10 @@
           }
 
           @if (q.status !== 'converted') {
+            <button type="button" class="btn btn--ghost btn--sm" (click)="editQuote(q)">
+              <span class="material-symbols-outlined">edit</span>
+              Editar
+            </button>
             <button type="button" class="icon-btn icon-btn--danger" (click)="askDelete(q)" aria-label="Eliminar cotización">
               <span class="material-symbols-outlined">delete</span>
             </button>

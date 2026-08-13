@@ -81,6 +81,8 @@
           <th>SKU</th>
           <th>Material</th>
           <th class="num">Stock</th>
+          <th class="num" title="Piezas apartadas por una reserva activa (Docs/plan-reserva-de-piezas.md)">Apartado</th>
+          <th class="num">Disponible</th>
           <th>Estado</th>
           <th class="num">Valor</th>
           <th class="actions-col">Acciones</th>
@@ -93,6 +95,12 @@
             <td data-label="SKU" class="muted">{{ row.sku || '—' }}</td>
             <td data-label="Material">{{ row.materialLabel }}</td>
             <td data-label="Stock" class="num" [class.negative]="row.stockQuantity < 0">{{ row.stockQuantity }}</td>
+            <td data-label="Apartado" class="num">
+              @if (row.reservedQuantity > 0) {
+                <span class="badge badge--amber">{{ row.reservedQuantity }}</span>
+              } @else { — }
+            </td>
+            <td data-label="Disponible" class="num" [class.negative]="row.availableQuantity < 0">{{ row.availableQuantity }}</td>
             <td data-label="Estado">
               @switch (stockState(row)) {
                 @case ('out') { <span class="badge badge--red">{{ row.stockQuantity < 0 ? 'Negativo — vendido y pendiente de fabricar' : 'Agotado' }}</span> }
@@ -115,7 +123,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="7" class="empty">No hay renglones que coincidan con el filtro.</td>
+            <td colspan="9" class="empty">No hay renglones que coincidan con el filtro.</td>
           </tr>
         }
       </tbody>
@@ -143,6 +151,16 @@
           <p class="field__hint">Puede quedar negativo: significa vendido y pendiente de fabricar (M15.4). No se bloquea.</p>
           @if (form.get('stockQuantity')?.invalid && form.get('stockQuantity')?.touched) {
             <p class="field__error">Ingresa un valor válido</p>
+          }
+          <!-- Docs/plan-reserva-de-piezas.md §6.4: advierte, no bloquea — el
+               admin puede confirmar y guardar igual (ej. la pieza reservada
+               se dañó o se perdió). -->
+          @if (row.reservedQuantity > 0 && (form.get('stockQuantity')?.value ?? 0) < row.reservedQuantity) {
+            <p class="field__warning">
+              <span class="material-symbols-outlined">warning</span>
+              Ojo: hay {{ row.reservedQuantity }} pieza(s) apartada(s) y el nuevo conteo
+              ({{ form.get('stockQuantity')?.value }}) es menor. Revisa las reservas antes de guardar.
+            </p>
           }
         </div>
 

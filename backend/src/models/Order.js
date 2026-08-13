@@ -1,6 +1,7 @@
 const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const Quote = require('./Quote');
+const StockReservation = require('./StockReservation');
 const { calculateCredit } = require('../utils/pricingCalculator');
 
 const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
@@ -79,6 +80,14 @@ function mapItem(row) {
     manufacturerName: row.manufacturer_name ?? null,
     /** Costo congelado al asignar el fabricante. */
     unitCost: row.unit_cost != null ? Number(row.unit_cost) : null,
+    /** Reserva de pieza activa de esta línea (Docs/plan-reserva-de-piezas.md). null = no tiene ninguna apartada. */
+    reservation: row.reservation_id != null ? {
+      id: row.reservation_id,
+      quantity: row.reservation_quantity,
+      reason: row.reservation_reason,
+      note: row.reservation_note ?? null,
+      customerName: row.reservation_customer_name ?? null,
+    } : null,
   };
 }
 
@@ -187,8 +196,11 @@ const BASE_SELECT = `
  * @returns {object} línea resuelta lista para INSERT, con el stock_quantity
  *   ANTES de este pedido (para decidir requiresFabrication) — el descuento
  *   real de stock lo hace quien llama, después del INSERT.
+ * @param {number|null} orderId id del pedido que se está editando (null si es
+ *   creación) — sus propias reservas activas no cuentan contra sí mismas
+ *   (Docs/plan-reserva-de-piezas.md §4.2).
  */
-async function resolveOrderLine(conn, it, paymentMethod, config) {
+async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null) {
   const [[product]] = await conn.execute(
     'SELECT id, name, sku, wholesale_min_qty FROM products WHERE id = ?', [it.productId],
   );
@@ -257,8 +269,71 @@ async function resolveOrderLine(conn, it, paymentMethod, config) {
 
   // M15.4: el stock informa, no bloquea. Sin existencia -> fabricación,
   // pero la venta procede siempre y el stock puede quedar negativo.
+  //
+  // Reserva de piezas (Docs/plan-reserva-de-piezas.md §4.2): la porción de
+  // stock reservada por OTRO pedido nunca se ofrece como disponible. Esto es
+  // ADITIVO a M15.4 — el caso "no hay stock físico, se fabrica" no cambia.
   const stockBefore = Number(declared.stock_quantity) || 0;
-  const requiresFabrication = stockBefore <= 0;
+  const reservedByOthers = await StockReservation.activeReservedQuantity(
+    product.id, materialId, { excludeOrderId: orderId, conn },
+  );
+  const available = stockBefore - reservedByOthers;
+
+  let requiresFabrication;
+  if (qty <= available) {
+    // Caso normal (sin cambios de M15.4), solo que "disponible" ya descuenta
+    // lo reservado por otros en vez de usar el stock físico crudo.
+    requiresFabrication = available <= 0;
+  } else if (qty <= stockBefore) {
+    // La diferencia estaría tomada de piezas reservadas por OTRO pedido:
+    // bloqueo duro (D5), a diferencia del caso "sin stock" que sí procede.
+    const [detail] = await StockReservation.listActiveByProductMaterial(
+      product.id, materialId, { excludeOrderId: orderId, conn },
+    );
+    const detailTxt = detail
+      ? ` — ${detail.customer_name ?? detail.order_customer_name ?? 'reserva sin cliente'}`
+      : '';
+    const err = new Error(
+      `Solo hay ${Math.max(0, available)} pieza(s) disponible(s) de "${product.name}" en `
+      + `${declared.label}; ${reservedByOthers} está(n) apartada(s)${detailTxt}.`,
+    );
+    err.statusCode = 400;
+    throw err;
+  } else {
+    // Ni con lo reservado de por medio alcanza — comportamiento M15.4 sin
+    // cambios: se permite, se marca fabricación, stock puede quedar negativo.
+    requiresFabrication = true;
+  }
+
+  // Reserva de esta misma línea (D4/D8): opcional, cantidad parcial o total
+  // respecto a `qty`. Nunca aplica sobre algo que se va a fabricar (D6,
+  // fuera de alcance — no hay pieza física que reservar todavía).
+  let reserve = null;
+  if (it.reserve) {
+    const reserveQty = Math.trunc(Number(it.reserve.quantity)) || 0;
+    if (reserveQty > 0) {
+      if (requiresFabrication) {
+        const err = new Error(
+          `No se puede reservar "${product.name}" en ${declared.label}: no hay pieza física en stock (se va a fabricar).`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+      if (reserveQty > qty) {
+        const err = new Error(
+          `No se puede reservar más piezas (${reserveQty}) que las que trae la línea (${qty}) de "${product.name}".`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+      reserve = {
+        quantity: reserveQty,
+        reason: it.reserve.reason,
+        note: it.reserve.note ?? null,
+        customerName: it.reserve.customerName ?? null,
+      };
+    }
+  }
 
   const unitPrice = unitPriceForScheme(materialPrices, paymentMethod);
   const subtotal = unitPrice * qty;
@@ -275,6 +350,7 @@ async function resolveOrderLine(conn, it, paymentMethod, config) {
     unitPrice,
     subtotal,
     requiresFabrication,
+    reserve,
   };
 }
 
@@ -323,10 +399,14 @@ const Order = {
     if (!row) return null;
     const order = mapOrder(row);
     const [items] = await pool.execute(
-      `SELECT oi.*, m.name AS manufacturer_name, rb.full_name AS ready_by_name
+      `SELECT oi.*, m.name AS manufacturer_name, rb.full_name AS ready_by_name,
+              r.id AS reservation_id, r.quantity AS reservation_quantity,
+              r.reason AS reservation_reason, r.note AS reservation_note,
+              r.customer_name AS reservation_customer_name
        FROM order_items oi
        LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
        LEFT JOIN users rb ON rb.id = oi.ready_by
+       LEFT JOIN stock_reservations r ON r.order_item_id = oi.id AND r.status = 'active'
        WHERE oi.order_id = ? ORDER BY oi.id`, [id],
     );
     const [payments] = await pool.execute(
@@ -456,7 +536,7 @@ const Order = {
       const orderId = result.insertId;
 
       for (const it of resolvedItems) {
-        await conn.execute(
+        const [itemResult] = await conn.execute(
           `INSERT INTO order_items
             (order_id, product_id, product_name, product_sku, material_id, material_label, color,
              quantity, variant_selections, unit_price, subtotal, requires_fabrication)
@@ -471,6 +551,21 @@ const Order = {
         // M15.4: el stock siempre se descuenta de la fila (producto, material)
         // correcta, aunque quede negativo. No bloquea la venta.
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
+
+        // Reserva de pieza (D4): nace ligada a este order_item recién creado.
+        if (it.reserve) {
+          await StockReservation.create({
+            productId: it.productId,
+            materialId: it.materialId,
+            quantity: it.reserve.quantity,
+            reason: it.reserve.reason,
+            note: it.reserve.note,
+            customerName: it.reserve.customerName ?? data.customerName,
+            orderId,
+            orderItemId: itemResult.insertId,
+            createdBy: sellerId,
+          }, conn);
+        }
       }
 
       // El pedido nació de una cotización: se cierra su ciclo dentro de la
@@ -490,11 +585,11 @@ const Order = {
     }
   },
 
-  async update(id, data) {
+  async update(id, data, userId = null) {
     // Si vienen items, se reemplaza el contenido del pedido en una transacción:
     // se devuelve el stock anterior, se valida/aplica el nuevo y se recalculan totales.
     if (Array.isArray(data.items)) {
-      return this.updateWithItems(id, data);
+      return this.updateWithItems(id, data, userId);
     }
 
     const allowed = {
@@ -526,7 +621,7 @@ const Order = {
    * primero devuelve el stock de los items actuales (por su material
    * congelado, M4) y luego descuenta el nuevo.
    */
-  async updateWithItems(id, data) {
+  async updateWithItems(id, data, userId = null) {
     const existing = await this.findById(id);
     if (!existing) throw new Error('Pedido no encontrado');
 
@@ -558,7 +653,9 @@ const Order = {
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
-        const resolved = await resolveOrderLine(conn, it, paymentMethod, config);
+        // orderId = id: las reservas activas de ESTE pedido no cuentan como
+        // "de otro pedido" contra sí mismas (§4.2).
+        const resolved = await resolveOrderLine(conn, it, paymentMethod, config, id);
         total += resolved.subtotal;
         resolvedItems.push(resolved);
       }
@@ -617,9 +714,15 @@ const Order = {
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
       // 4. Reemplazar los items y descontar el nuevo stock.
+      // Nota (§4.3): DELETE arrastra por ON DELETE CASCADE cualquier reserva
+      // ligada a los order_items viejos, aunque estuviera activa. El vendedor
+      // reenvía el estado de reserva de cada línea en `reserve` (precargado
+      // en modo edición, §7.2) y se recrea abajo sobre el order_item nuevo —
+      // funcionalmente equivalente a "liberar y volver a reservar" en la
+      // misma transacción, aunque no conserva el `created_at` original.
       await conn.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
       for (const it of resolvedItems) {
-        await conn.execute(
+        const [itemResult] = await conn.execute(
           `INSERT INTO order_items
             (order_id, product_id, product_name, product_sku, material_id, material_label, color,
              quantity, variant_selections, unit_price, subtotal, requires_fabrication)
@@ -632,6 +735,20 @@ const Order = {
           ],
         );
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
+
+        if (it.reserve) {
+          await StockReservation.create({
+            productId: it.productId,
+            materialId: it.materialId,
+            quantity: it.reserve.quantity,
+            reason: it.reserve.reason,
+            note: it.reserve.note,
+            customerName: it.reserve.customerName ?? data.customerName ?? existing.customerName,
+            orderId: id,
+            orderItemId: itemResult.insertId,
+            createdBy: userId ?? existing.sellerId,
+          }, conn);
+        }
       }
 
       // 5. Recalcular el estado de pago contra el nuevo total.
@@ -743,6 +860,13 @@ const Order = {
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
     await pool.execute('UPDATE orders SET order_status = ? WHERE id = ?', [status, id]);
+    // §4.3: al entregar, cualquier reserva activa del pedido pasa a
+    // 'fulfilled' (housekeeping, ya no cuenta en reserved_quantity_activo).
+    if (status === 'delivered') {
+      await StockReservation.fulfillByOrder(id);
+    } else if (status === 'cancelled') {
+      await StockReservation.releaseByOrder(id, 'Pedido cancelado');
+    }
     return this.findById(id);
   },
 
@@ -800,6 +924,8 @@ const Order = {
           await adjustMaterialStock(conn, item.product_id, item.material_id, item.quantity);
         }
       }
+      // §4.3: cancelar el pedido libera cualquier reserva activa ligada a él.
+      await StockReservation.releaseByOrder(id, 'Pedido cancelado', conn);
       await conn.commit();
     } catch (err) {
       await conn.rollback();

@@ -87,6 +87,50 @@ export interface OrderItem {
   unitCost?: number | null;
   /** Fabricantes con costo registrado para este producto EN ESE MATERIAL (solo en el detalle de admin). */
   manufacturerOptions?: ManufacturerOption[];
+  /**
+   * Reserva de pieza activa ligada a esta línea (Docs/plan-reserva-de-piezas.md).
+   * null = la línea no tiene ninguna pieza apartada. No confundir con
+   * `payment_method = 'layaway'` (Apartado, un esquema de cobro distinto, §0).
+   */
+  reservation?: StockReservationInfo | null;
+}
+
+/** Motivo de una reserva de pieza (Docs/plan-reserva-de-piezas.md §3, D1). */
+export type StockReservationReason = 'color_unico' | 'pagada' | 'fecha_entrega' | 'otro';
+export type StockReservationStatus = 'active' | 'released' | 'fulfilled';
+
+/** Resumen de la reserva de una línea, embebido en OrderItem (para order-detail). */
+export interface StockReservationInfo {
+  id: number;
+  quantity: number;
+  reason: StockReservationReason;
+  note: string | null;
+  customerName: string | null;
+}
+
+/** Reserva de pieza completa (pantalla "Reservas", admin + vendedor, §7.4). */
+export interface StockReservation {
+  id: number;
+  productId: number;
+  productName: string;
+  materialId: number;
+  materialLabel: string;
+  /** Cantidad reservada de la línea (puede ser parcial respecto a orderItem.quantity, D8). */
+  quantity: number;
+  reason: StockReservationReason;
+  note: string | null;
+  customerName: string | null;
+  orderId: number;
+  orderNumber: string;
+  orderItemId: number;
+  status: StockReservationStatus;
+  createdBy: number;
+  createdByName: string | null;
+  createdAt: string;
+  releasedBy: number | null;
+  releasedByName: string | null;
+  releasedAt: string | null;
+  releasedReason: string | null;
 }
 
 export interface OrderPayment {
@@ -197,6 +241,18 @@ export interface CreateOrderRequest {
     quantity: number;
     unitPrice: number;
     variantSelections?: Record<string, string> | null;
+    /**
+     * Reserva de pieza(s) de ESTA línea (Docs/plan-reserva-de-piezas.md §6.5,
+     * D4/D8). Opcional; si se omite, la línea se vende sin apartar nada
+     * (comportamiento actual, sin cambios). `quantity` puede ser parcial o
+     * total respecto a `quantity` de la línea, pero nunca mayor.
+     */
+    reserve?: {
+      quantity: number;
+      reason: StockReservationReason;
+      note?: string | null;
+      customerName?: string | null;
+    } | null;
   }>;
 }
 
@@ -227,6 +283,17 @@ export interface InventoryMaterialPrice {
   fixedColor: string | null;
   /** Existencia de ESTE material (M15). 0 o negativo -> se fabrica (M15.4), nunca bloquea la venta. */
   stockQuantity: number;
+  /** Reserva de piezas (Docs/plan-reserva-de-piezas.md): cuánto de `stockQuantity` ya está apartado. */
+  reservedQuantity?: number;
+  /** = stockQuantity - reservedQuantity. Lo que el POS debe ofrecer como "disponible" a un pedido nuevo (§4.1). */
+  availableQuantity?: number;
+  /** Detalle de quién tiene apartado este material, para el tooltip del buscador (§7.2). */
+  reservations?: Array<{
+    quantity: number;
+    reason: StockReservationReason;
+    note: string | null;
+    customerName: string | null;
+  }>;
   /** false = declarado pero sin costo capturado por ningún fabricante (M2) o no cotizado (RN-03). */
   isQuoted: boolean;
   priceCash: number | null;

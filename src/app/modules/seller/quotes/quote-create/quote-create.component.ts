@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../../core/services/seller.service';
 import { QuotesService } from '../../../../core/services/quotes.service';
 import { ShippingService } from '../../../../core/services/shipping.service';
@@ -24,6 +24,14 @@ interface QuoteLine {
   materialId: number;
   color: string | null;
   quantity: number;
+}
+
+/** "2221234567" -> "222 123 4567". Recorta a 10 dígitos. */
+function formatPhoneDigits(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  return digits.replace(/(\d{3})(\d{0,3})(\d{0,4})/, (_, a, b, c) =>
+    [a, b, c].filter(Boolean).join(' '),
+  );
 }
 
 /**
@@ -49,8 +57,10 @@ export class QuoteCreateComponent implements OnInit {
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   protected saving = signal(false);
+  protected loadingQuote = signal(false);
   protected searching = signal(false);
   protected searchResults = signal<InventoryItem[]>([]);
   protected lines = signal<QuoteLine[]>([]);
@@ -59,13 +69,23 @@ export class QuoteCreateComponent implements OnInit {
   protected created = signal<Quote | null>(null);
   protected copied = signal(false);
 
+  /** Id de la cotización en edición; null = se está creando una nueva. */
+  protected editingId = signal<number | null>(null);
+  protected isEditing = computed(() => this.editingId() !== null);
+
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
-    customerPhone: [''],
+    customerPhone: ['', [Validators.required, Validators.pattern(/^\d{3} \d{3} \d{4}$/)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     assemblyService: [false],
     assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
   });
+
+  /** Formatea "222 123 4567" mientras el vendedor escribe (M17). */
+  protected onPhoneInput(event: Event): void {
+    const formatted = formatPhoneDigits((event.target as HTMLInputElement).value);
+    this.form.controls.customerPhone.setValue(formatted);
+  }
 
   // ===== Condición de venta: define el precio de cada línea =====
   private paymentMethodSig = toSignal(this.form.controls.paymentMethod.valueChanges, {
@@ -214,6 +234,77 @@ export class QuoteCreateComponent implements OnInit {
         }),
       error: () => {},
     });
+
+    const idParam = this.route.snapshot.paramMap.get('id');
+    if (idParam) this.loadForEdit(Number(idParam));
+  }
+
+  /**
+   * Precarga el builder con una cotización existente. Reconstruye cada línea
+   * como un InventoryItem de una sola fila —igual que hace el POS al
+   * precargarse desde una cotización (`OrderDraftStore.loadFromQuote`)— para
+   * que se muestre exactamente el precio ya congelado en esa línea.
+   */
+  private loadForEdit(id: number): void {
+    this.loadingQuote.set(true);
+    this.quotesService.getById(id).subscribe({
+      next: (quote) => {
+        this.editingId.set(quote.id);
+        this.form.patchValue({
+          customerName: quote.customerName,
+          customerPhone: formatPhoneDigits(quote.customerPhone ?? ''),
+          paymentMethod: quote.paymentMethod,
+          assemblyService: quote.assemblyService,
+          assemblyFloors: quote.assemblyFloors ?? 0,
+        });
+        if (quote.shippingPostalCode) {
+          const cp = String(quote.shippingPostalCode).replace(/\D/g, '').slice(0, 5);
+          this.shippingCp.set(cp);
+          if (cp.length === 5) {
+            this.shippingService.quoteByPostalCode(cp).subscribe({
+              next: (q) => this.shippingQuote.set(q),
+              error: () => this.shippingQuote.set(null),
+            });
+          }
+        }
+        this.lines.set(
+          (quote.items ?? []).map((it) => ({
+            product: {
+              id: it.productId,
+              name: it.productName,
+              sku: it.productSku ?? '',
+              availability_days: 0,
+              materialPrices: [
+                {
+                  materialId: it.materialId,
+                  code: '',
+                  label: it.materialLabel,
+                  colorPolicy: 'free' as const,
+                  fixedColor: null,
+                  stockQuantity: 1,
+                  isQuoted: true,
+                  // Precio ya congelado en la línea; se replica en los tres
+                  // esquemas para que el total no cambie hasta que el
+                  // vendedor toque algo (mismo criterio que loadFromQuote).
+                  priceCash: it.unitPrice,
+                  price6msi: it.unitPrice,
+                  priceMayoreo: it.unitPrice,
+                },
+              ],
+            },
+            materialId: it.materialId,
+            color: it.color ?? null,
+            quantity: it.quantity,
+          })),
+        );
+        this.loadingQuote.set(false);
+      },
+      error: () => {
+        this.loadingQuote.set(false);
+        this.notification.error('No se pudo cargar la cotización para editar');
+        this.goToList();
+      },
+    });
   }
 
   protected searchProducts(term: string): void {
@@ -335,7 +426,7 @@ export class QuoteCreateComponent implements OnInit {
     const raw = this.form.getRawValue();
     const payload: CreateQuoteRequest = {
       customerName: raw.customerName!.trim(),
-      customerPhone: raw.customerPhone?.trim() || null,
+      customerPhone: raw.customerPhone!.replace(/\D/g, ''),
       paymentMethod: raw.paymentMethod!,
       shippingPostalCode: this.shippingCp() || null,
       assemblyService: !!raw.assemblyService,
@@ -350,16 +441,27 @@ export class QuoteCreateComponent implements OnInit {
       })),
     };
 
+    const editingId = this.editingId();
     this.saving.set(true);
-    this.quotesService.create(payload).subscribe({
+    const request$ = editingId
+      ? this.quotesService.update(editingId, payload)
+      : this.quotesService.create(payload);
+    request$.subscribe({
       next: (quote) => {
         this.saving.set(false);
-        this.created.set(quote);
-        this.notification.success('Cotización creada');
+        if (editingId) {
+          this.notification.success('Cotización actualizada');
+          this.goToList();
+        } else {
+          this.created.set(quote);
+          this.notification.success('Cotización creada');
+        }
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);
-        this.notification.error(err?.error?.message ?? 'No se pudo crear la cotización');
+        this.notification.error(
+          err?.error?.message ?? (editingId ? 'No se pudo actualizar la cotización' : 'No se pudo crear la cotización'),
+        );
       },
     });
   }

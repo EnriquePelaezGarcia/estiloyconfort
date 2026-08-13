@@ -28,12 +28,18 @@ const inventoryController = {
       const [rows] = await pool.execute(
         `SELECT p.id AS product_id, p.name, p.sku,
                 mat.id AS material_id, mat.code AS material_code, mat.label AS material_label,
-                pm.stock_quantity, mp.base_cost, mp.price_cash
+                pm.stock_quantity, mp.base_cost, mp.price_cash,
+                COALESCE(res.reserved_qty, 0) AS reserved_quantity
            FROM product_materials pm
            JOIN products p ON p.id = pm.product_id
            JOIN materials mat ON mat.id = pm.material_id
            LEFT JOIN product_material_prices mp
                   ON mp.product_id = pm.product_id AND mp.material_id = pm.material_id
+           LEFT JOIN (
+             SELECT product_id, material_id, SUM(quantity) AS reserved_qty
+               FROM stock_reservations WHERE status = 'active'
+              GROUP BY product_id, material_id
+           ) res ON res.product_id = pm.product_id AND res.material_id = pm.material_id
           ${where}
           ORDER BY p.name, mat.sort_order`,
         params,
@@ -47,6 +53,10 @@ const inventoryController = {
         materialCode: r.material_code,
         materialLabel: r.material_label,
         stockQuantity: r.stock_quantity,
+        // Reserva de piezas (Docs/plan-reserva-de-piezas.md §6.4): cuánto de
+        // ese stock ya está apartado y cuánto queda libre para vender.
+        reservedQuantity: Number(r.reserved_quantity) || 0,
+        availableQuantity: Number(r.stock_quantity) - (Number(r.reserved_quantity) || 0),
         // COALESCE(...,0) a propósito: existencia sin costo capturado (el
         // hueco de M2) vale NULL, no cero por descuido (§15.5).
         baseCost: r.base_cost != null ? Number(r.base_cost) : null,

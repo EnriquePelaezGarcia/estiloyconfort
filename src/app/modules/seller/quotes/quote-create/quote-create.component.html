@@ -1,12 +1,20 @@
 <header class="page-head">
   <div>
     <p class="page-head__overline">Cotizaciones</p>
-    <h1 class="page-head__title">Nueva cotización</h1>
-    <p class="page-head__sub">Arma el presupuesto y compártelo por WhatsApp. Vigencia: 15 días hábiles.</p>
+    <h1 class="page-head__title">{{ isEditing() ? 'Editar cotización' : 'Nueva cotización' }}</h1>
+    <p class="page-head__sub">
+      @if (isEditing()) {
+        Ajusta el presupuesto mientras el cliente decide. El link que ya compartiste no cambia.
+      } @else {
+        Arma el presupuesto y compártelo por WhatsApp. Vigencia: 15 días hábiles.
+      }
+    </p>
   </div>
 </header>
 
-@if (created(); as quote) {
+@if (loadingQuote()) {
+  <div class="state"><div class="spinner"></div></div>
+} @else if (created(); as quote) {
   <!-- ===== Modo compartir: la cotización ya existe ===== -->
   <div class="panel share">
     <span class="material-symbols-outlined share__icon">check_circle</span>
@@ -57,10 +65,21 @@
             <p class="field__error">Ingresa el nombre (mínimo 3 caracteres).</p>
           }
         </div>
-        <div class="field">
-          <label for="customerPhone">Teléfono (WhatsApp)</label>
-          <input id="customerPhone" type="tel" formControlName="customerPhone" placeholder="2221234567" />
-          <p class="field__hint">Opcional. Si lo capturas, el botón de WhatsApp abre directo su chat.</p>
+        <div class="field" [class.field--error]="form.controls.customerPhone.touched && form.controls.customerPhone.invalid">
+          <label for="customerPhone">Teléfono (WhatsApp) *</label>
+          <input
+            id="customerPhone"
+            type="tel"
+            inputmode="numeric"
+            formControlName="customerPhone"
+            placeholder="222 123 4567"
+            (input)="onPhoneInput($event)"
+          />
+          @if (form.controls.customerPhone.touched && form.controls.customerPhone.invalid) {
+            <p class="field__error">Ingresa un teléfono a 10 dígitos.</p>
+          } @else {
+            <p class="field__hint">El botón de WhatsApp abre directo su chat con este número.</p>
+          }
         </div>
 
         <div class="field">
@@ -190,28 +209,30 @@
               <div class="cart-line__info">
                 <span class="cart-line__name">{{ l.product.name }}</span>
 
-                @if (l.product.materialPrices.length > 1) {
-                  <select class="cart-line__material" (change)="changeLineMaterial(i, $event)">
-                    @for (mp of l.product.materialPrices; track mp.materialId) {
-                      <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
-                        {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
-                      </option>
-                    }
-                  </select>
-                } @else if (l.product.materialPrices[0]; as onlyMaterial) {
-                  <span class="muted">{{ onlyMaterial.label }}</span>
-                }
+                <div class="cart-line__variant">
+                  @if (l.product.materialPrices.length > 1) {
+                    <select class="cart-line__material" (change)="changeLineMaterial(i, $event)">
+                      @for (mp of l.product.materialPrices; track mp.materialId) {
+                        <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
+                          {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
+                        </option>
+                      }
+                    </select>
+                  } @else if (l.product.materialPrices[0]; as onlyMaterial) {
+                    <span class="cart-line__material-fixed">{{ onlyMaterial.label }}</span>
+                  }
 
-                @if (lineMaterialPrice(l); as mp) {
-                  <input
-                    type="text"
-                    class="cart-line__color"
-                    [value]="l.color ?? ''"
-                    [disabled]="mp.colorPolicy === 'fixed'"
-                    [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
-                    (input)="changeLineColor(i, $event)"
-                  />
-                }
+                  @if (lineMaterialPrice(l); as mp) {
+                    <input
+                      type="text"
+                      class="cart-line__color"
+                      [value]="l.color ?? ''"
+                      [disabled]="mp.colorPolicy === 'fixed'"
+                      [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
+                      (input)="changeLineColor(i, $event)"
+                    />
+                  }
+                </div>
 
                 @if (unitPrice(l) !== null) {
                   <span class="cart-line__price">{{ unitPrice(l) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
@@ -373,7 +394,10 @@
 
         <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
           @if (saving()) {
-            <span class="spinner spinner--sm"></span> Creando…
+            <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
+          } @else if (isEditing()) {
+            <span class="material-symbols-outlined">save</span>
+            Guardar cambios
           } @else {
             <span class="material-symbols-outlined">request_quote</span>
             Crear y compartir

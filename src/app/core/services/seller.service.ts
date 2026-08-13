@@ -11,6 +11,7 @@ import {
   Paginated,
   PaymentInstrument,
   SellerDashboard,
+  StockReservation,
 } from '../models/order.model';
 import { CreditConfig } from '../models/pricing-config.model';
 
@@ -99,5 +100,21 @@ export class SellerService {
       paymentMethod,
       notes: notes || null,
     });
+  }
+
+  // ===== Reservas de inventario (Docs/plan-reserva-de-piezas.md) =====
+  // D2/D7: el vendedor ve y libera CUALQUIER reserva, no solo las suyas. No
+  // hay creación aquí (D4) — nace del payload de crear/editar un pedido.
+
+  listReservations(filters: { status?: string; productId?: number; search?: string } = {}): Observable<{ data: StockReservation[] }> {
+    const params: Record<string, string> = {};
+    if (filters.status) params['status'] = filters.status;
+    if (filters.productId) params['productId'] = String(filters.productId);
+    if (filters.search) params['search'] = filters.search;
+    return this.api.get<{ data: StockReservation[] }>('/inventory/reservations', params);
+  }
+
+  releaseReservation(id: number, releasedReason?: string): Observable<{ data: StockReservation; message: string }> {
+    return this.api.patch<{ data: StockReservation; message: string }>(`/inventory/reservations/${id}/release`, { releasedReason });
   }
 }

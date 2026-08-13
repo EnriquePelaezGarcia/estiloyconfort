@@ -35,6 +35,12 @@ export const sellerRoutes: Routes = [
         title: 'Nueva cotización - Vendedor',
       },
       {
+        path: 'cotizaciones/:id/editar',
+        loadComponent: () =>
+          import('./quotes/quote-create/quote-create.component').then((m) => m.QuoteCreateComponent),
+        title: 'Editar cotización - Vendedor',
+      },
+      {
         path: 'catalogo',
         loadComponent: () =>
           import('../admin/catalog/catalog.component').then((m) => m.CatalogComponent),
@@ -59,6 +65,12 @@ export const sellerRoutes: Routes = [
             (m) => m.CreditClientsComponent,
           ),
         title: 'Clientes Crédito y Apartado - Vendedor',
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('../shared/reservations/reservations.component').then((m) => m.ReservationsComponent),
+        title: 'Reservas - Vendedor',
       },
       { path: '**', redirectTo: 'resumen' },
     ],

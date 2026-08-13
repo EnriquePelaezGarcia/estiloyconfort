@@ -19,5 +19,6 @@ export class SellerLayoutComponent {
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos' },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
+    { label: 'Reservas', icon: 'bookmark', route: 'reservas' },
   ];
 }

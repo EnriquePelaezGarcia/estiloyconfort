@@ -8,7 +8,7 @@ import { SellerService } from '../../../core/services/seller.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { Order, OrderItem, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
+import { Order, OrderItem, OrderStatus, PaymentStatus, StockReservationReason } from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
   ORDER_STATUS_LABELS,
@@ -62,6 +62,12 @@ export class OrderDetailComponent implements OnInit {
 
   /** Ids de items con una asignación de fabricante en curso. */
   protected assigningManufacturer = signal<Set<number>>(new Set());
+
+  /** Ids de reserva liberándose (Docs/plan-reserva-de-piezas.md §7.3). */
+  protected releasingReservation = signal<Set<number>>(new Set());
+
+  /** Líneas con reserva activa (motivo/cliente/nota) — §7.3. */
+  protected reservedItems = computed(() => (this.order()?.items ?? []).filter((it) => !!it.reservation));
 
   /** Controla qué se imprime: el ticket de venta o el ticket de abono. */
   protected printMode = signal<'order' | 'abono' | null>(null);
@@ -457,6 +463,46 @@ export class OrderDetailComponent implements OnInit {
     if (!order) return;
     const base = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/nuevo';
     this.router.navigate([base], { queryParams: { edit: order.id } });
+  }
+
+  /**
+   * Libera la reserva de una línea (D7: cualquier admin o vendedor, sin
+   * importar quién la creó — el backend guarda released_by = quien la hizo).
+   */
+  protected releaseReservation(it: OrderItem): void {
+    const reservationId = it.reservation?.id;
+    const order = this.order();
+    if (!reservationId || !order) return;
+    this.releasingReservation.update((set) => new Set(set).add(reservationId));
+    this.adminService.releaseReservation(reservationId).subscribe({
+      next: (res) => {
+        this.releasingReservation.update((set) => {
+          const next = new Set(set);
+          next.delete(reservationId);
+          return next;
+        });
+        this.notification.success(res.message);
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.releasingReservation.update((set) => {
+          const next = new Set(set);
+          next.delete(reservationId);
+          return next;
+        });
+        this.notification.error(err?.error?.message ?? 'No se pudo liberar la reserva');
+      },
+    });
+  }
+
+  protected reservationReasonLabel(reason: StockReservationReason): string {
+    const labels: Record<StockReservationReason, string> = {
+      color_unico: 'Color único',
+      pagada: 'Ya pagada',
+      fecha_entrega: 'Entrega en fecha específica',
+      otro: 'Otro',
+    };
+    return labels[reason] ?? reason;
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

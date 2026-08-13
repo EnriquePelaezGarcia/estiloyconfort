@@ -156,7 +156,7 @@ const sellerController = {
       dataToSave.notes = existing.notes ? `${existing.notes}\n${bitacora}` : bitacora;
     }
 
-    let order = await Order.update(req.params.id, dataToSave);
+    let order = await Order.update(req.params.id, dataToSave, req.user.id);
 
     // D4: si el nuevo total quedó por debajo de lo ya cobrado, se anota el
     // saldo a favor del cliente; la devolución del dinero es manual.
@@ -265,6 +265,23 @@ const sellerController = {
        ${where} ORDER BY p.name, mat.sort_order LIMIT 300`,
       params,
     );
+
+    // Reserva de piezas (Docs/plan-reserva-de-piezas.md): cuánto de lo que se
+    // ve como "stock" ya está apartado, para que el buscador del POS ofrezca
+    // solo lo disponible (§7.2).
+    const [reservationRows] = await pool.execute(
+      `SELECT product_id, material_id, quantity, reason, note, customer_name
+         FROM stock_reservations WHERE status = 'active'`,
+    );
+    const reservationsByPair = new Map();
+    for (const rr of reservationRows) {
+      const key = `${rr.product_id}-${rr.material_id}`;
+      if (!reservationsByPair.has(key)) reservationsByPair.set(key, []);
+      reservationsByPair.get(key).push({
+        quantity: rr.quantity, reason: rr.reason, note: rr.note ?? null, customerName: rr.customer_name ?? null,
+      });
+    }
+
     const byProduct = new Map();
     for (const r of rows) {
       if (!byProduct.has(r.id)) {
@@ -280,6 +297,8 @@ const sellerController = {
       }
       // isQuoted = false (base_cost NULL): el hueco de M2, se muestra "no
       // aplica" en el POS, nunca $0.
+      const reservations = reservationsByPair.get(`${r.id}-${r.material_id}`) ?? [];
+      const reservedQuantity = reservations.reduce((s, res) => s + Number(res.quantity), 0);
       byProduct.get(r.id).materialPrices.push({
         materialId: r.material_id,
         code: r.code,
@@ -287,6 +306,9 @@ const sellerController = {
         colorPolicy: r.color_policy,
         fixedColor: r.fixed_color,
         stockQuantity: r.stock_quantity,
+        reservedQuantity,
+        availableQuantity: Number(r.stock_quantity) - reservedQuantity,
+        reservations,
         isQuoted: r.base_cost != null,
         priceCash: r.price_cash != null ? Number(r.price_cash) : null,
         price6msi: r.price_6msi != null ? Number(r.price_6msi) : null,

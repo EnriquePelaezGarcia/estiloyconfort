@@ -514,7 +514,11 @@ const getOrders = asyncHandler(async (req, res) => {
 // GET /api/admin/orders/:id
 // Cada item viaja con sus fabricantes candidatos (los que tienen costo para ese
 // producto EN EL MATERIAL de esa línea, M4), para que el select del detalle
-// pueda asignar sin una llamada extra.
+// pueda asignar sin una llamada extra. Solo se mandan para items que
+// requirieron fabricación (sin stock al vender, o sobre pedido): si el item
+// salió de bodega el select no tiene sentido en esta pantalla, aunque ya
+// tenga un fabricante asignado de antes (asignarle costo a items de stock
+// sigue siendo válido, solo no se edita desde aquí).
 const getOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) throw ApiError.notFound('Pedido no encontrado');
@@ -523,7 +527,9 @@ const getOrder = asyncHandler(async (req, res) => {
   );
   order.items = (order.items ?? []).map((it) => ({
     ...it,
-    manufacturerOptions: optionsByKey.get(`${it.productId}:${it.materialId}`) ?? [],
+    manufacturerOptions: it.requiresFabrication
+      ? optionsByKey.get(`${it.productId}:${it.materialId}`) ?? []
+      : [],
   }));
   res.json({ data: order });
 });

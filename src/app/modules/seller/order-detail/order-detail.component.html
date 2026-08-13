@@ -90,6 +90,41 @@
         </table>
       </div>
 
+      <!-- Piezas apartadas del pedido (Docs/plan-reserva-de-piezas.md §7.3).
+           §0: no confundir con "Apartado" (payment_method = 'layaway'). -->
+      @if (reservedItems().length) {
+        <div class="reserved-box no-print">
+          <h3 class="info-subtitle">Piezas apartadas de este pedido</h3>
+          <ul class="reserved-list">
+            @for (it of reservedItems(); track it.id) {
+              <li class="reserved-list__item">
+                <div class="reserved-list__info">
+                  <span class="strong">{{ it.productName }}</span>
+                  <span class="muted">
+                    {{ it.reservation!.quantity }} de {{ it.quantity }} pieza(s) ·
+                    {{ reservationReasonLabel(it.reservation!.reason) }}
+                    @if (it.reservation!.customerName) { · {{ it.reservation!.customerName }} }
+                  </span>
+                  @if (it.reservation!.note) { <span class="muted">{{ it.reservation!.note }}</span> }
+                </div>
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm"
+                  [disabled]="releasingReservation().has(it.reservation!.id)"
+                  (click)="releaseReservation(it)"
+                >
+                  @if (releasingReservation().has(it.reservation!.id)) {
+                    <span class="spinner spinner--sm"></span>
+                  } @else {
+                    <span class="material-symbols-outlined">lock_open</span> Liberar reserva
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
       <div class="totals">
         @if (isCredit() && o.cashTotal != null) {
           <div class="totals__row"><span>Subtotal contado</span><span>{{ o.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>

@@ -10,7 +10,7 @@ import { MaterialsStore } from '../../../core/services/materials.store';
 import { PricingService } from '../../../core/services/pricing.service';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem,
-  InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme,
+  InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
 } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
@@ -26,6 +26,17 @@ export interface CartLine {
   materialId: number;
   color: string | null;
   quantity: number;
+  /**
+   * Reserva de pieza(s) de ESTA línea (Docs/plan-reserva-de-piezas.md, D4/D8).
+   * null = la línea no aparta nada — venta normal, sin cambios. `quantity`
+   * puede ser parcial o total respecto a `quantity` de la línea.
+   */
+  reserve?: {
+    quantity: number;
+    reason: StockReservationReason;
+    note: string | null;
+    customerName: string | null;
+  } | null;
 }
 
 /** Resumen del cambio de producto para el diálogo de confirmación (edición no-pendiente). */
@@ -81,9 +92,14 @@ export class OrderDraftStore {
     () => this.isEditing() && this.orderStatus() !== null && this.orderStatus() !== 'pending',
   );
 
-  /** ¿Tiene el producto AL MENOS UN material con existencia? (edición restringida) */
+  /** Disponible real de un material (Docs/plan-reserva-de-piezas.md §4.1): stock menos lo apartado por reservas de OTROS pedidos. */
+  private availableOf(mp: InventoryMaterialPrice): number {
+    return mp.availableQuantity ?? mp.stockQuantity;
+  }
+
+  /** ¿Tiene el producto AL MENOS UN material con existencia disponible (no reservada)? (edición restringida) */
   private hasAnyStock(product: InventoryItem): boolean {
-    return product.materialPrices.some((mp) => mp.stockQuantity > 0);
+    return product.materialPrices.some((mp) => this.availableOf(mp) > 0);
   }
 
   /** Resultados del buscador visibles: en edición restringida, solo con stock disponible en algún material. */
@@ -93,10 +109,75 @@ export class OrderDraftStore {
       : this.searchResults(),
   );
 
-  /** M15.4: se deriva del stock del material ELEGIDO en la línea — nunca se captura a mano. */
+  /**
+   * M15.4: se deriva del DISPONIBLE del material ELEGIDO en la línea — nunca
+   * se captura a mano. Docs/plan-reserva-de-piezas.md §4.1: lo reservado por
+   * otro pedido ya no cuenta como disponible para uno nuevo.
+   */
   lineRequiresFabrication(line: CartLine): boolean {
     const mp = line.product.materialPrices.find((m) => m.materialId === line.materialId);
-    return !mp || mp.stockQuantity <= 0;
+    return !mp || this.availableOf(mp) <= 0;
+  }
+
+  /** Piezas disponibles del material elegido en esta línea (para el badge "N disponibles · M apartada(s)"). */
+  lineAvailableQuantity(line: CartLine): number {
+    const mp = this.lineMaterialPrice(line);
+    return mp ? this.availableOf(mp) : 0;
+  }
+
+  /** Máximo que se puede reservar de ESTA línea: lo disponible, topado por la cantidad de la línea (D8). */
+  lineMaxReserve(line: CartLine): number {
+    return Math.max(0, Math.min(line.quantity, this.lineAvailableQuantity(line)));
+  }
+
+  /** Texto del tooltip "quién tiene apartado esto" (§7.2), para el buscador del POS. */
+  reservationsTooltip(mp: InventoryMaterialPrice): string {
+    return (mp.reservations ?? [])
+      .map((r) => `${r.quantity} pza(s) — ${r.customerName ?? 'sin cliente'} (${r.note ?? r.reason})`)
+      .join('\n');
+  }
+
+  // ===== Reserva de pieza(s) de una línea (Docs/plan-reserva-de-piezas.md D4/D8) =====
+
+  toggleReserve(index: number, checked: boolean): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => {
+        if (i !== index) return l;
+        if (!checked) return { ...l, reserve: null };
+        const qty = this.lineMaxReserve(l) || l.quantity;
+        return {
+          ...l,
+          reserve: {
+            quantity: Math.max(1, Math.min(qty, l.quantity)),
+            reason: 'pagada',
+            note: null,
+            customerName: this.form.controls.customerName.value || null,
+          },
+        };
+      }),
+    );
+  }
+
+  setReserveQuantity(index: number, quantity: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => {
+        if (i !== index || !l.reserve) return l;
+        const max = Math.max(1, Math.min(l.quantity, this.lineMaxReserve(l) || l.quantity));
+        return { ...l, reserve: { ...l.reserve, quantity: Math.max(1, Math.min(max, Math.trunc(quantity) || 1)) } };
+      }),
+    );
+  }
+
+  setReserveReason(index: number, reason: StockReservationReason): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index && l.reserve ? { ...l, reserve: { ...l.reserve, reason } } : l)),
+    );
+  }
+
+  setReserveNote(index: number, note: string): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index && l.reserve ? { ...l, reserve: { ...l.reserve, note: note || null } } : l)),
+    );
   }
 
   /** ¿El carrito tiene algún mueble que se fabrica sobre pedido? */
@@ -379,6 +460,16 @@ export class OrderDraftStore {
             materialId: it.materialId,
             color: it.color ?? null,
             quantity: it.quantity,
+            // Precarga de reserva (§7.2): si el vendedor desmarca el checkbox
+            // al guardar, se libera; si reduce la cantidad, se topa sola (D8).
+            reserve: it.reservation
+              ? {
+                  quantity: it.reservation.quantity,
+                  reason: it.reservation.reason,
+                  note: it.reservation.note,
+                  customerName: it.reservation.customerName,
+                }
+              : null,
           })),
         );
       },
@@ -563,11 +654,16 @@ export class OrderDraftStore {
 
   changeQty(index: number, delta: number): void {
     this.lines.update((lines) =>
-      lines.map((l, i) =>
-        i === index && this.canEditLine(l)
-          ? { ...l, quantity: Math.max(1, l.quantity + delta) }
-          : l,
-      ),
+      lines.map((l, i) => {
+        if (i !== index || !this.canEditLine(l)) return l;
+        const quantity = Math.max(1, l.quantity + delta);
+        // §4.3: si la reserva de la línea queda por encima de la nueva
+        // cantidad, se topa sola — nunca puede reservar más de lo que trae la línea.
+        const reserve = l.reserve && l.reserve.quantity > quantity
+          ? { ...l.reserve, quantity }
+          : l.reserve;
+        return { ...l, quantity, reserve };
+      }),
     );
   }
 
@@ -681,6 +777,15 @@ export class OrderDraftStore {
         // El backend recalcula el precio autoritativo por esquema y material
         // (RN-01…RN-10); este valor es solo para no romper el tipo del payload.
         unitPrice: this.unitPrice(l) ?? 0,
+        // Reserva de pieza(s) de esta línea (Docs/plan-reserva-de-piezas.md D4/D8).
+        reserve: l.reserve
+          ? {
+              quantity: l.reserve.quantity,
+              reason: l.reserve.reason,
+              note: l.reserve.note,
+              customerName: l.reserve.customerName || raw.customerName || null,
+            }
+          : null,
       })),
     };
 

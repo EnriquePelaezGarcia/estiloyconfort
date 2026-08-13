@@ -1,0 +1,110 @@
+<header class="page-head">
+  <div>
+    <span class="page-head__overline">Inventario</span>
+    <h1 class="page-head__title">Reservas de piezas</h1>
+    <p class="page-head__sub">
+      Piezas apartadas de un pedido (color único, ya pagadas o con fecha de entrega comprometida) —
+      no confundir con "Apartado" (el método de pago). Toda reserva nace al levantar o editar un pedido;
+      aquí solo se consultan y liberan.
+    </p>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="search"
+      placeholder="Buscar por producto, cliente o folio de pedido…"
+      [value]="search()"
+      (input)="onSearchInput($event)"
+    />
+  </div>
+  <div class="chips">
+    <button type="button" class="chip" [class.chip--active]="statusFilter() === 'active'" (click)="setStatusFilter('active')">
+      Activas
+    </button>
+    <button type="button" class="chip" [class.chip--active]="statusFilter() === 'released'" (click)="setStatusFilter('released')">
+      Liberadas
+    </button>
+    <button type="button" class="chip" [class.chip--active]="statusFilter() === 'fulfilled'" (click)="setStatusFilter('fulfilled')">
+      Entregadas
+    </button>
+    <button type="button" class="chip" [class.chip--active]="statusFilter() === 'all'" (click)="setStatusFilter('all')">
+      Todas
+    </button>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span><p>Cargando reservas…</p></div>
+} @else {
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Material</th>
+          <th class="num">Cantidad</th>
+          <th>Motivo</th>
+          <th>Cliente</th>
+          <th>Pedido</th>
+          <th>Creó / cuándo</th>
+          <th>Estado</th>
+          <th class="actions-col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of filteredReservations(); track r.id) {
+          <tr>
+            <td data-label="Producto" class="strong">{{ r.productName }}</td>
+            <td data-label="Material">{{ r.materialLabel }}</td>
+            <td data-label="Cantidad" class="num">{{ r.quantity }}</td>
+            <td data-label="Motivo">
+              {{ reasonLabel(r.reason) }}
+              @if (r.note) { <span class="muted"> · {{ r.note }}</span> }
+            </td>
+            <td data-label="Cliente">{{ r.customerName || '—' }}</td>
+            <td data-label="Pedido">
+              <a [routerLink]="[orderDetailBase(), r.orderId]">{{ r.orderNumber }}</a>
+            </td>
+            <td data-label="Creó / cuándo">
+              {{ r.createdByName || '—' }}
+              <span class="muted">· {{ r.createdAt | date:'dd/MM/yyyy' }}</span>
+            </td>
+            <td data-label="Estado">
+              @switch (r.status) {
+                @case ('active') { <span class="badge badge--amber">Activa</span> }
+                @case ('released') { <span class="badge badge--gray">Liberada</span> }
+                @case ('fulfilled') { <span class="badge badge--green">Entregada</span> }
+              }
+              @if (r.status !== 'active' && r.releasedByName) {
+                <span class="muted"> · {{ r.releasedByName }}</span>
+              }
+            </td>
+            <td data-label="Acciones" class="actions">
+              @if (r.status === 'active') {
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm"
+                  [disabled]="releasingId() === r.id"
+                  (click)="release(r)"
+                >
+                  @if (releasingId() === r.id) {
+                    <span class="spinner spinner--sm"></span>
+                  } @else {
+                    <span class="material-symbols-outlined">lock_open</span> Liberar
+                  }
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="9" class="empty">No hay reservas que coincidan con el filtro.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

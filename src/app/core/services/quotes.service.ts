@@ -21,6 +21,13 @@ export class QuotesService {
     return this.api.post<{ data: Quote }>('/quotes', payload).pipe(map((res) => res.data));
   }
 
+  /** Edita una cotización mientras no esté convertida en pedido. */
+  update(id: number, payload: CreateQuoteRequest): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${id}`, payload)
+      .pipe(map((res) => res.data));
+  }
+
   /** El cliente aceptó por WhatsApp; habilita levantar el pedido. */
   confirm(id: number): Observable<Quote> {
     return this.api

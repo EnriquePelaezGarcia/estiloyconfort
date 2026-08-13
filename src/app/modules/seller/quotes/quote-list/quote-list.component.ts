@@ -48,7 +48,12 @@ export class QuoteListComponent implements OnInit {
     let result = this.quotes();
     if (tab !== 'all') result = result.filter((quote) => quote.status === tab);
     if (q) {
-      result = result.filter((quote) => quote.customerName.toLowerCase().includes(q));
+      const qDigits = q.replace(/\D/g, '');
+      result = result.filter(
+        (quote) =>
+          quote.customerName.toLowerCase().includes(q) ||
+          (qDigits && (quote.customerPhone ?? '').replace(/\D/g, '').includes(qDigits)),
+      );
     }
     return result;
   });
@@ -91,6 +96,11 @@ export class QuoteListComponent implements OnInit {
 
   protected newQuote(): void {
     this.router.navigate([this.panelBase, 'cotizaciones', 'nueva']);
+  }
+
+  /** Editable mientras no se haya convertido en pedido. */
+  protected editQuote(quote: Quote): void {
+    this.router.navigate([this.panelBase, 'cotizaciones', quote.id, 'editar']);
   }
 
   /** Abre el POS con la cotización precargada para levantar el pedido. */

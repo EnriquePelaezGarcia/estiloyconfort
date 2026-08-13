@@ -82,6 +82,35 @@
   color: vars.$color-text-secondary;
 }
 
+// Reserva de piezas (Docs/plan-reserva-de-piezas.md §7.3).
+.reserved-box {
+  margin: vars.$spacing-md 0;
+  padding: vars.$spacing-md;
+  border: 1px solid #f59e0b;
+  border-radius: vars.$radius-md;
+  background: color-mix(in srgb, #f59e0b 8%, white);
+}
+
+.reserved-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+    font-size: 0.85rem;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
 .credit-box {
   margin: vars.$spacing-md 0;
   padding: vars.$spacing-md;

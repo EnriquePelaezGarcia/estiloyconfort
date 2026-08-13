@@ -30,11 +30,36 @@ const quotesController = {
     if (!req.body.customerName || !String(req.body.customerName).trim()) {
       throw ApiError.badRequest('El nombre del cliente es obligatorio');
     }
+    if (!/^\d{10}$/.test(String(req.body.customerPhone ?? '').replace(/\D/g, ''))) {
+      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos)');
+    }
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('La cotización debe incluir al menos un producto');
     }
     const quote = await Quote.create(req.body, req.user.id);
     res.status(201).json({ data: withShareUrl(quote), message: 'Cotización creada' });
+  }),
+
+  // PATCH /api/quotes/:id — edita cliente/condiciones/productos mientras no
+  // se haya convertido en pedido.
+  update: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    assertCanManage(existing, req.user);
+    if (existing.status === 'converted') {
+      throw ApiError.badRequest('Esta cotización ya se convirtió en pedido y no se puede editar');
+    }
+    if (!req.body.customerName || !String(req.body.customerName).trim()) {
+      throw ApiError.badRequest('El nombre del cliente es obligatorio');
+    }
+    if (!/^\d{10}$/.test(String(req.body.customerPhone ?? '').replace(/\D/g, ''))) {
+      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos)');
+    }
+    if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
+      throw ApiError.badRequest('La cotización debe incluir al menos un producto');
+    }
+    const quote = await Quote.update(req.params.id, req.body);
+    res.json({ data: withShareUrl(quote), message: 'Cotización actualizada' });
   }),
 
   // GET /api/quotes — propias (vendedor) o todas (admin)
