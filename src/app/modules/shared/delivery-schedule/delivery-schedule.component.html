@@ -1,0 +1,162 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1 class="page__title">Agenda de entregas</h1>
+      <p class="page__subtitle">
+        Entregas comprometidas y tentativas. Las de cumpleaños y XV años no admiten llegar tarde.
+      </p>
+    </div>
+    <button type="button" class="btn btn--ghost" (click)="load()">
+      <span class="material-symbols-outlined">refresh</span>
+      Actualizar
+    </button>
+  </header>
+
+  @if (counts(); as c) {
+    <!-- Tarjetas resumen: clicables, filtran la lista de abajo. -->
+    <div class="summary">
+      <button
+        type="button"
+        class="summary__card summary__card--critical"
+        [class.summary__card--active]="bucketFilter() === 'overdue_exact'"
+        (click)="setBucket('overdue_exact')"
+      >
+        <span class="summary__value">{{ c.overdueExact }}</span>
+        <span class="summary__label">Vencidas exactas</span>
+      </button>
+      <button
+        type="button"
+        class="summary__card"
+        [class.summary__card--active]="bucketFilter() === 'today'"
+        (click)="setBucket('today')"
+      >
+        <span class="summary__value">{{ c.today }}</span>
+        <span class="summary__label">Hoy</span>
+      </button>
+      <button
+        type="button"
+        class="summary__card"
+        [class.summary__card--active]="bucketFilter() === 'tomorrow'"
+        (click)="setBucket('tomorrow')"
+      >
+        <span class="summary__value">{{ c.tomorrow }}</span>
+        <span class="summary__label">Mañana</span>
+      </button>
+      <button
+        type="button"
+        class="summary__card"
+        [class.summary__card--active]="bucketFilter() === 'upcoming'"
+        (click)="setBucket('upcoming')"
+      >
+        <span class="summary__value">{{ c.upcoming }}</span>
+        <span class="summary__label">Próximos 7 días</span>
+      </button>
+      <button
+        type="button"
+        class="summary__card"
+        [class.summary__card--active]="bucketFilter() === 'unscheduled'"
+        (click)="setBucket('unscheduled')"
+      >
+        <span class="summary__value">{{ c.unscheduled }}</span>
+        <span class="summary__label">Sin fecha</span>
+      </button>
+    </div>
+  }
+
+  <div class="filters">
+    <button
+      type="button"
+      class="chip"
+      [class.chip--active]="commitmentFilter() === 'all'"
+      (click)="setCommitment('all')"
+    >Todas</button>
+    <button
+      type="button"
+      class="chip"
+      [class.chip--active]="commitmentFilter() === 'exact'"
+      (click)="setCommitment('exact')"
+    >Exactas</button>
+    <button
+      type="button"
+      class="chip"
+      [class.chip--active]="commitmentFilter() === 'tentative'"
+      (click)="setCommitment('tentative')"
+    >Tentativas</button>
+  </div>
+
+  @if (loading()) {
+    <p class="state">Cargando agenda…</p>
+  } @else if (groups().length === 0) {
+    <p class="state">No hay entregas programadas en este rango.</p>
+  } @else {
+    @for (group of groups(); track group.key) {
+      <div class="day">
+        <h2 class="day__title">{{ group.title }}</h2>
+
+        @for (d of group.deliveries; track d.orderId) {
+          <article
+            class="delivery"
+            [class.delivery--exact]="d.deliveryCommitment === 'exact'"
+            [class.delivery--overdue]="d.bucket === 'overdue' && d.deliveryCommitment === 'exact'"
+          >
+            <div class="delivery__top">
+              @if (d.deliveryCommitment === 'exact') {
+                <span class="tag tag--exact">EXACTA</span>
+              } @else {
+                <span class="tag">Tentativa</span>
+              }
+              @if (window(d)) {
+                <span class="delivery__window">
+                  @if (d.deliveryCommitment === 'tentative') { aprox. }{{ window(d) }}
+                </span>
+              } @else {
+                <span class="delivery__window delivery__window--none">Sin horario</span>
+              }
+              <span class="delivery__order">{{ d.orderNumber }}</span>
+              <span class="delivery__customer">{{ d.customerName }}</span>
+            </div>
+
+            @if (d.itemsSummary) {
+              <p class="delivery__items">{{ d.itemsSummary }}</p>
+            }
+
+            <div class="delivery__meta">
+              <span class="delivery__address">{{ d.deliveryAddress || 'Sin dirección capturada' }}</span>
+              @if (d.deliveryPersonName) {
+                <span class="delivery__person">Repartidor: {{ d.deliveryPersonName }}</span>
+              } @else {
+                <span class="delivery__person delivery__person--none">Repartidor: sin asignar</span>
+              }
+            </div>
+
+            <div class="delivery__actions">
+              @if (d.customerPhone) {
+                <a class="btn btn--ghost btn--sm" [href]="whatsappLink(d)" target="_blank" rel="noopener">
+                  WhatsApp
+                </a>
+              }
+              <a class="btn btn--ghost btn--sm" [routerLink]="[orderDetailBase(), d.orderId]">Ver pedido</a>
+              <button type="button" class="btn btn--ghost btn--sm" (click)="openReschedule(d)">
+                Reprogramar
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+    }
+  }
+</section>
+
+@if (rescheduling(); as d) {
+  <app-delivery-reschedule
+    [orderId]="d.orderId"
+    [orderNumber]="d.orderNumber"
+    [customerName]="d.customerName"
+    [expectedDeliveryDate]="d.expectedDeliveryDate"
+    [currentCommitment]="d.deliveryCommitment"
+    [windowStart]="d.deliveryWindowStart"
+    [windowEnd]="d.deliveryWindowEnd"
+    (closed)="closeReschedule()"
+    (saved)="onRescheduled()"
+  />
+}

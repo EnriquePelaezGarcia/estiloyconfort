@@ -223,13 +223,56 @@
         }
         <div><dt>Condición de venta</dt><dd>{{ schemeLabel(o.paymentMethod) }}</dd></div>
         <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
-        @if (o.expectedDeliveryDate) { <div><dt>Entrega estimada</dt><dd>{{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}</dd></div> }
+        <!-- Entrega (Docs/plan-fecha-hora-entrega.md §6.6). -->
+        <div>
+          <dt>Entrega</dt>
+          <dd>
+            @if (o.expectedDeliveryDate) {
+              {{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}
+              @if (deliveryWindow(); as win) {
+                · @if (o.deliveryCommitment === 'tentative') { aprox. }{{ win }}
+              }
+            } @else {
+              Sin fecha definida
+            }
+            @if (o.deliveryCommitment === 'exact') {
+              <span class="tag-exact">EXACTA</span>
+            }
+          </dd>
+        </div>
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
         @if (o.notasFabricante) { <div class="no-print"><dt>Notas fabricante</dt><dd>{{ o.notasFabricante }}</dd></div> }
         @if (o.notasPedido) { <div><dt>Notas del pedido</dt><dd>{{ o.notasPedido }}</dd></div> }
         @if (o.instruccionesEntrega) { <div class="no-print"><dt>Instrucciones de entrega</dt><dd>{{ o.instruccionesEntrega }}</dd></div> }
         @if (o.notes) { <div><dt>Notas</dt><dd>{{ o.notes }}</dd></div> }
       </dl>
+
+      @if (canReschedule()) {
+        <button type="button" class="btn btn--ghost no-print" (click)="openReschedule()">
+          <span class="material-symbols-outlined">event_repeat</span>
+          Reprogramar entrega
+        </button>
+      }
+
+      <!-- Bitácora de reprogramaciones (D7): sólo aparece si hubo cambios. -->
+      @if (deliveryHistory().length) {
+        <h3 class="info-subtitle no-print">Cambios de fecha de entrega</h3>
+        <ul class="schedule-log no-print">
+          @for (c of deliveryHistory(); track c.id) {
+            <li class="schedule-log__item">
+              <span class="schedule-log__meta">
+                {{ c.changedAt | date:'dd/MM/yyyy' }} — {{ c.changedByName || 'Sistema' }}
+              </span>
+              <span class="schedule-log__change">
+                {{ changeFrom(c) }} → {{ changeTo(c) }}
+              </span>
+              @if (c.reason) {
+                <span class="schedule-log__reason">Motivo: {{ c.reason }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
 
       @if (o.payments && o.payments.length) {
         <h3 class="info-subtitle">Pagos registrados</h3>
@@ -471,4 +514,20 @@
       </div>
     </div>
   </div>
+}
+
+<!-- ===== Modal: reprogramar entrega (Docs/plan-fecha-hora-entrega.md §6.6) ===== -->
+@if (rescheduleOpen() && order(); as o) {
+  <app-delivery-reschedule
+    [orderId]="o.id"
+    [orderNumber]="o.orderNumber"
+    [customerName]="o.customerName"
+    [expectedDeliveryDate]="o.expectedDeliveryDate ?? null"
+    [currentCommitment]="o.deliveryCommitment"
+    [windowStart]="o.deliveryWindowStart ?? null"
+    [windowEnd]="o.deliveryWindowEnd ?? null"
+    [slotId]="o.deliverySlotId ?? null"
+    (closed)="closeReschedule()"
+    (saved)="onRescheduled()"
+  />
 }

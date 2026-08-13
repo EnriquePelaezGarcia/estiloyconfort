@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { SellerService } from '../../../core/services/seller.service';
+import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 
 interface NavItem {
   label: string;
@@ -11,6 +12,8 @@ interface NavItem {
   soon?: boolean;
   /** M11 — solo se muestra si el módulo de Mayoreo está prendido. */
   wholesaleOnly?: boolean;
+  /** Contador en vivo junto al item (entregas que exigen atención hoy). */
+  badge?: () => number;
 }
 
 @Component({
@@ -23,6 +26,7 @@ interface NavItem {
 export class AdminLayoutComponent implements OnInit {
   protected auth = inject(AuthService);
   private sellerService = inject(SellerService);
+  private scheduleService = inject(DeliveryScheduleService);
 
   protected sidebarOpen = signal(false);
 
@@ -46,6 +50,13 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Gastos', icon: 'receipt_long', route: 'gastos' },
     { label: 'Por pagar', icon: 'account_balance_wallet', route: 'cuentas-por-pagar' },
     { label: 'Estado de resultados', icon: 'query_stats', route: 'estado-resultados' },
+    {
+      label: 'Agenda de entregas',
+      icon: 'event_upcoming',
+      route: 'agenda-entregas',
+      // Exactas vencidas + hoy + mañana (Docs/plan-fecha-hora-entrega.md §6.4).
+      badge: () => this.scheduleService.counts()?.badge ?? 0,
+    },
     { label: 'Todos los pedidos', icon: 'local_shipping', route: 'pedidos' },
     { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },
@@ -63,6 +74,7 @@ export class AdminLayoutComponent implements OnInit {
       next: ({ data }) => this.wholesaleEnabled.set(data.wholesaleEnabled),
       error: () => {},
     });
+    this.scheduleService.refreshCounts().subscribe({ error: () => {} });
   }
 
   protected toggleSidebar(): void {

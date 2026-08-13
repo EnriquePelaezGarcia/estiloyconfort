@@ -48,3 +48,28 @@
     .btn { flex: 1; }
   }
 }
+
+// Ventana horaria de la entrega (Docs/plan-fecha-hora-entrega.md §6.5).
+// La exacta se pinta en rojo y en mayúsculas porque es la única que no
+// perdona un retraso: cumpleaños y XV años.
+.dcard__exact {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-xs;
+  margin: 0 0 vars.$spacing-xs;
+  padding: vars.$spacing-xs vars.$spacing-sm;
+  border-radius: vars.$radius-sm;
+  background: vars.$color-error;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+
+  .material-symbols-outlined { font-size: 1.1rem; }
+}
+
+.dcard__window {
+  margin: 0 0 vars.$spacing-xs;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+}

@@ -72,6 +72,14 @@ export const sellerRoutes: Routes = [
           import('../shared/reservations/reservations.component').then((m) => m.ReservationsComponent),
         title: 'Reservas - Vendedor',
       },
+      {
+        path: 'agenda-entregas',
+        loadComponent: () =>
+          import('../shared/delivery-schedule/delivery-schedule.component').then(
+            (m) => m.DeliveryScheduleComponent,
+          ),
+        title: 'Agenda de entregas - Vendedor',
+      },
       { path: '**', redirectTo: 'resumen' },
     ],
   },

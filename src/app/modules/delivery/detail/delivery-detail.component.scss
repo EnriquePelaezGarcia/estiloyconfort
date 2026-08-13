@@ -241,3 +241,27 @@
     white-space: pre-line;
   }
 }
+
+// Compromiso de entrega (Docs/plan-fecha-hora-entrega.md §6.5).
+.commitment {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+
+  // La entrega exacta no admite matices: es la de cumpleaños y XV años.
+  &--exact {
+    background: vars.$color-error;
+    border-color: vars.$color-error;
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 700;
+  }
+}

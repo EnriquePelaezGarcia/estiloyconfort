@@ -7,6 +7,7 @@ const apiRoutes = require('./routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { scheduleQuoteCleanup } = require('./jobs/cleanupExpiredQuotes');
 const { scheduleFixedExpenses } = require('./jobs/generateFixedExpenses');
+const { scheduleDeliveryReminders } = require('./jobs/deliveryReminders');
 
 const app = express();
 
@@ -31,6 +32,7 @@ async function start() {
     // Requieren la BD viva: se programan después de validar la conexión.
     scheduleQuoteCleanup();
     scheduleFixedExpenses();
+    scheduleDeliveryReminders();
     app.listen(env.port, () => {
       console.log(`🚀 API escuchando en http://localhost:${env.port}/api`);
       console.log(`   Entorno: ${env.nodeEnv}`);

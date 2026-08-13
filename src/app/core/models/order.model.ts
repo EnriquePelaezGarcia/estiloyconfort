@@ -30,6 +30,26 @@ export type DeliveryType = 'standard' | 'with_installation';
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 /**
+ * Nivel de compromiso de la fecha de entrega (Docs/plan-fecha-hora-entrega.md).
+ *   - 'exact'     -> cumpleaños, XV años, eventos. No se entrega antes ni
+ *                    después de la fecha y ventana pactadas.
+ *   - 'tentative' -> ~80% de las ventas. Se reconfirma con el cliente por
+ *                    WhatsApp cuando llega el mueble.
+ */
+export type DeliveryCommitment = 'tentative' | 'exact';
+
+/** Franja horaria del catálogo editable `delivery_slots` (D3: datos, no código). */
+export interface DeliverySlot {
+  id: number;
+  label: string;
+  /** 'HH:mm:ss' */
+  startTime: string;
+  endTime: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+/**
  * Política de captura de color de un material (M6 §6.2): dato, no código.
  *   - 'fixed'    -> el campo se rellena con `fixedColor` y se deshabilita.
  *   - 'required' -> obligatorio.
@@ -164,6 +184,13 @@ export interface Order {
   orderStatus: OrderStatus;
   orderDate: string;
   expectedDeliveryDate?: string | null;
+  /** Ver DeliveryCommitment. Los pedidos anteriores a la migración son 'tentative'. */
+  deliveryCommitment: DeliveryCommitment;
+  /** 'HH:mm:ss'. Obligatorias cuando deliveryCommitment = 'exact'. */
+  deliveryWindowStart?: string | null;
+  deliveryWindowEnd?: string | null;
+  /** Franja del catálogo de la que salió la ventana; null si fue horario libre. */
+  deliverySlotId?: number | null;
   /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega (la asigna el admin). */
   manufacturerDueDate?: string | null;
   totalAmount: number;
@@ -219,6 +246,11 @@ export interface CreateOrderRequest {
   deliveryType: DeliveryType;
   paymentMethod: SaleScheme;
   expectedDeliveryDate?: string | null;
+  /** 'exact' exige fecha y ventana horaria; el backend rechaza lo contrario. */
+  deliveryCommitment?: DeliveryCommitment;
+  deliveryWindowStart?: string | null;
+  deliveryWindowEnd?: string | null;
+  deliverySlotId?: number | null;
   notes?: string | null;
   shippingCost?: number | null;
   shippingPostalCode?: string | null;
@@ -341,6 +373,14 @@ export interface DeliveryAssignment {
   notasFabricante?: string | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
+  /**
+   * Compromiso y ventana horaria. En 'exact' el repartidor no puede llegar
+   * antes ni después del rango (cumpleaños, XV años).
+   */
+  expectedDeliveryDate?: string | null;
+  deliveryCommitment?: DeliveryCommitment;
+  deliveryWindowStart?: string | null;
+  deliveryWindowEnd?: string | null;
   /** M4: material y color son por línea, ya no del pedido completo. */
   items?: Array<{
     id: number;

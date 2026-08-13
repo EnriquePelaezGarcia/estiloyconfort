@@ -21,6 +21,21 @@
           <span class="badge" [class]="statusTone(a.deliveryStatus)">{{ statusLabel(a.deliveryStatus) }}</span>
         </div>
 
+        <!--
+          Ventana horaria (Docs/plan-fecha-hora-entrega.md §6.5). En 'exact'
+          el chip rojo va arriba de todo: son entregas de cumpleaños y XV
+          años donde llegar tarde arruina el evento.
+        -->
+        @if (a.deliveryCommitment === 'exact') {
+          <p class="dcard__exact">
+            <span class="material-symbols-outlined">alarm</span>
+            HORA EXACTA
+            @if (windowOf(a); as win) { · entregar entre {{ win }} }
+          </p>
+        } @else if (windowOf(a); as win) {
+          <p class="dcard__window">Horario aproximado {{ win }}</p>
+        }
+
         <h2 class="dcard__customer">{{ a.customerName }}</h2>
         @if (a.deliveryAddress) { <p class="dcard__address">{{ a.deliveryAddress }}</p> }
         @if (a.instruccionesEntrega) {

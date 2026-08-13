@@ -32,6 +32,9 @@
           >
             <span class="material-symbols-outlined">{{ item.icon }}</span>
             <span class="nav-link__label">{{ item.label }}</span>
+            @if (item.badge && item.badge() > 0) {
+              <span class="nav-link__count">{{ item.badge() }}</span>
+            }
           </a>
         }
       }

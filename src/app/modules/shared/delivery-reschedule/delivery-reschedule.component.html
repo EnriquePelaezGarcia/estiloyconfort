@@ -1,0 +1,89 @@
+<div class="backdrop" (click)="close()"></div>
+
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="reschedule-title">
+  <header class="modal__header">
+    <h2 id="reschedule-title" class="modal__title">Reprogramar entrega</h2>
+    <button type="button" class="modal__close" (click)="close()" aria-label="Cerrar">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </header>
+
+  <p class="modal__subject">{{ orderNumber() }} · {{ customerName() }}</p>
+
+  @if (requiresReason()) {
+    <p class="modal__warning">
+      <span class="material-symbols-outlined">warning</span>
+      Esta es una entrega comprometida. El cambio quedará registrado.
+    </p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="modal__form">
+    <span class="modal__label">Tipo de entrega</span>
+    <div class="options">
+      <label class="options__item">
+        <input type="radio" formControlName="deliveryCommitment" value="tentative" />
+        <span>Tentativa</span>
+      </label>
+      <label class="options__item">
+        <input type="radio" formControlName="deliveryCommitment" value="exact" />
+        <span>Exacta (cumpleaños / XV años)</span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label for="rs-date">Fecha de entrega @if (isExact()) { <span class="req">*</span> }</label>
+      <input id="rs-date" type="date" formControlName="expectedDeliveryDate" />
+      @if (form.controls.expectedDeliveryDate.touched && form.controls.expectedDeliveryDate.invalid) {
+        <p class="field__error">Selecciona la fecha de entrega. En una entrega exacta es obligatoria.</p>
+      }
+    </div>
+
+    <div class="field">
+      <label for="rs-slot">Horario de entrega @if (isExact()) { <span class="req">*</span> }</label>
+      <select id="rs-slot" formControlName="deliverySlotChoice">
+        <option value="">Sin horario definido</option>
+        @for (slot of slots(); track slot.id) {
+          <option [value]="slot.id">{{ slot.label }}</option>
+        }
+        <option value="custom">Otro horario…</option>
+      </select>
+      @if (form.controls.deliverySlotChoice.touched && form.controls.deliverySlotChoice.invalid) {
+        <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
+      }
+    </div>
+
+    @if (isCustomWindow()) {
+      <div class="field-row">
+        <div class="field">
+          <label for="rs-start">De <span class="req">*</span></label>
+          <input id="rs-start" type="time" formControlName="deliveryWindowStart" />
+        </div>
+        <div class="field">
+          <label for="rs-end">a <span class="req">*</span></label>
+          <input id="rs-end" type="time" formControlName="deliveryWindowEnd" />
+        </div>
+      </div>
+    }
+
+    @if (requiresReason()) {
+      <div class="field">
+        <label for="rs-reason">Motivo del cambio <span class="req">*</span></label>
+        <textarea
+          id="rs-reason"
+          formControlName="rescheduleReason"
+          placeholder="Ej. el cliente cambió la fecha del evento"
+        ></textarea>
+        @if (form.controls.rescheduleReason.touched && form.controls.rescheduleReason.invalid) {
+          <p class="field__error">Indica por qué se mueve esta entrega comprometida.</p>
+        }
+      </div>
+    }
+
+    <footer class="modal__actions">
+      <button type="button" class="btn btn--ghost" (click)="close()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        {{ saving() ? 'Guardando…' : 'Guardar cambio' }}
+      </button>
+    </footer>
+  </form>
+</div>

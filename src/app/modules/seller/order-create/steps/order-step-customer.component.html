@@ -86,9 +86,9 @@
         <textarea
           id="instruccionesEntrega"
           formControlName="instruccionesEntrega"
-          placeholder="Ej. Casa azul frente al parque, entregar de 6 a 12 am, dejar en portería..."
+          placeholder="Ej. Casa azul frente al parque, tocar en la reja, dejar en portería..."
         ></textarea>
-        <p class="field__hint">Referencias de fachada, navegación y horarios para el repartidor.</p>
+        <p class="field__hint">Referencias de fachada y navegación para el repartidor. El horario va en el bloque de entrega, no aquí.</p>
       </div>
       <div class="field assembly-field">
         <label class="assembly-check">
@@ -115,11 +115,76 @@
           }
         }
       </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="expectedDeliveryDate">Fecha estimada de entrega</label>
-          <input id="expectedDeliveryDate" type="date" formControlName="expectedDeliveryDate" />
+      <!--
+        Fecha y hora de entrega (Docs/plan-fecha-hora-entrega.md §6.2).
+        El tipo va primero porque decide si lo demás es obligatorio.
+      -->
+      <div class="schedule" [class.schedule--exact]="store.isExactDelivery()">
+        <span class="schedule__title">Tipo de entrega</span>
+        <div class="schedule__options">
+          <label class="schedule__option">
+            <input type="radio" formControlName="deliveryCommitment" value="tentative" />
+            <span class="schedule__option-body">
+              <span class="schedule__option-name">Tentativa</span>
+              <span class="schedule__option-hint">Nos ponemos de acuerdo con el cliente por WhatsApp.</span>
+            </span>
+          </label>
+          <label class="schedule__option">
+            <input type="radio" formControlName="deliveryCommitment" value="exact" />
+            <span class="schedule__option-body">
+              <span class="schedule__option-name">Exacta (cumpleaños / XV años)</span>
+              <span class="schedule__option-hint">No se puede entregar antes ni después de esta fecha y horario.</span>
+            </span>
+          </label>
         </div>
+
+        <div class="field-row">
+          <div class="field" [class.field--error]="store.form.controls.expectedDeliveryDate.touched && store.form.controls.expectedDeliveryDate.invalid">
+            <label for="expectedDeliveryDate">
+              Fecha de entrega @if (store.isExactDelivery()) { <span class="req">*</span> }
+            </label>
+            <input id="expectedDeliveryDate" type="date" formControlName="expectedDeliveryDate" />
+            @if (store.form.controls.expectedDeliveryDate.touched && store.form.controls.expectedDeliveryDate.invalid) {
+              <p class="field__error">Selecciona la fecha de entrega. En una entrega exacta es obligatoria.</p>
+            }
+          </div>
+          <div class="field" [class.field--error]="store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid">
+            <label for="deliverySlotChoice">
+              Horario de entrega @if (store.isExactDelivery()) { <span class="req">*</span> }
+            </label>
+            <select id="deliverySlotChoice" formControlName="deliverySlotChoice">
+              <option value="">Sin horario definido</option>
+              @for (slot of store.deliverySlots(); track slot.id) {
+                <option [value]="slot.id">{{ slot.label }}</option>
+              }
+              <option value="custom">Otro horario…</option>
+            </select>
+            @if (store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid) {
+              <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
+            }
+          </div>
+        </div>
+
+        @if (store.isCustomWindow()) {
+          <div class="field-row">
+            <div class="field">
+              <label for="deliveryWindowStart">De <span class="req">*</span></label>
+              <input id="deliveryWindowStart" type="time" formControlName="deliveryWindowStart" />
+            </div>
+            <div class="field">
+              <label for="deliveryWindowEnd">a <span class="req">*</span></label>
+              <input id="deliveryWindowEnd" type="time" formControlName="deliveryWindowEnd" />
+            </div>
+          </div>
+        }
+
+        <p class="field__hint">
+          @if (store.isExactDelivery()) {
+            El repartidor verá esta entrega marcada como comprometida y aparecerá en la agenda un día antes.
+          } @else {
+            Se puede cambiar después, cuando el mueble llegue y se acuerde la entrega con el cliente.
+          }
+        </p>
       </div>
       <div class="field">
         <label for="deliveryPersonId">Asignar repartidor</label>

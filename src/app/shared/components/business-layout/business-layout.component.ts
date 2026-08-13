@@ -6,6 +6,12 @@ export interface BusinessNavItem {
   label: string;
   icon: string;
   route: string;
+  /**
+   * Contador opcional junto al item (p. ej. entregas que exigen atención hoy).
+   * Es un signal, no un número: el layout se repinta solo cuando cambia y
+   * nadie tiene que acordarse de refrescar el menú.
+   */
+  badge?: () => number;
 }
 
 /**

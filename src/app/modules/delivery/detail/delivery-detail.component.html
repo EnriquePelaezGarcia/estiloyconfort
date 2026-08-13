@@ -15,6 +15,19 @@
     </a>
   </header>
 
+  <!--
+    Compromiso de entrega (Docs/plan-fecha-hora-entrega.md §6.5). Va antes de
+    todo lo demás: si es exacta, es lo primero que el repartidor tiene que ver.
+  -->
+  @if (a.deliveryCommitment === 'exact' && windowOf(a); as win) {
+    <p class="commitment commitment--exact">
+      <span class="material-symbols-outlined">alarm</span>
+      Entregar entre {{ win }} — NO antes, NO después.
+    </p>
+  } @else if (windowOf(a); as win) {
+    <p class="commitment">Horario aproximado {{ win }}</p>
+  }
+
   <div class="detail-grid">
     <div>
       <!-- Info -->

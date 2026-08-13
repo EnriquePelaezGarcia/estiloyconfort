@@ -120,6 +120,154 @@ function computeAssemblyCost(floors, configMap) {
   return Math.round((base + n * perFloor) * 100) / 100;
 }
 
+const DELIVERY_COMMITMENTS = ['tentative', 'exact'];
+
+/** Campos que forman el bloque de entrega; son interdependientes (§3.2). */
+const DELIVERY_SCHEDULE_KEYS = [
+  'expectedDeliveryDate', 'deliveryCommitment',
+  'deliveryWindowStart', 'deliveryWindowEnd', 'deliverySlotId',
+];
+
+function badRequest(message) {
+  const err = new Error(message);
+  err.statusCode = 400;
+  return err;
+}
+
+/**
+ * Normaliza 'H:mm' / 'HH:mm' / 'HH:mm:ss' a 'HH:mm:ss'. Devuelve null si el
+ * valor está vacío, o lanza si no es una hora del día válida.
+ */
+function normalizeTime(value, label) {
+  if (value === null || value === undefined || value === '') return null;
+  const m = String(value).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) throw badRequest(`${label} no es una hora válida.`);
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  const s = Number(m[3] ?? 0);
+  if (h > 23 || min > 59 || s > 59) throw badRequest(`${label} no es una hora válida.`);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(h)}:${pad(min)}:${pad(s)}`;
+}
+
+function normalizeDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  // El front manda 'YYYY-MM-DD'; una columna DATE de MySQL llega como Date
+  // a medianoche LOCAL. Se lee con los getters locales a propósito:
+  // toISOString() la pasaría a UTC y en un huso negativo —como el de
+  // México— una entrega del 16 se guardaría como el 15.
+  if (value instanceof Date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  }
+  const s = String(value).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw badRequest('La fecha de entrega no es válida.');
+  return s;
+}
+
+/**
+ * Valida y normaliza el bloque de entrega (Docs/plan-fecha-hora-entrega.md §5.1).
+ *
+ * Regla única (§3.2): una entrega 'exact' —cumpleaños, XV años— exige fecha
+ * Y ventana horaria completa, porque el compromiso con el cliente es llegar
+ * dentro de ese rango. Una 'tentative' no exige nada, pero una ventana a
+ * medias (inicio sin fin) nunca se acepta en ningún caso: no significa nada
+ * para quien la lee después.
+ *
+ * Si viene `deliverySlotId`, las horas se leen del catálogo `delivery_slots`
+ * y se IGNORA lo que mande el cliente: si no, un request manipulado podría
+ * guardar la etiqueta "1:00pm - 3:00pm" con horas que no corresponden.
+ *
+ * @param {object} data campos ya mezclados con los del pedido existente
+ * @param {object} executor pool o conexión de transacción
+ * @returns {Promise<{expectedDeliveryDate:string|null, deliveryCommitment:string,
+ *   deliveryWindowStart:string|null, deliveryWindowEnd:string|null,
+ *   deliverySlotId:number|null}>}
+ */
+async function normalizeDeliverySchedule(data, executor = pool) {
+  const commitment = data.deliveryCommitment ?? 'tentative';
+  if (!DELIVERY_COMMITMENTS.includes(commitment)) {
+    throw badRequest('El tipo de entrega debe ser "tentative" o "exact".');
+  }
+
+  const date = normalizeDate(data.expectedDeliveryDate);
+
+  let slotId = data.deliverySlotId != null && data.deliverySlotId !== ''
+    ? Number(data.deliverySlotId)
+    : null;
+  let start = normalizeTime(data.deliveryWindowStart, 'La hora de inicio');
+  let end = normalizeTime(data.deliveryWindowEnd, 'La hora final');
+
+  if (slotId != null) {
+    if (!Number.isInteger(slotId)) throw badRequest('La franja horaria no es válida.');
+    const [rows] = await executor.execute(
+      'SELECT start_time, end_time FROM delivery_slots WHERE id = ? AND is_active = 1', [slotId],
+    );
+    if (!rows.length) throw badRequest('La franja horaria seleccionada ya no está disponible.');
+    start = normalizeTime(rows[0].start_time, 'La hora de inicio');
+    end = normalizeTime(rows[0].end_time, 'La hora final');
+  }
+
+  // Ventana a medias: nunca, en ningún compromiso.
+  if ((start && !end) || (!start && end)) {
+    throw badRequest('El horario de entrega necesita hora de inicio y hora final.');
+  }
+  if (start && end && end <= start) {
+    throw badRequest('La hora final debe ser posterior a la hora inicial.');
+  }
+
+  if (commitment === 'exact') {
+    if (!date) throw badRequest('Selecciona la fecha de entrega. En una entrega exacta es obligatoria.');
+    if (!start) throw badRequest('Selecciona el horario de entrega. En una entrega exacta es obligatorio.');
+  }
+
+  return {
+    expectedDeliveryDate: date,
+    deliveryCommitment: commitment,
+    deliveryWindowStart: start,
+    deliveryWindowEnd: end,
+    deliverySlotId: start ? slotId : null,
+  };
+}
+
+/**
+ * Registra una reprogramación en `order_delivery_changes` si algo del bloque
+ * de entrega cambió (D7). El motivo sólo se EXIGE cuando el pedido ya estaba
+ * comprometido como 'exact': mover una entrega de XV años tiene que dejar
+ * rastro de quién y por qué; mover una tentativa es la operación normal del
+ * negocio y no debe estorbar.
+ */
+async function logDeliveryChange(executor, orderId, existing, next, reason, userId) {
+  const changed = existing.deliveryCommitment !== next.deliveryCommitment
+    || normalizeDate(existing.expectedDeliveryDate) !== next.expectedDeliveryDate
+    || (existing.deliveryWindowStart ?? null) !== next.deliveryWindowStart
+    || (existing.deliveryWindowEnd ?? null) !== next.deliveryWindowEnd;
+  if (!changed) return;
+
+  const trimmedReason = (reason ?? '').trim();
+  if (existing.deliveryCommitment === 'exact' && !trimmedReason) {
+    throw badRequest('Esta es una entrega comprometida: indica el motivo del cambio.');
+  }
+
+  await executor.execute(
+    `INSERT INTO order_delivery_changes
+      (order_id, old_date, old_window_start, old_window_end, old_commitment,
+       new_date, new_window_start, new_window_end, new_commitment, reason, changed_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      orderId,
+      normalizeDate(existing.expectedDeliveryDate),
+      existing.deliveryWindowStart ?? null,
+      existing.deliveryWindowEnd ?? null,
+      existing.deliveryCommitment ?? 'tentative',
+      next.expectedDeliveryDate, next.deliveryWindowStart, next.deliveryWindowEnd,
+      next.deliveryCommitment,
+      trimmedReason || null,
+      userId ?? existing.sellerId,
+    ],
+  );
+}
+
 function parseJson(value) {
   if (!value) return null;
   if (typeof value === 'object') return value;
@@ -154,6 +302,16 @@ function mapOrder(row) {
     orderStatus: row.order_status,
     orderDate: row.order_date,
     expectedDeliveryDate: row.expected_delivery_date,
+    /**
+     * 'exact' = cumpleaños/XV: la fecha y la ventana son un compromiso.
+     * 'tentative' = ~80% de las ventas, se reconfirma por WhatsApp.
+     * Ver Docs/plan-fecha-hora-entrega.md.
+     */
+    deliveryCommitment: row.delivery_commitment ?? 'tentative',
+    deliveryWindowStart: row.delivery_window_start ?? null,
+    deliveryWindowEnd: row.delivery_window_end ?? null,
+    /** Franja del catálogo de la que salió la ventana; null si fue horario libre. */
+    deliverySlotId: row.delivery_slot_id ?? null,
     manufacturerDueDate: row.manufacturer_due_date ?? null,
     totalAmount: Number(row.total_amount),
     shippingCost: row.shipping_cost != null ? Number(row.shipping_cost) : 0,
@@ -539,23 +697,30 @@ const Order = {
       }
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
+      // Fecha, tipo de compromiso y ventana horaria de la entrega al cliente.
+      const schedule = await normalizeDeliverySchedule(data, conn);
+
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
            delivery_address, delivery_address_lat, delivery_address_lng, google_maps_url,
            delivery_type, payment_method, payment_status, payment_amount, order_status,
-           expected_delivery_date, total_amount, shipping_cost, shipping_postal_code,
+           expected_delivery_date, delivery_commitment, delivery_window_start,
+           delivery_window_end, delivery_slot_id,
+           total_amount, shipping_cost, shipping_postal_code,
            assembly_service, assembly_floors, assembly_cost,
            notas_fabricante, notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
           data.deliveryAddressLat ?? null, data.deliveryAddressLng ?? null,
           data.googleMapsUrl ?? null,
           deliveryType, paymentMethod,
-          'pending', 0, 'pending', data.expectedDeliveryDate ?? null,
+          'pending', 0, 'pending', schedule.expectedDeliveryDate,
+          schedule.deliveryCommitment, schedule.deliveryWindowStart,
+          schedule.deliveryWindowEnd, schedule.deliverySlotId,
           totalAmount, shippingCost, shippingPostalCode,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
           data.notasFabricante ?? null, data.notasPedido ?? null,
@@ -628,7 +793,7 @@ const Order = {
       customerPhone: 'customer_phone', deliveryAddress: 'delivery_address',
       googleMapsUrl: 'google_maps_url',
       deliveryType: 'delivery_type', paymentMethod: 'payment_method',
-      expectedDeliveryDate: 'expected_delivery_date', notes: 'notes',
+      notes: 'notes',
       notasFabricante: 'notas_fabricante', notasPedido: 'notas_pedido',
       instruccionesEntrega: 'instrucciones_entrega',
     };
@@ -640,10 +805,86 @@ const Order = {
         params.push(data[key]);
       }
     }
+
+    // El bloque de entrega NO cabe en el bucle genérico: sus 5 campos son
+    // interdependientes (§3.2), así que si viene cualquiera de ellos se
+    // valida la MEZCLA con lo que ya tenía el pedido y se escriben juntos.
+    const touchesSchedule = DELIVERY_SCHEDULE_KEYS.some((k) => data[k] !== undefined);
+    let existing = null;
+    let schedule = null;
+    if (touchesSchedule) {
+      existing = await this.findById(id);
+      if (!existing) {
+        const err = new Error('Pedido no encontrado');
+        err.statusCode = 404;
+        throw err;
+      }
+      const merged = {};
+      for (const k of DELIVERY_SCHEDULE_KEYS) {
+        merged[k] = data[k] !== undefined ? data[k] : existing[k];
+      }
+      schedule = await normalizeDeliverySchedule(merged);
+      sets.push(
+        'expected_delivery_date = ?', 'delivery_commitment = ?',
+        'delivery_window_start = ?', 'delivery_window_end = ?', 'delivery_slot_id = ?',
+      );
+      params.push(
+        schedule.expectedDeliveryDate, schedule.deliveryCommitment,
+        schedule.deliveryWindowStart, schedule.deliveryWindowEnd, schedule.deliverySlotId,
+      );
+    }
+
     if (!sets.length) return this.findById(id);
-    params.push(id);
-    await pool.execute(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`, params);
+
+    if (!touchesSchedule) {
+      params.push(id);
+      await pool.execute(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`, params);
+      return this.findById(id);
+    }
+
+    // Con reprogramación, el UPDATE y su bitácora van en la misma transacción:
+    // un cambio de fecha de una entrega comprometida no puede quedar sin
+    // rastro (D7), ni el rastro sin el cambio.
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await logDeliveryChange(conn, id, existing, schedule, data.rescheduleReason, userId);
+      params.push(id);
+      await conn.execute(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`, params);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
     return this.findById(id);
+  },
+
+  /** Bitácora de reprogramaciones de un pedido, la más reciente primero (D7). */
+  async findDeliveryHistory(orderId) {
+    const [rows] = await pool.execute(
+      `SELECT c.*, u.full_name AS changed_by_name
+       FROM order_delivery_changes c
+       LEFT JOIN users u ON u.id = c.changed_by
+       WHERE c.order_id = ?
+       ORDER BY c.changed_at DESC, c.id DESC`, [orderId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      oldDate: r.old_date,
+      oldWindowStart: r.old_window_start,
+      oldWindowEnd: r.old_window_end,
+      oldCommitment: r.old_commitment,
+      newDate: r.new_date,
+      newWindowStart: r.new_window_start,
+      newWindowEnd: r.new_window_end,
+      newCommitment: r.new_commitment,
+      reason: r.reason,
+      changedBy: r.changed_by,
+      changedByName: r.changed_by_name ?? null,
+      changedAt: r.changed_at,
+    }));
   },
 
   /**
@@ -744,6 +985,15 @@ const Order = {
       totalAmount += assemblyCost;
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
+      // 3.b Bloque de entrega: se valida la mezcla de lo que llega con lo que
+      // ya tenía el pedido (§3.2) y, si algo cambió, queda en bitácora (D7).
+      const mergedSchedule = {};
+      for (const k of DELIVERY_SCHEDULE_KEYS) {
+        mergedSchedule[k] = data[k] !== undefined ? data[k] : existing[k];
+      }
+      const schedule = await normalizeDeliverySchedule(mergedSchedule, conn);
+      await logDeliveryChange(conn, id, existing, schedule, data.rescheduleReason, userId);
+
       // 4. Reemplazar los items y descontar el nuevo stock.
       // Nota (§4.3): DELETE arrastra por ON DELETE CASCADE cualquier reserva
       // ligada a los order_items viejos, aunque estuviera activa. El vendedor
@@ -791,7 +1041,9 @@ const Order = {
         `UPDATE orders SET
            customer_name = ?, customer_email = ?, customer_phone = ?,
            delivery_address = ?, google_maps_url = ?, delivery_type = ?,
-           payment_method = ?, payment_status = ?, expected_delivery_date = ?, notes = ?,
+           payment_method = ?, payment_status = ?, expected_delivery_date = ?,
+           delivery_commitment = ?, delivery_window_start = ?,
+           delivery_window_end = ?, delivery_slot_id = ?, notes = ?,
            total_amount = ?, shipping_cost = ?, shipping_postal_code = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
            notas_fabricante = ?, notas_pedido = ?, instrucciones_entrega = ?,
@@ -806,7 +1058,8 @@ const Order = {
           data.googleMapsUrl !== undefined ? data.googleMapsUrl : existing.googleMapsUrl,
           deliveryType,
           paymentMethod, paymentStatus,
-          data.expectedDeliveryDate !== undefined ? data.expectedDeliveryDate : existing.expectedDeliveryDate,
+          schedule.expectedDeliveryDate, schedule.deliveryCommitment,
+          schedule.deliveryWindowStart, schedule.deliveryWindowEnd, schedule.deliverySlotId,
           data.notes !== undefined ? data.notes : existing.notes,
           totalAmount, shippingCost, shippingPostalCode,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,

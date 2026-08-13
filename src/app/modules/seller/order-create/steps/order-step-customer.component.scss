@@ -67,3 +67,69 @@
     }
   }
 }
+
+// ===== Fecha y hora de entrega (Docs/plan-fecha-hora-entrega.md §6.2) =====
+// El bloque cambia de color cuando la entrega es exacta: el vendedor tiene
+// que ver de un vistazo que ese pedido no admite llegar tarde.
+.schedule {
+  margin-top: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-left: 3px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+  transition: border-color vars.$transition-fast, background vars.$transition-fast;
+
+  &--exact {
+    border-color: color-mix(in srgb, vars.$color-error 40%, vars.$color-border);
+    border-left-color: vars.$color-error;
+    background: color-mix(in srgb, vars.$color-error 5%, white);
+  }
+
+  &__title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: vars.$color-text;
+    margin-bottom: vars.$spacing-sm;
+  }
+
+  &__options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: vars.$spacing-sm;
+    margin-bottom: vars.$spacing-md;
+
+    @media (max-width: vars.$bp-tablet) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__option {
+    display: flex;
+    align-items: flex-start;
+    gap: vars.$spacing-sm;
+    padding: vars.$spacing-sm;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-surface;
+    cursor: pointer;
+
+    input[type='radio'] {
+      margin-top: 2px;
+      accent-color: vars.$color-primary;
+      cursor: pointer;
+    }
+
+    &:has(input:checked) {
+      border-color: vars.$color-primary;
+      box-shadow: 0 0 0 1px vars.$color-primary;
+    }
+  }
+
+  &__option-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  &__option-name { font-weight: 600; font-size: 0.875rem; color: vars.$color-text; }
+  &__option-hint { font-size: 0.75rem; color: vars.$color-text-secondary; }
+
+  .req { color: vars.$color-error; }
+}

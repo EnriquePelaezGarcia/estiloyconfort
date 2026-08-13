@@ -32,6 +32,15 @@ function mapDelivery(row) {
     notasFabricante: row.notas_fabricante ?? null,
     notasPedido: row.notas_pedido ?? null,
     instruccionesEntrega: row.instrucciones_entrega ?? null,
+    /**
+     * Compromiso y ventana horaria (Docs/plan-fecha-hora-entrega.md §6.5).
+     * En 'exact' el repartidor NO puede llegar antes ni después del rango:
+     * son entregas de cumpleaños y XV años.
+     */
+    expectedDeliveryDate: row.expected_delivery_date ?? null,
+    deliveryCommitment: row.delivery_commitment ?? 'tentative',
+    deliveryWindowStart: row.delivery_window_start ?? null,
+    deliveryWindowEnd: row.delivery_window_end ?? null,
   };
 }
 
@@ -40,7 +49,9 @@ const BASE_SELECT = `
          o.delivery_address_lat, o.delivery_address_lng, o.google_maps_url, o.payment_status,
          o.payment_method, o.total_amount, o.payment_amount,
          o.assembly_service, o.assembly_floors, o.assembly_cost,
-         o.notas_fabricante, o.notas_pedido, o.instrucciones_entrega
+         o.notas_fabricante, o.notas_pedido, o.instrucciones_entrega,
+         o.expected_delivery_date, o.delivery_commitment,
+         o.delivery_window_start, o.delivery_window_end
   FROM deliveries dv
   JOIN orders o ON o.id = dv.order_id
 `;
@@ -51,7 +62,15 @@ const Delivery = {
     const params = [deliveryPersonId];
     if (date) { conditions.push('dv.assignment_date = ?'); params.push(date); }
     const [rows] = await pool.execute(
-      `${BASE_SELECT} WHERE ${conditions.join(' AND ')} ORDER BY dv.assignment_date DESC, dv.id DESC`,
+      // Dentro de un mismo día manda la hora comprometida, no el folio: el
+      // repartidor lee esta lista como su ruta. Las de hora exacta primero,
+      // y las que no tienen ventana al final.
+      `${BASE_SELECT} WHERE ${conditions.join(' AND ')}
+       ORDER BY dv.assignment_date DESC,
+                o.delivery_commitment = 'exact' DESC,
+                o.delivery_window_start IS NULL,
+                o.delivery_window_start ASC,
+                dv.id DESC`,
       params,
     );
     return rows.map(mapDelivery);

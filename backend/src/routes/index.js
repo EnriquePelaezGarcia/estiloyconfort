@@ -16,6 +16,7 @@ const expensesRoutes = require('./expensesRoutes');
 const payablesRoutes = require('./payablesRoutes');
 const inventoryReservationsRoutes = require('./inventoryReservationsRoutes');
 const ticketsRoutes = require('./ticketsRoutes');
+const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
 
 const router = Router();
 
@@ -42,5 +43,7 @@ router.use('/expenses', expensesRoutes);
 router.use('/payables', payablesRoutes);
 // Reservas de inventario (Docs/plan-reserva-de-piezas.md) — compartido admin/vendedor (D2/D7).
 router.use('/inventory', inventoryReservationsRoutes);
+// Agenda de entregas (Docs/plan-fecha-hora-entrega.md) — admin, vendedor y repartidor (D2).
+router.use('/deliveries', deliveryScheduleRoutes);
 
 module.exports = router;

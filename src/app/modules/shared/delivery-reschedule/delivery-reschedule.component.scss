@@ -1,0 +1,118 @@
+@use '../../../../styles/variables' as vars;
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: vars.$z-modal;
+}
+
+.modal {
+  position: fixed;
+  z-index: vars.$z-modal + 1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - #{vars.$spacing-lg} * 2));
+  max-height: calc(100vh - #{vars.$spacing-xl} * 2);
+  overflow-y: auto;
+  padding: vars.$spacing-lg;
+  border-radius: vars.$radius-lg;
+  background: vars.$color-surface;
+  box-shadow: vars.$shadow-lg;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+  }
+
+  &__title {
+    margin: 0;
+    font-family: vars.$font-headline;
+    font-size: 1.125rem;
+    color: vars.$color-text;
+  }
+
+  &__close {
+    display: grid;
+    place-items: center;
+    border: none;
+    background: none;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+    padding: vars.$spacing-xs;
+    border-radius: vars.$radius-sm;
+
+    &:hover { background: vars.$color-bg; color: vars.$color-text; }
+  }
+
+  &__subject {
+    margin: vars.$spacing-xs 0 vars.$spacing-md;
+    font-size: 0.875rem;
+    color: vars.$color-text-secondary;
+  }
+
+  // El aviso sólo aparece cuando el pedido YA estaba comprometido (D7).
+  &__warning {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    margin: 0 0 vars.$spacing-md;
+    padding: vars.$spacing-sm vars.$spacing-md;
+    border: 1px solid color-mix(in srgb, vars.$color-error 40%, vars.$color-border);
+    border-radius: vars.$radius-md;
+    background: color-mix(in srgb, vars.$color-error 6%, white);
+    font-size: 0.8125rem;
+    color: vars.$color-text;
+
+    .material-symbols-outlined { color: vars.$color-error; font-size: 1.125rem; }
+  }
+
+  &__label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: vars.$spacing-sm;
+  }
+
+  &__form { display: flex; flex-direction: column; gap: vars.$spacing-md; }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: vars.$spacing-sm;
+    margin-top: vars.$spacing-sm;
+  }
+}
+
+.options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: vars.$spacing-sm;
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    padding: vars.$spacing-sm;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    font-size: 0.875rem;
+    cursor: pointer;
+
+    input[type='radio'] { accent-color: vars.$color-primary; cursor: pointer; }
+
+    &:has(input:checked) {
+      border-color: vars.$color-primary;
+      box-shadow: 0 0 0 1px vars.$color-primary;
+    }
+  }
+}
+
+.req { color: vars.$color-error; }

@@ -241,3 +241,16 @@ $sidebar-width: 264px;
     padding: vars.$spacing-xl;
   }
 }
+
+// Contador de entregas que exigen atención hoy (Docs/plan-fecha-hora-entrega.md §6.4).
+// Va en rojo y no en el gris del badge de texto: es un número que pide actuar.
+.nav-link__count {
+  min-width: 1.25rem;
+  padding: 1px 6px;
+  border-radius: vars.$radius-full;
+  background: vars.$color-error;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+}

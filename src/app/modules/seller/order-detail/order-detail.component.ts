@@ -9,7 +9,10 @@ import { TicketsService } from '../../../core/services/tickets.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { Order, OrderItem, OrderStatus, PaymentStatus, StockReservationReason } from '../../../core/models/order.model';
+import { DeliveryScheduleService, formatWindow } from '../../../core/services/delivery-schedule.service';
+import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
+import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
+import { DeliveryCommitment, Order, OrderItem, OrderStatus, PaymentStatus, StockReservationReason } from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
   ORDER_STATUS_LABELS,
@@ -42,7 +45,7 @@ interface AbonoReceipt {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-detail.component.html',
   styleUrl: './order-detail.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective, DeliveryRescheduleComponent],
 })
 export class OrderDetailComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -50,6 +53,7 @@ export class OrderDetailComponent implements OnInit {
   private adminService = inject(AdminService);
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
+  private scheduleService = inject(DeliveryScheduleService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private fb = inject(FormBuilder);
@@ -158,6 +162,27 @@ export class OrderDetailComponent implements OnInit {
     return false;
   });
 
+  // ===== Entrega (Docs/plan-fecha-hora-entrega.md §6.6) =====
+
+  protected rescheduleOpen = signal(false);
+  protected deliveryHistory = signal<DeliveryChangeLog[]>([]);
+
+  /** '1:00pm – 3:00pm', o '' si el pedido no tiene ventana capturada. */
+  protected deliveryWindow = computed(() => {
+    const o = this.order();
+    return o ? formatWindow(o.deliveryWindowStart, o.deliveryWindowEnd) : '';
+  });
+
+  /**
+   * Reprogramar SÍ se permite con el pedido ya en ruta —mover la hora de una
+   * entrega que ya salió es justo lo que hay que poder resolver por teléfono—;
+   * lo único cerrado es lo entregado o cancelado.
+   */
+  protected canReschedule = computed(() => {
+    const status = this.order()?.orderStatus;
+    return !!status && status !== 'delivered' && status !== 'cancelled';
+  });
+
   /** Solo pending puede editarse sin confirmación previa. */
   protected needsEditConfirm = computed(() => this.order()?.orderStatus !== 'pending');
 
@@ -223,6 +248,49 @@ export class OrderDetailComponent implements OnInit {
     return this.router.url.startsWith('/admin');
   }
 
+  /** Bitácora de reprogramaciones. Un pedido que nunca se movió devuelve []. */
+  private loadDeliveryHistory(id: number): void {
+    this.scheduleService.getHistory(id).subscribe({
+      next: (data) => this.deliveryHistory.set(data),
+      error: () => this.deliveryHistory.set([]),
+    });
+  }
+
+  protected openReschedule(): void {
+    this.rescheduleOpen.set(true);
+  }
+
+  protected closeReschedule(): void {
+    this.rescheduleOpen.set(false);
+  }
+
+  protected onRescheduled(): void {
+    this.rescheduleOpen.set(false);
+    const id = this.order()?.id;
+    if (id) this.load(id);
+  }
+
+  /** "15/08/2026 1:00pm – 2:00pm (exacta)" para un extremo de la bitácora. */
+  private formatChangeSide(
+    date: string | null,
+    start: string | null,
+    end: string | null,
+    commitment: DeliveryCommitment | null,
+  ): string {
+    const day = date ? new Date(`${String(date).slice(0, 10)}T12:00:00`).toLocaleDateString('es-MX') : 'sin fecha';
+    const win = formatWindow(start, end);
+    const kind = commitment === 'exact' ? ' (exacta)' : '';
+    return win ? `${day} ${win}${kind}` : `${day}${kind}`;
+  }
+
+  protected changeFrom(c: DeliveryChangeLog): string {
+    return this.formatChangeSide(c.oldDate, c.oldWindowStart, c.oldWindowEnd, c.oldCommitment);
+  }
+
+  protected changeTo(c: DeliveryChangeLog): string {
+    return this.formatChangeSide(c.newDate, c.newWindowStart, c.newWindowEnd, c.newCommitment);
+  }
+
   private load(id: number): void {
     this.loading.set(true);
     const req = this.isAdmin ? this.adminService.getOrder(id) : this.sellerService.getOrder(id);
@@ -230,6 +298,7 @@ export class OrderDetailComponent implements OnInit {
       next: (res) => {
         this.order.set(res.data);
         this.loading.set(false);
+        this.loadDeliveryHistory(id);
       },
       error: () => {
         this.loading.set(false);

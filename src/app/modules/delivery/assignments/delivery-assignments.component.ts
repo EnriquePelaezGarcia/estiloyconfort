@@ -3,6 +3,7 @@ import { CurrencyPipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DeliveryService } from '../../../core/services/delivery.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { DeliveryAssignment, DeliveryStatus, PaymentStatus } from '../../../core/models/order.model';
 import {
   DELIVERY_STATUS_LABELS,
@@ -26,6 +27,11 @@ export class DeliveryAssignmentsComponent implements OnInit {
   protected assignments = signal<DeliveryAssignment[]>([]);
   protected loading = signal(true);
   protected showAll = signal(false);
+
+  /** '1:00pm – 3:00pm', o '' si el pedido no tiene ventana capturada. */
+  protected windowOf(a: DeliveryAssignment): string {
+    return formatWindow(a.deliveryWindowStart, a.deliveryWindowEnd);
+  }
 
   ngOnInit(): void {
     this.showAll.set(this.route.snapshot.data['all'] === true);

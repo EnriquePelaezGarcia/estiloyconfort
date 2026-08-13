@@ -358,3 +358,36 @@ $ticket-font: 'Courier New', monospace;
   .detail-view.print-abono .detail-screen { display: none; }
   .detail-view.print-abono .abono-ticket { display: block; }
 }
+
+// ===== Entrega y bitácora (Docs/plan-fecha-hora-entrega.md §6.6) =====
+.tag-exact {
+  margin-left: vars.$spacing-xs;
+  padding: 1px 6px;
+  border-radius: vars.$radius-full;
+  background: vars.$color-error;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.schedule-log {
+  list-style: none;
+  margin: vars.$spacing-sm 0 0;
+  padding: 0;
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: vars.$spacing-sm 0;
+    border-bottom: 1px solid vars.$color-border;
+    font-size: 0.8125rem;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  &__meta { color: vars.$color-text-secondary; font-size: 0.75rem; }
+  &__change { color: vars.$color-text; font-weight: 600; }
+  &__reason { color: vars.$color-text-secondary; }
+}

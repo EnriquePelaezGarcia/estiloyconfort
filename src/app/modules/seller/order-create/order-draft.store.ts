@@ -8,9 +8,10 @@ import { ShippingService } from '../../../core/services/shipping.service';
 import { QuotesService } from '../../../core/services/quotes.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { PricingService } from '../../../core/services/pricing.service';
+import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import {
-  AssemblyRates, CreateOrderRequest, DeliveryPerson, InventoryItem,
-  InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
+  AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
+  InventoryItem, InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
 } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
@@ -61,6 +62,7 @@ export class OrderDraftStore {
   private notification = inject(NotificationService);
   private shippingService = inject(ShippingService);
   private quotesService = inject(QuotesService);
+  private deliveryScheduleService = inject(DeliveryScheduleService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
   readonly materialsStore = inject(MaterialsStore);
@@ -230,11 +232,38 @@ export class OrderDraftStore {
     assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     expectedDeliveryDate: [''],
+    /**
+     * Docs/plan-fecha-hora-entrega.md — 'tentative' por defecto porque es el
+     * ~80% de las ventas (D4). 'exact' es la entrega de cumpleaños/XV: al
+     * elegirla, fecha y horario pasan a ser obligatorios.
+     */
+    deliveryCommitment: ['tentative' as DeliveryCommitment],
+    /** '' = sin horario · '<id>' = franja del catálogo · 'custom' = horario libre. */
+    deliverySlotChoice: [''],
+    deliveryWindowStart: [''],
+    deliveryWindowEnd: [''],
     notasFabricante: [''],
     notasPedido: [''],
     instruccionesEntrega: [''],
     deliveryPersonId: [null as number | null],
   });
+
+  // ===== Bloque de entrega (Docs/plan-fecha-hora-entrega.md §6.2) =====
+
+  /** Franjas horarias del catálogo, para el select del POS. */
+  readonly deliverySlots = signal<DeliverySlot[]>([]);
+
+  private commitmentSig = toSignal(this.form.controls.deliveryCommitment.valueChanges, {
+    initialValue: this.form.controls.deliveryCommitment.value,
+  });
+  private slotChoiceSig = toSignal(this.form.controls.deliverySlotChoice.valueChanges, {
+    initialValue: this.form.controls.deliverySlotChoice.value,
+  });
+
+  /** Entrega comprometida: cumpleaños/XV. Fecha y horario dejan de ser opcionales. */
+  readonly isExactDelivery = computed(() => this.commitmentSig() === 'exact');
+  /** El vendedor eligió "Otro horario…": se capturan las dos horas a mano. */
+  readonly isCustomWindow = computed(() => this.slotChoiceSig() === 'custom');
 
   /** Repartidores disponibles para asignar el pedido (opcional). */
   readonly deliveryPeople = signal<DeliveryPerson[]>([]);
@@ -367,6 +396,58 @@ export class OrderDraftStore {
           floors.disable();
         }
       });
+
+    // D4: en 'exact' —cumpleaños, XV años— la fecha y el horario dejan de ser
+    // opcionales; en 'tentative' se relajan pero NO se borra lo capturado
+    // (D6: el cliente puede volver a cambiar de opinión).
+    this.form.controls.deliveryCommitment.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((commitment) => this.applyDeliveryValidators(commitment === 'exact'));
+
+    // "Otro horario…" exige las dos horas; una franja del catálogo no.
+    this.form.controls.deliverySlotChoice
+      .valueChanges.pipe(takeUntilDestroyed())
+      .subscribe(() => this.applyDeliveryValidators(this.isExactDelivery()));
+  }
+
+  /**
+   * Sincroniza los validadores del bloque de entrega. Vive aquí y no en la
+   * plantilla porque la regla es de negocio (§3.2), no de presentación: el
+   * backend aplica exactamente la misma y esta es sólo la primera defensa.
+   */
+  private applyDeliveryValidators(isExact: boolean): void {
+    const { expectedDeliveryDate, deliverySlotChoice, deliveryWindowStart, deliveryWindowEnd } =
+      this.form.controls;
+
+    expectedDeliveryDate.setValidators(isExact ? [Validators.required] : []);
+    deliverySlotChoice.setValidators(isExact ? [Validators.required] : []);
+
+    const needsCustomTimes = deliverySlotChoice.value === 'custom';
+    const timeValidators = needsCustomTimes ? [Validators.required] : [];
+    deliveryWindowStart.setValidators(timeValidators);
+    deliveryWindowEnd.setValidators(timeValidators);
+
+    for (const c of [expectedDeliveryDate, deliverySlotChoice, deliveryWindowStart, deliveryWindowEnd]) {
+      c.updateValueAndValidity({ emitEvent: false });
+    }
+  }
+
+  /**
+   * Fecha, tipo de compromiso y ventana horaria listos para el backend.
+   * Cuando se eligió una franja del catálogo NO se mandan horas: el servidor
+   * las lee de `delivery_slots` (§5.1) para que la etiqueta y las horas no
+   * puedan discrepar.
+   */
+  private deliverySchedulePayload(raw: { expectedDeliveryDate?: string | null; deliveryCommitment?: DeliveryCommitment | null; deliverySlotChoice?: string | null; deliveryWindowStart?: string | null; deliveryWindowEnd?: string | null }) {
+    const choice = raw.deliverySlotChoice || '';
+    const isCustom = choice === 'custom';
+    return {
+      expectedDeliveryDate: raw.expectedDeliveryDate || null,
+      deliveryCommitment: (raw.deliveryCommitment ?? 'tentative') as DeliveryCommitment,
+      deliverySlotId: !isCustom && choice ? Number(choice) : null,
+      deliveryWindowStart: isCustom ? raw.deliveryWindowStart || null : null,
+      deliveryWindowEnd: isCustom ? raw.deliveryWindowEnd || null : null,
+    };
   }
 
   /** Llamado UNA VEZ por el shell en su ngOnInit — carga catálogos y config, no depende de query params. */
@@ -380,6 +461,11 @@ export class OrderDraftStore {
 
     this.sellerService.getDeliveryPeople().subscribe({
       next: ({ data }) => this.deliveryPeople.set(data),
+      error: () => {},
+    });
+
+    this.deliveryScheduleService.getSlots().subscribe({
+      next: (slots) => this.deliverySlots.set(slots),
       error: () => {},
     });
 
@@ -419,6 +505,18 @@ export class OrderDraftStore {
           paymentMethod: data.paymentMethod ?? 'cash',
           expectedDeliveryDate: data.expectedDeliveryDate
             ? String(data.expectedDeliveryDate).slice(0, 10)
+            : '',
+          deliveryCommitment: data.deliveryCommitment ?? 'tentative',
+          // Si el pedido salió de una franja se reselecciona esa; si tenía
+          // horario libre se abre "Otro horario…" con las horas capturadas.
+          deliverySlotChoice: data.deliverySlotId != null
+            ? String(data.deliverySlotId)
+            : data.deliveryWindowStart ? 'custom' : '',
+          deliveryWindowStart: data.deliveryWindowStart
+            ? String(data.deliveryWindowStart).slice(0, 5)
+            : '',
+          deliveryWindowEnd: data.deliveryWindowEnd
+            ? String(data.deliveryWindowEnd).slice(0, 5)
             : '',
           notasFabricante: data.notasFabricante ?? '',
           notasPedido: data.notasPedido ?? '',
@@ -702,6 +800,35 @@ export class OrderDraftStore {
     return true;
   }
 
+  /**
+   * Coherencia de la ventana horaria antes de enviar. Devuelve false (y avisa)
+   * si el rango no tiene sentido; la fecha pasada NO bloquea, sólo pregunta:
+   * puede ser un pedido que se está registrando a destiempo (§5.1).
+   */
+  private validateDeliveryWindowOrNotify(): boolean {
+    const raw = this.form.getRawValue();
+
+    if (raw.deliverySlotChoice === 'custom') {
+      const start = raw.deliveryWindowStart || '';
+      const end = raw.deliveryWindowEnd || '';
+      if (start && end && end <= start) {
+        this.notification.error('La hora final debe ser posterior a la hora inicial');
+        return false;
+      }
+    }
+
+    if (raw.deliveryCommitment === 'exact' && raw.expectedDeliveryDate) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (raw.expectedDeliveryDate < today) {
+        return confirm(
+          'La fecha de entrega es anterior a hoy y la entrega está marcada como exacta. ¿Es correcto?',
+        );
+      }
+    }
+
+    return true;
+  }
+
   /** Navega entre pasos preservando ?edit / ?fromQuote. */
   goToStep(step: 1 | 2): void {
     this.router.navigate([], {
@@ -744,6 +871,11 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
+    if (!this.validateDeliveryWindowOrNotify()) {
+      this._lastInvalidStep.set(2);
+      this.goToStep(2);
+      return;
+    }
 
     const raw = this.form.getRawValue();
     const payload: CreateOrderRequest = {
@@ -754,7 +886,7 @@ export class OrderDraftStore {
       googleMapsUrl: raw.googleMapsUrl || null,
       deliveryType: raw.assemblyService ? 'with_installation' : 'standard',
       paymentMethod: raw.paymentMethod!,
-      expectedDeliveryDate: raw.expectedDeliveryDate || null,
+      ...this.deliverySchedulePayload(raw),
       shippingCost: this.shippingCost() || null,
       shippingPostalCode: this.shippingCp() || null,
       // El servidor calcula el costo del armado con las tarifas vigentes.

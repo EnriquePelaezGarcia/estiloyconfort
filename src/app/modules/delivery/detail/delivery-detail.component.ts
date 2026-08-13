@@ -16,6 +16,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { DeliveryService } from '../../../core/services/delivery.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { DeliveryAssignment, PaymentInstrument, PaymentStatus } from '../../../core/models/order.model';
 import {
   PAYMENT_INSTRUMENT_LABELS,
@@ -41,6 +42,11 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
 
   protected assignment = signal<DeliveryAssignment | null>(null);
   protected loading = signal(true);
+
+  /** '1:00pm – 3:00pm', o '' si el pedido no tiene ventana capturada. */
+  protected windowOf(a: DeliveryAssignment): string {
+    return formatWindow(a.deliveryWindowStart, a.deliveryWindowEnd);
+  }
   protected saving = signal(false);
 
   protected photoData = signal<string | null>(null);

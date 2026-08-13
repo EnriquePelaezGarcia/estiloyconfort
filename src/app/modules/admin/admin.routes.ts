@@ -40,6 +40,14 @@ export const adminRoutes: Routes = [
         title: 'Reservas - Panel Admin',
       },
       {
+        path: 'agenda-entregas',
+        loadComponent: () =>
+          import('../shared/delivery-schedule/delivery-schedule.component').then(
+            (m) => m.DeliveryScheduleComponent,
+          ),
+        title: 'Agenda de entregas - Panel Admin',
+      },
+      {
         path: 'reglas-precios',
         loadComponent: () =>
           import('./pricing/pricing.component').then((m) => m.PricingComponent),

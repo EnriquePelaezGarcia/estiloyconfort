@@ -1,0 +1,224 @@
+@use '../../../../styles/variables' as vars;
+
+.page {
+  padding: vars.$spacing-lg;
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: vars.$spacing-md;
+    flex-wrap: wrap;
+    margin-bottom: vars.$spacing-lg;
+  }
+
+  &__title {
+    margin: 0;
+    font-family: vars.$font-headline;
+    font-size: 1.5rem;
+    color: vars.$color-text;
+  }
+
+  &__subtitle {
+    margin: vars.$spacing-xs 0 0;
+    font-size: 0.875rem;
+    color: vars.$color-text-secondary;
+  }
+}
+
+// ===== Tarjetas resumen =====
+.summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+
+  // En móvil se consultan en la calle: scroll horizontal en vez de apretujar.
+  @media (max-width: vars.$bp-tablet) {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: vars.$spacing-xs;
+  }
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$spacing-xs;
+    padding: vars.$spacing-md;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-surface;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color vars.$transition-fast, box-shadow vars.$transition-fast;
+
+    @media (max-width: vars.$bp-tablet) {
+      flex: 0 0 9rem;
+      scroll-snap-align: start;
+    }
+
+    &:hover { border-color: vars.$color-primary; }
+
+    &--active {
+      border-color: vars.$color-primary;
+      box-shadow: 0 0 0 1px vars.$color-primary;
+    }
+
+    &--critical {
+      border-color: color-mix(in srgb, vars.$color-error 40%, vars.$color-border);
+
+      .summary__value { color: vars.$color-error; }
+
+      &.summary__card--active {
+        border-color: vars.$color-error;
+        box-shadow: 0 0 0 1px vars.$color-error;
+      }
+    }
+  }
+
+  &__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: vars.$color-text;
+    line-height: 1;
+  }
+
+  &__label {
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+  }
+}
+
+.filters {
+  display: flex;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-lg;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: vars.$spacing-xs vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-surface;
+  font-size: 0.8125rem;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+
+  &--active {
+    border-color: vars.$color-primary;
+    background: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.state {
+  padding: vars.$spacing-xl;
+  text-align: center;
+  color: vars.$color-text-secondary;
+}
+
+// ===== Lista agrupada por día =====
+.day {
+  margin-bottom: vars.$spacing-lg;
+
+  &__title {
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: vars.$color-text;
+    text-transform: capitalize;
+  }
+}
+
+.delivery {
+  padding: vars.$spacing-md;
+  margin-bottom: vars.$spacing-sm;
+  border: 1px solid vars.$color-border;
+  border-left: 3px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface;
+
+  // Una entrega exacta tiene que distinguirse sin leer: es la que no
+  // perdona un retraso.
+  &--exact {
+    border-left-color: vars.$color-error;
+  }
+
+  &--overdue {
+    background: color-mix(in srgb, vars.$color-error 5%, white);
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    flex-wrap: wrap;
+  }
+
+  &__window {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    color: vars.$color-text;
+
+    &--none { font-weight: 500; color: vars.$color-text-secondary; }
+  }
+
+  &__order {
+    font-size: 0.8125rem;
+    font-family: monospace;
+    color: vars.$color-text-secondary;
+  }
+
+  &__customer { font-weight: 600; font-size: 0.9375rem; color: vars.$color-text; }
+
+  &__items {
+    margin: vars.$spacing-xs 0 0;
+    font-size: 0.8125rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__meta {
+    display: flex;
+    gap: vars.$spacing-md;
+    flex-wrap: wrap;
+    margin-top: vars.$spacing-xs;
+    font-size: 0.8125rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__person--none {
+    color: vars.$color-error;
+    font-weight: 600;
+  }
+
+  &__actions {
+    display: flex;
+    gap: vars.$spacing-sm;
+    flex-wrap: wrap;
+    margin-top: vars.$spacing-sm;
+  }
+}
+
+.tag {
+  padding: 2px vars.$spacing-sm;
+  border-radius: vars.$radius-full;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: vars.$color-bg;
+  color: vars.$color-text-secondary;
+  border: 1px solid vars.$color-border;
+
+  &--exact {
+    background: vars.$color-error;
+    border-color: vars.$color-error;
+    color: #fff;
+  }
+}
+
+.btn--sm {
+  padding: vars.$spacing-xs vars.$spacing-sm;
+  font-size: 0.8125rem;
+}
