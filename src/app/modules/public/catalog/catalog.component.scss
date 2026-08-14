@@ -4,6 +4,10 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 v.$spacing-lg;
+
+  @media (max-width: v.$bp-tablet) {
+    padding: 0 v.$spacing-md;
+  }
 }
 
 .catalog {
@@ -15,6 +19,13 @@
     padding: v.$spacing-2xl 0;
     text-align: center;
     color: #fff;
+
+    // En móvil el bloque morado se comía la primera pantalla completa y los
+    // productos quedaban fuera de vista; ahí se oculta y el catálogo arranca
+    // directo en los filtros.
+    @media (max-width: v.$bp-tablet) {
+      display: none;
+    }
   }
 
   &__title {
@@ -40,6 +51,8 @@
 
     @media (max-width: v.$bp-tablet) {
       grid-template-columns: 1fr;
+      padding-top: v.$spacing-md;
+      gap: v.$spacing-md;
     }
   }
 
@@ -112,8 +125,10 @@
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: v.$spacing-lg;
 
-    @media (max-width: 480px) {
-      grid-template-columns: 1fr;
+    // Dos productos por fila en teléfono: con `minmax(260px)` sólo cabía uno.
+    @media (max-width: v.$bp-tablet) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: v.$spacing-sm;
     }
   }
 
@@ -149,6 +164,10 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+
+    @media (max-width: v.$bp-tablet) {
+      display: none;
+    }
   }
 
   &__item {
@@ -187,6 +206,14 @@
     transition: border-color v.$transition-fast;
 
     &:focus { border-color: v.$color-primary; }
+
+    &--mobile {
+      display: none;
+
+      @media (max-width: v.$bp-tablet) {
+        display: block;
+      }
+    }
   }
 }
 

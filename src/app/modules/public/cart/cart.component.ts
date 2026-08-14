@@ -4,8 +4,9 @@ import { CurrencyPipe } from '@angular/common';
 import { CartService } from '../../../core/services/cart.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { CartItem, CartVariantSelection } from '../../../core/models/cart.model';
+import { environment } from '../../../../environments/environment';
 
-const WHATSAPP_NUMBER = '522221234567'; // reemplazar con número real
+const WHATSAPP_NUMBER = environment.whatsappNumber;
 
 @Component({
   selector: 'app-cart',

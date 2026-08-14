@@ -50,4 +50,15 @@
   &--detail &__amount {
     font-size: 1.25rem;
   }
+
+  // La variante de tarjeta convive con dos productos por fila en teléfono.
+  @media (max-width: v.$bp-tablet) {
+    &--card &__amount {
+      font-size: 0.9rem;
+    }
+
+    &--card &__amount--main {
+      font-size: 1.05rem;
+    }
+  }
 }

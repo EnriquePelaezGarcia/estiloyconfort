@@ -1,0 +1,38 @@
+.whatsapp-fab {
+  position: fixed;
+  right: 1rem;
+  // Se levanta con el safe-area de los iPhone para no quedar bajo la barra del navegador.
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 900; // por debajo del drawer del navbar (1200) y su overlay (1100)
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: #25d366;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  text-decoration: none;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+
+  &:hover {
+    transform: scale(1.06);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  &:focus-visible {
+    outline: 3px solid #128c7e;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:hover { transform: none; }
+  }
+
+  svg {
+    width: 30px;
+    height: 30px;
+  }
+}

@@ -1,5 +1,15 @@
 <nav class="app-navbar">
   <div class="app-navbar__inner">
+    <button
+      class="icon-btn hamburger"
+      (click)="toggleMobileMenu()"
+      [attr.aria-expanded]="mobileMenuOpen()"
+      aria-controls="mobile-nav"
+      aria-label="Menú"
+    >
+      <span class="material-symbols-outlined">{{ mobileMenuOpen() ? 'close' : 'menu' }}</span>
+    </button>
+
     <a class="app-navbar__brand" routerLink="/" aria-label="Ir al inicio">
       Estilo y Confort
     </a>
@@ -46,31 +56,40 @@
           }
         </div>
       }
-
-      <button
-        class="icon-btn hamburger"
-        (click)="toggleMobileMenu()"
-        [attr.aria-expanded]="mobileMenuOpen()"
-        aria-label="Menú"
-      >
-        <span class="material-symbols-outlined">{{ mobileMenuOpen() ? 'close' : 'menu' }}</span>
-      </button>
     </div>
   </div>
 </nav>
 
-@if (mobileMenuOpen()) {
-  <div class="mobile-nav">
-    <ul>
-      <li><a routerLink="/catalogo" (click)="mobileMenuOpen.set(false)">Catálogo</a></li>
-      <li><a routerLink="/nosotros" (click)="mobileMenuOpen.set(false)">Nosotros</a></li>
-      <li><a routerLink="/contacto" (click)="mobileMenuOpen.set(false)">Contacto</a></li>
-      @if (!auth.isAuthenticated()) {
-        <li><a routerLink="/auth/login" (click)="mobileMenuOpen.set(false)" class="mobile-nav__login">Iniciar Sesión</a></li>
-      }
-      @if (auth.isAuthenticated()) {
-        <li><button (click)="auth.logout()">Cerrar sesión</button></li>
-      }
-    </ul>
+<!-- El drawer se queda siempre en el DOM (no dentro de un @if) para que la
+     transición de entrada corra: con @if el elemento nace ya en su estado
+     final y el deslizamiento no se ve. `inert` lo saca del tab order cuando
+     está cerrado. -->
+<div class="mobile-nav__overlay" [class.is-open]="mobileMenuOpen()" (click)="closeMobileMenu()"></div>
+
+<aside
+  id="mobile-nav"
+  class="mobile-nav"
+  [class.is-open]="mobileMenuOpen()"
+  [attr.inert]="mobileMenuOpen() ? null : ''"
+  (click)="$event.stopPropagation()"
+>
+  <!-- El drawer tapa el navbar, así que necesita su propio botón de cierre. -->
+  <div class="mobile-nav__header">
+    <span class="mobile-nav__brand">Estilo y Confort</span>
+    <button class="icon-btn" (click)="closeMobileMenu()" aria-label="Cerrar menú">
+      <span class="material-symbols-outlined">close</span>
+    </button>
   </div>
-}
+
+  <ul>
+    <li><a routerLink="/catalogo" (click)="closeMobileMenu()">Catálogo</a></li>
+    <li><a routerLink="/nosotros" (click)="closeMobileMenu()">Nosotros</a></li>
+    <li><a routerLink="/contacto" (click)="closeMobileMenu()">Contacto</a></li>
+    @if (!auth.isAuthenticated()) {
+      <li><a routerLink="/auth/login" (click)="closeMobileMenu()" class="mobile-nav__login">Iniciar Sesión</a></li>
+    }
+    @if (auth.isAuthenticated()) {
+      <li><button (click)="auth.logout()">Cerrar sesión</button></li>
+    }
+  </ul>
+</aside>

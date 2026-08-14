@@ -84,6 +84,12 @@
     flex-direction: column;
     gap: v.$spacing-sm;
     flex: 1;
+
+    // Con dos tarjetas por fila en teléfono el ancho útil baja a ~150px.
+    @media (max-width: v.$bp-tablet) {
+      padding: v.$spacing-sm;
+      gap: v.$spacing-xs;
+    }
   }
 
   &__category {
@@ -102,6 +108,10 @@
     font-weight: 600;
     line-height: 1.4;
 
+    @media (max-width: v.$bp-tablet) {
+      font-size: 0.85rem;
+    }
+
     a {
       color: v.$color-text;
       text-decoration: none;
@@ -115,6 +125,19 @@
     gap: v.$spacing-sm;
     margin-top: auto;
     padding-top: v.$spacing-sm;
+
+    // Los dos botones lado a lado no caben en una tarjeta de media pantalla.
+    @media (max-width: v.$bp-tablet) {
+      flex-direction: column;
+      gap: v.$spacing-xs;
+      padding-top: v.$spacing-xs;
+
+      a,
+      button {
+        padding: v.$spacing-xs v.$spacing-sm;
+        font-size: 0.75rem;
+      }
+    }
 
     a,
     button {

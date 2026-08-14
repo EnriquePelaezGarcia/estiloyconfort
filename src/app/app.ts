@@ -5,6 +5,7 @@ import { NavbarComponent } from './shared/components/navbar/navbar.component';
 import { FooterComponent } from './shared/components/footer/footer.component';
 import { LoaderComponent } from './shared/components/loader/loader.component';
 import { ToastComponent } from './shared/components/toast/toast.component';
+import { WhatsappFabComponent } from './shared/components/whatsapp-fab/whatsapp-fab.component';
 
 // Rutas de paneles internos que usan su propio layout (sin navbar/footer público).
 const DASHBOARD_PREFIXES = ['/admin', '/vendedor', '/repartidor', '/fabricante'];
@@ -12,7 +13,14 @@ const DASHBOARD_PREFIXES = ['/admin', '/vendedor', '/repartidor', '/fabricante']
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, NavbarComponent, FooterComponent, LoaderComponent, ToastComponent],
+  imports: [
+    RouterOutlet,
+    NavbarComponent,
+    FooterComponent,
+    LoaderComponent,
+    ToastComponent,
+    WhatsappFabComponent,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

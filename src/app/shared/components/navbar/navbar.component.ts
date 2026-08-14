@@ -10,6 +10,7 @@ import { AuthService } from '../../../core/auth/auth.service';
   imports: [RouterLink, RouterLinkActive],
   host: {
     '(document:click)': 'closeDropdown()',
+    '(document:keydown.escape)': 'closeMobileMenu()',
   },
 })
 export class NavbarComponent {
@@ -24,6 +25,10 @@ export class NavbarComponent {
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update((v) => !v);
+  }
+
+  closeMobileMenu(): void {
+    this.mobileMenuOpen.set(false);
   }
 
   closeDropdown(): void {
