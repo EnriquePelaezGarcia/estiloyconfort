@@ -57,8 +57,9 @@
       font-size: 0.9rem;
     }
 
+    // Tarjeta ~20% más baja (a prueba). Valor anterior: 1rem.
     &--card &__amount--main {
-      font-size: 1rem;
+      font-size: 0.92rem;
     }
 
     // El bloque de 6 MSI se lleva dos renglones que en la tarjeta hacen falta

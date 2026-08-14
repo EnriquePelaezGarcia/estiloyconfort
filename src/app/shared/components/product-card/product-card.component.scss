@@ -61,10 +61,11 @@
     aspect-ratio: 4 / 3;
     background: v.$color-bg;
 
-    // En teléfono la foto manda: en vertical ocupa ~3/4 del alto de la tarjeta
-    // y a la información le queda el resto.
+    // En teléfono la foto manda: en vertical ocupa la mayor parte del alto de
+    // la tarjeta y a la información le queda el resto.
+    // Tarjeta ~20% más baja (a prueba). Valor anterior: 3 / 4.
     @media (max-width: v.$bp-tablet) {
-      aspect-ratio: 3 / 4;
+      aspect-ratio: 1 / 1.05;
     }
   }
 
@@ -231,11 +232,12 @@
       &:hover { color: v.$color-primary; }
     }
 
+    // Tarjeta ~20% más baja (a prueba). Valores anteriores: 0.82rem / 2.6em.
     @media (max-width: v.$bp-tablet) {
-      font-size: 0.82rem;
+      font-size: 0.78rem;
       font-weight: 500;
       line-height: 1.3;
-      min-height: 2.6em;
+      min-height: 2.4em;
     }
   }
 
@@ -264,14 +266,15 @@
       border: none;
     }
 
+    // Tarjeta ~20% más baja (a prueba). Valores anteriores: 6px / 0.72rem.
     @media (max-width: v.$bp-tablet) {
       gap: 2px;
       padding-top: v.$spacing-xs;
 
       a,
       button {
-        padding: 6px v.$spacing-sm;
-        font-size: 0.72rem;
+        padding: 4px v.$spacing-sm;
+        font-size: 0.68rem;
       }
     }
   }

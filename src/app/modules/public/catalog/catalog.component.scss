@@ -93,14 +93,16 @@
 
     @media (max-width: v.$bp-tablet) {
       display: block;
-      flex: 0 0 42%;
+      // 46%: con menos, "Todas las categorías" se cortaba en el ancho de un
+      // teléfono y el control mostraba "Todas las categ…".
+      flex: 0 0 46%;
       min-width: 0;
       // `appearance: none` quita el recuadro gris nativo del sistema; a cambio
       // hay que dibujar la flecha, que va como SVG de fondo (no como imagen
       // externa) para no pedir un archivo extra.
       appearance: none;
       -webkit-appearance: none;
-      padding: v.$spacing-sm 1.75rem v.$spacing-sm v.$spacing-md;
+      padding: v.$spacing-sm 1.5rem v.$spacing-sm 0.9rem;
       border: 1px solid v.$color-border;
       border-radius: v.$radius-full;
       background-color: v.$color-surface;
@@ -109,7 +111,7 @@
       background-position: right 0.7rem center;
       background-size: 10px 7px;
       font-family: v.$font-body;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 500;
       line-height: 1.2;
       color: v.$color-text;

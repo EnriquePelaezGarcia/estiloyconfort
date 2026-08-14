@@ -30,15 +30,37 @@
     </div>
   </div>
   <div class="categories__grid">
-    @for (cat of categories; track cat.label) {
-      <a href="#" class="category-item">
+    @for (cat of categories(); track cat.id) {
+      <a
+        routerLink="/catalogo"
+        [queryParams]="{ categoria: cat.slug }"
+        class="category-item"
+        [attr.aria-label]="'Ver productos de ' + cat.name"
+      >
         <div class="category-item__ring">
           <div class="category-item__img-wrap">
-            <img [src]="cat.image" [alt]="cat.label" loading="lazy" />
+            @if (cat.image_url) {
+              <img [src]="cat.image_url" [alt]="cat.name" loading="lazy" />
+            } @else {
+              <div class="category-item__fallback">
+                <span class="material-symbols-outlined">chair</span>
+              </div>
+            }
           </div>
         </div>
-        <span class="category-item__label">{{ cat.label }}</span>
+        <span class="category-item__label">{{ cat.name }}</span>
       </a>
+    } @empty {
+      @if (categoriesLoading()) {
+        @for (i of [1, 2, 3, 4, 5]; track i) {
+          <div class="category-item category-item--skeleton">
+            <div class="category-item__ring">
+              <div class="category-item__img-wrap"></div>
+            </div>
+            <span class="category-item__label-skeleton"></span>
+          </div>
+        }
+      }
     }
   </div>
 </section>
