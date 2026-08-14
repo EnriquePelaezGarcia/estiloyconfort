@@ -1,5 +1,15 @@
 @use '../../../../../styles/variables' as vars;
 
+// Label + botón de ayuda en la misma línea. `.field label` global es
+// `display: block`, así que aquí se pisa ese margen y lo hereda la fila.
+.field__label-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.35rem;
+
+  label { margin-bottom: 0; }
+}
+
 .step2-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -125,6 +135,16 @@
       border-color: vars.$color-primary;
       box-shadow: 0 0 0 1px vars.$color-primary;
     }
+
+    // "Recoge en tienda" cuando el carrito tiene piezas sobre pedido: se deja
+    // visible (con el motivo) en lugar de esconderla, para que el vendedor
+    // sepa que la opción existe y por qué hoy no aplica.
+    &--disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+
+      input[type='radio'] { cursor: not-allowed; }
+    }
   }
 
   &__option-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -137,6 +157,32 @@
 // Aviso cuando el carrito tiene piezas agotadas/sobre pedido: reemplaza el
 // selector Tentativa/Exacta — no hay opción de horario que ofrecer.
 // Mismo ámbar que el aviso de piezas apartadas (order-detail .reserved-box).
+// El selector de modo abre el panel de Entrega: sin margen superior y sin la
+// separación que sí necesita el bloque de horario, que va más abajo.
+.delivery-mode {
+  margin-top: 0;
+  margin-bottom: vars.$spacing-md;
+
+  .schedule__options { margin-bottom: 0; }
+}
+
+// Recoge en tienda: reemplaza todo el bloque de entrega a domicilio, así que
+// explica en una línea qué deja de cobrarse y en qué estado nace el pedido.
+.pickup-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: vars.$spacing-sm;
+  margin: 0;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-primary;
+  border-radius: vars.$radius-sm;
+  background: color-mix(in srgb, vars.$color-primary 8%, white);
+  font-size: 0.8125rem;
+  color: vars.$color-text;
+
+  .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-primary; }
+}
+
 .fabrication-notice {
   display: flex;
   align-items: flex-start;

@@ -45,6 +45,10 @@ export class PricingComponent implements OnInit {
     wholesale_min_qty: [DEFAULT_PRICING_CONFIG.wholesale_min_qty, [Validators.required, Validators.min(1)]],
     wholesale_price_includes_iva: [DEFAULT_PRICING_CONFIG.wholesale_price_includes_iva],
     min_margin_alert: [DEFAULT_PRICING_CONFIG.min_margin_alert, [Validators.required, Validators.min(0), Validators.max(100)]],
+    // Plazo de fabricación, uno solo para todo el catálogo
+    // (Docs/plan-disponibilidad-publica.md). min(1): un plazo de 0 días haría
+    // que el POS prometiera la pieza para hoy en algo que ni se ha empezado.
+    fabrication_days: [DEFAULT_PRICING_CONFIG.fabrication_days, [Validators.required, Validators.min(1), Validators.max(365)]],
   });
 
   protected readonly materials = this.materialsStore.active;
@@ -114,6 +118,7 @@ export class PricingComponent implements OnInit {
         wholesale_min_qty: v.wholesale_min_qty ?? DEFAULT_PRICING_CONFIG.wholesale_min_qty,
         wholesale_price_includes_iva: v.wholesale_price_includes_iva ? 1 : 0,
         min_margin_alert: v.min_margin_alert ?? DEFAULT_PRICING_CONFIG.min_margin_alert,
+        fabrication_days: v.fabrication_days ?? DEFAULT_PRICING_CONFIG.fabrication_days,
       });
     });
 

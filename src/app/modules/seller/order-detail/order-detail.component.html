@@ -18,6 +18,11 @@
       <p class="page-head__sub">
         <span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span>
         <span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span>
+        @if (o.pickupInStore) {
+          <span class="badge badge--pickup">
+            <span class="material-symbols-outlined">storefront</span> Recoge en tienda
+          </span>
+        }
       </p>
     </div>
     <div class="head-actions no-print">
@@ -46,13 +51,35 @@
           <span class="material-symbols-outlined">handyman</span> Quitar armado
         </button>
       }
-      @if (o.orderStatus !== 'cancelled' && o.orderStatus !== 'delivered') {
+      <!--
+        Un pickup nace 'delivered', así que sin la excepción no habría forma de
+        cancelarlo cuando el cliente regresa el mueble (D9). El backend siempre
+        permitió cancelar un entregado; era el botón el que faltaba.
+      -->
+      @if (o.orderStatus !== 'cancelled' && (o.orderStatus !== 'delivered' || o.pickupInStore)) {
         <button type="button" class="btn btn--danger" (click)="cancelModalOpen.set(true)">
-          <span class="material-symbols-outlined">cancel</span> Cancelar
+          <span class="material-symbols-outlined">cancel</span>
+          {{ o.pickupInStore && o.orderStatus === 'delivered' ? 'Cancelar / devolución' : 'Cancelar' }}
         </button>
       }
     </div>
   </header>
+
+  <!--
+    D6 — el pickup se entregó al crearse, pero el cobro se registra por el flujo
+    normal. Si quedó saldo, el mueble ya salió de la tienda sin pago anotado.
+  -->
+  @if (pickupUnpaid()) {
+    <div class="banner banner--error no-print">
+      <span class="material-symbols-outlined">error</span>
+      <span>
+        <strong>Entregado sin cobro registrado.</strong>
+        El cliente se llevó el mueble y quedan
+        {{ (o.totalAmount - o.paymentAmount) | currency:'MXN':'symbol-narrow':'1.2-2' }}
+        sin registrar. Registra el pago abajo.
+      </span>
+    </div>
+  }
 
   <div class="detail-grid">
     <!-- Items -->
@@ -173,6 +200,13 @@
         } @else {
           <div class="totals__row"><span>{{ isCredit() ? 'Precio a crédito' : 'Total' }}</span><span class="totals__amount">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         }
+        <!-- Referencia, nunca otro total con el mismo peso: el número de arriba
+             es el que se cobra a crédito. -->
+        @if (cashEquivalent(); as cash) {
+          <p class="cash-equivalent">
+            Equivale a {{ cash | currency:'MXN':'symbol-narrow':'1.2-2' }} de contado
+          </p>
+        }
         <div class="totals__row"><span>Pagado</span><span>{{ o.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
         <div class="totals__row totals__row--balance"><span>Saldo</span><span>{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
       </div>
@@ -216,30 +250,37 @@
         <div><dt>Cliente</dt><dd>{{ o.customerName }}</dd></div>
         @if (o.customerEmail) { <div><dt>Email</dt><dd>{{ o.customerEmail }}</dd></div> }
         @if (o.customerPhone) { <div><dt>Teléfono</dt><dd>{{ o.customerPhone }}</dd></div> }
-        @if (o.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ o.deliveryAddress }}</dd></div> }
-        <div><dt>Envío</dt><dd>{{ deliveryLabel(o.deliveryType) }}</dd></div>
+        @if (o.pickupInStore) {
+          <!-- Recoge en tienda: no hay dirección, ruta ni horario que mostrar. -->
+          <div><dt>Entrega</dt><dd>Recogido en tienda por el cliente</dd></div>
+        } @else {
+          @if (o.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ o.deliveryAddress }}</dd></div> }
+          <div><dt>Envío</dt><dd>{{ deliveryLabel(o.deliveryType) }}</dd></div>
+        }
         @if (o.assemblyService) {
           <div><dt>Armado</dt><dd>Piso {{ o.assemblyFloors ?? 0 }} · {{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
         }
         <div><dt>Condición de venta</dt><dd>{{ schemeLabel(o.paymentMethod) }}</dd></div>
         <div><dt>Fecha</dt><dd>{{ o.orderDate | date:'dd/MM/yyyy HH:mm' }}</dd></div>
         <!-- Entrega (Docs/plan-fecha-hora-entrega.md §6.6). -->
-        <div>
-          <dt>Entrega</dt>
-          <dd>
-            @if (o.expectedDeliveryDate) {
-              {{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}
-              @if (deliveryWindow(); as win) {
-                · @if (o.deliveryCommitment === 'tentative') { aprox. }{{ win }}
+        @if (!o.pickupInStore) {
+          <div>
+            <dt>Entrega</dt>
+            <dd>
+              @if (o.expectedDeliveryDate) {
+                {{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}
+                @if (deliveryWindow(); as win) {
+                  · @if (o.deliveryCommitment === 'tentative') { aprox. }{{ win }}
+                }
+              } @else {
+                Sin fecha definida
               }
-            } @else {
-              Sin fecha definida
-            }
-            @if (o.deliveryCommitment === 'exact') {
-              <span class="tag-exact">EXACTA</span>
-            }
-          </dd>
-        </div>
+              @if (o.deliveryCommitment === 'exact') {
+                <span class="tag-exact">EXACTA</span>
+              }
+            </dd>
+          </div>
+        }
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
         @if (o.notasFabricante) { <div class="no-print"><dt>Notas fabricante</dt><dd>{{ o.notasFabricante }}</dd></div> }
         @if (o.notasPedido) { <div><dt>Notas del pedido</dt><dd>{{ o.notasPedido }}</dd></div> }
@@ -308,7 +349,15 @@
       <div class="sale-ticket__row"><span>Le atendió</span><span>{{ o.sellerName }}</span></div>
     }
     <div class="sale-ticket__row"><span>Condición</span><span>{{ schemeLabel(o.paymentMethod) }}</span></div>
-    @if (o.expectedDeliveryDate) {
+    @if (o.pickupInStore) {
+      <!--
+        El pickup lleva fecha de hoy sellada por el backend, pero imprimir
+        "Entrega (estimada) <hoy>" en el ticket de alguien que ya se llevó el
+        mueble no dice nada — y el aviso de "coordinamos por WhatsApp" sería
+        directamente falso.
+      -->
+      <div class="sale-ticket__row"><span>Entrega</span><span>Recogido en tienda</span></div>
+    } @else if (o.expectedDeliveryDate) {
       <div class="sale-ticket__row">
         <span>{{ isExactCommitment() ? 'Entrega (EXACTA)' : 'Entrega (estimada)' }}</span>
         <span>
@@ -351,9 +400,19 @@
     @if (isWholesale() && !wholesalePriceIncludesIva()) {
       <div class="sale-ticket__row"><span>IVA</span><span>{{ wholesaleIvaAmount() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
     }
+    @if (isCredit() && o.cashTotal != null) {
+      <div class="sale-ticket__row"><span>Productos (contado)</span><span>{{ o.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
+      <div class="sale-ticket__row">
+        <span>Interés crédito</span>
+        <span>{{ (o.totalAmount - shippingCost() - assemblyCost() - o.cashTotal) | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+    }
     <div class="sale-ticket__row sale-ticket__row--total">
       <span>TOTAL</span><span>{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
     </div>
+    @if (cashEquivalent(); as cash) {
+      <p class="sale-ticket__equiv">Equivale a {{ cash | currency:'MXN':'symbol-narrow':'1.2-2' }} de contado</p>
+    }
     <div class="sale-ticket__row"><span>Pagado</span><span>{{ o.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
     <div class="sale-ticket__row sale-ticket__row--balance">
       <span>SALDO</span><span>{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
@@ -517,8 +576,19 @@
   <div class="modal-backdrop no-print">
     <div class="modal modal--sm">
       <div class="modal__body">
-        <h2 class="panel__title">¿Cancelar este pedido?</h2>
-        <p class="muted">Esta acción marcará el pedido como cancelado.</p>
+        <h2 class="panel__title">
+          {{ order()?.pickupInStore ? '¿Registrar la devolución?' : '¿Cancelar este pedido?' }}
+        </h2>
+        <p class="muted">
+          Esta acción marcará el pedido como cancelado y devolverá los muebles al inventario.
+        </p>
+        @if ((order()?.paymentAmount ?? 0) > 0) {
+          <!-- D9: el movimiento del dinero es manual; aquí solo queda el rastro. -->
+          <p class="strong">
+            Se anotará un reembolso pendiente al cliente de
+            {{ order()?.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}.
+          </p>
+        }
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="cancelModalOpen.set(false)">No</button>
           <button type="button" class="btn btn--danger" (click)="confirmCancel()">Sí, cancelar</button>

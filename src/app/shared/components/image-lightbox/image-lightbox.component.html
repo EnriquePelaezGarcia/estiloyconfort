@@ -1,0 +1,8 @@
+<div class="modal-backdrop" (click)="closed.emit()">
+  <div class="lightbox" (click)="$event.stopPropagation()">
+    <button type="button" class="icon-btn lightbox__close" (click)="closed.emit()" aria-label="Cerrar">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+    <img class="lightbox__img" [src]="src()" [alt]="alt()" />
+  </div>
+</div>

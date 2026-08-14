@@ -59,7 +59,8 @@ export class CartService {
               quantity,
               variantSelections,
               variantPriceModifier,
-              availabilityDays: product.availability_days,
+              // Foto del momento en que se agregó, del material de ESTA línea.
+              inStock: (materialPrice?.available_quantity ?? 0) > 0,
             } satisfies CartItem,
           ];
       return { items, updatedAt: new Date().toISOString() };
@@ -139,7 +140,16 @@ export class CartService {
       if (!raw) return this.emptyCart();
       const { cart, expiry } = JSON.parse(raw) as { cart: Cart; expiry: number };
       if (Date.now() > expiry) { localStorage.removeItem(CART_KEY); return this.emptyCart(); }
-      return cart;
+      // Un carrito guardado antes de este cambio trae `availabilityDays` y no
+      // `inStock`; sin normalizar aquí, `inStock` llegaría undefined y todas
+      // esas líneas se pintarían "Sobre pedido" aunque haya piezas en bodega.
+      // Se degrada a `true` = no mostrar aviso: quedarse callado es preferible
+      // a inventarle al cliente una demora que no existe. Se corrige solo en
+      // cuanto vuelve a agregar el producto.
+      return {
+        ...cart,
+        items: (cart.items ?? []).map((i) => ({ ...i, inStock: i.inStock ?? true })),
+      };
     } catch { return this.emptyCart(); }
   }
 

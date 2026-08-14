@@ -8,12 +8,16 @@ import { QuotesService } from '../../../../core/services/quotes.service';
 import { ShippingService } from '../../../../core/services/shipping.service';
 import { PricingService } from '../../../../core/services/pricing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
+import { addBusinessDays } from '../../../../core/utils/business-days';
+import { availableOf, reservationsTooltip } from '../../../../core/utils/stock-availability';
 import {
   AssemblyRates, InventoryItem, InventoryMaterialPrice, SaleScheme,
 } from '../../../../core/models/order.model';
 import { CreateQuoteRequest, Quote } from '../../../../core/models/quote.model';
 import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
+import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
 
 /**
  * Línea de la cotización. Igual que el `CartLine` del POS: el material y el
@@ -48,7 +52,7 @@ function formatPhoneDigits(raw: string): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-create.component.html',
   styleUrl: './quote-create.component.scss',
-  imports: [ReactiveFormsModule, CurrencyPipe],
+  imports: [ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent],
 })
 export class QuoteCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -77,6 +81,15 @@ export class QuoteCreateComponent implements OnInit {
     customerName: ['', [Validators.required, Validators.minLength(3)]],
     customerPhone: ['', [Validators.required, Validators.pattern(/^\d{3} \d{3} \d{4}$/)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
+    /**
+     * Recoge en tienda (Docs/plan-recoge-en-tienda.md D4): se cotiza sin envío
+     * ni armado, y el flag viaja al pedido cuando la cotización se convierte.
+     * A diferencia del POS aquí NO se valida stock: una cotización vive varios
+     * días hábiles y el stock de hoy no dice nada del día de la conversión.
+     * Esa validación es dura al crear el pedido, que es cuando se toca el
+     * inventario.
+     */
+    pickupInStore: [false],
     assemblyService: [false],
     assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
   });
@@ -138,7 +151,14 @@ export class QuoteCreateComponent implements OnInit {
   // ===== Envío por CP (mismo mecanismo que el POS) =====
   protected shippingCp = signal('');
   protected shippingQuote = signal<ShippingQuote | null>(null);
-  protected shippingCost = computed(() => this.shippingQuote()?.price ?? 0);
+  /** RN-P2: si el cliente recoge en tienda no hay envío que cotizar. */
+  protected shippingCost = computed(() => (this.isPickup() ? 0 : this.shippingQuote()?.price ?? 0));
+
+  // ===== Recoge en tienda =====
+  private pickupSig = toSignal(this.form.controls.pickupInStore.valueChanges, {
+    initialValue: this.form.controls.pickupInStore.value,
+  });
+  protected isPickup = computed(() => !!this.pickupSig());
 
   // ===== Servicio de armado =====
   protected assemblyRates = signal<AssemblyRates | null>(null);
@@ -152,9 +172,10 @@ export class QuoteCreateComponent implements OnInit {
   protected assemblyFloorsValue = computed(() =>
     Math.max(0, Math.trunc(Number(this.assemblyFloorsSig())) || 0),
   );
+  /** RN-P2: el armado es un servicio a domicilio — en pickup no aplica. */
   protected assemblyCost = computed(() => {
     const rates = this.assemblyRates();
-    if (!this.hasAssembly() || !rates) return 0;
+    if (this.isPickup() || !this.hasAssembly() || !rates) return 0;
     return rates.base + this.assemblyFloorsValue() * rates.perFloor;
   });
 
@@ -162,6 +183,36 @@ export class QuoteCreateComponent implements OnInit {
   protected lineMaterialPrice(line: QuoteLine): InventoryMaterialPrice | null {
     return line.product.materialPrices.find((mp) => mp.materialId === line.materialId) ?? null;
   }
+
+  /**
+   * Piezas realmente libres del material de esta línea: stock menos lo
+   * apartado. Antes esta pantalla leía `stockQuantity` a pelo y contradecía al
+   * Punto de venta — con 3 en bodega y 3 apartadas, el POS decía "Agotado" y
+   * aquí salía "3 disponibles" (Docs/plan-disponibilidad-publica.md, anexo).
+   *
+   * Cotizar sigue sin apartar nada (D4/D8): esto solo corrige el número que se
+   * muestra. Y justo porque no aparta, el disponible es el número honesto: lo
+   * que quedaría libre si el cliente dijera que sí.
+   */
+  protected lineAvailableQuantity(line: QuoteLine): number {
+    const mp = this.lineMaterialPrice(line);
+    return mp ? availableOf(mp) : 0;
+  }
+
+  /** Tooltip "quién tiene apartado esto" — mismo helper que el POS. */
+  protected reservationsTooltip(mp: InventoryMaterialPrice): string {
+    return reservationsTooltip(mp);
+  }
+
+  /**
+   * Fecha estimada en que estaría lista una pieza a fabricar. Mismo criterio
+   * que el POS: se muestra la fecha, no el plazo, porque es lo que el vendedor
+   * le va a decir al cliente.
+   */
+  protected fabricationEta = computed(() =>
+    addBusinessDays(new Date(), this.pricingConfig().fabrication_days)
+      .toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }),
+  );
 
   /**
    * Precio unitario según la condición de venta elegida — misma tabla de
@@ -211,6 +262,23 @@ export class QuoteCreateComponent implements OnInit {
           floors.disable();
         }
       });
+
+    // Recoge en tienda: caen el armado y las condiciones que no caben en una
+    // venta que el cliente se lleva en el momento (RN-P2/RN-P3).
+    this.form.controls.pickupInStore.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((pickup) => {
+        if (!pickup) return;
+        if (this.form.controls.assemblyService.value) {
+          this.form.controls.assemblyService.setValue(false);
+        }
+        if (!PICKUP_PAYMENT_METHODS.includes(this.form.controls.paymentMethod.value as SaleScheme)) {
+          this.form.controls.paymentMethod.setValue('cash');
+          this.notification.info(
+            'Recoge en tienda solo admite pago completo: la condición de venta cambió a Contado.',
+          );
+        }
+      });
   }
 
   ngOnInit(): void {
@@ -231,6 +299,7 @@ export class QuoteCreateComponent implements OnInit {
           wholesale_enabled: data.wholesaleEnabled ? 1 : 0,
           wholesale_min_qty: data.wholesaleMinQty,
           wholesale_price_includes_iva: data.wholesalePriceIncludesIva ? 1 : 0,
+          fabrication_days: data.fabricationDays,
         }),
       error: () => {},
     });
@@ -254,6 +323,7 @@ export class QuoteCreateComponent implements OnInit {
           customerName: quote.customerName,
           customerPhone: formatPhoneDigits(quote.customerPhone ?? ''),
           paymentMethod: quote.paymentMethod,
+          pickupInStore: !!quote.pickupInStore,
           assemblyService: quote.assemblyService,
           assemblyFloors: quote.assemblyFloors ?? 0,
         });
@@ -274,6 +344,7 @@ export class QuoteCreateComponent implements OnInit {
               name: it.productName,
               sku: it.productSku ?? '',
               availability_days: 0,
+              primaryImage: it.imageUrl ?? null,
               materialPrices: [
                 {
                   materialId: it.materialId,
@@ -428,9 +499,11 @@ export class QuoteCreateComponent implements OnInit {
       customerName: raw.customerName!.trim(),
       customerPhone: raw.customerPhone!.replace(/\D/g, ''),
       paymentMethod: raw.paymentMethod!,
-      shippingPostalCode: this.shippingCp() || null,
-      assemblyService: !!raw.assemblyService,
-      assemblyFloors: this.assemblyFloorsValue(),
+      // RN-P2: en pickup no hay CP que cotizar ni armado que sumar.
+      pickupInStore: this.isPickup(),
+      shippingPostalCode: this.isPickup() ? null : this.shippingCp() || null,
+      assemblyService: !this.isPickup() && !!raw.assemblyService,
+      assemblyFloors: this.isPickup() ? 0 : this.assemblyFloorsValue(),
       // El backend recalcula precio, envío y armado con las tarifas vigentes:
       // aquí solo viaja QUÉ se cotiza, no CUÁNTO cuesta.
       items: this.lines().map((l) => ({

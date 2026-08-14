@@ -63,10 +63,11 @@
               <button
                 type="button"
                 class="icon-btn"
+                [class.icon-btn--assigned]="!!o.deliveryPersonId"
                 (click)="openAssign(o)"
                 [disabled]="o.orderStatus === 'cancelled'"
-                aria-label="Asignar repartidor"
-                title="Asignar repartidor"
+                [attr.aria-label]="o.deliveryPersonId ? 'Repartidor asignado: ' + o.deliveryPersonName : 'Asignar repartidor'"
+                [title]="o.deliveryPersonId ? 'Repartidor asignado: ' + o.deliveryPersonName : 'Asignar repartidor'"
               >
                 <span class="material-symbols-outlined">assignment_ind</span>
               </button>

@@ -12,10 +12,10 @@
         <span class="material-symbols-outlined">chair</span>
       </div>
     }
-    @if (product().availability_days === 0) {
+    @if (product().in_stock) {
       <span class="product-card__badge product-card__badge--stock">Disponible</span>
     } @else {
-      <span class="product-card__badge product-card__badge--order">{{ product().availability_days }} días</span>
+      <span class="product-card__badge product-card__badge--order">Sobre pedido</span>
     }
     @if (product().is_featured) {
       <span class="product-card__badge product-card__badge--featured">Destacado</span>

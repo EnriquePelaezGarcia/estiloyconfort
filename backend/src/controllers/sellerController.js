@@ -4,6 +4,7 @@ const PricingConfig = require('../models/PricingConfig');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { calculateCredit } = require('../utils/pricingCalculator');
+const { isPickupWithinGrace } = require('../utils/pickup');
 const { pool } = require('../config/database');
 
 /**
@@ -137,17 +138,27 @@ const sellerController = {
   // 'pending' se edita libre. 'fabricating'/'ready' solo permiten cambiar
   // items de stock por otros de stock (los de fabricación deben llegar
   // intactos). 'in_delivery'/'delivered'/'cancelled' no se editan.
+  //
+  // Excepción: un "recoge en tienda" del mismo día se edita como si fuera
+  // 'pending' (Docs/plan-recoge-en-tienda.md D7). Nace en 'delivered', así que
+  // sin esta ventana quedaría cerrado desde el instante en que se crea.
   update: asyncHandler(async (req, res) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
     if (existing.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
 
-    if (['in_delivery', 'delivered', 'cancelled'].includes(existing.orderStatus)) {
+    const pickupGrace = isPickupWithinGrace(existing);
+    if (!pickupGrace && ['in_delivery', 'delivered', 'cancelled'].includes(existing.orderStatus)) {
       throw ApiError.badRequest('No se puede editar un pedido en esta etapa');
     }
 
+    // Dentro de la ventana, el pickup se trata como 'pending': si se le
+    // aplicara "solo stock por stock" el vendedor no podría corregir lo que
+    // acaba de capturar, que es justo para lo que existe la ventana.
+    const editsFreely = existing.orderStatus === 'pending' || pickupGrace;
+
     let bitacora = null;
-    if (existing.orderStatus !== 'pending' && Array.isArray(req.body.items)) {
+    if (!editsFreely && Array.isArray(req.body.items)) {
       bitacora = await validateStockOnlyChange(existing, req.body.items, req.user.id);
     }
 
@@ -160,7 +171,7 @@ const sellerController = {
 
     // D4: si el nuevo total quedó por debajo de lo ya cobrado, se anota el
     // saldo a favor del cliente; la devolución del dinero es manual.
-    if (existing.orderStatus !== 'pending' && Array.isArray(req.body.items)) {
+    if (!editsFreely && Array.isArray(req.body.items)) {
       const paid = Number(order.paymentAmount) || 0;
       if (order.totalAmount < paid) {
         const diff = (paid - order.totalAmount).toFixed(2);
@@ -215,6 +226,10 @@ const sellerController = {
         wholesaleEnabled: Number(config.wholesale_enabled) === 1,
         wholesaleMinQty: Number(config.wholesale_min_qty),
         wholesalePriceIncludesIva: Number(config.wholesale_price_includes_iva) === 1,
+        // Plazo de fabricación (días hábiles) para la fecha estimada que el POS
+        // y las cotizaciones muestran en las líneas sin existencia. Va por aquí
+        // y no por /admin/pricing-config porque esa ruta es solo de admin.
+        fabricationDays: Number(config.fabrication_days),
       },
     });
   }),
@@ -257,12 +272,19 @@ const sellerController = {
                 WHERE product_id = p.id ORDER BY is_primary DESC, order_display LIMIT 1) AS primary_image,
               pm.material_id, mat.code, mat.label, mat.color_policy, mat.fixed_color,
               pm.stock_quantity,
-              mp.price_cash, mp.price_6msi, mp.price_mayoreo, mp.base_cost
+              mp.price_cash, mp.price_6msi, mp.price_mayoreo, mp.base_cost,
+              -- Popularidad del buscador: pedidos + cotizaciones de los
+              -- últimos 3 meses. La definición vive en la vista
+              -- product_popularity (schema_product_popularity_view.sql), que
+              -- comparte con el catálogo público — antes estaba incrustada
+              -- aquí y duplicarla habría dejado dos criterios que mantener.
+              COALESCE(pop.popularity_count, 0) AS popularity_count
        FROM products p
        JOIN product_materials pm ON pm.product_id = p.id AND pm.is_active = TRUE
        JOIN materials mat ON mat.id = pm.material_id
        LEFT JOIN product_material_prices mp ON mp.product_id = pm.product_id AND mp.material_id = pm.material_id
-       ${where} ORDER BY p.name, mat.sort_order LIMIT 300`,
+       LEFT JOIN product_popularity pop ON pop.product_id = p.id
+       ${where} ORDER BY popularity_count DESC, p.name ASC, mat.sort_order LIMIT 300`,
       params,
     );
 

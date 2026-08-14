@@ -19,7 +19,13 @@ export interface CartItem {
   quantity: number;
   variantSelections: CartVariantSelection;
   variantPriceModifier: number;
-  availabilityDays: number;
+  /**
+   * ¿Había pieza libre (stock − apartado) en ESTE material al agregar la línea?
+   * Reemplaza al viejo `availabilityDays`, que era un plazo fijo capturado a
+   * mano y sin relación con el inventario. Los carritos guardados de antes no
+   * lo traen: `loadFromStorage()` los normaliza a `true` (ver ahí el porqué).
+   */
+  inStock: boolean;
 }
 
 export interface Cart {

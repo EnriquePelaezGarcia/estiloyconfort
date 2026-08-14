@@ -25,6 +25,8 @@ export interface QuoteItem {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  /** Foto principal vigente del producto; null si no tiene ninguna cargada. */
+  imageUrl?: string | null;
 }
 
 export interface Quote {
@@ -39,6 +41,8 @@ export interface Quote {
   shippingPostalCode?: string | null;
   shippingCost: number;
   shippingZoneLabel?: string | null;
+  /** Recoge en tienda: se cotiza sin envío ni armado (Docs/plan-recoge-en-tienda.md). */
+  pickupInStore?: boolean;
   assemblyService: boolean;
   assemblyFloors: number;
   assemblyCost: number;
@@ -78,6 +82,8 @@ export interface PublicQuote {
   shippingPostalCode?: string | null;
   shippingCost: number;
   shippingZoneLabel?: string | null;
+  /** Recoge en tienda: la vista pública lo muestra en lugar del envío. */
+  pickupInStore?: boolean;
   assemblyService: boolean;
   assemblyFloors: number;
   assemblyCost: number;
@@ -101,6 +107,8 @@ export interface CreateQuoteRequest {
   customerPhone: string;
   paymentMethod: SaleScheme;
   shippingPostalCode?: string | null;
+  /** Recoge en tienda: el backend ignora CP y armado, y solo admite pago completo. */
+  pickupInStore?: boolean;
   assemblyService?: boolean;
   assemblyFloors?: number;
   items: Array<{

@@ -34,6 +34,8 @@ export interface PublicTicket {
   sellerName: string | null;
 
   deliveryType: DeliveryType;
+  /** Recoge en tienda: el ticket lo muestra en lugar de la dirección de entrega. */
+  pickupInStore?: boolean;
   deliveryAddress: string | null;
   expectedDeliveryDate: string | null;
   /** Ver DeliveryCommitment. Los pedidos anteriores a la migración son 'tentative'. */

@@ -30,6 +30,19 @@
       <section class="items">
         @for (it of q.items; track $index) {
           <div class="item">
+            @if (it.imageUrl; as img) {
+              <img
+                class="item__thumb item__thumb--zoomable"
+                [src]="img"
+                [alt]="it.productName"
+                loading="lazy"
+                (click)="zoomedImage.set(img)"
+              />
+            } @else {
+              <span class="item__thumb item__thumb--empty">
+                <span class="material-symbols-outlined">chair</span>
+              </span>
+            }
             <div class="item__info">
               <span class="item__name">{{ it.productName }}</span>
               <span class="item__detail">
@@ -60,7 +73,13 @@
           </div>
         }
 
-        @if (q.shippingPostalCode) {
+        @if (q.pickupInStore) {
+          <!-- Recoge en tienda: el cliente pasa por el mueble, no hay envío. -->
+          <div class="totals__row">
+            <span>Recoge en tienda</span>
+            <span class="totals__free">SIN ENVÍO</span>
+          </div>
+        } @else if (q.shippingPostalCode) {
           <div class="totals__row">
             <span>
               Envío
@@ -94,6 +113,14 @@
             {{ (q.totalAmount + (q.wholesaleIva ?? 0)) | currency:'MXN':'symbol-narrow':'1.2-2' }}
           </span>
         </div>
+
+        <!-- Referencia, nunca otro "total" con el mismo peso: el número
+             grande de arriba es el que se paga a crédito. -->
+        @if (q.paymentMethod === 'store_credit' && q.cashTotal != null) {
+          <p class="cash-equivalent">
+            Equivale a {{ (q.cashTotal + q.shippingCost + q.assemblyCost) | currency:'MXN':'symbol-narrow':'1.2-2' }} de contado
+          </p>
+        }
       </section>
 
       <!-- Plan de pagos: lo que el cliente a crédito pregunta de inmediato. -->
@@ -158,5 +185,9 @@
         </p>
       </footer>
     </article>
+  }
+
+  @if (zoomedImage(); as img) {
+    <app-image-lightbox [src]="img" [alt]="'Foto del producto'" (closed)="zoomedImage.set(null)" />
   }
 </div>

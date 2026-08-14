@@ -71,6 +71,30 @@
 
   &--alert { background: color-mix(in srgb, #dc2626 6%, white); }
 
+  // Mismo tratamiento que .result__thumb (buscador): cuadrada, `cover`,
+  // placeholder de silla cuando el producto no tiene foto cargada.
+  &__thumb {
+    flex-shrink: 0;
+    align-self: flex-start;
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+
+    &--empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .material-symbols-outlined {
+        font-size: 1.3rem;
+        color: vars.$color-text-secondary;
+      }
+    }
+  }
+
   &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   &__name { font-weight: 600; font-size: 0.88rem; }
   &__price { font-size: 0.78rem; color: vars.$color-text-secondary; }

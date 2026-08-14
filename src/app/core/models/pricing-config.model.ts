@@ -33,7 +33,11 @@ export type PricingConfigKey =
   // suma al facturar.
   | 'wholesale_price_includes_iva'
   // Umbral visual del semáforo de utilidades. No bloquea nada.
-  | 'min_margin_alert';
+  | 'min_margin_alert'
+  // Plazo de fabricación en días HÁBILES cuando un mueble no tiene existencia
+  // (Docs/plan-disponibilidad-publica.md). Uno solo para todo el catálogo.
+  // Solo lo ve el vendedor; el cliente ve "Sobre pedido", sin plazos.
+  | 'fabrication_days';
 
 /** Mapa key -> valor usado por el calculador de precios. */
 export type PricingConfigMap = Record<PricingConfigKey, number>;
@@ -53,6 +57,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   wholesale_min_qty: 6,
   wholesale_price_includes_iva: 0,
   min_margin_alert: 20,
+  fabrication_days: 15,
 };
 
 export interface CalculatedPrices {
@@ -114,4 +119,10 @@ export interface CreditConfig {
   wholesaleMinQty: number;
   /** M13 — false (default): el precio de mayoreo es SIN IVA y se suma al facturar. */
   wholesalePriceIncludesIva: boolean;
+  /**
+   * Días HÁBILES de fabricación cuando la línea no tiene existencia
+   * (Docs/plan-disponibilidad-publica.md). El POS lo convierte en fecha
+   * estimada; nunca se le muestra al cliente en el catálogo.
+   */
+  fabricationDays: number;
 }

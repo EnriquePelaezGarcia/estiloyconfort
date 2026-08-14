@@ -103,6 +103,38 @@
 
       <div class="panel">
         <h2 class="panel__title">Envío y armado</h2>
+
+        <!--
+          Modo de entrega (Docs/plan-recoge-en-tienda.md §6.5). A diferencia del
+          POS aquí no se valida stock: la cotización vive días y no compromete
+          inventario; esa validación es dura al convertirla en pedido.
+        -->
+        <div class="schedule delivery-mode">
+          <span class="schedule__title">Modo de entrega</span>
+          <div class="schedule__options">
+            <label class="schedule__option">
+              <input type="radio" formControlName="pickupInStore" [value]="false" />
+              <span class="schedule__option-body">
+                <span class="schedule__option-name">Envío a domicilio</span>
+                <span class="schedule__option-hint">Se cotiza el envío por código postal.</span>
+              </span>
+            </label>
+            <label class="schedule__option">
+              <input type="radio" formControlName="pickupInStore" [value]="true" />
+              <span class="schedule__option-body">
+                <span class="schedule__option-name">Recoge en tienda</span>
+                <span class="schedule__option-hint">Sin costo de envío ni armado.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        @if (isPickup()) {
+          <p class="pickup-notice">
+            <span class="material-symbols-outlined">storefront</span>
+            El cliente recoge en tienda: se cotiza sin envío ni armado.
+          </p>
+        } @else {
         <div class="field">
           <label for="shippingCp">Código postal de entrega</label>
           <input
@@ -145,7 +177,15 @@
 
           @if (hasAssembly()) {
             <div class="field">
-              <label for="assemblyFloors">Piso de entrega</label>
+              <div class="field__label-row">
+                <label for="assemblyFloors">Piso de entrega</label>
+                <app-help-image-popover
+                  imageSrc="/help/pisos-entrega.jpeg"
+                  imageAlt="Cómo se cuentan los pisos de entrega"
+                  title="¿Cómo se cuentan los pisos?"
+                  label="Cómo se cuentan los pisos de entrega"
+                />
+              </div>
               <input id="assemblyFloors" type="number" formControlName="assemblyFloors" min="0" step="1" />
               <p class="field__hint">0 = planta baja (solo tarifa base).</p>
             </div>
@@ -161,6 +201,7 @@
             }
           }
         </div>
+        }
       </div>
     </div>
 
@@ -206,6 +247,13 @@
         } @else {
           @for (l of lines(); track l.product.id + '-' + l.materialId; let i = $index) {
             <div class="cart-line" [class.cart-line--alert]="unitPrice(l) === null">
+              @if (l.product.primaryImage) {
+                <img class="cart-line__thumb" [src]="l.product.primaryImage" [alt]="l.product.name" loading="lazy" />
+              } @else {
+                <span class="cart-line__thumb cart-line__thumb--empty">
+                  <span class="material-symbols-outlined">chair</span>
+                </span>
+              }
               <div class="cart-line__info">
                 <span class="cart-line__name">{{ l.product.name }}</span>
 
@@ -251,13 +299,19 @@
                 <!-- Piezas disponibles del material YA SELECCIONADO en esta línea: se
                      actualiza solo al cambiar el material (mismo dato que el precio). -->
                 @if (lineMaterialPrice(l); as stockMp) {
-                  @if (stockMp.stockQuantity > 0) {
+                  @if (lineAvailableQuantity(l) > 0) {
                     <span class="cart-line__stock cart-line__stock--available">
-                      {{ stockMp.stockQuantity }} disponibles
+                      {{ lineAvailableQuantity(l) }} disponibles
+                      @if ((stockMp.reservedQuantity ?? 0) > 0) {
+                        · {{ stockMp.reservedQuantity }} apartada(s)
+                        @if (stockMp.reservations?.length) {
+                          <span class="cart-line__reserved-detail" [title]="reservationsTooltip(stockMp)">ⓘ</span>
+                        }
+                      }
                     </span>
                   } @else {
                     <span class="cart-line__stock cart-line__stock--out">
-                      Agotado — se fabrica ({{ l.product.availability_days }} días)
+                      Agotado — se fabrica (listo aprox. {{ fabricationEta() }})
                     </span>
                   }
                 }
@@ -291,7 +345,15 @@
               </span>
               <span class="cart-total__amount">{{ productsTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
-            @if (shippingQuote(); as shipping) {
+            @if (isPickup()) {
+              <div class="shipping-row">
+                <span class="shipping-row__label">
+                  <span class="material-symbols-outlined">storefront</span>
+                  Recoge en tienda
+                </span>
+                <span class="shipping-row__free">SIN ENVÍO</span>
+              </div>
+            } @else if (shippingQuote(); as shipping) {
               <div class="shipping-row">
                 <span class="shipping-row__label">
                   <span class="material-symbols-outlined">local_shipping</span>
@@ -304,7 +366,7 @@
                 }
               </div>
             }
-            @if (hasAssembly()) {
+            @if (!isPickup() && hasAssembly()) {
               <div class="shipping-row">
                 <span class="shipping-row__label">
                   <span class="material-symbols-outlined">handyman</span>
@@ -322,6 +384,17 @@
               <span>Total</span>
               <span class="cart-total__amount">{{ grandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
+          }
+
+          <!-- Comparación de referencia, nunca otro "total" con el mismo peso:
+               el número grande es el que se cobra (a crédito); esto es solo
+               para que el vendedor ubique la diferencia contra contado. -->
+          @if (isCredit()) {
+            @if (creditQuote(); as credit) {
+              <p class="cash-equivalent">
+                Equivale a {{ (credit.cashTotal + shippingCost() + assemblyCost()) | currency:'MXN':'symbol-narrow':'1.2-2' }} de contado
+              </p>
+            }
           }
 
           <!-- M13: en mayoreo el precio de lista va sin IVA; se desglosa. -->
@@ -343,8 +416,8 @@
                   <span class="material-symbols-outlined">credit_score</span> Plan de Crédito en Tienda
                 </h3>
                 <div class="plan__row">
-                  <span>Precio de contado</span>
-                  <span class="strong">{{ credit.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  <span>Precio a crédito</span>
+                  <span class="strong">{{ credit.creditPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
                 </div>
                 <div class="plan__row plan__row--highlight">
                   <span>Pago inicial</span>

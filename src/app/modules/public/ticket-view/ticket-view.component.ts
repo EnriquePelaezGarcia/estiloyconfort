@@ -5,6 +5,7 @@ import { TicketsService } from '../../../core/services/tickets.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { PublicTicket } from '../../../core/models/ticket.model';
 import { DeliveryType, OrderStatus, SaleScheme } from '../../../core/models/order.model';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 /**
  * Fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6): nos deslindamos de
@@ -56,7 +57,7 @@ const DELIVERY_LABELS: Record<DeliveryType, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ticket-view.component.html',
   styleUrl: './ticket-view.component.scss',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent],
 })
 export class TicketViewComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -65,6 +66,9 @@ export class TicketViewComponent implements OnInit {
   protected loading = signal(true);
   protected ticket = signal<PublicTicket | null>(null);
   protected notFound = signal(false);
+
+  /** Foto de producto abierta en grande; null = lightbox cerrado. */
+  protected zoomedImage = signal<string | null>(null);
 
   protected isCredit = computed(() => this.ticket()?.paymentMethod === 'store_credit');
   protected isLayaway = computed(() => this.ticket()?.paymentMethod === 'layaway');
@@ -78,6 +82,25 @@ export class TicketViewComponent implements OnInit {
     const t = this.ticket();
     if (!t) return 0;
     return t.items.reduce((sum, it) => sum + it.subtotal, 0);
+  });
+
+  /**
+   * Interés del crédito en tienda: lo que separa el total a pagar del precio
+   * de contado. null (no se muestra la fila) si el pedido no es a crédito o
+   * es de antes de que se guardara el desglose.
+   */
+  protected creditInterest = computed(() => {
+    const t = this.ticket();
+    if (!t || !this.isCredit() || t.cashTotal == null) return null;
+    const interest = t.totalAmount - t.shippingCost - t.assemblyCost - t.cashTotal;
+    return interest > 0 ? interest : null;
+  });
+
+  /** Lo que costaría el mismo pedido de contado, envío y armado incluidos. */
+  protected cashEquivalent = computed(() => {
+    const t = this.ticket();
+    if (!t || !this.isCredit() || t.cashTotal == null) return null;
+    return t.cashTotal + t.shippingCost + t.assemblyCost;
   });
 
   /**

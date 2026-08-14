@@ -36,7 +36,15 @@ export interface Product {
   dimensions_width: number | null;
   dimensions_height: number | null;
   weight_volumetric: number | null;
+  /**
+   * @deprecated El plazo dejó de ser un dato por producto: vive en
+   * `pricing_config.fabrication_days` (Docs/plan-disponibilidad-publica.md).
+   * La columna sigue en la base como histórico y por si algún día un mueble
+   * tarda distinto, pero ninguna pantalla la lee.
+   */
   availability_days: number;
+  /** Catálogo público: hay AL MENOS UNA pieza libre (stock − apartado) en algún material. */
+  in_stock?: boolean;
   /** Override de cantidad mínima de mayoreo; NULL = usa el global (M12). */
   wholesale_min_qty: number | null;
   margin_percentage: number;
@@ -66,7 +74,10 @@ export interface MaterialPrices {
   label: string;
   color_policy: ColorPolicy;
   fixed_color: string | null;
+  /** Existencia física en bodega. Para saber qué ofrecer usa `available_quantity`. */
   stock_quantity: number;
+  /** = stock_quantity − apartado por reservas activas. Lo que la ficha anuncia como disponible. */
+  available_quantity: number;
   base_cost: number | null;
   price_cash: number | null;
   price_6msi: number | null;
@@ -163,7 +174,8 @@ export interface ProductFilters {
   featured?: boolean;
   page?: number;
   limit?: number;
-  sort?: 'price_asc' | 'price_desc' | 'name' | 'newest';
+  /** 'popular' = pedidos + cotizaciones de los últimos 3 meses (es el default). */
+  sort?: 'popular' | 'price_asc' | 'price_desc' | 'name' | 'newest';
 }
 
 /** Materiales declarados de un producto, con su existencia (M2 + M15). */

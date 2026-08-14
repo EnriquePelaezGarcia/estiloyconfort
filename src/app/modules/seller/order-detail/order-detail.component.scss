@@ -2,6 +2,26 @@
 
 .head-actions { display: flex; gap: vars.$spacing-sm; flex-wrap: wrap; }
 
+// Aviso de "entregado sin cobro registrado" (Docs/plan-recoge-en-tienda.md D6).
+// Mismo lenguaje visual que los banners del POS: rojo, icono a la izquierda.
+.banner {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  font-size: 0.85rem;
+
+  &--error {
+    border: 1px solid #dc2626;
+    background: color-mix(in srgb, #dc2626 8%, white);
+    color: vars.$color-text;
+
+    .material-symbols-outlined { color: #dc2626; }
+  }
+}
+
 // El verde de WhatsApp rompe la paleta a propósito (regla 4 del sistema):
 // señala "esto sale de la aplicación". No usarlo en ningún otro botón.
 .btn--whatsapp {
@@ -62,6 +82,15 @@
   }
 
   &__amount { font-weight: 700; color: vars.$color-primary; }
+
+  // Referencia contra contado del crédito: más chica que el total para que no
+  // se lea como un segundo monto a cobrar.
+  .cash-equivalent {
+    margin: -0.15rem 0 0.2rem;
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+    text-align: right;
+  }
 }
 
 .info {
@@ -258,6 +287,14 @@ $ticket-font: 'Courier New', monospace;
   &__legal {
     margin: 2px 0 0;
     text-align: center;
+    font-size: 7pt;
+  }
+
+  // Equivalencia a contado del crédito: renglón de referencia, más chico que
+  // el TOTAL impreso.
+  &__equiv {
+    margin: 1px 0 0;
+    text-align: right;
     font-size: 7pt;
   }
 }

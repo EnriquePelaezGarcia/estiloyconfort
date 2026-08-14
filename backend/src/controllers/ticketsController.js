@@ -46,6 +46,8 @@ module.exports = {
         sellerName: order.sellerName,
 
         deliveryType: order.deliveryType,
+        /** Recoge en tienda: el ticket muestra eso en lugar de la dirección. */
+        pickupInStore: order.pickupInStore,
         deliveryAddress: order.deliveryAddress,
         expectedDeliveryDate: order.expectedDeliveryDate,
         deliveryCommitment: order.deliveryCommitment,

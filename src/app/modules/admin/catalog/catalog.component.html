@@ -389,10 +389,10 @@
             <label for="stockAlertLevel">Alerta de stock total</label>
             <input id="stockAlertLevel" type="number" formControlName="stockAlertLevel" min="0" step="1" />
           </div>
-          <div class="field">
-            <label for="availabilityDays">Días de fabricación</label>
-            <input id="availabilityDays" type="number" formControlName="availabilityDays" min="0" step="1" />
-          </div>
+          <!-- "Días de fabricación" ya no se captura por producto: es uno solo
+               para todo el catálogo y vive en *Admin → Precios*
+               (Docs/plan-disponibilidad-publica.md). El control del formulario
+               se conserva para no perder el valor histórico al guardar. -->
           <div class="field">
             <label for="wholesaleMinQty">Mínimo de mayoreo</label>
             <input id="wholesaleMinQty" type="number" formControlName="wholesaleMinQty" min="1" step="1" placeholder="Usa el global" />

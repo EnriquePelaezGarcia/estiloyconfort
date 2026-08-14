@@ -3,6 +3,7 @@ import { CurrencyPipe } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
 import { OrderDraftStore } from '../order-draft.store';
 import { OrderSummaryComponent } from '../order-summary/order-summary.component';
+import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
 
 /**
  * Paso 2 — «Cliente y entrega»: datos del cliente, entrega, notas, y el
@@ -13,7 +14,7 @@ import { OrderSummaryComponent } from '../order-summary/order-summary.component'
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-step-customer.component.html',
   styleUrl: './order-step-customer.component.scss',
-  imports: [ReactiveFormsModule, CurrencyPipe, OrderSummaryComponent],
+  imports: [ReactiveFormsModule, CurrencyPipe, OrderSummaryComponent, HelpImagePopoverComponent],
 })
 export class OrderStepCustomerComponent {
   protected store = inject(OrderDraftStore);

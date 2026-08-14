@@ -29,6 +29,49 @@
 
     <div class="panel">
       <h2 class="panel__title">Entrega</h2>
+
+      <!--
+        Modo de entrega (Docs/plan-recoge-en-tienda.md §6.3). Va primero porque
+        decide si el resto del panel existe: en "Recoge en tienda" no hay
+        dirección, ni envío, ni armado, ni horario, ni repartidor.
+      -->
+      <div class="schedule delivery-mode">
+        <span class="schedule__title">Modo de entrega</span>
+        <div class="schedule__options">
+          <label class="schedule__option">
+            <input type="radio" formControlName="pickupInStore" [value]="false" />
+            <span class="schedule__option-body">
+              <span class="schedule__option-name">Envío a domicilio</span>
+              <span class="schedule__option-hint">Se entrega en el domicilio del cliente.</span>
+            </span>
+          </label>
+          <label class="schedule__option" [class.schedule__option--disabled]="!store.pickupAllowed()">
+            <input
+              type="radio"
+              formControlName="pickupInStore"
+              [value]="true"
+              [attr.disabled]="store.pickupAllowed() ? null : ''"
+            />
+            <span class="schedule__option-body">
+              <span class="schedule__option-name">Recoge en tienda</span>
+              <span class="schedule__option-hint">
+                @if (store.pickupAllowed()) {
+                  El cliente se lo lleva ahora. Sin costo de envío.
+                } @else {
+                  No disponible: el pedido tiene piezas sobre pedido o agotadas.
+                }
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      @if (store.isPickup()) {
+        <p class="pickup-notice">
+          <span class="material-symbols-outlined">storefront</span>
+          El cliente recoge en tienda. No se cobra envío ni armado, y el pedido se registra como entregado hoy.
+        </p>
+      } @else {
       <div class="field" [class.field--error]="store.form.controls.deliveryAddress.touched && store.form.controls.deliveryAddress.invalid">
         <label for="deliveryAddress">Dirección de entrega *</label>
         <textarea id="deliveryAddress" formControlName="deliveryAddress" placeholder="Calle, número, colonia, ciudad"></textarea>
@@ -99,7 +142,15 @@
 
         @if (store.hasAssembly()) {
           <div class="field">
-            <label for="assemblyFloors">Piso de entrega</label>
+            <div class="field__label-row">
+              <label for="assemblyFloors">Piso de entrega</label>
+              <app-help-image-popover
+                imageSrc="/help/pisos-entrega.jpeg"
+                imageAlt="Cómo se cuentan los pisos de entrega"
+                title="¿Cómo se cuentan los pisos?"
+                label="Cómo se cuentan los pisos de entrega"
+              />
+            </div>
             <input id="assemblyFloors" type="number" formControlName="assemblyFloors" min="0" step="1" />
             <p class="field__hint">0 = planta baja (solo tarifa base).</p>
           </div>
@@ -218,8 +269,14 @@
           <p class="field__hint">Opcional. Al asignarlo, el pedido pasa a "En entrega" y aparece en las entregas del repartidor.</p>
         }
       </div>
+      }
     </div>
 
+    <!--
+      Recoge en tienda: no hay fabricante al que instruir ni repartidor que lea
+      notas, y el cliente se lleva el mueble revisado en el momento.
+    -->
+    @if (!store.isPickup()) {
     <div class="panel">
       <h2 class="panel__title">Notas</h2>
       <div class="field">
@@ -240,6 +297,7 @@
         <p class="field__hint">Este texto se imprimirá en el ticket.</p>
       </div>
     </div>
+    }
   </form>
 
   <app-order-summary class="order-col" />

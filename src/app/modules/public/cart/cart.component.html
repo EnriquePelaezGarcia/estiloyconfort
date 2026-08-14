@@ -31,8 +31,8 @@
                   {{ item.name }}
                 </a>
                 <p class="cart-item__variants">{{ materialLabel(item) }}@if (variantLabel(item)) {, {{ variantLabel(item) }}}</p>
-                @if (item.availabilityDays > 0) {
-                  <span class="cart-item__lead">{{ item.availabilityDays }} días de fabricación</span>
+                @if (!item.inStock) {
+                  <span class="cart-item__lead">Sobre pedido</span>
                 }
               </div>
 

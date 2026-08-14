@@ -10,6 +10,7 @@ import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { DeliveryScheduleService, formatWindow } from '../../../core/services/delivery-schedule.service';
+import { isPickupWithinGrace } from '../../../core/utils/pickup';
 import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
 import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
 import { DeliveryCommitment, Order, OrderItem, OrderStatus, PaymentStatus, StockReservationReason } from '../../../core/models/order.model';
@@ -122,6 +123,16 @@ export class OrderDetailComponent implements OnInit {
   /** ¿El pedido se vendió a Crédito Tienda? */
   protected isCredit = computed(() => this.order()?.paymentMethod === 'store_credit');
 
+  /**
+   * Lo que costaría el mismo pedido de contado (envío y armado incluidos).
+   * null si no es crédito o si el pedido es anterior al desglose guardado.
+   */
+  protected cashEquivalent = computed(() => {
+    const o = this.order();
+    if (!o || !this.isCredit() || o.cashTotal == null) return null;
+    return o.cashTotal + this.shippingCost() + this.assemblyCost();
+  });
+
   /** ¿El pedido es Apartado? */
   protected isLayaway = computed(() => this.order()?.paymentMethod === 'layaway');
 
@@ -164,11 +175,29 @@ export class OrderDetailComponent implements OnInit {
   protected canEdit = computed(() => {
     const o = this.order();
     if (!o) return false;
+    if (this.pickupGrace()) return true;
     if (o.orderStatus === 'pending') return true;
     if (o.orderStatus === 'fabricating' || o.orderStatus === 'ready') {
       return (o.items ?? []).some((it) => !it.requiresFabrication);
     }
     return false;
+  });
+
+  /**
+   * Ventana de gracia del "recoge en tienda" (Docs/plan-recoge-en-tienda.md
+   * D7): nace 'delivered', así que sin esto quedaría cerrado a la edición
+   * desde el instante en que se crea. El mismo día se edita como 'pending'.
+   */
+  protected pickupGrace = computed(() => isPickupWithinGrace(this.order()));
+
+  /**
+   * D6 — el pickup nace entregado pero el cobro sigue su curso normal: si el
+   * vendedor no lo registró, el pedido está en la calle sin pago anotado y eso
+   * tiene que verse.
+   */
+  protected pickupUnpaid = computed(() => {
+    const o = this.order();
+    return !!o?.pickupInStore && o.paymentStatus !== 'paid';
   });
 
   // ===== Entrega (Docs/plan-fecha-hora-entrega.md §6.6) =====
@@ -220,8 +249,14 @@ export class OrderDetailComponent implements OnInit {
     return !!status && status !== 'delivered' && status !== 'cancelled';
   });
 
-  /** Solo pending puede editarse sin confirmación previa. */
-  protected needsEditConfirm = computed(() => this.order()?.orderStatus !== 'pending');
+  /**
+   * Solo pending puede editarse sin confirmación previa. Un pickup dentro de
+   * su ventana también: se está corrigiendo lo que se acaba de capturar, no
+   * tocando un pedido cerrado.
+   */
+  protected needsEditConfirm = computed(
+    () => this.order()?.orderStatus !== 'pending' && !this.pickupGrace(),
+  );
 
   protected editConfirmOpen = signal(false);
 

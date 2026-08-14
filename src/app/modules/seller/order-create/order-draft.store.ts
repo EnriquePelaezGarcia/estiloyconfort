@@ -10,6 +10,8 @@ import { MaterialsStore } from '../../../core/services/materials.store';
 import { PricingService } from '../../../core/services/pricing.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
+import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
+import { availableOf, reservationsTooltip } from '../../../core/utils/stock-availability';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
   InventoryItem, InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
@@ -97,19 +99,25 @@ export class OrderDraftStore {
   readonly orderStatus = signal<OrderStatus | null>(null);
   readonly originalPaymentAmount = signal(0);
   readonly originalItems = signal<OrderItem[]>([]);
+  /**
+   * Ventana de gracia del pickup (Docs/plan-recoge-en-tienda.md D7): un pedido
+   * "recoge en tienda" nace 'delivered', así que sin esta excepción quedaría
+   * cerrado a la edición desde el instante en que se crea. Mientras sea del
+   * mismo día se edita como si fuera 'pending'. El backend aplica la misma
+   * regla con SU fecha, que es la que manda.
+   */
+  readonly pickupGrace = signal(false);
   /** Un pedido ya cobrado (no pendiente) solo admite cambiar stock por stock. */
   readonly isRestrictedEdit = computed(
-    () => this.isEditing() && this.orderStatus() !== null && this.orderStatus() !== 'pending',
+    () => this.isEditing()
+      && !this.pickupGrace()
+      && this.orderStatus() !== null
+      && this.orderStatus() !== 'pending',
   );
-
-  /** Disponible real de un material (Docs/plan-reserva-de-piezas.md §4.1): stock menos lo apartado por reservas de OTROS pedidos. */
-  private availableOf(mp: InventoryMaterialPrice): number {
-    return mp.availableQuantity ?? mp.stockQuantity;
-  }
 
   /** ¿Tiene el producto AL MENOS UN material con existencia disponible (no reservada)? (edición restringida) */
   private hasAnyStock(product: InventoryItem): boolean {
-    return product.materialPrices.some((mp) => this.availableOf(mp) > 0);
+    return product.materialPrices.some((mp) => availableOf(mp) > 0);
   }
 
   /** Resultados del buscador visibles: en edición restringida, solo con stock disponible en algún material. */
@@ -126,13 +134,13 @@ export class OrderDraftStore {
    */
   lineRequiresFabrication(line: CartLine): boolean {
     const mp = line.product.materialPrices.find((m) => m.materialId === line.materialId);
-    return !mp || this.availableOf(mp) <= 0;
+    return !mp || availableOf(mp) <= 0;
   }
 
   /** Piezas disponibles del material elegido en esta línea (para el badge "N disponibles · M apartada(s)"). */
   lineAvailableQuantity(line: CartLine): number {
     const mp = this.lineMaterialPrice(line);
-    return mp ? this.availableOf(mp) : 0;
+    return mp ? availableOf(mp) : 0;
   }
 
   /** Máximo que se puede reservar de ESTA línea: lo disponible, topado por la cantidad de la línea (D8). */
@@ -142,9 +150,7 @@ export class OrderDraftStore {
 
   /** Texto del tooltip "quién tiene apartado esto" (§7.2), para el buscador del POS. */
   reservationsTooltip(mp: InventoryMaterialPrice): string {
-    return (mp.reservations ?? [])
-      .map((r) => `${r.quantity} pza(s) — ${r.customerName ?? 'sin cliente'} (${r.note ?? r.reason})`)
-      .join('\n');
+    return reservationsTooltip(mp);
   }
 
   // ===== Reserva de pieza(s) de una línea (Docs/plan-reserva-de-piezas.md D4/D8) =====
@@ -206,6 +212,16 @@ export class OrderDraftStore {
   private syncFabricationDeliverySchedule(wasFabricationRequired: boolean): void {
     if (wasFabricationRequired || !this.hasFabricationLines()) return;
 
+    // RN-P1: si el carrito deja de estar completo en tienda, "recoge en
+    // tienda" deja de ser posible — el cliente no puede llevarse hoy un mueble
+    // que todavía hay que fabricar.
+    if (this.form.controls.pickupInStore.value) {
+      this.form.controls.pickupInStore.setValue(false);
+      this.notification.info(
+        'Se desactivó "Recoge en tienda": el pedido ahora incluye piezas sobre pedido o agotadas.',
+      );
+    }
+
     const estimate = addBusinessDays(new Date(), FABRICATION_ESTIMATE_BUSINESS_DAYS);
     this.form.patchValue({
       deliveryCommitment: 'tentative',
@@ -225,6 +241,8 @@ export class OrderDraftStore {
    * (order_status 'ready'). Un pedido nuevo siempre nace 'pending'.
    */
   readonly deliveryAssignmentBlocked = computed(() => {
+    // RN-P2: un pedido que el cliente se lleva de la tienda no tiene ruta.
+    if (this.isPickup()) return true;
     if (!this.hasFabricationLines()) return false;
     const status = this.orderStatus();
     return status !== 'ready' && status !== 'in_delivery' && status !== 'delivered';
@@ -253,8 +271,24 @@ export class OrderDraftStore {
   /** CP de entrega y cotización de envío en vivo. */
   readonly shippingCp = signal<string>('');
   readonly shippingQuote = signal<ShippingQuote | null>(null);
-  readonly shippingCost = computed(() => this.shippingQuote()?.price ?? 0);
-  readonly grandTotal = computed(() => this.total() + this.shippingCost() + this.assemblyCost());
+  /** RN-P2: si el cliente recoge en tienda no hay envío que cobrar. */
+  readonly shippingCost = computed(() => (this.isPickup() ? 0 : this.shippingQuote()?.price ?? 0));
+  /**
+   * Total de los productos ya con el tratamiento del esquema: en Crédito
+   * Tienda lleva el interés (es lo que el backend guarda como total_amount);
+   * en el resto es el subtotal de contado tal cual.
+   */
+  readonly productsTotal = computed(() => {
+    const credit = this.creditQuote();
+    return this.isCredit() && credit ? credit.creditPrice : this.total();
+  });
+  readonly grandTotal = computed(
+    () => this.productsTotal() + this.shippingCost() + this.assemblyCost(),
+  );
+  /** Lo mismo que grandTotal pero al precio de contado: referencia del crédito. */
+  readonly cashGrandTotal = computed(
+    () => this.total() + this.shippingCost() + this.assemblyCost(),
+  );
 
   readonly form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
@@ -262,6 +296,12 @@ export class OrderDraftStore {
     customerPhone: ['', Validators.required],
     deliveryAddress: ['', Validators.required],
     googleMapsUrl: [''],
+    /**
+     * Recoge en tienda (Docs/plan-recoge-en-tienda.md): el cliente llegó a
+     * tienda, paga y se lleva el mueble ahora. Apaga envío, armado, horario y
+     * repartidor, y el pedido nace ya entregado.
+     */
+    pickupInStore: [false],
     assemblyService: [false],
     assemblyFloors: [{ value: 0, disabled: true }, [Validators.min(0)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
@@ -294,6 +334,19 @@ export class OrderDraftStore {
     initialValue: this.form.controls.deliverySlotChoice.value,
   });
 
+  // ===== Recoge en tienda (Docs/plan-recoge-en-tienda.md §6.2) =====
+
+  private pickupSig = toSignal(this.form.controls.pickupInStore.valueChanges, {
+    initialValue: this.form.controls.pickupInStore.value,
+  });
+  /** El cliente se lleva el mueble de la tienda ahora mismo. */
+  readonly isPickup = computed(() => !!this.pickupSig());
+  /**
+   * RN-P1: solo se puede recoger lo que YA está en tienda. Un mueble sobre
+   * pedido o agotado no se lo puede llevar nadie hoy.
+   */
+  readonly pickupAllowed = computed(() => !this.hasFabricationLines());
+
   /** Entrega comprometida: cumpleaños/XV. Fecha y horario dejan de ser opcionales. */
   readonly isExactDelivery = computed(() => this.commitmentSig() === 'exact');
   /** El vendedor eligió "Otro horario…": se capturan las dos horas a mano. */
@@ -314,10 +367,13 @@ export class OrderDraftStore {
   });
   readonly hasAssembly = computed(() => !!this.assemblyServiceSig());
   readonly assemblyFloorsValue = computed(() => Math.max(0, Math.trunc(Number(this.assemblyFloorsSig())) || 0));
-  /** Costo estimado del armado: tarifa base + pisos × tarifa por piso. */
+  /**
+   * Costo estimado del armado: tarifa base + pisos × tarifa por piso.
+   * RN-P2: el armado es un servicio a domicilio — en pickup no aplica.
+   */
   readonly assemblyCost = computed(() => {
     const rates = this.assemblyRates();
-    if (!this.hasAssembly() || !rates) return 0;
+    if (this.isPickup() || !this.hasAssembly() || !rates) return 0;
     return rates.base + this.assemblyFloorsValue() * rates.perFloor;
   });
 
@@ -382,6 +438,20 @@ export class OrderDraftStore {
     this.isWholesale() && !this.wholesalePriceIncludesIva() ? this.total() * (this.ivaRate() / 100) : 0,
   );
 
+  /**
+   * Fecha en que estaría lista una pieza que hay que fabricar. Es lo que el
+   * vendedor le va a decir al cliente, así que se muestra la fecha y no el
+   * plazo ("15 días" obliga a sacar la cuenta frente al cliente, y a contar
+   * hábiles a mano).
+   *
+   * Sin calendario de festivos (ver `addBusinessDays`): es un estimado
+   * comercial, por eso el "aprox." en pantalla.
+   */
+  readonly fabricationEta = computed(() =>
+    addBusinessDays(new Date(), this.creditConfig().fabrication_days)
+      .toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }),
+  );
+
   /** M12 — mínimo de mayoreo por línea (override del producto o el global). */
   readonly wholesaleMinQtyGlobal = computed(() => this.creditConfig().wholesale_min_qty);
   lineWholesaleShortfall(line: CartLine): number {
@@ -400,9 +470,13 @@ export class OrderDraftStore {
 
   /** Paso 1 (Venta) incompleto: sin badge falso mientras el carrito está vacío por primera vez. */
   readonly step1Incomplete = computed(() => this.lines().length === 0 || this.hasUnquotedLines());
-  /** Paso 2 (Cliente y entrega) incompleto: solo se marca tras el primer intento de envío. */
+  /**
+   * Paso 2 (Cliente y entrega) incompleto: solo se marca tras el primer
+   * intento de envío. En pickup el CP no cuenta: no hay envío que cotizar.
+   */
   readonly step2Incomplete = computed(
-    () => this.submitAttempted() && (this.form.invalid || this.shippingCp().length !== 5),
+    () => this.submitAttempted()
+      && (this.form.invalid || (!this.isPickup() && this.shippingCp().length !== 5)),
   );
 
   /** Último paso que falló una validación al intentar guardar; null si no hay error pendiente. */
@@ -442,6 +516,39 @@ export class OrderDraftStore {
     this.form.controls.deliverySlotChoice
       .valueChanges.pipe(takeUntilDestroyed())
       .subscribe(() => this.applyDeliveryValidators(this.isExactDelivery()));
+
+    // Recoge en tienda: al prenderlo caen las obligaciones de una entrega a
+    // domicilio (dirección, CP) y las condiciones que no caben en una venta
+    // que se lleva ahora (armado, crédito, apartado).
+    this.form.controls.pickupInStore.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((pickup) => this.applyPickupMode(!!pickup));
+  }
+
+  /**
+   * Sincroniza el formulario con el modo de entrega (RN-P2/RN-P3). Vive en el
+   * store y no en la plantilla porque son reglas de negocio: el backend aplica
+   * exactamente las mismas y esta es sólo la primera defensa.
+   */
+  private applyPickupMode(pickup: boolean): void {
+    const address = this.form.controls.deliveryAddress;
+    address.setValidators(pickup ? [] : [Validators.required]);
+    address.updateValueAndValidity({ emitEvent: false });
+
+    if (!pickup) return;
+
+    // El armado se entrega a domicilio: no cabe en una venta de mostrador.
+    if (this.form.controls.assemblyService.value) {
+      this.form.controls.assemblyService.setValue(false);
+    }
+
+    // RN-P3: nadie se lleva el mueble debiendo la mayor parte de él.
+    if (!PICKUP_PAYMENT_METHODS.includes(this.form.controls.paymentMethod.value as SaleScheme)) {
+      this.form.controls.paymentMethod.setValue('cash');
+      this.notification.info(
+        'Recoge en tienda solo admite pago completo: la condición de venta cambió a Contado.',
+      );
+    }
   }
 
   /**
@@ -473,6 +580,19 @@ export class OrderDraftStore {
    * puedan discrepar.
    */
   private deliverySchedulePayload(raw: { expectedDeliveryDate?: string | null; deliveryCommitment?: DeliveryCommitment | null; deliverySlotChoice?: string | null; deliveryWindowStart?: string | null; deliveryWindowEnd?: string | null }) {
+    // RN-P4: en pickup no hay horario que negociar — la entrega es ahora. El
+    // servidor sella igualmente la fecha de hoy; esto sólo evita mandar una
+    // ventana horaria que no significa nada.
+    if (this.isPickup()) {
+      return {
+        expectedDeliveryDate: null,
+        deliveryCommitment: 'tentative' as DeliveryCommitment,
+        deliverySlotId: null,
+        deliveryWindowStart: null,
+        deliveryWindowEnd: null,
+      };
+    }
+
     const choice = raw.deliverySlotChoice || '';
     const isCustom = choice === 'custom';
     return {
@@ -515,6 +635,7 @@ export class OrderDraftStore {
           wholesale_enabled: data.wholesaleEnabled ? 1 : 0,
           wholesale_min_qty: data.wholesaleMinQty,
           wholesale_price_includes_iva: data.wholesalePriceIncludesIva ? 1 : 0,
+          fabrication_days: data.fabricationDays,
         }),
       error: () => {},
     });
@@ -526,6 +647,7 @@ export class OrderDraftStore {
       next: ({ data }) => {
         this.editId.set(data.id);
         this.orderStatus.set(data.orderStatus);
+        this.pickupGrace.set(isPickupWithinGrace(data));
         this.originalPaymentAmount.set(data.paymentAmount);
         this.originalItems.set(data.items ?? []);
         this.form.patchValue({
@@ -534,6 +656,7 @@ export class OrderDraftStore {
           customerPhone: data.customerPhone ?? '',
           deliveryAddress: data.deliveryAddress ?? '',
           googleMapsUrl: data.googleMapsUrl ?? '',
+          pickupInStore: !!data.pickupInStore,
           assemblyService: !!data.assemblyService,
           assemblyFloors: data.assemblyFloors ?? 0,
           paymentMethod: data.paymentMethod ?? 'cash',
@@ -574,6 +697,7 @@ export class OrderDraftStore {
               name: it.productName ?? '',
               sku: it.productSku ?? '',
               availability_days: 0,
+              primaryImage: it.imageUrl ?? null,
               materialPrices: [
                 {
                   materialId: it.materialId,
@@ -629,6 +753,9 @@ export class OrderDraftStore {
           // El pedido hereda la condición con la que se cotizó: el cliente
           // aceptó ESE precio, no el de otro esquema.
           paymentMethod: quote.paymentMethod ?? 'cash',
+          // El modo de entrega también se cotizó: si se le prometió "recoge en
+          // tienda, sin envío", el pedido nace con esa misma condición.
+          pickupInStore: !!quote.pickupInStore,
           assemblyService: quote.assemblyService,
           assemblyFloors: quote.assemblyFloors ?? 0,
         });
@@ -644,6 +771,7 @@ export class OrderDraftStore {
               name: it.productName,
               sku: it.productSku ?? '',
               availability_days: 0,
+              primaryImage: it.imageUrl ?? null,
               materialPrices: [
                 {
                   materialId: it.materialId,
@@ -903,8 +1031,18 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
-    if (this.shippingCp().length !== 5) {
+    // RN-P2: en pickup no se cotiza envío, así que no hay CP que exigir.
+    if (!this.isPickup() && this.shippingCp().length !== 5) {
       this.notification.error('Ingresa el código postal de entrega (5 dígitos)');
+      this._lastInvalidStep.set(2);
+      this.goToStep(2);
+      return;
+    }
+    // RN-P1: última defensa del cliente antes de que lo rechace el backend.
+    if (this.isPickup() && !this.pickupAllowed()) {
+      this.notification.error(
+        'No se puede recoger en tienda: el pedido tiene piezas sobre pedido o agotadas.',
+      );
       this._lastInvalidStep.set(2);
       this.goToStep(2);
       return;
@@ -916,23 +1054,30 @@ export class OrderDraftStore {
     }
 
     const raw = this.form.getRawValue();
+    const pickup = this.isPickup();
     const payload: CreateOrderRequest = {
       customerName: raw.customerName!,
       customerEmail: raw.customerEmail || null,
       customerPhone: raw.customerPhone || null,
       deliveryAddress: raw.deliveryAddress || null,
-      googleMapsUrl: raw.googleMapsUrl || null,
-      deliveryType: raw.assemblyService ? 'with_installation' : 'standard',
+      deliveryType: !pickup && raw.assemblyService ? 'with_installation' : 'standard',
+      // RN-P2/RN-P4: el backend vuelve a forzar todo esto; mandarlo ya limpio
+      // evita que el pedido guardado y lo que vio el vendedor difieran.
+      pickupInStore: pickup,
       paymentMethod: raw.paymentMethod!,
       ...this.deliverySchedulePayload(raw),
-      shippingCost: this.shippingCost() || null,
-      shippingPostalCode: this.shippingCp() || null,
+      shippingCost: pickup ? null : this.shippingCost() || null,
+      shippingPostalCode: pickup ? null : this.shippingCp() || null,
       // El servidor calcula el costo del armado con las tarifas vigentes.
-      assemblyService: !!raw.assemblyService,
-      assemblyFloors: this.assemblyFloorsValue(),
-      notasFabricante: raw.notasFabricante?.trim() || null,
-      notasPedido: raw.notasPedido?.trim() || null,
-      instruccionesEntrega: raw.instruccionesEntrega?.trim() || null,
+      assemblyService: !pickup && !!raw.assemblyService,
+      assemblyFloors: pickup ? 0 : this.assemblyFloorsValue(),
+      // En pickup estos campos no se muestran (no hay fabricante que instruir
+      // ni repartidor que navegue): se mandan vacíos para que un pedido que
+      // venía de domicilio no conserve notas que ya nadie puede ver ni editar.
+      notasFabricante: pickup ? null : raw.notasFabricante?.trim() || null,
+      notasPedido: pickup ? null : raw.notasPedido?.trim() || null,
+      instruccionesEntrega: pickup ? null : raw.instruccionesEntrega?.trim() || null,
+      googleMapsUrl: pickup ? null : raw.googleMapsUrl || null,
       // Cierra la cotización de origen (si la hubo) en la misma transacción
       // del pedido. En modo edición no aplica: no se está creando nada.
       fromQuoteId: this.isEditing() ? null : this.fromQuoteId(),
@@ -948,7 +1093,8 @@ export class OrderDraftStore {
         // (RN-01…RN-10); este valor es solo para no romper el tipo del payload.
         unitPrice: this.unitPrice(l) ?? 0,
         // Reserva de pieza(s) de esta línea (Docs/plan-reserva-de-piezas.md D4/D8).
-        reserve: l.reserve
+        // RN-P5: en pickup no hay nada que apartar — la pieza se va con el cliente.
+        reserve: l.reserve && !pickup
           ? {
               quantity: l.reserve.quantity,
               reason: l.reserve.reason,

@@ -63,8 +63,15 @@
           <p class="label-overline">Tu compra</p>
           @for (it of t.items; track $index) {
             <div class="line">
-              @if (it.imageUrl) {
-                <img class="line__thumb" [src]="it.imageUrl" [alt]="it.productName" width="56" height="56" />
+              @if (it.imageUrl; as img) {
+                <img
+                  class="line__thumb line__thumb--zoomable"
+                  [src]="img"
+                  [alt]="it.productName"
+                  width="56"
+                  height="56"
+                  (click)="zoomedImage.set(img)"
+                />
               }
               <div class="line__main">
                 <p class="line__name">{{ it.productName }}</p>
@@ -85,10 +92,16 @@
         <!-- Totales. Envío y armado se listan aparte para que el cliente vea
              de dónde sale la diferencia contra la suma de productos. -->
         <section class="totals">
-          @if (t.shippingCost > 0 || t.assemblyService) {
+          @if (t.shippingCost > 0 || t.assemblyService || isCredit()) {
             <div class="totals__row">
-              <span>Productos</span>
+              <span>@if (isCredit()) { Productos (precio de contado) } @else { Productos }</span>
               <span>{{ productsSubtotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
+          @if (creditInterest(); as interest) {
+            <div class="totals__row">
+              <span>Interés por financiamiento</span>
+              <span>{{ interest | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
           }
           @if (t.shippingCost > 0) {
@@ -116,6 +129,13 @@
             <span>Total</span>
             <span class="totals__grand">{{ t.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
           </div>
+          <!-- Referencia, nunca otro "total" con el mismo peso: el número de
+               arriba es el que se paga a crédito. -->
+          @if (cashEquivalent(); as cash) {
+            <p class="cash-equivalent">
+              Equivale a {{ cash | currency:'MXN':'symbol-narrow':'1.2-2' }} de contado
+            </p>
+          }
           <div class="totals__row totals__row--paid">
             <span>Pagado</span>
             <span>{{ t.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
@@ -166,9 +186,18 @@
           </div>
           <div class="fact">
             <p class="label-overline">Entrega</p>
-            <p class="fact__value">{{ deliveryLabel(t.deliveryType) }}</p>
+            <!-- Recoge en tienda: el cliente ya se llevó el mueble; no hay
+                 envío ni dirección que mostrarle. -->
+            <p class="fact__value">
+              {{ t.pickupInStore ? 'Recoge en tienda' : deliveryLabel(t.deliveryType) }}
+            </p>
           </div>
-          @if (t.expectedDeliveryDate) {
+          <!--
+            En pickup el backend sella la fecha de hoy, pero al cliente que ya
+            se llevó el mueble no se le anuncia una "fecha estimada" ni se le
+            promete coordinar la entrega por WhatsApp.
+          -->
+          @if (t.expectedDeliveryDate && !t.pickupInStore) {
             <div class="fact fact--wide">
               <p class="label-overline">
                 {{ isExactCommitment() ? 'Fecha y hora de entrega' : 'Fecha estimada' }}
@@ -183,7 +212,7 @@
               }
             </div>
           }
-          @if (t.deliveryAddress) {
+          @if (t.deliveryAddress && !t.pickupInStore) {
             <div class="fact fact--wide">
               <p class="label-overline">Dirección</p>
               <p class="fact__value">{{ t.deliveryAddress }}</p>
@@ -228,4 +257,8 @@
       </footer>
     </article>
   </div>
+
+  @if (zoomedImage(); as img) {
+    <app-image-lightbox class="no-print" [src]="img" [alt]="'Foto del producto'" (closed)="zoomedImage.set(null)" />
+  }
 }

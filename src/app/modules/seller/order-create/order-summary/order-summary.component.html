@@ -4,6 +4,13 @@
   <div class="summary-lines">
     @for (l of store.lines(); track l.product.id + '-' + l.materialId) {
       <div class="summary-line">
+        @if (l.product.primaryImage) {
+          <img class="summary-line__thumb" [src]="l.product.primaryImage" [alt]="l.product.name" loading="lazy" />
+        } @else {
+          <span class="summary-line__thumb summary-line__thumb--empty">
+            <span class="material-symbols-outlined">chair</span>
+          </span>
+        }
         <span class="summary-line__name">
           {{ l.quantity }}× {{ l.product.name }}
           @if (store.lineMaterialPrice(l); as mp) {
@@ -19,12 +26,25 @@
     }
   </div>
 
-  @if (store.shippingQuote() || store.hasAssembly()) {
+  @if (store.shippingQuote() || store.hasAssembly() || store.isCredit()) {
     <div class="cart-total cart-total--sub">
-      <span>{{ store.isMsi() ? 'Subtotal a 6 MSI' : 'Subtotal productos' }}</span>
-      <span class="cart-total__amount">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      <span>
+        @if (store.isCredit()) { Precio a crédito }
+        @else if (store.isMsi()) { Subtotal a 6 MSI }
+        @else { Subtotal productos }
+      </span>
+      <span class="cart-total__amount">{{ store.productsTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
     </div>
-    @if (store.shippingQuote(); as shipping) {
+    @if (store.isPickup()) {
+      <!-- Recoge en tienda: sin envío ni armado que sumar al total. -->
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">storefront</span>
+          Recoge en tienda
+        </span>
+        <span class="shipping-row__free">SIN ENVÍO</span>
+      </div>
+    } @else if (store.shippingQuote(); as shipping) {
       <div class="shipping-row">
         <span class="shipping-row__label">
           <span class="material-symbols-outlined">local_shipping</span>
@@ -37,7 +57,7 @@
         }
       </div>
     }
-    @if (store.hasAssembly()) {
+    @if (!store.isPickup() && store.hasAssembly()) {
       <div class="shipping-row">
         <span class="shipping-row__label">
           <span class="material-symbols-outlined">handyman</span>
@@ -56,6 +76,16 @@
       <span class="cart-total__amount">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
     </div>
   }
+
+  <!-- Comparación de referencia, nunca otro "total" con el mismo peso: el
+       número grande es el que se cobra (a crédito); esto es solo para que el
+       vendedor ubique la diferencia contra contado. -->
+  @if (store.isCredit() && store.creditQuote()) {
+    <p class="cash-equivalent">
+      Equivale a {{ store.cashGrandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }} de contado
+    </p>
+  }
+
   @if (store.isMsi()) {
     <p class="msi-note">
       <span class="material-symbols-outlined">credit_card</span>

@@ -273,6 +273,18 @@
   &--amber { background: rgba(vars.$color-gold, 0.16); color: vars.$color-gold; }
   &--blue { background: rgba(#1565c0, 0.14); color: #1565c0; }
   &--purple { background: rgba(vars.$color-primary, 0.14); color: vars.$color-primary; }
+
+  // Recoge en tienda (Docs/plan-recoge-en-tienda.md): lleva icono, así que
+  // necesita alinearlo con el texto — el resto de badges son sólo texto.
+  &--pickup {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(vars.$color-primary, 0.14);
+    color: vars.$color-primary;
+
+    .material-symbols-outlined { font-size: 0.95rem; }
+  }
 }
 
 // ===== Icon button =====

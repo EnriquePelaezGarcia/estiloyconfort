@@ -26,6 +26,11 @@ const ALLOWED_KEYS = [
   'wholesale_price_includes_iva',
   // Umbral visual del semáforo de utilidades (§5.4 del plan). No bloquea nada.
   'min_margin_alert',
+  // Plazo de fabricación en días HÁBILES cuando un mueble no tiene existencia
+  // (Docs/plan-disponibilidad-publica.md). Es uno solo para todo el catálogo:
+  // el negocio tarda lo mismo en cualquier mueble. Solo se muestra al
+  // vendedor — el cliente ve "Sobre pedido", sin plazos.
+  'fabrication_days',
 ];
 
 const PricingConfig = {
@@ -58,6 +63,7 @@ const PricingConfig = {
       wholesale_min_qty: 6,
       wholesale_price_includes_iva: 0,
       min_margin_alert: 20,
+      fabrication_days: 15,
     };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;

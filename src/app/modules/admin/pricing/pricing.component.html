@@ -133,6 +133,11 @@
           <input id="minMarginAlert" type="number" formControlName="min_margin_alert" min="0" max="100" step="0.1" />
           <p class="field__hint">{{ itemMeta('min_margin_alert')?.description }}</p>
         </div>
+        <div class="field">
+          <label for="fabricationDays">{{ itemMeta('fabrication_days')?.label ?? 'Días de fabricación' }} (días hábiles)</label>
+          <input id="fabricationDays" type="number" formControlName="fabrication_days" min="1" max="365" step="1" />
+          <p class="field__hint">{{ itemMeta('fabrication_days')?.description }}</p>
+        </div>
 
         <div class="card__foot">
           <button type="submit" class="btn btn--primary" [disabled]="saving()">

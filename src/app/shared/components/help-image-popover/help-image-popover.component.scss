@@ -1,0 +1,33 @@
+@use '../../../../styles/variables' as vars;
+
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 0.3rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: vars.$color-bg;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background vars.$transition-fast, color vars.$transition-fast;
+
+  .material-symbols-outlined { font-size: 1rem; }
+
+  &:hover { background: vars.$color-primary; color: #fff; }
+}
+
+// El modal ya trae padding en .modal__body (globales en _business.scss);
+// solo falta el espacio inferior y el tratamiento de la imagen.
+.modal__body { padding-bottom: vars.$spacing-lg; }
+
+.help-image {
+  display: block;
+  width: 100%;
+  border-radius: vars.$radius-md;
+  border: 1px solid vars.$color-border;
+}

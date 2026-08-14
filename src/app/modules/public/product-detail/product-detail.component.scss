@@ -104,6 +104,14 @@
     }
   }
 
+  // Acompaña al badge de disponibilidad: el badge dice QUÉ, esta línea dice
+  // qué significa para el cliente ("desde bodega" vs "se fabrica para ti").
+  &__availability-note {
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: v.$color-text-secondary;
+  }
+
   &__variants {
     display: flex;
     flex-direction: column;

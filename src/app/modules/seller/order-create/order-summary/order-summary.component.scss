@@ -22,15 +22,43 @@
 
 .summary-line {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: vars.$spacing-sm;
   padding: 0.3rem 0;
   border-bottom: 1px solid vars.$color-border;
   font-size: 0.85rem;
 
+  &__thumb {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+    object-fit: cover;
+
+    &--empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: vars.$color-bg;
+      color: vars.$color-text-secondary;
+
+      .material-symbols-outlined { font-size: 1rem; }
+    }
+  }
+
   &__name { flex: 1; min-width: 0; }
   &__amount { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
 
   .muted { color: vars.$color-text-secondary; font-weight: 400; }
+}
+
+// Referencia contra contado del crédito: peso tipográfico menor que el total,
+// para que nunca compita con el número que se cobra.
+.cash-equivalent {
+  margin: -0.25rem 0 vars.$spacing-sm;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  text-align: right;
 }

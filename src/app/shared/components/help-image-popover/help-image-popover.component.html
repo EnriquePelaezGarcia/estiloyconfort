@@ -1,0 +1,25 @@
+<button
+  type="button"
+  class="help-icon"
+  (click)="open.set(true)"
+  [attr.aria-label]="label()"
+  [title]="label()"
+>
+  <span class="material-symbols-outlined">help</span>
+</button>
+
+@if (open()) {
+  <div class="modal-backdrop" (click)="open.set(false)">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <div class="modal__head">
+        <h2>{{ title() }}</h2>
+        <button type="button" class="icon-btn" (click)="open.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <img class="help-image" [src]="imageSrc()" [alt]="imageAlt()" />
+      </div>
+    </div>
+  </div>
+}

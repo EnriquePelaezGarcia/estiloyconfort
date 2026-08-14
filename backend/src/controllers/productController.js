@@ -72,6 +72,8 @@ const productController = {
         limit: limit || 12,
         sort,
       });
+      // MySQL devuelve EXISTS como 0/1; el badge del catálogo espera booleano.
+      result.data = result.data.map((p) => ({ ...p, in_stock: Number(p.in_stock) === 1 }));
       res.json(result);
     } catch (err) { next(err); }
   },

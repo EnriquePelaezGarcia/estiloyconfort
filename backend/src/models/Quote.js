@@ -4,6 +4,7 @@ const PricingConfig = require('./PricingConfig');
 const ShippingRate = require('./ShippingRate');
 const { addBusinessDays } = require('../utils/businessDays');
 const { calculateCredit } = require('../utils/pricingCalculator');
+const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
 
 /** Vigencia comercial de una cotización, en días hábiles. */
 const QUOTE_BUSINESS_DAYS = 15;
@@ -39,6 +40,8 @@ function mapQuote(row) {
     shippingPostalCode: row.shipping_postal_code ?? null,
     shippingCost: Number(row.shipping_cost),
     shippingZoneLabel: row.shipping_zone_label ?? null,
+    /** Recoge en tienda (Docs/plan-recoge-en-tienda.md §5.4): sin envío ni armado. */
+    pickupInStore: !!row.pickup_in_store,
     assemblyService: !!row.assembly_service,
     assemblyFloors: Number(row.assembly_floors) || 0,
     assemblyCost: Number(row.assembly_cost),
@@ -74,8 +77,19 @@ function mapQuoteItem(row) {
     quantity: Number(row.quantity),
     unitPrice: Number(row.unit_price),
     subtotal: Number(row.subtotal),
+    /** Foto principal VIGENTE del producto (tabla product_images); no es
+     * congelada como el precio — si el catálogo cambia la foto, la
+     * cotización muestra la actual. */
+    imageUrl: row.primary_image ?? null,
   };
 }
+
+const ITEMS_SELECT = `
+  SELECT qi.*,
+         (SELECT image_url FROM product_images
+            WHERE product_id = qi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
+  FROM quote_items qi WHERE qi.quote_id = ? ORDER BY qi.id
+`;
 
 const BASE_SELECT = `
   SELECT q.*, u.full_name AS seller_name
@@ -235,6 +249,23 @@ async function resolveQuotePricing(conn, data, config) {
     throw err;
   }
 
+  /**
+   * Recoge en tienda (Docs/plan-recoge-en-tienda.md D2/D4): misma restricción
+   * de esquema que en el pedido, para no cotizarle al cliente una condición
+   * que el POS va a rechazar cuando quiera convertir la cotización.
+   *
+   * La regla de stock (RN-P1) NO se valida aquí a propósito: una cotización no
+   * compromete inventario y vive varios días hábiles, así que el stock de hoy
+   * no dice nada del stock del día en que se convierta. Esa validación es
+   * dura en `Order.create`, que es donde el inventario sí se toca.
+   */
+  const pickupInStore = !!data.pickupInStore;
+  if (pickupInStore && !PICKUP_PAYMENT_METHODS.includes(paymentMethod)) {
+    const err = new Error('Recoge en tienda solo admite pago completo (contado, MSI o mayoreo).');
+    err.statusCode = 400;
+    throw err;
+  }
+
   let subtotal = 0;
   const resolvedItems = [];
   for (const it of items) {
@@ -246,7 +277,7 @@ async function resolveQuotePricing(conn, data, config) {
   // Envío: se congela la tarifa vigente. Un CP fuera de cobertura no es
   // un error — se cotiza sin envío y el vendedor lo acuerda aparte.
   const rawCp = String(data.shippingPostalCode ?? '').replace(/\D/g, '').slice(0, 5);
-  const shippingPostalCode = rawCp.length === 5 ? rawCp : null;
+  const shippingPostalCode = pickupInStore || rawCp.length !== 5 ? null : rawCp;
   let shippingCost = 0;
   let shippingZoneLabel = null;
   if (shippingPostalCode) {
@@ -257,7 +288,8 @@ async function resolveQuotePricing(conn, data, config) {
     }
   }
 
-  const assemblyService = !!data.assemblyService;
+  // RN-P2: el armado es un servicio a domicilio — en pickup no aplica.
+  const assemblyService = !pickupInStore && !!data.assemblyService;
   const assemblyFloors = assemblyService
     ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0)
     : 0;
@@ -311,6 +343,7 @@ async function resolveQuotePricing(conn, data, config) {
     shippingPostalCode,
     shippingCost,
     shippingZoneLabel,
+    pickupInStore,
     assemblyService,
     assemblyFloors,
     assemblyCost,
@@ -349,16 +382,16 @@ const Quote = {
       const [result] = await conn.execute(
         `INSERT INTO quotes
           (token, seller_id, customer_name, customer_phone, payment_method,
-           shipping_postal_code, shipping_cost, shipping_zone_label,
+           shipping_postal_code, shipping_cost, shipping_zone_label, pickup_in_store,
            assembly_service, assembly_floors, assembly_cost,
            subtotal, total_amount,
            cash_total, down_payment, weekly_payment, last_payment,
            credit_weeks, layaway_deadline, wholesale_iva,
            status, expires_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           token, sellerId, data.customerName, data.customerPhone ?? null, p.paymentMethod,
-          p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel,
+          p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel, p.pickupInStore ? 1 : 0,
           p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
           p.subtotal, p.totalAmount,
           p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
@@ -422,6 +455,7 @@ const Quote = {
         `UPDATE quotes SET
            customer_name = ?, customer_phone = ?, payment_method = ?,
            shipping_postal_code = ?, shipping_cost = ?, shipping_zone_label = ?,
+           pickup_in_store = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
            subtotal = ?, total_amount = ?,
            cash_total = ?, down_payment = ?, weekly_payment = ?, last_payment = ?,
@@ -430,6 +464,7 @@ const Quote = {
         [
           data.customerName, data.customerPhone ?? null, p.paymentMethod,
           p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel,
+          p.pickupInStore ? 1 : 0,
           p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
           p.subtotal, p.totalAmount,
           p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
@@ -468,10 +503,7 @@ const Quote = {
     const [[row]] = await pool.execute(`${BASE_SELECT} WHERE q.id = ?`, [id]);
     if (!row) return null;
     const quote = mapQuote(row);
-    const [items] = await pool.execute(
-      'SELECT * FROM quote_items WHERE quote_id = ? ORDER BY id',
-      [id],
-    );
+    const [items] = await pool.execute(ITEMS_SELECT, [id]);
     quote.items = items.map(mapQuoteItem);
     return quote;
   },
@@ -488,10 +520,7 @@ const Quote = {
     );
     if (!row) return null;
     const quote = mapQuote(row);
-    const [items] = await pool.execute(
-      'SELECT * FROM quote_items WHERE quote_id = ? ORDER BY id',
-      [row.id],
-    );
+    const [items] = await pool.execute(ITEMS_SELECT, [row.id]);
     quote.items = items.map(mapQuoteItem);
     return quote;
   },

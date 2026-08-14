@@ -25,11 +25,28 @@ const Product = {
     // cotizados o no, para poder terminar de capturarles el costo.
     if (!includeInactive) conditions.push('pp.quoted_materials > 0');
 
+    /**
+     * "Más populares" (Docs/plan-catalogo-mas-populares.md D2/D3): pedidos +
+     * cotizaciones de los últimos 3 meses, vía la vista `product_popularity`.
+     *
+     * El desempate importa tanto como el criterio principal: hoy la mayoría de
+     * los productos no tiene ventas en la ventana y quedaría empatada en cero.
+     * Sin desempate explícito ese bloque saldría en orden arbitrario; así sale
+     * por criterio comercial (destacado) y luego por novedad.
+     */
+    // COALESCE en is_featured: la columna admite NULL y en DESC los NULL caen
+    // DESPUÉS de los 0, así que dos productos igualmente no destacados (uno
+    // con 0 y otro con NULL) se ordenarían distinto y el desempate por fecha
+    // dejaría de aplicar entre ellos.
+    const POPULAR_ORDER =
+      'pop.popularity_count DESC, COALESCE(p.is_featured, 0) DESC, p.created_at DESC';
     const validSorts = {
       price_asc: 'pp.price_from ASC', price_desc: 'pp.price_from DESC',
       name: 'p.name ASC', newest: 'p.created_at DESC',
+      popular: POPULAR_ORDER,
     };
-    const orderBy = validSorts[sort] || 'p.created_at DESC';
+    // D2: sin `sort` explícito el catálogo abre en popularidad, no en novedad.
+    const orderBy = validSorts[sort] || POPULAR_ORDER;
 
     // LIMIT/OFFSET no pueden ir como parámetros en pool.execute() (prepared
     // statements) — MySQL responde "Incorrect arguments to mysqld_stmt_execute".
@@ -49,11 +66,31 @@ const Product = {
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug,
               m.name AS manufacturer_name,
               pp.price_from, pp.price_to, pp.price_6msi_from, pp.price_mayoreo_from, pp.quoted_materials,
-              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image
+              -- Se expone aunque el orden no sea 'popular': sin este número no
+              -- hay forma de explicar por qué un producto quedó donde quedó.
+              COALESCE(pop.popularity_count, 0) AS popularity_count,
+              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image,
+              -- Badge del catálogo público: "Disponible" si queda AL MENOS UNA
+              -- pieza libre en cualquier material declarado. La pregunta es de
+              -- existencia, no de cantidad, así que un EXISTS correlacionado
+              -- evita el GROUP BY que rompería la paginación de arriba.
+              -- El JOIN a product_materials hace falta porque la vista no
+              -- filtra is_active: un material desmarcado que conservó piezas
+              -- (ver syncProductMaterials) no debe anunciarse como disponible.
+              EXISTS (
+                SELECT 1
+                  FROM product_material_availability a
+                  JOIN product_materials pm2
+                    ON pm2.product_id = a.product_id AND pm2.material_id = a.material_id
+                 WHERE a.product_id = p.id
+                   AND pm2.is_active = TRUE
+                   AND a.available_quantity > 0
+              ) AS in_stock
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
        LEFT JOIN product_public_prices pp ON pp.product_id = p.id
+       LEFT JOIN product_popularity pop ON pop.product_id = p.id
        ${where}
        ORDER BY ${orderBy}
        LIMIT ${safeLimit} OFFSET ${offset}`,
@@ -92,11 +129,18 @@ const Product = {
     const [materialPrices] = await pool.execute(
       `SELECT pm.material_id, mat.code, mat.label, mat.color_policy, mat.fixed_color,
               pm.stock_quantity,
-              mp.base_cost, mp.price_cash, mp.price_6msi, mp.price_credit, mp.price_mayoreo
+              mp.base_cost, mp.price_cash, mp.price_6msi, mp.price_credit, mp.price_mayoreo,
+              -- Lo que la ficha pública debe anunciar como disponible: el stock
+              -- menos lo apartado por reservas activas. stock_quantity se queda
+              -- como está (dato de bodega, lo usa el admin); esta columna se
+              -- AGREGA para no cambiarle el significado a la de al lado.
+              COALESCE(av.available_quantity, pm.stock_quantity) AS available_quantity
          FROM product_materials pm
          JOIN materials mat ON mat.id = pm.material_id
          LEFT JOIN product_material_prices mp
                 ON mp.product_id = pm.product_id AND mp.material_id = pm.material_id
+         LEFT JOIN product_material_availability av
+                ON av.product_id = pm.product_id AND av.material_id = pm.material_id
         WHERE pm.product_id = ? AND pm.is_active = TRUE
         ORDER BY mat.sort_order`,
       [id]

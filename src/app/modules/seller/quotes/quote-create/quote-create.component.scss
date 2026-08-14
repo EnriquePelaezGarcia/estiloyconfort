@@ -1,5 +1,15 @@
 @use '../../../../../styles/variables' as vars;
 
+// Label + botón de ayuda en la misma línea. `.field label` global es
+// `display: block`, así que aquí se pisa ese margen y lo hereda la fila.
+.field__label-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.35rem;
+
+  label { margin-bottom: 0; }
+}
+
 .banner {
   display: flex;
   align-items: center;
@@ -95,6 +105,26 @@
   border-bottom: 1px solid vars.$color-border;
 
   &--alert { background: color-mix(in srgb, #dc2626 6%, white); }
+
+  &__thumb {
+    flex-shrink: 0;
+    align-self: flex-start;
+    width: 48px;
+    height: 48px;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+    object-fit: cover;
+
+    &--empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: vars.$color-bg;
+      color: vars.$color-text-secondary;
+
+      .material-symbols-outlined { font-size: 1.2rem; }
+    }
+  }
 
   &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   &__name { font-weight: 600; font-size: 0.88rem; }
@@ -355,6 +385,15 @@
   }
 }
 
+// Nota de referencia contado vs crédito: chica y gris a propósito — nunca
+// debe competir visualmente con el Total (ese es el número que se cobra).
+.cash-equivalent {
+  margin: -0.5rem 0 vars.$spacing-md;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  text-align: right;
+}
+
 .assembly-field {
   .assembly-check {
     display: flex;
@@ -431,4 +470,76 @@
 @keyframes quote-fade-in {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+// ===== Modo de entrega (Docs/plan-recoge-en-tienda.md §6.5) =====
+// Mismas dos tarjetas de radio que el paso 2 del POS, para que el vendedor
+// reconozca el control al pasar de cotizar a vender.
+.delivery-mode {
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-border;
+  border-left: 3px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  .schedule__title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: vars.$color-text;
+    margin-bottom: vars.$spacing-sm;
+  }
+
+  .schedule__options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: vars.$spacing-sm;
+
+    @media (max-width: vars.$bp-tablet) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .schedule__option {
+    display: flex;
+    align-items: flex-start;
+    gap: vars.$spacing-sm;
+    padding: vars.$spacing-sm;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-surface;
+    cursor: pointer;
+
+    input[type='radio'] {
+      margin-top: 2px;
+      accent-color: vars.$color-primary;
+      cursor: pointer;
+    }
+
+    &:has(input:checked) {
+      border-color: vars.$color-primary;
+      box-shadow: 0 0 0 1px vars.$color-primary;
+    }
+  }
+
+  .schedule__option-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .schedule__option-name { font-weight: 600; font-size: 0.875rem; color: vars.$color-text; }
+  .schedule__option-hint { font-size: 0.75rem; color: vars.$color-text-secondary; }
+}
+
+// Recoge en tienda: reemplaza el bloque de CP y armado.
+.pickup-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: vars.$spacing-sm;
+  margin: 0;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-primary;
+  border-radius: vars.$radius-sm;
+  background: color-mix(in srgb, vars.$color-primary 8%, white);
+  font-size: 0.8125rem;
+  color: vars.$color-text;
+
+  .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-primary; }
 }

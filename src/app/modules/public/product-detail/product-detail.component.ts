@@ -55,6 +55,22 @@ export class ProductDetailComponent implements OnInit {
     return this.materialOptions().find((m) => m.material_id === materialId) ?? null;
   });
 
+  /**
+   * Disponibilidad que se le anuncia al cliente. Con un material ya elegido
+   * responde por ESE material: puede haber piezas en MDF y ninguna en
+   * melamina, y prometer stock del material equivocado es peor que no
+   * prometer nada. Sin material elegido responde por el producto entero, igual
+   * que la tarjeta del catálogo.
+   *
+   * Ojo: con un solo material cotizado, ngOnInit lo autoselecciona (M5), así
+   * que el badge nace ya evaluado por material — que es lo correcto.
+   */
+  inStock = computed(() => {
+    const selected = this.selectedMaterialPrices();
+    if (selected) return selected.available_quantity > 0;
+    return this.materialOptions().some((m) => m.available_quantity > 0);
+  });
+
   activeImage = computed(() => {
     const p = this.product();
     if (!p?.images?.length) return p?.primary_image ?? null;

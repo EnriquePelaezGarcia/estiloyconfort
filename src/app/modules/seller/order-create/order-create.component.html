@@ -47,7 +47,7 @@
     (click)="store.goToStep(2)"
   >
     <span class="step-chip__number">2</span>
-    Cliente y entrega
+    {{ store.isPickup() ? 'Cliente' : 'Cliente y entrega' }}
     @if (store.step2Incomplete()) {
       <span class="step-chip__badge" title="Faltan datos en este paso"></span>
     }

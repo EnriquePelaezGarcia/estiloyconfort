@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { QuotesService } from '../../../core/services/quotes.service';
 import { PublicQuote } from '../../../core/models/quote.model';
 import { SaleScheme } from '../../../core/models/order.model';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 /** Cómo se le nombra al cliente cada condición de venta. */
 const SCHEME_LABELS: Record<SaleScheme, string> = {
@@ -28,7 +29,7 @@ const SCHEME_LABELS: Record<SaleScheme, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-view.component.html',
   styleUrl: './quote-view.component.scss',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent],
 })
 export class QuoteViewComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -37,6 +38,9 @@ export class QuoteViewComponent implements OnInit {
   protected loading = signal(true);
   protected quote = signal<PublicQuote | null>(null);
   protected notFound = signal(false);
+
+  /** Foto de producto abierta en grande; null = lightbox cerrado. */
+  protected zoomedImage = signal<string | null>(null);
 
   protected schemeLabel(scheme: SaleScheme): string {
     return SCHEME_LABELS[scheme] ?? 'Contado';

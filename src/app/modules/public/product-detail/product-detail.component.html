@@ -62,17 +62,24 @@
         }
         <h1 class="detail__name">{{ product()!.name }}</h1>
 
-        @if (product()!.availability_days === 0) {
+        @if (inStock()) {
           <span class="detail__badge detail__badge--available">
             <span class="material-symbols-outlined">check_circle</span>
-            Disponibilidad inmediata
+            Disponible
           </span>
         } @else {
           <span class="detail__badge detail__badge--order">
             <span class="material-symbols-outlined">schedule</span>
-            {{ product()!.availability_days }} días de fabricación
+            Sobre pedido
           </span>
         }
+        <p class="detail__availability-note">
+          @if (inStock()) {
+            Entrega inmediata desde bodega.
+          } @else {
+            Se fabrica especialmente para ti.
+          }
+        </p>
 
         <!-- Material: M5 — con un solo material declarado, la ficha no pregunta -->
         @if (materialOptions().length > 1) {

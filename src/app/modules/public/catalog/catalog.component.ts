@@ -16,6 +16,18 @@ import { Product, ProductFilters, ProductListResponse } from '../../../core/mode
 import { Category } from '../../../core/models/category.model';
 import { ProductCardComponent } from '../../../shared/components/product-card/product-card.component';
 
+type CatalogSort = NonNullable<ProductFilters['sort']>;
+
+/**
+ * Orden con el que abre el catálogo. Se compara contra él para decidir si el
+ * orden viaja en la URL: el default se omite para no ensuciar el link que la
+ * gente comparte.
+ */
+const DEFAULT_SORT: CatalogSort = 'popular';
+
+/** Órdenes que el selector ofrece; cualquier otro valor en la URL se ignora. */
+const VALID_SORTS: CatalogSort[] = ['popular', 'newest', 'price_asc', 'price_desc', 'name'];
+
 @Component({
   selector: 'app-catalog',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -34,10 +46,15 @@ export class CatalogComponent implements OnInit {
   loading = signal(false);
   addedProductId = signal<number | null>(null);
 
+  /**
+   * D2 (Docs/plan-catalogo-mas-populares.md): el catálogo abre por popularidad
+   * — pedidos y cotizaciones de los últimos 3 meses. "Más reciente" pasa a ser
+   * una opción más del selector.
+   */
   filters = signal<ProductFilters>({
     page: 1,
     limit: 12,
-    sort: 'newest',
+    sort: DEFAULT_SORT,
   });
 
   products = computed(() => this.result()?.data ?? []);
@@ -53,11 +70,16 @@ export class CatalogComponent implements OnInit {
     this.productService.getCategories().subscribe(cats => this.categories.set(cats));
 
     this.route.queryParams.subscribe(params => {
+      // `orden` se lee de la URL (antes se ignoraba): sin esto, un link
+      // compartido con ?orden=price_asc mostraba el selector en un valor y la
+      // lista ordenada en otro. Un valor desconocido cae al default.
+      const orden = params['orden'] as CatalogSort | undefined;
       this.filters.update(f => ({
         ...f,
         category: params['categoria'] || undefined,
         search: params['q'] || undefined,
         page: Number(params['pagina'] || 1),
+        sort: orden && VALID_SORTS.includes(orden) ? orden : DEFAULT_SORT,
       }));
       this.searchValue = params['q'] || '';
       this.loadProducts();
@@ -84,7 +106,10 @@ export class CatalogComponent implements OnInit {
         categoria: category || null,
         q: search || null,
         pagina: page !== 1 ? page : null,
-        orden: sort !== 'newest' ? sort : null,
+        // Se compara contra el default vigente, no contra 'newest': si no, el
+        // catálogo arrastraría siempre ?orden=popular y en cambio el orden por
+        // novedad no quedaría en la URL — justo al revés.
+        orden: sort !== DEFAULT_SORT ? sort : null,
       },
       queryParamsHandling: 'merge',
     });

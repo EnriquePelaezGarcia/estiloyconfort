@@ -4,6 +4,7 @@ const PricingConfig = require('./PricingConfig');
 const Quote = require('./Quote');
 const StockReservation = require('./StockReservation');
 const { calculateCredit } = require('../utils/pricingCalculator');
+const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
 
 const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
 
@@ -316,6 +317,12 @@ function mapOrder(row) {
     deliveryAddressLng: row.delivery_address_lng != null ? Number(row.delivery_address_lng) : null,
     googleMapsUrl: row.google_maps_url ?? null,
     deliveryType: row.delivery_type,
+    /**
+     * Recoge en tienda (Docs/plan-recoge-en-tienda.md): el cliente se lleva el
+     * mueble de la tienda en ese momento. Sin envío, sin dirección, sin
+     * horario y sin repartidor; el pedido nace ya en 'delivered'.
+     */
+    pickupInStore: !!row.pickup_in_store,
     deliveryPersonId: row.delivery_person_id,
     deliveryPersonName: row.delivery_person_name ?? null,
     paymentMethod: row.payment_method,
@@ -667,6 +674,16 @@ const Order = {
         throw err;
       }
 
+      // Recoge en tienda (Docs/plan-recoge-en-tienda.md RN-P3): si el cliente
+      // se lleva el mueble ahora, el pedido tiene que estar pagado completo.
+      // Crédito Tienda y Apartado son, por definición, lo contrario.
+      const pickupInStore = !!data.pickupInStore;
+      if (pickupInStore && !PICKUP_PAYMENT_METHODS.includes(paymentMethod)) {
+        const err = new Error('Recoge en tienda solo admite pago completo (contado, MSI o mayoreo).');
+        err.statusCode = 400;
+        throw err;
+      }
+
       // M4: cada línea trae y congela su propio material_id + color; ya no
       // hay un material único de pedido que reprecie todas las líneas.
       let total = 0;
@@ -675,6 +692,17 @@ const Order = {
         const resolved = await resolveOrderLine(conn, it, paymentMethod, config);
         total += resolved.subtotal;
         resolvedItems.push(resolved);
+      }
+
+      // RN-P1: solo se puede recoger en tienda lo que YA está en tienda. Se
+      // valida contra los items resueltos (requiresFabrication lo deriva el
+      // servidor del stock real), nunca contra lo que mandó el cliente.
+      if (pickupInStore && resolvedItems.some((it) => it.requiresFabrication)) {
+        const err = new Error(
+          "No se puede marcar 'Recoge en tienda': el pedido tiene piezas sobre pedido o agotadas.",
+        );
+        err.statusCode = 400;
+        throw err;
       }
 
       // Para "Crédito Tienda" el total es precio con interés y se guarda el desglose.
@@ -705,14 +733,16 @@ const Order = {
         layawayDeadline = deadline.toISOString().slice(0, 10);
       }
 
-      // El costo de envío se suma al total a pagar de cualquier esquema de venta.
-      const shippingCost = Math.max(0, Number(data.shippingCost) || 0);
-      const shippingPostalCode = data.shippingPostalCode ?? null;
+      // RN-P2: en pickup no hay envío que cobrar ni CP a dónde ir. Se fuerza
+      // aquí y no se confía en que el cliente haya mandado cero.
+      const shippingCost = pickupInStore ? 0 : Math.max(0, Number(data.shippingCost) || 0);
+      const shippingPostalCode = pickupInStore ? null : (data.shippingPostalCode ?? null);
       totalAmount += shippingCost;
 
       // Servicio de armado: el servidor calcula el costo con las tarifas
       // vigentes (snapshot en el pedido); el cliente solo manda flag + pisos.
-      const assemblyService = !!data.assemblyService;
+      // RN-P2: el armado es un servicio a domicilio — en pickup no aplica.
+      const assemblyService = !pickupInStore && !!data.assemblyService;
       const assemblyFloors = assemblyService ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0) : 0;
       let assemblyCost = 0;
       if (assemblyService) {
@@ -724,29 +754,44 @@ const Order = {
       // Fecha, tipo de compromiso y ventana horaria de la entrega al cliente.
       // Un pedido nuevo siempre nace 'pending', así que basta con mirar los
       // items recién resueltos.
-      const schedule = await normalizeDeliverySchedule(
-        data, conn, resolvedItems.some((it) => it.requiresFabrication),
-      );
+      //
+      // RN-P4: el pickup no negocia horario — se entrega en este momento. Se
+      // sella la fecha de hoy y se salta la normalización, que solo tiene
+      // sentido para una entrega futura a domicilio.
+      const schedule = pickupInStore
+        ? {
+            expectedDeliveryDate: new Date().toISOString().slice(0, 10),
+            deliveryCommitment: 'tentative',
+            deliveryWindowStart: null,
+            deliveryWindowEnd: null,
+            deliverySlotId: null,
+          }
+        : await normalizeDeliverySchedule(
+            data, conn, resolvedItems.some((it) => it.requiresFabrication),
+          );
 
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
            delivery_address, delivery_address_lat, delivery_address_lng, google_maps_url,
-           delivery_type, payment_method, payment_status, payment_amount, order_status,
+           delivery_type, pickup_in_store, payment_method, payment_status, payment_amount, order_status,
            expected_delivery_date, delivery_commitment, delivery_window_start,
            delivery_window_end, delivery_slot_id,
            total_amount, shipping_cost, shipping_postal_code,
            assembly_service, assembly_floors, assembly_cost,
            notas_fabricante, notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
           data.deliveryAddressLat ?? null, data.deliveryAddressLng ?? null,
           data.googleMapsUrl ?? null,
-          deliveryType, paymentMethod,
-          'pending', 0, 'pending', schedule.expectedDeliveryDate,
+          deliveryType, pickupInStore ? 1 : 0, paymentMethod,
+          // RN-P4: el pickup ya se entregó — el cliente se lo llevó al crear
+          // el pedido. El cobro sigue su curso normal (D6): si queda saldo, el
+          // detalle avisa "Entregado sin cobro registrado".
+          'pending', 0, pickupInStore ? 'delivered' : 'pending', schedule.expectedDeliveryDate,
           schedule.deliveryCommitment, schedule.deliveryWindowStart,
           schedule.deliveryWindowEnd, schedule.deliverySlotId,
           totalAmount, shippingCost, shippingPostalCode,
@@ -777,7 +822,9 @@ const Order = {
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
 
         // Reserva de pieza (D4): nace ligada a este order_item recién creado.
-        if (it.reserve) {
+        // RN-P5: en pickup no hay nada que apartar — el cliente se lleva la
+        // pieza en este momento.
+        if (it.reserve && !pickupInStore) {
           await StockReservation.create({
             productId: it.productId,
             materialId: it.materialId,
@@ -816,6 +863,10 @@ const Order = {
       return this.updateWithItems(id, data, userId);
     }
 
+    // `pickupInStore` NO entra aquí a propósito: cambiar el modo de entrega
+    // arrastra totales (envío, armado) y estado del pedido (D8), y esta ruta
+    // no recalcula nada. El cambio de modo va siempre por `updateWithItems`,
+    // que es lo que manda el POS. Un PATCH suelto del flag se ignora.
     const allowed = {
       customerName: 'customer_name', customerEmail: 'customer_email',
       customerPhone: 'customer_phone', deliveryAddress: 'delivery_address',
@@ -952,6 +1003,17 @@ const Order = {
         throw err;
       }
 
+      // Recoge en tienda: se conserva el modo del pedido si la edición no lo
+      // toca (Docs/plan-recoge-en-tienda.md D8).
+      const pickupInStore = data.pickupInStore !== undefined
+        ? !!data.pickupInStore
+        : !!existing.pickupInStore;
+      if (pickupInStore && !PICKUP_PAYMENT_METHODS.includes(paymentMethod)) {
+        const err = new Error('Recoge en tienda solo admite pago completo (contado, MSI o mayoreo).');
+        err.statusCode = 400;
+        throw err;
+      }
+
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
@@ -960,6 +1022,16 @@ const Order = {
         const resolved = await resolveOrderLine(conn, it, paymentMethod, config, id);
         total += resolved.subtotal;
         resolvedItems.push(resolved);
+      }
+
+      // RN-P1, igual que en create: solo se recoge en tienda lo que ya está
+      // en tienda, medido contra los items NUEVOS de esta edición.
+      if (pickupInStore && resolvedItems.some((it) => it.requiresFabrication)) {
+        const err = new Error(
+          "No se puede marcar 'Recoge en tienda': el pedido tiene piezas sobre pedido o agotadas.",
+        );
+        err.statusCode = 400;
+        throw err;
       }
 
       // 3. Recalcular totales y desglose según el método de pago.
@@ -994,12 +1066,13 @@ const Order = {
       }
 
       // Costo de envío: se conserva el del pedido si no viene en la edición.
-      const shippingCost = data.shippingCost !== undefined
+      // RN-P2: en pickup no hay envío, venga lo que venga en la petición.
+      const shippingCost = pickupInStore ? 0 : (data.shippingCost !== undefined
         ? Math.max(0, Number(data.shippingCost) || 0)
-        : Number(existing.shippingCost) || 0;
-      const shippingPostalCode = data.shippingPostalCode !== undefined
+        : Number(existing.shippingCost) || 0);
+      const shippingPostalCode = pickupInStore ? null : (data.shippingPostalCode !== undefined
         ? data.shippingPostalCode
-        : existing.shippingPostalCode;
+        : existing.shippingPostalCode);
       totalAmount += shippingCost;
 
       // Servicio de armado: si la edición lo modifica se recalcula con las
@@ -1012,20 +1085,51 @@ const Order = {
         assemblyFloors = assemblyService ? Math.max(0, Math.trunc(Number(data.assemblyFloors)) || 0) : 0;
         assemblyCost = assemblyService ? computeAssemblyCost(assemblyFloors, config) : 0;
       }
+      // RN-P2: el armado es un servicio a domicilio — en pickup no aplica,
+      // incluso si el pedido lo traía de cuando era a domicilio.
+      if (pickupInStore) {
+        assemblyService = false;
+        assemblyFloors = 0;
+        assemblyCost = 0;
+      }
       totalAmount += assemblyCost;
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
       // 3.b Bloque de entrega: se valida la mezcla de lo que llega con lo que
       // ya tenía el pedido (§3.2) y, si algo cambió, queda en bitácora (D7).
-      const mergedSchedule = {};
-      for (const k of DELIVERY_SCHEDULE_KEYS) {
-        mergedSchedule[k] = data[k] !== undefined ? data[k] : existing[k];
+      // En pickup no hay horario que negociar (RN-P4): se sella hoy.
+      let schedule;
+      if (pickupInStore) {
+        schedule = {
+          expectedDeliveryDate: new Date().toISOString().slice(0, 10),
+          deliveryCommitment: 'tentative',
+          deliveryWindowStart: null,
+          deliveryWindowEnd: null,
+          deliverySlotId: null,
+        };
+      } else {
+        const mergedSchedule = {};
+        for (const k of DELIVERY_SCHEDULE_KEYS) {
+          mergedSchedule[k] = data[k] !== undefined ? data[k] : existing[k];
+        }
+        // Se valida contra los items NUEVOS de esta edición, no los viejos.
+        schedule = await normalizeDeliverySchedule(
+          mergedSchedule, conn, hasPendingFabrication(resolvedItems, existing.orderStatus),
+        );
       }
-      // Se valida contra los items NUEVOS de esta edición, no los viejos.
-      const schedule = await normalizeDeliverySchedule(
-        mergedSchedule, conn, hasPendingFabrication(resolvedItems, existing.orderStatus),
-      );
       await logDeliveryChange(conn, id, existing, schedule, data.rescheduleReason, userId);
+
+      /**
+       * D8 — el modo de entrega arrastra el estado del pedido:
+       *   - se prende el pickup  → el cliente se lo lleva ahora: 'delivered'.
+       *   - se apaga el pickup   → deshacer un pickup mal capturado: el pedido
+       *     vuelve a 'pending' y recupera todas las validaciones de entrega.
+       * Si el modo no cambió, el estado no se toca.
+       */
+      let statusOverride = null;
+      if (pickupInStore !== !!existing.pickupInStore) {
+        statusOverride = pickupInStore ? 'delivered' : 'pending';
+      }
 
       // 4. Reemplazar los items y descontar el nuevo stock.
       // Nota (§4.3): DELETE arrastra por ON DELETE CASCADE cualquier reserva
@@ -1050,7 +1154,8 @@ const Order = {
         );
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
 
-        if (it.reserve) {
+        // RN-P5: en pickup no hay nada que apartar.
+        if (it.reserve && !pickupInStore) {
           await StockReservation.create({
             productId: it.productId,
             materialId: it.materialId,
@@ -1074,6 +1179,7 @@ const Order = {
         `UPDATE orders SET
            customer_name = ?, customer_email = ?, customer_phone = ?,
            delivery_address = ?, google_maps_url = ?, delivery_type = ?,
+           pickup_in_store = ?, order_status = COALESCE(?, order_status),
            payment_method = ?, payment_status = ?, expected_delivery_date = ?,
            delivery_commitment = ?, delivery_window_start = ?,
            delivery_window_end = ?, delivery_slot_id = ?, notes = ?,
@@ -1090,6 +1196,7 @@ const Order = {
           data.deliveryAddress !== undefined ? data.deliveryAddress : existing.deliveryAddress,
           data.googleMapsUrl !== undefined ? data.googleMapsUrl : existing.googleMapsUrl,
           deliveryType,
+          pickupInStore ? 1 : 0, statusOverride,
           paymentMethod, paymentStatus,
           schedule.expectedDeliveryDate, schedule.deliveryCommitment,
           schedule.deliveryWindowStart, schedule.deliveryWindowEnd, schedule.deliverySlotId,
@@ -1190,6 +1297,12 @@ const Order = {
   async assignDeliveryPerson(id, deliveryPersonId, assignmentDate) {
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
+    // RN-P2: un pedido que el cliente recogió en tienda no tiene ruta.
+    if (order.pickupInStore) {
+      const err = new Error('Este pedido se recoge en tienda: no requiere repartidor');
+      err.statusCode = 400;
+      throw err;
+    }
     // Si el pedido tiene muebles sobre pedido, no se puede asignar repartidor
     // hasta que el fabricante los marque listos (order_status pasa a 'ready').
     if (hasPendingFabrication(order.items, order.orderStatus)) {
@@ -1227,10 +1340,24 @@ const Order = {
     const [items] = await pool.execute(
       'SELECT product_id, material_id, quantity FROM order_items WHERE order_id = ?', [id],
     );
+    const existing = await this.findById(id);
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE id = ?", [id]);
+
+      // D9 — devolución: cancelar un pedido ya cobrado (el caso típico es un
+      // "recoge en tienda" que el cliente regresa) deja anotado cuánto hay que
+      // reembolsarle. El movimiento del dinero es manual, igual que el saldo a
+      // favor por cambio de producto.
+      const paid = Number(existing?.paymentAmount) || 0;
+      if (paid > 0) {
+        const stamp = new Date().toISOString().slice(0, 10);
+        const note = `[${stamp}] Reembolso al cliente: $${paid.toFixed(2)} por devolución`;
+        const notes = existing.notes ? `${existing.notes}\n${note}` : note;
+        await conn.execute('UPDATE orders SET notes = ? WHERE id = ?', [notes, id]);
+      }
+
       // Devolver stock al cancelar el pedido, cada uno a su material congelado.
       for (const item of items) {
         if (item.product_id != null && item.material_id != null) {

@@ -41,6 +41,7 @@
       <div class="filter-group">
         <h3 class="filter-group__title">Ordenar por</h3>
         <select class="filter-group__select" [value]="filters().sort" (change)="onSortChange($any($event.target).value)">
+          <option value="popular">Más populares</option>
           <option value="newest">Más reciente</option>
           <option value="price_asc">Precio: menor a mayor</option>
           <option value="price_desc">Precio: mayor a menor</option>

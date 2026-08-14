@@ -178,6 +178,12 @@ export interface Order {
   deliveryAddressLng?: number | null;
   googleMapsUrl?: string | null;
   deliveryType: DeliveryType;
+  /**
+   * Recoge en tienda (Docs/plan-recoge-en-tienda.md): el cliente se llevó el
+   * mueble de la tienda en el momento de la venta. Sin envío, sin dirección,
+   * sin horario y sin repartidor; el pedido nace ya en 'delivered'.
+   */
+  pickupInStore?: boolean;
   deliveryPersonId?: number | null;
   deliveryPersonName?: string | null;
   paymentMethod: SaleScheme;
@@ -246,6 +252,12 @@ export interface CreateOrderRequest {
   deliveryAddress?: string | null;
   googleMapsUrl?: string | null;
   deliveryType: DeliveryType;
+  /**
+   * Recoge en tienda: el backend fuerza envío y armado a cero, sella la fecha
+   * de hoy y crea el pedido ya 'delivered'. Solo admite pago completo y
+   * exige que ninguna línea requiera fabricación.
+   */
+  pickupInStore?: boolean;
   paymentMethod: SaleScheme;
   expectedDeliveryDate?: string | null;
   /** 'exact' exige fecha y ventana horaria; el backend rechaza lo contrario. */

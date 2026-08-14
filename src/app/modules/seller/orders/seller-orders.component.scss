@@ -44,3 +44,19 @@
     text-align: center;
   }
 }
+
+// Icono de repartidor: verde y con fondo permanente cuando ya hay repartidor
+// asignado, para que se distinga sin necesidad de pasar el mouse encima.
+.icon-btn--assigned {
+  color: vars.$color-success;
+  background: rgba(vars.$color-success, 0.16);
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  }
+
+  &:hover {
+    background: rgba(vars.$color-success, 0.26);
+    color: vars.$color-success;
+  }
+}
