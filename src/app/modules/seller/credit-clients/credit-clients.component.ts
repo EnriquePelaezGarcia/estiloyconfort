@@ -13,6 +13,7 @@ import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { CreditClient } from '../../../core/models/order.model';
 import { PAYMENT_METHOD_LABELS } from '../../../core/models/order-labels';
+import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 
 type FilterTab = 'all' | 'store_credit' | 'layaway';
 
@@ -21,7 +22,7 @@ type FilterTab = 'all' | 'store_credit' | 'layaway';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './credit-clients.component.html',
   styleUrl: './credit-clients.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, CurrencyInputDirective],
 })
 export class CreditClientsComponent implements OnInit {
   private sellerService = inject(SellerService);

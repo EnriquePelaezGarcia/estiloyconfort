@@ -76,6 +76,9 @@ function mapItem(row) {
     materialLabel: row.material_label,
     color: row.color ?? null,
     requiresFabrication: !!row.requires_fabrication,
+    /** Foto principal del producto (tabla product_images). No es congelada:
+     * si el catálogo cambia la foto, el pedido muestra la vigente. */
+    imageUrl: row.primary_image ?? null,
     /** Fabricante al que se le compra este item (tabla manufacturers). */
     manufacturerId: row.manufacturer_id ?? null,
     manufacturerName: row.manufacturer_name ?? null,
@@ -121,6 +124,17 @@ function computeAssemblyCost(floors, configMap) {
 }
 
 const DELIVERY_COMMITMENTS = ['tentative', 'exact'];
+
+/**
+ * ¿El pedido tiene piezas agotadas/sobre-pedido AÚN sin fabricar? Mismo
+ * criterio que ya usaba `assignDeliveryPerson` para bloquear la asignación de
+ * repartidor: una vez 'ready'/'in_delivery'/'delivered' el mueble ya está (o
+ * ya salió) y comprometer fecha y hora exactas vuelve a tener sentido.
+ */
+function hasPendingFabrication(items, orderStatus) {
+  return (items ?? []).some((it) => it.requiresFabrication)
+    && orderStatus !== 'ready' && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
+}
 
 /** Campos que forman el bloque de entrega; son interdependientes (§3.2). */
 const DELIVERY_SCHEDULE_KEYS = [
@@ -180,14 +194,22 @@ function normalizeDate(value) {
  *
  * @param {object} data campos ya mezclados con los del pedido existente
  * @param {object} executor pool o conexión de transacción
+ * @param {boolean} blockExact true si el pedido tiene piezas agotadas/sobre
+ *   pedido sin fabricar todavía: en ese caso 'exact' se rechaza —no se puede
+ *   comprometer un horario para un mueble que aún no existe en tienda.
  * @returns {Promise<{expectedDeliveryDate:string|null, deliveryCommitment:string,
  *   deliveryWindowStart:string|null, deliveryWindowEnd:string|null,
  *   deliverySlotId:number|null}>}
  */
-async function normalizeDeliverySchedule(data, executor = pool) {
+async function normalizeDeliverySchedule(data, executor = pool, blockExact = false) {
   const commitment = data.deliveryCommitment ?? 'tentative';
   if (!DELIVERY_COMMITMENTS.includes(commitment)) {
     throw badRequest('El tipo de entrega debe ser "tentative" o "exact".');
+  }
+  if (commitment === 'exact' && blockExact) {
+    throw badRequest(
+      'No se puede comprometer fecha y horario exactos: el pedido tiene piezas agotadas o sobre pedido pendientes de fabricar.',
+    );
   }
 
   const date = normalizeDate(data.expectedDeliveryDate);
@@ -591,7 +613,9 @@ const Order = {
       `SELECT oi.*, m.name AS manufacturer_name, rb.full_name AS ready_by_name,
               r.id AS reservation_id, r.quantity AS reservation_quantity,
               r.reason AS reservation_reason, r.note AS reservation_note,
-              r.customer_name AS reservation_customer_name
+              r.customer_name AS reservation_customer_name,
+              (SELECT image_url FROM product_images
+                WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
        FROM order_items oi
        LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
        LEFT JOIN users rb ON rb.id = oi.ready_by
@@ -698,7 +722,11 @@ const Order = {
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
       // Fecha, tipo de compromiso y ventana horaria de la entrega al cliente.
-      const schedule = await normalizeDeliverySchedule(data, conn);
+      // Un pedido nuevo siempre nace 'pending', así que basta con mirar los
+      // items recién resueltos.
+      const schedule = await normalizeDeliverySchedule(
+        data, conn, resolvedItems.some((it) => it.requiresFabrication),
+      );
 
       const [result] = await conn.execute(
         `INSERT INTO orders
@@ -823,7 +851,9 @@ const Order = {
       for (const k of DELIVERY_SCHEDULE_KEYS) {
         merged[k] = data[k] !== undefined ? data[k] : existing[k];
       }
-      schedule = await normalizeDeliverySchedule(merged);
+      schedule = await normalizeDeliverySchedule(
+        merged, pool, hasPendingFabrication(existing.items, existing.orderStatus),
+      );
       sets.push(
         'expected_delivery_date = ?', 'delivery_commitment = ?',
         'delivery_window_start = ?', 'delivery_window_end = ?', 'delivery_slot_id = ?',
@@ -991,7 +1021,10 @@ const Order = {
       for (const k of DELIVERY_SCHEDULE_KEYS) {
         mergedSchedule[k] = data[k] !== undefined ? data[k] : existing[k];
       }
-      const schedule = await normalizeDeliverySchedule(mergedSchedule, conn);
+      // Se valida contra los items NUEVOS de esta edición, no los viejos.
+      const schedule = await normalizeDeliverySchedule(
+        mergedSchedule, conn, hasPendingFabrication(resolvedItems, existing.orderStatus),
+      );
       await logDeliveryChange(conn, id, existing, schedule, data.rescheduleReason, userId);
 
       // 4. Reemplazar los items y descontar el nuevo stock.
@@ -1159,11 +1192,7 @@ const Order = {
     if (!order) throw new Error('Pedido no encontrado');
     // Si el pedido tiene muebles sobre pedido, no se puede asignar repartidor
     // hasta que el fabricante los marque listos (order_status pasa a 'ready').
-    const hasPendingFabrication = (order.items ?? []).some((it) => it.requiresFabrication)
-      && order.orderStatus !== 'ready'
-      && order.orderStatus !== 'in_delivery'
-      && order.orderStatus !== 'delivered';
-    if (hasPendingFabrication) {
+    if (hasPendingFabrication(order.items, order.orderStatus)) {
       const err = new Error(
         'No se puede asignar repartidor: el pedido tiene muebles sobre pedido pendientes de fabricación',
       );

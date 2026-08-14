@@ -63,6 +63,9 @@
           <p class="label-overline">Tu compra</p>
           @for (it of t.items; track $index) {
             <div class="line">
+              @if (it.imageUrl) {
+                <img class="line__thumb" [src]="it.imageUrl" [alt]="it.productName" width="56" height="56" />
+              }
               <div class="line__main">
                 <p class="line__name">{{ it.productName }}</p>
                 <p class="line__spec">
@@ -100,6 +103,14 @@
               <span>{{ t.assemblyCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
           }
+          @if (isWholesale() && !t.wholesalePriceIncludesIva) {
+            <!-- M13: el precio de lista de Mayoreo es SIN IVA — se desglosa
+                 siempre, aunque el cliente no pida factura. -->
+            <div class="totals__row">
+              <span>IVA (se suma al facturar)</span>
+              <span>{{ wholesaleIvaAmount() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
 
           <div class="totals__row totals__row--grand">
             <span>Total</span>
@@ -125,6 +136,11 @@
                 {{ t.creditWeeks }} pagos semanales de
                 <strong>{{ t.weeklyPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
               </p>
+              @if (t.downPayment) {
+                <p class="balance__plan">
+                  Pago inicial: <strong>{{ t.downPayment | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                </p>
+              }
             } @else if (isLayaway()) {
               <p class="balance__plan">Apartado · abona cuando gustes hasta liquidar</p>
             }
@@ -153,9 +169,18 @@
             <p class="fact__value">{{ deliveryLabel(t.deliveryType) }}</p>
           </div>
           @if (t.expectedDeliveryDate) {
-            <div class="fact">
-              <p class="label-overline">Fecha estimada</p>
-              <p class="fact__value">{{ t.expectedDeliveryDate | date:'dd/MM/yyyy' }}</p>
+            <div class="fact fact--wide">
+              <p class="label-overline">
+                {{ isExactCommitment() ? 'Fecha y hora de entrega' : 'Fecha estimada' }}
+                @if (isExactCommitment()) { <span class="tag-exact">EXACTA</span> }
+              </p>
+              <p class="fact__value">
+                {{ t.expectedDeliveryDate | date:'dd/MM/yyyy' }}
+                @if (deliveryWindow(); as win) { · {{ win }} }
+              </p>
+              @if (showTentativeDeliveryNotice()) {
+                <p class="fact__notice">{{ tentativeDeliveryNotice }}</p>
+              }
             </div>
           }
           @if (t.deliveryAddress) {

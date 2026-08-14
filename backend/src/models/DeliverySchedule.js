@@ -35,6 +35,12 @@ function bucketFor(daysUntil) {
   return 'upcoming';
 }
 
+/** Mismo criterio que Order.hasPendingFabrication: piezas por fabricar y el pedido aún no llegó a listo/en entrega/entregado. */
+function hasPendingFabrication(fabricationItemsCount, orderStatus) {
+  return Number(fabricationItemsCount) > 0
+    && orderStatus !== 'ready' && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
+}
+
 function mapRow(row) {
   const daysUntil = row.days_until != null ? Number(row.days_until) : null;
   return {
@@ -57,6 +63,7 @@ function mapRow(row) {
     daysUntil,
     itemsSummary: row.items_summary ?? '',
     instruccionesEntrega: row.instrucciones_entrega ?? null,
+    hasPendingFabrication: hasPendingFabrication(row.fabrication_items_count, row.order_status),
   };
 }
 
@@ -115,7 +122,9 @@ const DeliverySchedule = {
               DATEDIFF(o.expected_delivery_date, CURDATE()) AS days_until,
               s.full_name AS seller_name, d.full_name AS delivery_person_name,
               (SELECT GROUP_CONCAT(CONCAT(oi.product_name, ' (', oi.quantity, ')') SEPARATOR ' · ')
-                 FROM order_items oi WHERE oi.order_id = o.id) AS items_summary
+                 FROM order_items oi WHERE oi.order_id = o.id) AS items_summary,
+              (SELECT COUNT(*) FROM order_items oi2
+                 WHERE oi2.order_id = o.id AND oi2.requires_fabrication = 1) AS fabrication_items_count
        FROM orders o
        LEFT JOIN users s ON s.id = o.seller_id
        LEFT JOIN users d ON d.id = o.delivery_person_id

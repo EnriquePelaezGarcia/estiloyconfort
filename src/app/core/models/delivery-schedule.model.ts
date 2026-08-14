@@ -32,6 +32,8 @@ export interface ScheduledDelivery {
   daysUntil: number | null;
   itemsSummary: string;
   instruccionesEntrega: string | null;
+  /** Piezas agotadas/sobre pedido sin fabricar todavía (Order.hasPendingFabrication en backend). */
+  hasPendingFabrication: boolean;
 }
 
 /**

@@ -246,6 +246,9 @@ $ticket-font: 'Courier New', monospace;
   &__item-name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
   &__item-spec { margin: 0; font-size: 7.5pt; }
 
+  // Deslinde de fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6).
+  &__notice { margin: 1px 0 4px; font-size: 7pt; line-height: 1.4; }
+
   &__foot {
     margin: 4px 0 0;
     text-align: center;

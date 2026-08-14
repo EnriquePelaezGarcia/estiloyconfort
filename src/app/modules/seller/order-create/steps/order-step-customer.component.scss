@@ -133,3 +133,21 @@
 
   .req { color: vars.$color-error; }
 }
+
+// Aviso cuando el carrito tiene piezas agotadas/sobre pedido: reemplaza el
+// selector Tentativa/Exacta — no hay opción de horario que ofrecer.
+// Mismo ámbar que el aviso de piezas apartadas (order-detail .reserved-box).
+.fabrication-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: vars.$spacing-sm;
+  margin: 0 0 vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid #f59e0b;
+  border-radius: vars.$radius-sm;
+  background: color-mix(in srgb, #f59e0b 8%, white);
+  font-size: 0.8125rem;
+  color: vars.$color-text;
+
+  .material-symbols-outlined { font-size: 1.1rem; color: #f59e0b; }
+}

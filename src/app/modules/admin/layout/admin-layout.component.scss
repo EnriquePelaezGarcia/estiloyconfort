@@ -32,6 +32,7 @@ $sidebar-width: 264px;
   background: vars.$color-primary-dark;
   color: #fff;
   padding: vars.$spacing-lg vars.$spacing-md;
+  overflow: hidden; // el scroll vive en .sidebar__nav, no en el aside completo
   transform: translateX(-100%);
   transition: transform vars.$transition-base;
   z-index: calc(#{vars.$z-navbar} + 1);
@@ -52,6 +53,7 @@ $sidebar-width: 264px;
   padding: 0 vars.$spacing-sm vars.$spacing-lg;
   border-bottom: 1px solid rgba(#fff, 0.1);
   margin-bottom: vars.$spacing-md;
+  flex-shrink: 0;
 }
 
 .sidebar__ornament {
@@ -77,17 +79,43 @@ $sidebar-width: 264px;
   }
 }
 
+// Con muchos módulos el menú ya no cabe en pantallas bajas: la lista scrollea
+// por dentro y marca/logout quedan siempre visibles.
 .sidebar__nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: 1;
+  min-height: 0; // sin esto el hijo flex no se deja encoger y no aparece el scroll
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(#fff, 0.25) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(#fff, 0.2);
+    border-radius: vars.$radius-full;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(#fff, 0.35);
+  }
 }
 
 .nav-link {
   display: flex;
   align-items: center;
   gap: vars.$spacing-sm;
+  flex-shrink: 0;
   padding: 0.7rem vars.$spacing-sm;
   border-radius: vars.$radius-md;
   color: rgba(#fff, 0.78);
@@ -140,6 +168,7 @@ $sidebar-width: 264px;
   display: flex;
   align-items: center;
   gap: vars.$spacing-sm;
+  flex-shrink: 0;
   margin-top: vars.$spacing-md;
   padding: 0.7rem vars.$spacing-sm;
   border: 1px solid rgba(#fff, 0.18);

@@ -2,8 +2,18 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { TicketsService } from '../../../core/services/tickets.service';
+import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { PublicTicket } from '../../../core/models/ticket.model';
 import { DeliveryType, OrderStatus, SaleScheme } from '../../../core/models/order.model';
+
+/**
+ * Fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6): nos deslindamos de
+ * la fecha exacta y dejamos claro qué pasa si el mueble llega antes o hay
+ * ajuste — mismo texto en los dos tickets (térmico y WhatsApp).
+ */
+const TENTATIVE_DELIVERY_NOTICE =
+  'Fecha estimada, sujeta a cambios. Si tu mueble llega antes, te lo entregamos antes; ' +
+  'en cuanto esté en tienda te contactamos para coordinar la entrega.';
 
 /**
  * Cómo se le nombra al cliente cada condición de venta. No se reusan los
@@ -58,6 +68,7 @@ export class TicketViewComponent implements OnInit {
 
   protected isCredit = computed(() => this.ticket()?.paymentMethod === 'store_credit');
   protected isLayaway = computed(() => this.ticket()?.paymentMethod === 'layaway');
+  protected isWholesale = computed(() => this.ticket()?.paymentMethod === 'wholesale');
 
   /** Hay saldo pendiente: el bloque del saldo pasa a ser el foco de la hoja. */
   protected hasBalance = computed(() => (this.ticket()?.balance ?? 0) > 0);
@@ -68,6 +79,37 @@ export class TicketViewComponent implements OnInit {
     if (!t) return 0;
     return t.items.reduce((sum, it) => sum + it.subtotal, 0);
   });
+
+  /**
+   * M13 — igual que en el ticket térmico: el precio de lista de Mayoreo es
+   * SIN IVA por default, así que el ticket lo suma siempre, aunque el
+   * cliente no pida factura.
+   */
+  protected wholesaleIvaAmount = computed(() => {
+    const t = this.ticket();
+    if (!t || !this.isWholesale() || t.wholesalePriceIncludesIva) return 0;
+    return this.productsSubtotal() * (t.ivaRate / 100);
+  });
+
+  /** '1:00pm – 3:00pm', o '' si el pedido no tiene ventana capturada. */
+  protected deliveryWindow = computed(() => {
+    const t = this.ticket();
+    return t ? formatWindow(t.deliveryWindowStart, t.deliveryWindowEnd) : '';
+  });
+
+  protected isExactCommitment = computed(() => this.ticket()?.deliveryCommitment === 'exact');
+
+  /** ¿Alguna línea del pedido está agotada o se fabrica sobre pedido? */
+  protected hasFabricationItems = computed(() =>
+    (this.ticket()?.items ?? []).some((it) => it.requiresFabrication),
+  );
+
+  /** El aviso de fecha estimada solo aplica mientras el compromiso siga siendo Tentativa. */
+  protected showTentativeDeliveryNotice = computed(
+    () => this.hasFabricationItems() && !this.isExactCommitment(),
+  );
+
+  protected readonly tentativeDeliveryNotice = TENTATIVE_DELIVERY_NOTICE;
 
   protected schemeLabel(s: SaleScheme): string { return SCHEME_LABELS[s] ?? 'Contado'; }
   protected statusLabel(s: OrderStatus): string { return STATUS_LABELS[s] ?? ''; }

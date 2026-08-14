@@ -13,6 +13,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ExpensesService } from '../../../../core/services/expenses.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
 import {
   Expense,
   ExpenseCategory,
@@ -44,7 +45,7 @@ type Period = 'week' | 'month' | 'year';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quick-expense.component.html',
   styleUrl: './quick-expense.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, CurrencyInputDirective],
 })
 export class QuickExpenseComponent implements OnInit {
   private expensesService = inject(ExpensesService);

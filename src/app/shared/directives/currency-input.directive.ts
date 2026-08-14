@@ -2,9 +2,11 @@ import {
   AfterViewInit,
   Directive,
   ElementRef,
-  OnDestroy,
+  effect,
   forwardRef,
   inject,
+  input,
+  output,
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
@@ -22,14 +24,33 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     '(blur)': 'onBlur()',
   },
 })
-export class CurrencyInputDirective
-  implements ControlValueAccessor, AfterViewInit, OnDestroy
-{
-  private readonly el = inject(ElementRef<HTMLInputElement>);
+export class CurrencyInputDirective implements ControlValueAccessor, AfterViewInit {
+  private readonly el = inject<ElementRef<HTMLInputElement>>(ElementRef);
+
+  /**
+   * Modo sin formulario reactivo: valor a mostrar, para tablas editables que
+   * bindean celda por celda. `undefined` (default) significa "no bindeado" y deja
+   * el control en manos del ControlValueAccessor.
+   */
+  readonly initialValue = input<number | null | undefined>(undefined);
+
+  /** Emitido en cada tecla. En modo formulario nadie lo escucha; es inofensivo. */
+  readonly valueChange = output<number | null>();
 
   private _onChange: (v: number | null) => void = () => {};
   private _onTouched: () => void = () => {};
   private _numeric: number | null = null;
+
+  constructor() {
+    effect(() => {
+      const value = this.initialValue();
+      if (value === undefined) return; // modo formulario: manda writeValue()
+      // No pisar lo que el usuario está tecleando.
+      if (document.activeElement === this.el.nativeElement) return;
+      this._numeric = value;
+      this._setDisplay(this._format(value));
+    });
+  }
 
   // ── ControlValueAccessor ──────────────────────────────────────────────────
 
@@ -46,6 +67,10 @@ export class CurrencyInputDirective
     this._onTouched = fn;
   }
 
+  setDisabledState(isDisabled: boolean): void {
+    this.el.nativeElement.disabled = isDisabled;
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   ngAfterViewInit(): void {
@@ -53,8 +78,6 @@ export class CurrencyInputDirective
     // element; re-applying here guarantees the formatted text is visible on first paint.
     this._setDisplay(this._format(this._numeric));
   }
-
-  ngOnDestroy(): void {}
 
   // ── Host events ───────────────────────────────────────────────────────────
 
@@ -77,6 +100,7 @@ export class CurrencyInputDirective
     const parsed = clean === '' || clean === '.' ? NaN : parseFloat(clean);
     this._numeric = isNaN(parsed) ? null : parsed;
     this._onChange(this._numeric);
+    this.valueChange.emit(this._numeric);
 
     const formatted = this._formatLive(clean);
     this._setDisplay(formatted);
@@ -123,9 +147,10 @@ export class CurrencyInputDirective
 
   private _format(value: number | null): string {
     if (value === null) return '';
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'MXN',
+      currencyDisplay: 'narrowSymbol',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);

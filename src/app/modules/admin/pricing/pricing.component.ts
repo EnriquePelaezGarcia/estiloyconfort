@@ -9,13 +9,14 @@ import {
   PricingConfigMap,
 } from '../../../core/models/pricing-config.model';
 import { MaterialsStore } from '../../../core/services/materials.store';
+import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 
 @Component({
   selector: 'app-admin-pricing',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pricing.component.html',
   styleUrl: './pricing.component.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, CurrencyInputDirective],
 })
 export class PricingComponent implements OnInit {
   private pricingService = inject(PricingService);

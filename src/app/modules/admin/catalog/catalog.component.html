@@ -236,13 +236,13 @@
                     [class.costs__material-cell--base]="row.materials[materialId].isBaseCost"
                   >
                     <input
-                      type="number"
+                      type="text"
+                      inputmode="decimal"
+                      appCurrencyInput
                       class="costs__input"
-                      min="0"
-                      step="0.01"
                       placeholder="No aplica"
-                      [value]="row.materials[materialId].cost ?? ''"
-                      (input)="onCostChange(row.manufacturerId, materialId, $event)"
+                      [initialValue]="row.materials[materialId].cost"
+                      (valueChange)="onCostChange(row.manufacturerId, materialId, $event)"
                     />
                     @if (row.materials[materialId].isBaseCost) {
                       <span class="costs__badge" title="Su costo define el precio de venta en este material">manda</span>
@@ -317,7 +317,7 @@
           </div>
           <div class="field">
             <label for="targetCashPrice">Precio de contado deseado</label>
-            <input id="targetCashPrice" type="number" formControlName="targetCashPrice" min="0" step="10" />
+            <input id="targetCashPrice" type="text" inputmode="decimal" appCurrencyInput formControlName="targetCashPrice" />
             <p class="field__hint">
               @if (effectiveMargin() !== null) {
                 Margen que lo produce: <strong>{{ effectiveMargin() }} %</strong>

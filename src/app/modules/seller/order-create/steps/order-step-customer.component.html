@@ -121,22 +121,36 @@
       -->
       <div class="schedule" [class.schedule--exact]="store.isExactDelivery()">
         <span class="schedule__title">Tipo de entrega</span>
-        <div class="schedule__options">
-          <label class="schedule__option">
-            <input type="radio" formControlName="deliveryCommitment" value="tentative" />
-            <span class="schedule__option-body">
-              <span class="schedule__option-name">Tentativa</span>
-              <span class="schedule__option-hint">Nos ponemos de acuerdo con el cliente por WhatsApp.</span>
-            </span>
-          </label>
-          <label class="schedule__option">
-            <input type="radio" formControlName="deliveryCommitment" value="exact" />
-            <span class="schedule__option-body">
-              <span class="schedule__option-name">Exacta (cumpleaños / XV años)</span>
-              <span class="schedule__option-hint">No se puede entregar antes ni después de esta fecha y horario.</span>
-            </span>
-          </label>
-        </div>
+
+        @if (store.hasFabricationLines()) {
+          <!--
+            Este pedido tiene piezas agotadas o sobre pedido: no se puede
+            comprometer horario para un mueble que todavía no existe en
+            tienda. El store ya forzó Tentativa + estimado de 15 días
+            hábiles al detectarlo (order-draft.store.ts).
+          -->
+          <p class="fabrication-notice">
+            <span class="material-symbols-outlined">build</span>
+            Este pedido incluye piezas agotadas o sobre pedido: la entrega es Tentativa y no se puede fijar horario exacto hasta que el mueble esté en tienda.
+          </p>
+        } @else {
+          <div class="schedule__options">
+            <label class="schedule__option">
+              <input type="radio" formControlName="deliveryCommitment" value="tentative" />
+              <span class="schedule__option-body">
+                <span class="schedule__option-name">Tentativa</span>
+                <span class="schedule__option-hint">Nos ponemos de acuerdo con el cliente por WhatsApp.</span>
+              </span>
+            </label>
+            <label class="schedule__option">
+              <input type="radio" formControlName="deliveryCommitment" value="exact" />
+              <span class="schedule__option-body">
+                <span class="schedule__option-name">Exacta (cumpleaños / XV años)</span>
+                <span class="schedule__option-hint">No se puede entregar antes ni después de esta fecha y horario.</span>
+              </span>
+            </label>
+          </div>
+        }
 
         <div class="field-row">
           <div class="field" [class.field--error]="store.form.controls.expectedDeliveryDate.touched && store.form.controls.expectedDeliveryDate.invalid">
@@ -148,24 +162,26 @@
               <p class="field__error">Selecciona la fecha de entrega. En una entrega exacta es obligatoria.</p>
             }
           </div>
-          <div class="field" [class.field--error]="store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid">
-            <label for="deliverySlotChoice">
-              Horario de entrega @if (store.isExactDelivery()) { <span class="req">*</span> }
-            </label>
-            <select id="deliverySlotChoice" formControlName="deliverySlotChoice">
-              <option value="">Sin horario definido</option>
-              @for (slot of store.deliverySlots(); track slot.id) {
-                <option [value]="slot.id">{{ slot.label }}</option>
+          @if (!store.hasFabricationLines()) {
+            <div class="field" [class.field--error]="store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid">
+              <label for="deliverySlotChoice">
+                Horario de entrega @if (store.isExactDelivery()) { <span class="req">*</span> }
+              </label>
+              <select id="deliverySlotChoice" formControlName="deliverySlotChoice">
+                <option value="">Sin horario definido</option>
+                @for (slot of store.deliverySlots(); track slot.id) {
+                  <option [value]="slot.id">{{ slot.label }}</option>
+                }
+                <option value="custom">Otro horario…</option>
+              </select>
+              @if (store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid) {
+                <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
               }
-              <option value="custom">Otro horario…</option>
-            </select>
-            @if (store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid) {
-              <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
-            }
-          </div>
+            </div>
+          }
         </div>
 
-        @if (store.isCustomWindow()) {
+        @if (!store.hasFabricationLines() && store.isCustomWindow()) {
           <div class="field-row">
             <div class="field">
               <label for="deliveryWindowStart">De <span class="req">*</span></label>
@@ -179,7 +195,9 @@
         }
 
         <p class="field__hint">
-          @if (store.isExactDelivery()) {
+          @if (store.hasFabricationLines()) {
+            Fecha estimada (15 días hábiles), sujeta a cambios. Puedes ajustarla; en cuanto el mueble esté en tienda coordina el horario con el cliente por WhatsApp.
+          } @else if (store.isExactDelivery()) {
             El repartidor verá esta entrega marcada como comprometida y aparecerá en la agenda un día antes.
           } @else {
             Se puede cambiar después, cuando el mueble llegue y se acuerde la entrega con el cliente.

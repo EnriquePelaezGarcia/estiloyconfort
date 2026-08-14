@@ -14,6 +14,7 @@ import { Product, ProductImage, ProductManufacturerPrice, ProductPayload } from 
 import { Manufacturer } from '../../../core/models/manufacturing.model';
 import { Category } from '../../../core/models/category.model';
 import { CalculatedPrices, DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
+import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 
 function slugify(value: string): string {
   return value
@@ -90,7 +91,7 @@ type PriceMode = 'margin' | 'price';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './catalog.component.html',
   styleUrl: './catalog.component.scss',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective],
 })
 export class CatalogComponent implements OnInit {
   private productService = inject(ProductService);
@@ -370,9 +371,7 @@ export class CatalogComponent implements OnInit {
     });
   }
 
-  protected onCostChange(manufacturerId: number, materialId: number, event: Event): void {
-    const raw = (event.target as HTMLInputElement).value;
-    const cost = raw === '' ? null : Number(raw);
+  protected onCostChange(manufacturerId: number, materialId: number, cost: number | null): void {
     const value = cost !== null && Number.isFinite(cost) && cost > 0 ? cost : null;
     this.costRows.update((rows) =>
       rows.map((r) =>

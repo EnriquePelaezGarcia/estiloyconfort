@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const PricingConfig = require('../models/PricingConfig');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
@@ -26,6 +27,10 @@ module.exports = {
     const order = await Order.findByShareToken(req.params.token);
     if (!order) throw ApiError.notFound('Este ticket ya no está disponible');
 
+    // M13: el ticket térmico desglosa el IVA de Mayoreo con la tasa VIGENTE
+    // (no la congelada al vender) — el ticket público hace lo mismo.
+    const config = await PricingConfig.getMap();
+
     // Lista blanca explícita. Lo que NO sale al público y por qué:
     //  - costos, fabricante y márgenes: información interna del negocio
     //  - notasFabricante / instruccionesEntrega: notas operativas internas
@@ -43,6 +48,9 @@ module.exports = {
         deliveryType: order.deliveryType,
         deliveryAddress: order.deliveryAddress,
         expectedDeliveryDate: order.expectedDeliveryDate,
+        deliveryCommitment: order.deliveryCommitment,
+        deliveryWindowStart: order.deliveryWindowStart,
+        deliveryWindowEnd: order.deliveryWindowEnd,
 
         shippingCost: order.shippingCost,
         shippingPostalCode: order.shippingPostalCode,
@@ -62,6 +70,11 @@ module.exports = {
         creditWeeks: order.creditWeeks ?? null,
         weeklyPayment: order.weeklyPayment ?? null,
 
+        // M13: para que el ticket público pueda desglosar el IVA de Mayoreo
+        // igual que el ticket térmico.
+        ivaRate: Number(config.iva),
+        wholesalePriceIncludesIva: Number(config.wholesale_price_includes_iva) === 1,
+
         items: (order.items ?? []).map((it) => ({
           productName: it.productName,
           materialLabel: it.materialLabel,
@@ -69,6 +82,10 @@ module.exports = {
           quantity: it.quantity,
           unitPrice: it.unitPrice,
           subtotal: it.subtotal,
+          // No es información sensible (costos/margen); decide si se muestra
+          // el aviso de fecha estimada por fabricación/agotado.
+          requiresFabrication: it.requiresFabrication,
+          imageUrl: it.imageUrl,
         })),
 
         payments: (order.payments ?? []).map((p) => ({

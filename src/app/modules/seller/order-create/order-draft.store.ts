@@ -9,6 +9,7 @@ import { QuotesService } from '../../../core/services/quotes.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { PricingService } from '../../../core/services/pricing.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
+import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
   InventoryItem, InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
@@ -39,6 +40,13 @@ export interface CartLine {
     customerName: string | null;
   } | null;
 }
+
+/**
+ * Plazo estimado cuando el pedido tiene alguna pieza agotada o sobre pedido:
+ * el vendedor ya no comprometa una fecha exacta, así que se sugiere un
+ * estimado razonable (editable) en lugar de dejarlo vacío.
+ */
+const FABRICATION_ESTIMATE_BUSINESS_DAYS = 15;
 
 /** Resumen del cambio de producto para el diálogo de confirmación (edición no-pendiente). */
 export interface ChangeSummary {
@@ -184,6 +192,32 @@ export class OrderDraftStore {
 
   /** ¿El carrito tiene algún mueble que se fabrica sobre pedido? */
   readonly hasFabricationLines = computed(() => this.lines().some((l) => this.lineRequiresFabrication(l)));
+
+  /**
+   * Docs/plan-fecha-hora-entrega.md — comprometer horario exacto solo tiene
+   * sentido para un mueble que ya está en tienda. En cuanto el carrito pasa a
+   * necesitar fabricación (línea agregada o cambiada a un material agotado),
+   * se fuerza el pedido a Tentativa con un estimado de
+   * `FABRICATION_ESTIMATE_BUSINESS_DAYS` días hábiles —editable— y se borra
+   * cualquier horario ya capturado. Solo dispara en la TRANSICIÓN
+   * false→true: si el carrito ya necesitaba fabricación, no se pisa lo que
+   * el vendedor ya haya ajustado a mano.
+   */
+  private syncFabricationDeliverySchedule(wasFabricationRequired: boolean): void {
+    if (wasFabricationRequired || !this.hasFabricationLines()) return;
+
+    const estimate = addBusinessDays(new Date(), FABRICATION_ESTIMATE_BUSINESS_DAYS);
+    this.form.patchValue({
+      deliveryCommitment: 'tentative',
+      expectedDeliveryDate: toDateInputValue(estimate),
+      deliverySlotChoice: '',
+      deliveryWindowStart: '',
+      deliveryWindowEnd: '',
+    });
+    this.notification.info(
+      'Este pedido tiene piezas agotadas o sobre pedido: se sugirió fecha de entrega a 15 días hábiles. Puedes ajustarla.',
+    );
+  }
 
   /**
    * No se puede asignar repartidor mientras el pedido tenga muebles sobre
@@ -694,6 +728,7 @@ export class OrderDraftStore {
       return;
     }
     const defaultMaterial = quoted.length === 1 ? quoted[0] : quoted[0];
+    const wasFabricationRequired = this.hasFabricationLines();
     this.lines.update((lines) => {
       const existing = lines.find((l) => l.product.id === product.id && l.materialId === defaultMaterial.materialId);
       if (existing) {
@@ -709,6 +744,7 @@ export class OrderDraftStore {
         quantity: 1,
       }];
     });
+    this.syncFabricationDeliverySchedule(wasFabricationRequired);
   }
 
   /**
@@ -729,6 +765,7 @@ export class OrderDraftStore {
   /** Cambia el material de ESA línea (M4): solo esa línea reprecia, no el resto del pedido. */
   changeLineMaterial(index: number, event: Event): void {
     const materialId = Number((event.target as HTMLSelectElement).value);
+    const wasFabricationRequired = this.hasFabricationLines();
     this.lines.update((lines) =>
       lines.map((l, i) => {
         if (i !== index) return l;
@@ -743,6 +780,7 @@ export class OrderDraftStore {
         return { ...l, materialId, color };
       }),
     );
+    this.syncFabricationDeliverySchedule(wasFabricationRequired);
   }
 
   changeLineColor(index: number, event: Event): void {

@@ -308,6 +308,18 @@
       <div class="sale-ticket__row"><span>Le atendió</span><span>{{ o.sellerName }}</span></div>
     }
     <div class="sale-ticket__row"><span>Condición</span><span>{{ schemeLabel(o.paymentMethod) }}</span></div>
+    @if (o.expectedDeliveryDate) {
+      <div class="sale-ticket__row">
+        <span>{{ isExactCommitment() ? 'Entrega (EXACTA)' : 'Entrega (estimada)' }}</span>
+        <span>
+          {{ o.expectedDeliveryDate | date:'dd/MM/yyyy' }}
+          @if (deliveryWindow(); as win) { {{ win }} }
+        </span>
+      </div>
+      @if (showTentativeDeliveryNotice()) {
+        <p class="sale-ticket__notice">{{ tentativeDeliveryNotice }}</p>
+      }
+    }
     <hr />
 
     @for (it of o.items; track it.id) {
@@ -527,6 +539,7 @@
     [windowStart]="o.deliveryWindowStart ?? null"
     [windowEnd]="o.deliveryWindowEnd ?? null"
     [slotId]="o.deliverySlotId ?? null"
+    [hasPendingFabrication]="hasPendingFabrication()"
     (closed)="closeReschedule()"
     (saved)="onRescheduled()"
   />

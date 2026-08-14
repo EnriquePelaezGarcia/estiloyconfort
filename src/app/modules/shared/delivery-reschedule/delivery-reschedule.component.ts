@@ -4,6 +4,10 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { DeliveryCommitment, DeliverySlot } from '../../../core/models/order.model';
+import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
+
+/** Espejo de FABRICATION_ESTIMATE_BUSINESS_DAYS en order-draft.store.ts. */
+const FABRICATION_ESTIMATE_BUSINESS_DAYS = 15;
 
 /**
  * Modal de reprogramación (Docs/plan-fecha-hora-entrega.md §6.6). Se usa
@@ -35,6 +39,13 @@ export class DeliveryRescheduleComponent implements OnInit {
   readonly windowStart = input<string | null>(null);
   readonly windowEnd = input<string | null>(null);
   readonly slotId = input<number | null>(null);
+  /**
+   * true si el pedido todavía tiene piezas agotadas/sobre pedido sin
+   * fabricar (mismo criterio que bloquea asignar repartidor). Mientras sea
+   * true no se ofrece "Exacta": no se puede comprometer horario para un
+   * mueble que aún no está en tienda.
+   */
+  readonly hasPendingFabrication = input<boolean>(false);
 
   readonly closed = output<void>();
   readonly saved = output<void>();
@@ -97,6 +108,24 @@ export class DeliveryRescheduleComponent implements OnInit {
       next: (slots) => this.slots.set(slots),
       error: () => {},
     });
+
+    if (this.hasPendingFabrication() && this.currentCommitment() === 'exact') {
+      // El pedido tenía Exacta capturada pero ahora incluye una pieza
+      // agotada/sobre pedido: ya no se puede sostener ese compromiso. Se
+      // reemplaza por el mismo estimado que usa el POS al levantar el pedido.
+      const estimate = addBusinessDays(new Date(), FABRICATION_ESTIMATE_BUSINESS_DAYS);
+      this.form.patchValue({
+        expectedDeliveryDate: toDateInputValue(estimate),
+        deliveryCommitment: 'tentative',
+        deliverySlotChoice: '',
+        deliveryWindowStart: '',
+        deliveryWindowEnd: '',
+      });
+      this.notification.info(
+        'Este pedido tiene piezas agotadas o sobre pedido: se sugirió fecha de entrega a 15 días hábiles. Puedes ajustarla.',
+      );
+      return;
+    }
 
     this.form.patchValue({
       expectedDeliveryDate: this.expectedDeliveryDate()

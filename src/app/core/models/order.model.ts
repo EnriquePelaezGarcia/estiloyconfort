@@ -100,6 +100,8 @@ export interface OrderItem {
   color?: string | null;
   /** TRUE si el mueble se fabrica sobre pedido; se DERIVA del stock de (producto, material) al crear la línea (M15.4), no se captura a mano. */
   requiresFabrication?: boolean;
+  /** Foto principal vigente del producto (tabla product_images); null si no tiene. No es congelada. */
+  imageUrl?: string | null;
   /** Fabricante al que se le compra este item, si el admin ya lo asignó. */
   manufacturerId?: number | null;
   manufacturerName?: string | null;

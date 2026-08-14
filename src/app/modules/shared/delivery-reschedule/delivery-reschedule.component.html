@@ -18,17 +18,29 @@
   }
 
   <form [formGroup]="form" (ngSubmit)="submit()" class="modal__form">
-    <span class="modal__label">Tipo de entrega</span>
-    <div class="options">
-      <label class="options__item">
-        <input type="radio" formControlName="deliveryCommitment" value="tentative" />
-        <span>Tentativa</span>
-      </label>
-      <label class="options__item">
-        <input type="radio" formControlName="deliveryCommitment" value="exact" />
-        <span>Exacta (cumpleaños / XV años)</span>
-      </label>
-    </div>
+    @if (hasPendingFabrication()) {
+      <!--
+        Piezas agotadas/sobre pedido sin fabricar: no se puede comprometer
+        horario para un mueble que todavía no está en tienda. En cuanto el
+        fabricante las marque listas, esta pantalla vuelve a ofrecer Exacta.
+      -->
+      <p class="modal__warning">
+        <span class="material-symbols-outlined">build</span>
+        Este pedido tiene piezas agotadas o sobre pedido: la entrega es Tentativa y no se puede fijar horario exacto hasta que el mueble esté en tienda.
+      </p>
+    } @else {
+      <span class="modal__label">Tipo de entrega</span>
+      <div class="options">
+        <label class="options__item">
+          <input type="radio" formControlName="deliveryCommitment" value="tentative" />
+          <span>Tentativa</span>
+        </label>
+        <label class="options__item">
+          <input type="radio" formControlName="deliveryCommitment" value="exact" />
+          <span>Exacta (cumpleaños / XV años)</span>
+        </label>
+      </div>
+    }
 
     <div class="field">
       <label for="rs-date">Fecha de entrega @if (isExact()) { <span class="req">*</span> }</label>
@@ -38,21 +50,23 @@
       }
     </div>
 
-    <div class="field">
-      <label for="rs-slot">Horario de entrega @if (isExact()) { <span class="req">*</span> }</label>
-      <select id="rs-slot" formControlName="deliverySlotChoice">
-        <option value="">Sin horario definido</option>
-        @for (slot of slots(); track slot.id) {
-          <option [value]="slot.id">{{ slot.label }}</option>
+    @if (!hasPendingFabrication()) {
+      <div class="field">
+        <label for="rs-slot">Horario de entrega @if (isExact()) { <span class="req">*</span> }</label>
+        <select id="rs-slot" formControlName="deliverySlotChoice">
+          <option value="">Sin horario definido</option>
+          @for (slot of slots(); track slot.id) {
+            <option [value]="slot.id">{{ slot.label }}</option>
+          }
+          <option value="custom">Otro horario…</option>
+        </select>
+        @if (form.controls.deliverySlotChoice.touched && form.controls.deliverySlotChoice.invalid) {
+          <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
         }
-        <option value="custom">Otro horario…</option>
-      </select>
-      @if (form.controls.deliverySlotChoice.touched && form.controls.deliverySlotChoice.invalid) {
-        <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
-      }
-    </div>
+      </div>
+    }
 
-    @if (isCustomWindow()) {
+    @if (!hasPendingFabrication() && isCustomWindow()) {
       <div class="field-row">
         <div class="field">
           <label for="rs-start">De <span class="req">*</span></label>

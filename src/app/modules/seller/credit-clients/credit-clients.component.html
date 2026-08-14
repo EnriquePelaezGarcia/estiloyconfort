@@ -210,11 +210,11 @@
           <label for="amount">Monto del abono *</label>
           <input
             id="amount"
-            type="number"
+            type="text"
+            inputmode="decimal"
+            appCurrencyInput
             formControlName="amount"
-            placeholder="0.00"
-            min="1"
-            step="0.01"
+            placeholder="$0.00"
           />
           @if (paymentForm.controls.amount.touched && paymentForm.controls.amount.invalid) {
             <p class="field__error">Ingresa un monto válido.</p>

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, si
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
 import { PayablesService } from '../../../../core/services/payables.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import {
@@ -40,7 +41,7 @@ interface CutLine {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './payable-detail.component.html',
   styleUrl: './payable-detail.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, CurrencyInputDirective],
 })
 export class PayableDetailComponent implements OnInit {
   /** Viene de la ruta `cuentas-por-pagar/:manufacturerId`. */
@@ -212,8 +213,8 @@ export class PayableDetailComponent implements OnInit {
     );
   }
 
-  protected onCutAmount(index: number, event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
+  protected onCutAmount(index: number, amount: number | null): void {
+    const value = amount ?? 0;
     this.cutLines.update((lines) =>
       lines.map((l, i) => (i === index ? { ...l, amount: value } : l)),
     );

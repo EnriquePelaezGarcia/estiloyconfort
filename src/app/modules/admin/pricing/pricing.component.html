@@ -86,13 +86,13 @@
 
         <div class="field">
           <label for="assemblyBase">{{ itemMeta('assembly_base')?.label ?? 'Armado: tarifa base' }} ($)</label>
-          <input id="assemblyBase" type="number" formControlName="assembly_base" min="0" step="1" />
+          <input id="assemblyBase" type="text" inputmode="decimal" appCurrencyInput formControlName="assembly_base" />
           <p class="field__hint">{{ itemMeta('assembly_base')?.description }}</p>
         </div>
 
         <div class="field">
           <label for="assemblyPerFloor">{{ itemMeta('assembly_per_floor')?.label ?? 'Armado: costo por piso' }} ($)</label>
-          <input id="assemblyPerFloor" type="number" formControlName="assembly_per_floor" min="0" step="1" />
+          <input id="assemblyPerFloor" type="text" inputmode="decimal" appCurrencyInput formControlName="assembly_per_floor" />
           <p class="field__hint">{{ itemMeta('assembly_per_floor')?.description }}</p>
         </div>
 
@@ -152,7 +152,7 @@
         <div class="field-row">
           <div class="field">
             <label for="simCost">Costo prov.</label>
-            <input id="simCost" type="number" formControlName="baseCost" min="0" step="0.01" />
+            <input id="simCost" type="text" inputmode="decimal" appCurrencyInput formControlName="baseCost" />
           </div>
           <div class="field">
             <label for="simMargin">% Ganancia</label>

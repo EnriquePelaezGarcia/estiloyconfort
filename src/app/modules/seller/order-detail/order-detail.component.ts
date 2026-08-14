@@ -28,6 +28,15 @@ import {
   SaleScheme,
 } from '../../../core/models/order.model';
 
+/**
+ * Fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6): nos deslindamos de
+ * la fecha exacta y dejamos claro qué pasa si el mueble llega antes o hay
+ * ajuste — mismo texto en los dos tickets (térmico y WhatsApp).
+ */
+const TENTATIVE_DELIVERY_NOTICE =
+  'Fecha estimada, sujeta a cambios. Si tu mueble llega antes, te lo entregamos antes; ' +
+  'en cuanto esté en tienda te contactamos para coordinar la entrega.';
+
 /** Datos para imprimir el ticket de cada abono semanal. */
 interface AbonoReceipt {
   orderNumber: string;
@@ -172,6 +181,34 @@ export class OrderDetailComponent implements OnInit {
     const o = this.order();
     return o ? formatWindow(o.deliveryWindowStart, o.deliveryWindowEnd) : '';
   });
+
+  protected isExactCommitment = computed(() => this.order()?.deliveryCommitment === 'exact');
+
+  /** ¿Alguna línea del pedido está agotada o se fabrica sobre pedido? */
+  protected hasFabricationItems = computed(() =>
+    (this.order()?.items ?? []).some((it) => it.requiresFabrication),
+  );
+
+  /** El aviso de fecha estimada solo aplica mientras el compromiso siga siendo Tentativa. */
+  protected showTentativeDeliveryNotice = computed(
+    () => this.hasFabricationItems() && !this.isExactCommitment(),
+  );
+
+  /**
+   * Mismo criterio que bloquea asignar repartidor (backend `hasPendingFabrication`
+   * en Order.js): piezas agotadas/sobre pedido y el pedido aún no llegó a
+   * 'ready'/'in_delivery'/'delivered'. Mientras sea true, Reprogramar no
+   * ofrece "Exacta" — no se puede comprometer horario para un mueble que
+   * todavía no está en tienda.
+   */
+  protected hasPendingFabrication = computed(() => {
+    const o = this.order();
+    if (!o) return false;
+    return this.hasFabricationItems()
+      && o.orderStatus !== 'ready' && o.orderStatus !== 'in_delivery' && o.orderStatus !== 'delivered';
+  });
+
+  protected readonly tentativeDeliveryNotice = TENTATIVE_DELIVERY_NOTICE;
 
   /**
    * Reprogramar SÍ se permite con el pedido ya en ruta —mover la hora de una

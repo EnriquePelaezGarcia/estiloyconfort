@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
@@ -16,6 +17,7 @@ import {
   PURCHASE_ORDER_STATUS_TONE,
 } from '../../../../core/models/manufacturing.model';
 import { PayablesService } from '../../../../core/services/payables.service';
+import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
 import { PayablePaymentStatus } from '../../../../core/models/payable.model';
 import {
   PAYMENT_STATUS_LABELS,
@@ -34,7 +36,7 @@ interface PoPayment {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './purchase-orders.component.html',
   styleUrl: './purchase-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective],
 })
 export class PurchaseOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
@@ -89,6 +91,12 @@ export class PurchaseOrdersComponent implements OnInit {
   protected formTotal = signal(0);
 
   protected activeManufacturers = computed(() => this.manufacturers().filter((m) => m.isActive));
+
+  constructor() {
+    // El total se deriva del form, no de listeners (input) en la plantilla: así no
+    // depende del orden en que corran los listeners de appCurrencyInput.
+    this.items.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.recalcTotal());
+  }
 
   ngOnInit(): void {
     this.load();
@@ -186,7 +194,6 @@ export class PurchaseOrdersComponent implements OnInit {
     this.form.reset({ manufacturerId: null, expectedDate: null, notes: '' });
     this.items.clear();
     this.addItem();
-    this.recalcTotal();
   }
 
   protected closeCreate(): void {
@@ -199,7 +206,6 @@ export class PurchaseOrdersComponent implements OnInit {
 
   protected removeItem(index: number): void {
     this.items.removeAt(index);
-    this.recalcTotal();
   }
 
   /** Al elegir un producto existente, copia nombre/sku/costo base. */
@@ -216,7 +222,6 @@ export class PurchaseOrdersComponent implements OnInit {
       // corregirlo a mano antes de guardar.
       unitCost: product ? this.firstQuotedCost(product) : 0,
     });
-    this.recalcTotal();
   }
 
   private firstQuotedCost(product: ManufacturerCatalogProduct): number {
@@ -224,7 +229,7 @@ export class PurchaseOrdersComponent implements OnInit {
     return found ?? 0;
   }
 
-  protected recalcTotal(): void {
+  private recalcTotal(): void {
     const total = this.items.controls.reduce((sum, ctrl) => {
       const q = Number(ctrl.get('quantity')?.value) || 0;
       const c = Number(ctrl.get('unitCost')?.value) || 0;

@@ -1,4 +1,4 @@
-import { DeliveryType, OrderStatus, PaymentStatus, SaleScheme } from './order.model';
+import { DeliveryCommitment, DeliveryType, OrderStatus, PaymentStatus, SaleScheme } from './order.model';
 
 /**
  * Ticket de venta como lo ve el CLIENTE desde el link de WhatsApp
@@ -13,6 +13,10 @@ export interface PublicTicketItem {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  /** Agotado o se fabrica sobre pedido: decide si se muestra el aviso de fecha estimada. */
+  requiresFabrication: boolean;
+  /** Foto principal vigente del producto; null si no tiene ninguna cargada. */
+  imageUrl: string | null;
 }
 
 export interface PublicTicketPayment {
@@ -32,6 +36,10 @@ export interface PublicTicket {
   deliveryType: DeliveryType;
   deliveryAddress: string | null;
   expectedDeliveryDate: string | null;
+  /** Ver DeliveryCommitment. Los pedidos anteriores a la migración son 'tentative'. */
+  deliveryCommitment: DeliveryCommitment;
+  deliveryWindowStart: string | null;
+  deliveryWindowEnd: string | null;
 
   shippingCost: number;
   shippingPostalCode: string | null;
@@ -48,6 +56,10 @@ export interface PublicTicket {
   downPayment: number | null;
   creditWeeks: number | null;
   weeklyPayment: number | null;
+
+  /** M13: para desglosar el IVA de Mayoreo igual que el ticket térmico. */
+  ivaRate: number;
+  wholesalePriceIncludesIva: boolean;
 
   items: PublicTicketItem[];
   payments: PublicTicketPayment[];

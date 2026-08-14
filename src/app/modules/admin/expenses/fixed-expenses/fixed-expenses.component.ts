@@ -11,6 +11,7 @@ import {
   RecurringExpense,
 } from '../../../../core/models/expense.model';
 import { EXPENSE_PAYMENT_METHOD_LABELS } from '../../../../core/models/expense-labels';
+import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
 
 /**
  * Gastos fijos: plantillas mensuales + los que el cron ya generó y siguen sin
@@ -26,7 +27,7 @@ import { EXPENSE_PAYMENT_METHOD_LABELS } from '../../../../core/models/expense-l
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './fixed-expenses.component.html',
   styleUrl: './fixed-expenses.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, CurrencyInputDirective],
 })
 export class FixedExpensesComponent implements OnInit {
   private expensesService = inject(ExpensesService);

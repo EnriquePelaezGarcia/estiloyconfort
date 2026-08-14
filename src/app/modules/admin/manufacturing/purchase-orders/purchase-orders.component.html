@@ -152,7 +152,7 @@
             <div class="item-card" [formGroupName]="i">
               <div class="item-card__top">
                 <label class="check">
-                  <input type="checkbox" formControlName="isNewProduct" (change)="recalcTotal()" />
+                  <input type="checkbox" formControlName="isNewProduct" />
                   Producto nuevo (con especificaciones)
                 </label>
                 <button type="button" class="icon-btn" (click)="removeItem(i)" aria-label="Quitar item">
@@ -191,11 +191,11 @@
               <div class="grid-2">
                 <div class="field">
                   <label>Cantidad</label>
-                  <input type="number" min="1" formControlName="quantity" (input)="recalcTotal()" />
+                  <input type="number" min="1" formControlName="quantity" />
                 </div>
                 <div class="field">
                   <label>Costo unitario</label>
-                  <input type="number" min="0" step="0.01" formControlName="unitCost" (input)="recalcTotal()" />
+                  <input type="text" inputmode="decimal" appCurrencyInput formControlName="unitCost" />
                 </div>
               </div>
             </div>
