@@ -13,20 +13,6 @@
       <div class="filter-group">
         <h3 class="filter-group__title">Categorías</h3>
 
-        <!-- En móvil la lista ocupaba toda la pantalla: ahí se muestra este
-             selector y la lista queda oculta por CSS (y al revés en desktop). -->
-        <select
-          class="filter-group__select filter-group__select--mobile"
-          aria-label="Categorías"
-          [value]="filters().category || ''"
-          (change)="onCategoryChange($any($event.target).value)"
-        >
-          <option value="">Todas las categorías</option>
-          @for (cat of categories(); track cat.id) {
-            <option [value]="cat.slug">{{ cat.name }}</option>
-          }
-        </select>
-
         <ul class="filter-group__list">
           <li>
             <button
@@ -67,8 +53,22 @@
 
     <!-- Contenido principal -->
     <main class="catalog__main">
-      <!-- Barra de búsqueda y conteo -->
+      <!-- Barra de filtros: en móvil la sidebar se oculta y esta fila lleva
+           categorías (izquierda) y búsqueda (derecha). El orden queda solo en
+           escritorio. -->
       <div class="catalog__toolbar">
+        <select
+          class="catalog__categories"
+          aria-label="Categorías"
+          [value]="filters().category || ''"
+          (change)="onCategoryChange($any($event.target).value)"
+        >
+          <option value="">Todas las categorías</option>
+          @for (cat of categories(); track cat.id) {
+            <option [value]="cat.slug">{{ cat.name }}</option>
+          }
+        </select>
+
         <div class="catalog__search">
           <span class="material-symbols-outlined">search</span>
           <input

@@ -61,6 +61,8 @@ export interface Product {
   is_active: boolean;
   is_featured: boolean;
   primary_image: string | null;
+  /** Solo en el listado: URLs de la galería (máx. 8), la principal primero. */
+  gallery?: string[];
   images?: ProductImage[];
   variants?: ProductVariant[];
   created_at: string;

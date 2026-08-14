@@ -70,6 +70,16 @@ const Product = {
               -- hay forma de explicar por qué un producto quedó donde quedó.
               COALESCE(pop.popularity_count, 0) AS popularity_count,
               (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image,
+              -- Galería para el carrusel de la tarjeta del catálogo: sin esto
+              -- habría que pedir la ficha de cada producto para saber si tiene
+              -- más de una foto. Se corta a 8 con SUBSTRING_INDEX porque
+              -- GROUP_CONCAT trunca a 1024 caracteres y una URL cortada a la
+              -- mitad rompería la imagen.
+              SUBSTRING_INDEX(
+                (SELECT GROUP_CONCAT(image_url ORDER BY is_primary DESC, order_display, id SEPARATOR '||')
+                   FROM product_images WHERE product_id = p.id),
+                '||', 8
+              ) AS gallery_urls,
               -- Badge del catálogo público: "Disponible" si queda AL MENOS UNA
               -- pieza libre en cualquier material declarado. La pregunta es de
               -- existencia, no de cantidad, así que un EXISTS correlacionado
@@ -97,7 +107,13 @@ const Product = {
       params
     );
 
-    return { data: rows, total, page: safePage, limit: safeLimit, pages: Math.ceil(total / safeLimit) };
+    // `gallery_urls` viaja como cadena unida; el cliente espera un arreglo.
+    const data = rows.map(({ gallery_urls, ...row }) => ({
+      ...row,
+      gallery: gallery_urls ? gallery_urls.split('||').filter(Boolean) : [],
+    }));
+
+    return { data, total, page: safePage, limit: safeLimit, pages: Math.ceil(total / safeLimit) };
   },
 
   async findById(id, { includeInactive = false } = {}) {

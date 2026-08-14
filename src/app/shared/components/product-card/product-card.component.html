@@ -1,17 +1,27 @@
-<article class="product-card">
-  <a [routerLink]="['/producto', product().slug]" class="product-card__image-link">
-    @if (product().primary_image) {
-      <img
-        [src]="product().primary_image!"
-        [alt]="product().name"
-        class="product-card__image"
-        loading="lazy"
-      />
-    } @else {
-      <div class="product-card__image-placeholder">
-        <span class="material-symbols-outlined">chair</span>
-      </div>
-    }
+<article class="product-card" (click)="onCardClick($event)">
+  <div class="product-card__media">
+    <!-- Carrusel: scroll horizontal nativo con scroll-snap. Cada lámina sigue
+         siendo un link, así que tocar abre la ficha y deslizar cambia de foto. -->
+    <div class="product-card__track" #track (scroll)="onGalleryScroll($event)">
+      @for (img of images(); track img) {
+        <a [routerLink]="['/producto', product().slug]" class="product-card__slide">
+          <img
+            [src]="img"
+            [alt]="product().name"
+            class="product-card__image"
+            draggable="false"
+            loading="lazy"
+          />
+        </a>
+      } @empty {
+        <a [routerLink]="['/producto', product().slug]" class="product-card__slide">
+          <div class="product-card__image-placeholder">
+            <span class="material-symbols-outlined">chair</span>
+          </div>
+        </a>
+      }
+    </div>
+
     @if (product().in_stock) {
       <span class="product-card__badge product-card__badge--stock">Disponible</span>
     } @else {
@@ -20,7 +30,40 @@
     @if (product().is_featured) {
       <span class="product-card__badge product-card__badge--featured">Destacado</span>
     }
-  </a>
+
+    @if (images().length > 1) {
+      <!-- Pista de que hay más fotos: un punto por imagen. -->
+      <div class="product-card__dots">
+        @for (img of images(); track img; let i = $index) {
+          <button
+            type="button"
+            class="product-card__dot"
+            [class.product-card__dot--active]="i === activeIndex()"
+            [attr.aria-label]="'Ver imagen ' + (i + 1)"
+            (click)="goTo(track, i, $event)"
+          ></button>
+        }
+      </div>
+
+      <!-- Con mouse no hay deslizamiento: estas flechas solo salen en escritorio. -->
+      <button
+        type="button"
+        class="product-card__arrow product-card__arrow--prev"
+        aria-label="Imagen anterior"
+        (click)="scrollBy(track, -1, $event)"
+      >
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <button
+        type="button"
+        class="product-card__arrow product-card__arrow--next"
+        aria-label="Imagen siguiente"
+        (click)="scrollBy(track, 1, $event)"
+      >
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
+    }
+  </div>
 
   <div class="product-card__body">
     @if (product().category_name) {
@@ -37,10 +80,9 @@
       layout="card"
     ></app-price-display>
 
+    <!-- "Ver detalle" ya no hace falta: la tarjeta entera lleva a la ficha
+         (onCardClick) y aquí solo queda la acción que hace algo distinto. -->
     <div class="product-card__actions">
-      <a [routerLink]="['/producto', product().slug]" class="btn-outline-primary">
-        Ver detalle
-      </a>
       <button type="button" class="btn-primary" (click)="onAddToCart($event)">
         <span class="material-symbols-outlined">shopping_cart</span>
         Agregar

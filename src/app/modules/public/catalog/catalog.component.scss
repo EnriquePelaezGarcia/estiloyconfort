@@ -63,10 +63,10 @@
     flex-direction: column;
     gap: v.$spacing-lg;
 
+    // En móvil los filtros viven en la barra superior (categorías + búsqueda),
+    // así que la columna lateral entera sobra.
     @media (max-width: v.$bp-tablet) {
-      position: static;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: none;
     }
   }
 
@@ -81,6 +81,61 @@
     align-items: center;
     gap: v.$spacing-md;
     flex-wrap: wrap;
+
+    @media (max-width: v.$bp-tablet) {
+      gap: v.$spacing-sm;
+    }
+  }
+
+  // Duplica la lista de la sidebar en formato compacto; solo existe en móvil.
+  &__categories {
+    display: none;
+
+    @media (max-width: v.$bp-tablet) {
+      display: block;
+      flex: 0 0 42%;
+      min-width: 0;
+      // `appearance: none` quita el recuadro gris nativo del sistema; a cambio
+      // hay que dibujar la flecha, que va como SVG de fondo (no como imagen
+      // externa) para no pedir un archivo extra.
+      appearance: none;
+      -webkit-appearance: none;
+      padding: v.$spacing-sm 1.75rem v.$spacing-sm v.$spacing-md;
+      border: 1px solid v.$color-border;
+      border-radius: v.$radius-full;
+      background-color: v.$color-surface;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%236b6b7b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.7rem center;
+      background-size: 10px 7px;
+      font-family: v.$font-body;
+      font-size: 0.85rem;
+      font-weight: 500;
+      line-height: 1.2;
+      color: v.$color-text;
+      cursor: pointer;
+      outline: none;
+      // Evita que el texto largo de una categoría empuje el ancho del control.
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: border-color v.$transition-fast, box-shadow v.$transition-fast;
+
+      &:hover { border-color: v.$color-primary; }
+
+      &:focus-visible {
+        border-color: v.$color-primary;
+        box-shadow: 0 0 0 3px rgba(61, 43, 94, 0.12);
+      }
+
+      // El menú desplegable lo pinta el sistema: lo único que se puede
+      // controlar de cada opción es el color, y sin esto en Android las
+      // opciones heredan el fondo transparente del control.
+      option {
+        background: v.$color-surface;
+        color: v.$color-text;
+      }
+    }
   }
 
   &__search {
@@ -94,6 +149,13 @@
     padding: v.$spacing-sm v.$spacing-md;
     background: v.$color-surface;
     transition: border-color v.$transition-fast;
+
+    // Va al final del bloque a propósito: un @media entre declaraciones se
+    // emite antes que ellas y las de abajo terminan ganando.
+    @media (max-width: v.$bp-tablet) {
+      min-width: 0; // sin esto no cabe junto al selector de categorías
+      border-width: 1px;
+    }
 
     &:focus-within { border-color: v.$color-primary; }
 
@@ -118,6 +180,12 @@
     color: v.$color-text-secondary;
     white-space: nowrap;
     margin: 0;
+
+    // Baja a su propio renglón para dejar la fila de arriba a los filtros.
+    @media (max-width: v.$bp-tablet) {
+      flex: 1 0 100%;
+      font-size: 0.8rem;
+    }
   }
 
   &__grid {
@@ -164,10 +232,6 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-
-    @media (max-width: v.$bp-tablet) {
-      display: none;
-    }
   }
 
   &__item {
@@ -206,14 +270,6 @@
     transition: border-color v.$transition-fast;
 
     &:focus { border-color: v.$color-primary; }
-
-    &--mobile {
-      display: none;
-
-      @media (max-width: v.$bp-tablet) {
-        display: block;
-      }
-    }
   }
 }
 

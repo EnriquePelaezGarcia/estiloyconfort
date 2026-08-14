@@ -58,7 +58,17 @@
     }
 
     &--card &__amount--main {
-      font-size: 1.05rem;
+      font-size: 1rem;
+    }
+
+    // El bloque de 6 MSI se lleva dos renglones que en la tarjeta hacen falta
+    // para la foto; el plazo sigue visible en la ficha del producto.
+    &--card &__msi {
+      display: none;
+    }
+
+    &--card &__label {
+      font-size: 0.6rem;
     }
   }
 }
