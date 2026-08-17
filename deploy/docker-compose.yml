@@ -1,0 +1,172 @@
+# Infraestructura completa de Estilo y Confort en una sola VPS.
+#
+#   nginx  ──┬── estiloyconfort.com             → frontend-prod    (Angular SSR)
+#            ├── api.estiloyconfort.com         → backend-prod     (Express)
+#            ├── staging.estiloyconfort.com     → frontend-staging
+#            └── api.staging.estiloyconfort.com → backend-staging
+#
+# Producción y preproducción viven en redes Docker separadas y con bases de
+# datos distintas: desde staging es imposible tocar datos reales.
+#
+# Las bases de datos NO publican puertos al exterior. Solo se llega a ellas
+# desde adentro de su red, o por un túnel SSH (ver DEPLOY.md).
+#
+# Cada ambiente compila desde su propia carpeta de git (worktree), para que
+# un deploy de staging jamás pueda construir producción con la rama equivocada:
+#
+#   /opt/estiloyconfort/app/          → rama main         (aquí vive este archivo)
+#   /opt/estiloyconfort/app-staging/  → rama development
+
+name: estiloyconfort
+
+services:
+  # ==================== Reverse proxy + SSL ====================
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    networks:
+      - prod-net
+      - staging-net
+    depends_on:
+      - frontend-prod
+      - backend-prod
+
+  # Renueva los certificados automáticamente. Let's Encrypt dura 90 días;
+  # este contenedor revisa cada 12 h y renueva cuando quedan menos de 30.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do
+               certbot renew --webroot -w /var/www/certbot --quiet;
+               sleep 12h & wait $${!};
+             done"
+
+  # ==================== PRODUCCIÓN ====================
+  db-prod:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --default-authentication-plugin=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${PROD_DB_ROOT_PASSWORD:?falta PROD_DB_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${PROD_DB_NAME:-estilo_confort}
+      MYSQL_USER: ${PROD_DB_USER:-estilo}
+      MYSQL_PASSWORD: ${PROD_DB_PASSWORD:?falta PROD_DB_PASSWORD en .env}
+      TZ: America/Mexico_City
+    volumes:
+      - db-prod-data:/var/lib/mysql
+    networks:
+      - prod-net
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${PROD_DB_ROOT_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend-prod:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db-prod
+      DB_PORT: 3306
+    volumes:
+      # Volumen persistente: las fotos de productos sobreviven a los deploys.
+      - uploads-prod:/app/uploads
+    networks:
+      - prod-net
+    depends_on:
+      db-prod:
+        condition: service_healthy
+
+  frontend-prod:
+    build:
+      context: ..
+      args:
+        BUILD_CONFIGURATION: production
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+    networks:
+      - prod-net
+
+  # ==================== PREPRODUCCIÓN ====================
+  db-staging:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --default-authentication-plugin=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${STAGING_DB_ROOT_PASSWORD:?falta STAGING_DB_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${STAGING_DB_NAME:-estilo_confort}
+      MYSQL_USER: ${STAGING_DB_USER:-estilo}
+      MYSQL_PASSWORD: ${STAGING_DB_PASSWORD:?falta STAGING_DB_PASSWORD en .env}
+      TZ: America/Mexico_City
+    volumes:
+      - db-staging-data:/var/lib/mysql
+    networks:
+      - staging-net
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${STAGING_DB_ROOT_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend-staging:
+    build:
+      # Worktree de la rama `development`, no el de producción.
+      context: ../../app-staging/backend
+    restart: unless-stopped
+    env_file:
+      - ./.env.staging
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db-staging
+      DB_PORT: 3306
+    volumes:
+      - uploads-staging:/app/uploads
+    networks:
+      - staging-net
+    depends_on:
+      db-staging:
+        condition: service_healthy
+
+  frontend-staging:
+    build:
+      context: ../../app-staging
+      args:
+        BUILD_CONFIGURATION: staging
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+    networks:
+      - staging-net
+
+networks:
+  prod-net:
+  staging-net:
+
+volumes:
+  db-prod-data:
+  db-staging-data:
+  uploads-prod:
+  uploads-staging:
+  certbot-conf:
+  certbot-www:

@@ -1,0 +1,7 @@
+# Los .env reales llevan contraseñas y secretos JWT: viven SOLO en el servidor.
+.env
+.env.production
+.env.staging
+!.env.example
+!.env.production.example
+!.env.staging.example

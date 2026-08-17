@@ -1,0 +1,33 @@
+# Normalización de saltos de línea.
+#
+# Se desarrolla en Windows (CRLF) pero el servidor es Linux (LF). Sin estas
+# reglas, un script .sh podría llegar al servidor con saltos de Windows y bash
+# lo rechazaría con el error "bad interpreter: /bin/bash^M", que es confuso
+# porque el archivo se ve perfectamente bien en el editor.
+#
+# `text=auto` normaliza a LF dentro del repositorio; las reglas específicas
+# garantizan LF también en el checkout, sin importar la configuración de git
+# de cada máquina.
+
+* text=auto
+
+# Archivos que SIEMPRE deben tener saltos LF: los ejecuta o los lee Linux.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.dockerfile    text eol=lf
+.dockerignore   text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.conf          text eol=lf
+.env.example    text eol=lf
+
+# Archivos binarios: git no debe tocarlos nunca.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.pdf    binary
+*.woff   binary
+*.woff2  binary

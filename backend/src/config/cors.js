@@ -2,15 +2,22 @@ const cors = require('cors');
 const env = require('./environment');
 
 /**
- * Orígenes permitidos. Se incluye el frontend Angular y se deja
- * espacio para integraciones futuras (WhatsApp Business API).
+ * Orígenes permitidos. En desarrollo se añade el dev-server de Angular;
+ * en producción solo se aceptan los dominios listados en CLIENT_ORIGIN.
  */
-const allowedOrigins = [env.clientOrigin, 'http://localhost:4200'];
+const allowedOrigins = env.isProduction
+  ? env.clientOrigins
+  : [...new Set([...env.clientOrigins, 'http://localhost:4200'])];
 
 const corsOptions = {
   origin(origin, callback) {
-    // Permitir herramientas sin origen (cURL, Postman) y orígenes en la lista.
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Las peticiones sin origen (cURL, Postman, health checks) solo se
+    // permiten fuera de producción: en producción todo cliente legítimo
+    // del navegador envía Origin.
+    if (!origin) {
+      return callback(null, !env.isProduction);
+    }
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`Origen no permitido por CORS: ${origin}`));

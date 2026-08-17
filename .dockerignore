@@ -1,0 +1,12 @@
+node_modules
+dist
+.angular
+backend
+deploy
+.git
+.github
+.vscode
+Docs
+*.log
+.DS_Store
+Thumbs.db

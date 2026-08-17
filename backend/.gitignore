@@ -1,5 +1,13 @@
 node_modules/
 .env
+.env.*
+!.env.example
 *.log
 npm-debug.log*
 .DS_Store
+
+# Imágenes subidas por los usuarios: son datos de runtime, no código.
+# En producción viven en un volumen del servidor y se respaldan con cron,
+# nunca por git (ver DEPLOY.md).
+uploads/
+

@@ -1,0 +1,79 @@
+# Prueba local reducida — SOLO para validar en tu PC antes de tocar el VPS.
+# NO es el archivo que corre en el servidor (ese es docker-compose.yml).
+#
+# Levanta 3 contenedores en lugar de 8: se omiten Nginx, Certbot y todo el
+# ambiente de staging, que no aportan nada a la validación y sí consumen RAM.
+#
+# Lo que ESTO comprueba:
+#   ✓ Los dos Dockerfiles construyen sin errores
+#   ✓ El backend arranca y conecta a MySQL
+#   ✓ El SSR de Angular levanta y responde
+#   ✓ Las validaciones de secretos de producción funcionan
+#
+# Lo que NO comprueba (eso se verá en el servidor):
+#   ✗ Nginx, certificados SSL, dominios
+#   ✗ El aislamiento entre producción y staging
+#
+# Uso:
+#   docker compose -f docker-compose.local.yml up --build
+#   → frontend en http://localhost:4000
+#   → API      en http://localhost:3000/api/health
+#
+# Al terminar, borra todo (incluidos los datos de prueba):
+#   docker compose -f docker-compose.local.yml down -v
+
+name: estiloyconfort-local
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: local_root_no_usar_en_produccion
+      MYSQL_DATABASE: estilo_confort
+      MYSQL_USER: estilo
+      MYSQL_PASSWORD: local_pass_no_usar_en_produccion
+    # Puerto expuesto solo para que puedas inspeccionar con un cliente MySQL.
+    # En el servidor esto NO se hace: la base no se asoma a internet.
+    ports:
+      - '3307:3306'
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-plocal_root_no_usar_en_produccion']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend:
+    build:
+      context: ../backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: estilo
+      DB_PASSWORD: local_pass_no_usar_en_produccion
+      DB_NAME: estilo_confort
+      # Secretos de 48+ caracteres: el backend rechaza los cortos cuando
+      # NODE_ENV=production. Estos son de juguete, válidos solo aquí.
+      JWT_ACCESS_SECRET: prueba_local_access_0123456789abcdefghijklmnopqrstuvwxyz
+      JWT_REFRESH_SECRET: prueba_local_refresh_0123456789abcdefghijklmnopqrstuvwxyz
+      CLIENT_ORIGIN: http://localhost:4000
+    ports:
+      - '3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ..
+      args:
+        # Se compila con la configuración de staging porque apunta a un
+        # dominio de pruebas. Igual el objetivo aquí es que el build pase
+        # y el SSR arranque, no que el API responda.
+        BUILD_CONFIGURATION: staging
+    environment:
+      PORT: 4000
+    ports:
+      - '4000:4000'
