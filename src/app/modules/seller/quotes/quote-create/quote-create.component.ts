@@ -11,6 +11,7 @@ import { NotificationService } from '../../../../core/services/notification.serv
 import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
 import { addBusinessDays } from '../../../../core/utils/business-days';
 import { availableOf, reservationsTooltip } from '../../../../core/utils/stock-availability';
+import { PHONE_PATTERN, formatPhoneDigits } from '../../../../core/utils/phone';
 import {
   AssemblyRates, InventoryItem, InventoryMaterialPrice, SaleScheme,
 } from '../../../../core/models/order.model';
@@ -28,14 +29,6 @@ interface QuoteLine {
   materialId: number;
   color: string | null;
   quantity: number;
-}
-
-/** "2221234567" -> "222 123 4567". Recorta a 10 dígitos. */
-function formatPhoneDigits(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 10);
-  return digits.replace(/(\d{3})(\d{0,3})(\d{0,4})/, (_, a, b, c) =>
-    [a, b, c].filter(Boolean).join(' '),
-  );
 }
 
 /**
@@ -79,7 +72,7 @@ export class QuoteCreateComponent implements OnInit {
 
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
-    customerPhone: ['', [Validators.required, Validators.pattern(/^\d{3} \d{3} \d{4}$/)]],
+    customerPhone: ['', [Validators.required, Validators.pattern(PHONE_PATTERN)]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     /**
      * Recoge en tienda (Docs/plan-recoge-en-tienda.md D4): se cotiza sin envío

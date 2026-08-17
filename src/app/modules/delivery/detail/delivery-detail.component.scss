@@ -42,15 +42,77 @@
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
+  width: 100%;
   padding: vars.$spacing-xl;
   border: 2px dashed vars.$color-border;
   border-radius: vars.$radius-md;
+  // Reset: ahora es un <button>, no un <label>, para poder abrir la cámara por JS.
+  background: none;
+  font: inherit;
   cursor: pointer;
   color: vars.$color-text-secondary;
   transition: border-color vars.$transition-fast, color vars.$transition-fast;
 
   &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
   .material-symbols-outlined { font-size: 2rem; }
+}
+
+// ===== Cámara en vivo (sólo celular, ver openPhotoCapture) =====
+.camera-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: vars.$z-modal + 2;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+
+  &__video {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+  }
+
+  &__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: vars.$spacing-lg vars.$spacing-xl;
+    padding-bottom: max(#{vars.$spacing-lg}, env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  &__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: vars.$radius-full;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    cursor: pointer;
+
+    .material-symbols-outlined { font-size: 1.3rem; }
+  }
+
+  &__shutter {
+    width: 68px;
+    height: 68px;
+    border-radius: vars.$radius-full;
+    background: #fff;
+    border: 4px solid rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+  }
+
+  &__spacer { width: 40px; }
+}
+
+.photo-input--loading {
+  cursor: default;
+  &:hover { border-color: vars.$color-border; color: vars.$color-text-secondary; }
 }
 
 .photo-preview {
@@ -73,6 +135,62 @@
   background:
     repeating-linear-gradient(transparent, transparent 28px, rgba(vars.$color-border, 0.5) 29px);
   overflow: hidden;
+
+  // Al tocar la firma en celular (ver onCanvasPointerDown) se expande a
+  // pantalla completa para que el repartidor le pase el teléfono al cliente
+  // y firme cómodo. En escritorio/tablet no se activa (isMobileViewport()).
+  &--fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: vars.$z-modal + 2;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0;
+    background: vars.$color-surface;
+
+    .signature { flex: 1; height: auto; }
+  }
+}
+
+// Fuerza el horizontal en celulares: gira el recuadro 90° y lo agranda al
+// tamaño del viewport ya girado, sin depender de que el usuario voltee el
+// teléfono físicamente.
+@media (max-width: vars.$bp-tablet) and (orientation: portrait) {
+  .signature-wrap--fullscreen {
+    top: 0;
+    left: 100%;
+    width: 100vh;
+    height: 100vw;
+    transform-origin: 0 0;
+    transform: rotate(90deg);
+  }
+}
+
+.signature-fullscreen-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border-bottom: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+
+  &__hint {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+  }
+
+  &__actions {
+    display: flex;
+    gap: vars.$spacing-sm;
+  }
 }
 
 .signature {
@@ -81,6 +199,31 @@
   height: 180px;
   touch-action: none;
   cursor: crosshair;
+}
+
+// Pista de que se puede tocar para firmar a pantalla completa; sólo aplica
+// en celular, es la única superficie donde tiene sentido pedirle el teléfono
+// al cliente.
+.signature-expand-hint {
+  display: none;
+  position: absolute;
+  top: vars.$spacing-sm;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  background: rgba(#fff, 0.9);
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  padding: 0.15rem 0.5rem;
+  pointer-events: none;
+
+  .material-symbols-outlined { font-size: 0.95rem; }
+
+  @media (max-width: vars.$bp-tablet) { display: inline-flex; }
 }
 
 .signature-clear {

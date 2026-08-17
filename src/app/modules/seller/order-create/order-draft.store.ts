@@ -12,6 +12,7 @@ import { DeliveryScheduleService } from '../../../core/services/delivery-schedul
 import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
 import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
 import { availableOf, reservationsTooltip } from '../../../core/utils/stock-availability';
+import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
   InventoryItem, InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
@@ -271,8 +272,23 @@ export class OrderDraftStore {
   /** CP de entrega y cotización de envío en vivo. */
   readonly shippingCp = signal<string>('');
   readonly shippingQuote = signal<ShippingQuote | null>(null);
+  /**
+   * Costo de envío capturado a mano cuando el CP no tiene cobertura (sin
+   * zona configurada en `shipping_rates`). Null = todavía no lo escribió;
+   * distinto de 0, que es un envío gratis intencional.
+   */
+  readonly manualShippingCost = signal<number | null>(null);
+  /** CP completo (5 dígitos) pero sin tarifa configurada: hay que capturar el costo a mano. */
+  readonly needsManualShipping = computed(
+    () => !this.isPickup() && this.shippingCp().length === 5 && !this.shippingQuote(),
+  );
   /** RN-P2: si el cliente recoge en tienda no hay envío que cobrar. */
-  readonly shippingCost = computed(() => (this.isPickup() ? 0 : this.shippingQuote()?.price ?? 0));
+  readonly shippingCost = computed(() => {
+    if (this.isPickup()) return 0;
+    const quote = this.shippingQuote();
+    if (quote) return quote.price;
+    return this.needsManualShipping() ? this.manualShippingCost() ?? 0 : 0;
+  });
   /**
    * Total de los productos ya con el tratamiento del esquema: en Crédito
    * Tienda lleva el interés (es lo que el backend guarda como total_amount);
@@ -293,7 +309,7 @@ export class OrderDraftStore {
   readonly form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
     customerEmail: ['', [Validators.email]],
-    customerPhone: ['', Validators.required],
+    customerPhone: ['', [Validators.required, Validators.pattern(PHONE_PATTERN)]],
     deliveryAddress: ['', Validators.required],
     googleMapsUrl: [''],
     /**
@@ -476,7 +492,9 @@ export class OrderDraftStore {
    */
   readonly step2Incomplete = computed(
     () => this.submitAttempted()
-      && (this.form.invalid || (!this.isPickup() && this.shippingCp().length !== 5)),
+      && (this.form.invalid
+        || (!this.isPickup() && this.shippingCp().length !== 5)
+        || (this.needsManualShipping() && this.manualShippingCost() === null)),
   );
 
   /** Último paso que falló una validación al intentar guardar; null si no hay error pendiente. */
@@ -653,7 +671,7 @@ export class OrderDraftStore {
         this.form.patchValue({
           customerName: data.customerName ?? '',
           customerEmail: data.customerEmail ?? '',
-          customerPhone: data.customerPhone ?? '',
+          customerPhone: formatPhoneDigits(data.customerPhone ?? ''),
           deliveryAddress: data.deliveryAddress ?? '',
           googleMapsUrl: data.googleMapsUrl ?? '',
           pickupInStore: !!data.pickupInStore,
@@ -682,10 +700,12 @@ export class OrderDraftStore {
         });
         this.initialDeliveryPersonId = data.deliveryPersonId ?? null;
         // Precargar el CP de envío y recotizar para mostrar el desglose.
+        // Si el CP ya no tiene tarifa (zona dada de baja, por ejemplo), se
+        // recupera el costo manual que se había capturado al crear el pedido.
         if (data.shippingPostalCode) {
           const cp = String(data.shippingPostalCode).replace(/\D/g, '').slice(0, 5);
           this.shippingCp.set(cp);
-          if (cp.length === 5) this.fetchShippingQuote(cp);
+          if (cp.length === 5) this.fetchShippingQuote(cp, data.shippingCost ?? null);
         }
         // M4/M7: cada línea trae su propio material_id + material_label + color
         // ya congelados — se reconstruye un InventoryItem de una sola fila para
@@ -749,7 +769,7 @@ export class OrderDraftStore {
         this.quoteCustomerName.set(quote.customerName);
         this.form.patchValue({
           customerName: quote.customerName,
-          customerPhone: quote.customerPhone ?? '',
+          customerPhone: formatPhoneDigits(quote.customerPhone ?? ''),
           // El pedido hereda la condición con la que se cotizó: el cliente
           // aceptó ESE precio, no el de otro esquema.
           paymentMethod: quote.paymentMethod ?? 'cash',
@@ -820,10 +840,18 @@ export class OrderDraftStore {
     this.searchProducts((event.target as HTMLInputElement).value);
   }
 
+  /** Formatea "222 123 4567" mientras el vendedor escribe (mismo formato que Cotizaciones). */
+  onPhoneInput(event: Event): void {
+    const formatted = formatPhoneDigits((event.target as HTMLInputElement).value);
+    this.form.controls.customerPhone.setValue(formatted);
+  }
+
   /** Filtra a 5 dígitos y cotiza el envío cuando el CP está completo. */
   onShippingCpInput(event: Event): void {
     const cp = (event.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 5);
     this.shippingCp.set(cp);
+    // CP nuevo: el costo manual capturado para el CP anterior ya no aplica.
+    this.manualShippingCost.set(null);
     if (cp.length === 5) {
       this.fetchShippingQuote(cp);
     } else {
@@ -831,11 +859,34 @@ export class OrderDraftStore {
     }
   }
 
-  private fetchShippingQuote(cp: string): void {
+  /**
+   * `fallbackManualCost` precarga el costo manual cuando no hay tarifa para
+   * el CP (por ejemplo, al reabrir para editar un pedido que ya se guardó
+   * con un costo capturado a mano).
+   */
+  private fetchShippingQuote(cp: string, fallbackManualCost: number | null = null): void {
     this.shippingService.quoteByPostalCode(cp).subscribe({
-      next: (q) => this.shippingQuote.set(q),
-      error: () => this.shippingQuote.set(null),
+      next: (q) => {
+        this.shippingQuote.set(q);
+        if (!q && fallbackManualCost != null) this.manualShippingCost.set(fallbackManualCost);
+      },
+      error: () => {
+        this.shippingQuote.set(null);
+        if (fallbackManualCost != null) this.manualShippingCost.set(fallbackManualCost);
+      },
     });
+  }
+
+  /**
+   * Captura manual del costo de envío cuando el CP no tiene tarifa
+   * configurada (zona fuera de cobertura). Disponible para vendedor y admin
+   * por igual: ambos usan esta misma pantalla (`/vendedor/nuevo` y
+   * `/admin/punto-venta`).
+   */
+  onManualShippingCostInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const value = Number(raw);
+    this.manualShippingCost.set(raw === '' || Number.isNaN(value) || value < 0 ? null : value);
   }
 
   /** ¿Se puede modificar (cantidad/quitar/material) esta línea del carrito? */
@@ -1038,6 +1089,14 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
+    // CP sin tarifa configurada: hay que capturar el costo de envío a mano
+    // antes de poder cobrar el pedido (aplica igual a vendedor y admin).
+    if (this.needsManualShipping() && this.manualShippingCost() === null) {
+      this.notification.error('Este CP no tiene cobertura automática: ingresa el costo de envío manualmente.');
+      this._lastInvalidStep.set(2);
+      this.goToStep(2);
+      return;
+    }
     // RN-P1: última defensa del cliente antes de que lo rechace el backend.
     if (this.isPickup() && !this.pickupAllowed()) {
       this.notification.error(
@@ -1058,7 +1117,7 @@ export class OrderDraftStore {
     const payload: CreateOrderRequest = {
       customerName: raw.customerName!,
       customerEmail: raw.customerEmail || null,
-      customerPhone: raw.customerPhone || null,
+      customerPhone: raw.customerPhone ? raw.customerPhone.replace(/\D/g, '') : null,
       deliveryAddress: raw.deliveryAddress || null,
       deliveryType: !pickup && raw.assemblyService ? 'with_installation' : 'standard',
       // RN-P2/RN-P4: el backend vuelve a forzar todo esto; mandarlo ya limpio

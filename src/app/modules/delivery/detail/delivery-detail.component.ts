@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -32,7 +33,7 @@ import {
   styleUrl: './delivery-detail.component.scss',
   imports: [CurrencyPipe, ReactiveFormsModule, CurrencyInputDirective],
 })
-export class DeliveryDetailComponent implements OnInit, AfterViewInit {
+export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   private deliveryService = inject(DeliveryService);
   private ticketsService = inject(TicketsService);
   private notification = inject(NotificationService);
@@ -41,6 +42,8 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   private fb = inject(FormBuilder);
 
   private canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('signature');
+  private fileInputRef = viewChild<ElementRef<HTMLInputElement>>('photoFileInput');
+  private videoRef = viewChild<ElementRef<HTMLVideoElement>>('cameraVideo');
 
   protected assignment = signal<DeliveryAssignment | null>(null);
   protected loading = signal(true);
@@ -52,9 +55,29 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   protected saving = signal(false);
 
   protected photoData = signal<string | null>(null);
+  /** Convirtiendo/validando la foto elegida (p.ej. HEIC de iPhone → JPEG). */
+  protected photoProcessing = signal(false);
+  /**
+   * Cámara en vivo (sólo celular): en vez de abrir el selector nativo (que en
+   * algunos navegadores ofrece "Galería" además de la cámara), se pide acceso
+   * a la cámara con getUserMedia y se toma la foto dentro de la app — así se
+   * garantiza que sólo se pueda capturar en directo, nunca subir una imagen
+   * ya existente. En escritorio o si el navegador no soporta getUserMedia se
+   * usa el selector de archivos de siempre (ver openPhotoCapture()).
+   */
+  protected cameraOpen = signal(false);
+  private mediaStream: MediaStream | null = null;
   protected hasSignature = signal(false);
   protected paymentModalOpen = signal(false);
   protected savingPayment = signal(false);
+
+  /**
+   * Firma en pantalla completa (sólo celular): al tocar el recuadro de firma
+   * ocupa todo el viewport y se fuerza horizontal por CSS (ver
+   * .signature-wrap--fullscreen), para que el repartidor le pase el teléfono
+   * al cliente y firme cómodo.
+   */
+  protected signatureExpanded = signal(false);
 
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
@@ -148,14 +171,131 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
   private initCanvas(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas || this.ctx) return;
-    canvas.width = canvas.offsetWidth;
-    canvas.height = 180;
+    this.sizeCanvas(canvas);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    this.configureCtx(ctx);
+    this.ctx = ctx;
+  }
+
+  /** El alto es fijo (180) en el recuadro normal; en pantalla completa lo da el flexbox. */
+  private sizeCanvas(canvas: HTMLCanvasElement): void {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight || 180;
+  }
+
+  private configureCtx(ctx: CanvasRenderingContext2D): void {
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#1a1a2e';
+  }
+
+  /**
+   * Cambiar el tamaño del canvas borra su contenido, así que se respalda la
+   * firma ya dibujada y se restaura al nuevo tamaño (entrar/salir de pantalla
+   * completa).
+   */
+  private resizeCanvasPreserving(): void {
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) return;
+    const dataUrl = this.hasSignature() ? canvas.toDataURL('image/png') : null;
+    this.sizeCanvas(canvas);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    this.configureCtx(ctx);
     this.ctx = ctx;
+    if (dataUrl) this.restoreSignature(dataUrl);
+  }
+
+  protected isMobileViewport(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  /** Primer toque sobre la firma en celular: expande a pantalla completa en vez de dibujar. */
+  protected onCanvasPointerDown(event: PointerEvent): void {
+    const completed = this.assignment()?.deliveryStatus === 'completed';
+    if (!completed && !this.signatureExpanded() && this.isMobileViewport()) {
+      event.preventDefault();
+      this.openSignatureFullscreen();
+      return;
+    }
+    this.onPointerDown(event);
+  }
+
+  protected openSignatureFullscreen(): void {
+    if (this.assignment()?.deliveryStatus === 'completed' || this.signatureExpanded()) return;
+    this.signatureExpanded.set(true);
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => this.resizeCanvasPreserving());
+  }
+
+  protected closeSignatureFullscreen(): void {
+    if (!this.signatureExpanded()) return;
+    this.signatureExpanded.set(false);
+    document.body.style.overflow = '';
+    setTimeout(() => this.resizeCanvasPreserving());
+  }
+
+  ngOnDestroy(): void {
+    if (this.signatureExpanded() || this.cameraOpen()) document.body.style.overflow = '';
+    this.stopCameraStream();
+  }
+
+  /**
+   * Punto de entrada del botón "Tomar foto". En celular abre la cámara en
+   * vivo dentro de la app (garantiza foto en directo, sin opción de galería);
+   * en escritorio, o si el navegador no soporta getUserMedia / el usuario
+   * niega el permiso, cae al selector de archivos nativo como respaldo.
+   */
+  protected async openPhotoCapture(): Promise<void> {
+    if (this.assignment()?.deliveryStatus === 'completed') return;
+    if (!this.isMobileViewport() || !navigator.mediaDevices?.getUserMedia) {
+      this.fileInputRef()?.nativeElement.click();
+      return;
+    }
+    try {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      this.cameraOpen.set(true);
+      document.body.style.overflow = 'hidden';
+      // Espera al render del <video> antes de engancharle el stream.
+      setTimeout(() => {
+        const video = this.videoRef()?.nativeElement;
+        if (!video) return;
+        video.srcObject = this.mediaStream;
+        video.play().catch(() => {});
+      });
+    } catch {
+      this.notification.error('No se pudo abrir la cámara. Elige una foto desde el teléfono.');
+      this.fileInputRef()?.nativeElement.click();
+    }
+  }
+
+  /** Toma el cuadro actual del video como foto y cierra la cámara. */
+  protected capturePhoto(): void {
+    const video = this.videoRef()?.nativeElement;
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    this.photoData.set(canvas.toDataURL('image/jpeg', 0.9));
+    this.closeCamera();
+  }
+
+  protected closeCamera(): void {
+    this.stopCameraStream();
+    this.cameraOpen.set(false);
+    document.body.style.overflow = '';
+  }
+
+  private stopCameraStream(): void {
+    this.mediaStream?.getTracks().forEach((track) => track.stop());
+    this.mediaStream = null;
   }
 
   private restoreSignature(dataUrl: string): void {
@@ -204,12 +344,83 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
     this.hasSignature.set(false);
   }
 
+  /**
+   * Antes esto sólo leía el archivo con FileReader y lo mostraba tal cual: si
+   * el formato no lo podía decodificar el navegador (HEIC de iPhone en
+   * Chrome/Android, TIFF, RAW, etc.) quedaba una foto rota sin ningún aviso.
+   * Ahora: valida que sea una imagen, convierte HEIC/HEIF a JPEG (el formato
+   * por defecto de la cámara de iPhone, que Chrome/Android no puede mostrar)
+   * y confirma que el navegador puede decodificar el resultado antes de
+   * aceptarlo — si algo falla, se avisa con un error en vez de quedar mudo.
+   */
   protected onPhotoSelected(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // permite reintentar con el mismo archivo si falla
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => this.photoData.set(reader.result as string);
-    reader.readAsDataURL(file);
+
+    if (!this.isSupportedImageFile(file)) {
+      this.notification.error('Ese archivo no es una imagen. Usa JPG, PNG, WEBP o HEIC.');
+      return;
+    }
+
+    this.photoProcessing.set(true);
+    this.readImageFile(file)
+      .then((dataUrl) => this.verifyImageDecodes(dataUrl))
+      .then((dataUrl) => {
+        this.photoData.set(dataUrl);
+        this.photoProcessing.set(false);
+      })
+      .catch((err: unknown) => {
+        this.photoProcessing.set(false);
+        this.notification.error(
+          err instanceof Error && err.message
+            ? err.message
+            : 'No se pudo procesar la foto. Intenta con otra imagen (JPG o PNG).',
+        );
+      });
+  }
+
+  /** HEIC/HEIF = foto por defecto de iPhone; Chrome/Android no la puede mostrar. */
+  private isHeic(file: File): boolean {
+    const type = file.type.toLowerCase();
+    const name = file.name.toLowerCase();
+    return type === 'image/heic' || type === 'image/heif' || name.endsWith('.heic') || name.endsWith('.heif');
+  }
+
+  private isSupportedImageFile(file: File): boolean {
+    return file.type.startsWith('image/') || this.isHeic(file);
+  }
+
+  private async readImageFile(file: File): Promise<string> {
+    let source: Blob = file;
+    if (this.isHeic(file)) {
+      const heic2any = (await import('heic2any')).default;
+      const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+      source = Array.isArray(converted) ? converted[0] : converted;
+    }
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo de la foto.'));
+      reader.readAsDataURL(source);
+    });
+  }
+
+  /** Confirma que el navegador puede decodificar/mostrar la imagen antes de aceptarla. */
+  private verifyImageDecodes(dataUrl: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(dataUrl);
+      img.onerror = () =>
+        reject(new Error('Este formato de imagen no es compatible con el navegador. Usa JPG, PNG o WEBP.'));
+      img.src = dataUrl;
+    });
+  }
+
+  /** Red de seguridad: una foto ya guardada (de otro navegador/dispositivo) que no se puede decodificar aquí. */
+  protected onPhotoRenderError(): void {
+    this.notification.error('No se pudo mostrar la foto guardada; puede estar en un formato no compatible.');
   }
 
   protected saveProof(): void {
@@ -226,9 +437,9 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
           this.saving.set(false);
           this.notification.success('Evidencia guardada');
         },
-        error: () => {
+        error: (err: { error?: { message?: string } }) => {
           this.saving.set(false);
-          this.notification.error('No se pudo guardar la evidencia');
+          this.notification.error(err?.error?.message ?? 'No se pudo guardar la evidencia');
         },
       });
   }
@@ -256,9 +467,9 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit {
             },
           });
         },
-        error: () => {
+        error: (err: { error?: { message?: string } }) => {
           this.saving.set(false);
-          this.notification.error('No se pudo guardar la evidencia');
+          this.notification.error(err?.error?.message ?? 'No se pudo guardar la evidencia');
         },
       });
   }

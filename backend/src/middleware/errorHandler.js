@@ -23,6 +23,12 @@ function errorHandler(err, req, res, next) {
     message = 'El registro ya existe (valor duplicado)';
   }
 
+  // Body JSON demasiado grande (ej: foto/firma de evidencia de entrega).
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    statusCode = 413;
+    message = 'El archivo es demasiado grande';
+  }
+
   if (!err.isOperational && statusCode === 500) {
     console.error('❌ Error no controlado:', err);
     if (env.nodeEnv === 'production') {

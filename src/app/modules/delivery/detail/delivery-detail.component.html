@@ -136,9 +136,14 @@
 
         <div class="field">
           <label>Foto del mueble entregado</label>
-          @if (photoData()) {
+          @if (photoProcessing()) {
+            <div class="photo-input photo-input--loading">
+              <span class="spinner spinner--sm"></span>
+              <span>Procesando foto…</span>
+            </div>
+          } @else if (photoData()) {
             <div class="photo-preview">
-              <img [src]="photoData()!" alt="Foto de entrega" />
+              <img [src]="photoData()!" alt="Foto de entrega" (error)="onPhotoRenderError()" />
               @if (a.deliveryStatus !== 'completed') {
                 <button type="button" class="icon-btn icon-btn--danger" (click)="photoData.set(null)" aria-label="Quitar foto">
                   <span class="material-symbols-outlined">delete</span>
@@ -146,29 +151,60 @@
               }
             </div>
           } @else {
-            <label class="photo-input">
+            <!--
+              En celular abre la cámara en vivo dentro de la app (ver
+              openPhotoCapture): sólo se puede tomar la foto en directo, no
+              elegir una de la galería. El input de abajo es el respaldo para
+              escritorio o si el navegador no soporta getUserMedia.
+            -->
+            <button type="button" class="photo-input" (click)="openPhotoCapture()">
               <span class="material-symbols-outlined">photo_camera</span>
-              <span>Tomar / subir foto</span>
-              <input type="file" accept="image/*" capture="environment" (change)="onPhotoSelected($event)" hidden />
-            </label>
+              <span>Tomar foto</span>
+            </button>
+            <input
+              #photoFileInput
+              type="file"
+              accept="image/*,.heic,.heif"
+              [attr.capture]="isMobileViewport() ? 'environment' : null"
+              (change)="onPhotoSelected($event)"
+              hidden
+            />
           }
         </div>
 
         <div class="field">
           <label>Firma del cliente</label>
-          <div class="signature-wrap">
+          <div class="signature-wrap" [class.signature-wrap--fullscreen]="signatureExpanded()">
+            @if (signatureExpanded()) {
+              <div class="signature-fullscreen-bar">
+                <span class="signature-fullscreen-bar__hint">
+                  <span class="material-symbols-outlined">edit</span> Pide al cliente que firme aquí
+                </span>
+                <div class="signature-fullscreen-bar__actions">
+                  <button type="button" class="btn btn--ghost btn--sm" (click)="clearSignature()">
+                    <span class="material-symbols-outlined">ink_eraser</span> Borrar
+                  </button>
+                  <button type="button" class="btn btn--success btn--sm" (click)="closeSignatureFullscreen()">
+                    <span class="material-symbols-outlined">check</span> Listo
+                  </button>
+                </div>
+              </div>
+            }
             <canvas
               #signature
               class="signature"
-              (pointerdown)="onPointerDown($event)"
+              (pointerdown)="onCanvasPointerDown($event)"
               (pointermove)="onPointerMove($event)"
               (pointerup)="onPointerUp()"
               (pointerleave)="onPointerUp()"
             ></canvas>
-            @if (a.deliveryStatus !== 'completed') {
+            @if (a.deliveryStatus !== 'completed' && !signatureExpanded()) {
               <button type="button" class="signature-clear" (click)="clearSignature()">
                 <span class="material-symbols-outlined">ink_eraser</span> Borrar
               </button>
+              <span class="signature-expand-hint">
+                <span class="material-symbols-outlined">open_in_full</span> Toca para firmar en pantalla completa
+              </span>
             }
           </div>
         </div>
@@ -193,6 +229,19 @@
           }
         }
       </div>
+    </div>
+  </div>
+}
+
+@if (cameraOpen()) {
+  <div class="camera-overlay">
+    <video #cameraVideo class="camera-overlay__video" playsinline autoplay muted></video>
+    <div class="camera-overlay__bar">
+      <button type="button" class="camera-overlay__close" (click)="closeCamera()" aria-label="Cancelar">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <button type="button" class="camera-overlay__shutter" (click)="capturePhoto()" aria-label="Tomar foto"></button>
+      <span class="camera-overlay__spacer" aria-hidden="true"></span>
     </div>
   </div>
 }

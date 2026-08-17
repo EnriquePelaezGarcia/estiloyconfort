@@ -26,7 +26,7 @@
     }
   </div>
 
-  @if (store.shippingQuote() || store.hasAssembly() || store.isCredit()) {
+  @if (store.shippingQuote() || store.needsManualShipping() || store.hasAssembly() || store.isCredit()) {
     <div class="cart-total cart-total--sub">
       <span>
         @if (store.isCredit()) { Precio a crédito }
@@ -54,6 +54,21 @@
           <span class="shipping-row__free">GRATIS</span>
         } @else {
           <span class="shipping-row__price">{{ shipping.price | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        }
+      </div>
+    } @else if (store.needsManualShipping()) {
+      <!-- CP sin tarifa configurada: el costo lo capturó el vendedor/admin a mano. -->
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">local_shipping</span>
+          Envío (manual) · CP {{ store.shippingCp() }}
+        </span>
+        @if (store.manualShippingCost() === null) {
+          <span class="shipping-row__price muted">Pendiente</span>
+        } @else if (store.manualShippingCost() === 0) {
+          <span class="shipping-row__free">GRATIS</span>
+        } @else {
+          <span class="shipping-row__price">{{ store.manualShippingCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
         }
       </div>
     }

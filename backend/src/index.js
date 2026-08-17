@@ -13,8 +13,11 @@ const app = express();
 
 // Middlewares globales
 app.use(corsMiddleware);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// El límite por defecto de express.json() es 100kb: insuficiente para la
+// evidencia de entrega (foto + firma van embebidas en base64 dentro del JSON,
+// ver deliveryController.saveProof), que se guarda en columnas MEDIUMTEXT.
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Archivos estáticos (imágenes subidas)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
