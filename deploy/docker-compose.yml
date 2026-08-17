@@ -1,9 +1,9 @@
 # Infraestructura completa de Estilo y Confort en una sola VPS.
 #
-#   nginx  ──┬── estiloyconfort.com             → frontend-prod    (Angular SSR)
-#            ├── api.estiloyconfort.com         → backend-prod     (Express)
-#            ├── staging.estiloyconfort.com     → frontend-staging
-#            └── api.staging.estiloyconfort.com → backend-staging
+#   nginx  ──┬── estiloyconfortm.com             → frontend-prod    (Angular SSR)
+#            ├── api.estiloyconfortm.com         → backend-prod     (Express)
+#            ├── dev.estiloyconfortm.com     → frontend-staging
+#            └── api-dev.estiloyconfortm.com → backend-staging
 #
 # Producción y preproducción viven en redes Docker separadas y con bases de
 # datos distintas: desde staging es imposible tocar datos reales.

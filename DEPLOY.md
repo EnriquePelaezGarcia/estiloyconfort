@@ -42,7 +42,7 @@ Un solo servidor con todo dentro de contenedores Docker:
           ┌────────────┴────────────┐
           │                         │
    ── PRODUCCIÓN ──          ── PREPRODUCCIÓN ──
-   estiloyconfort.com        staging.estiloyconfort.com
+   estiloyconfortm.com        dev.estiloyconfortm.com
           │                         │
    ┌──────▼──────┐           ┌──────▼──────┐
    │ frontend    │           │ frontend    │   Angular SSR
@@ -53,16 +53,22 @@ Un solo servidor con todo dentro de contenedores Docker:
 ```
 
 **Lo importante:** cada ambiente tiene su **propia base de datos** y vive en una
-**red Docker separada**. Desde staging es imposible tocar datos reales de
+**red Docker separada**. Desde preproducción es imposible tocar datos reales de
 clientes. Las bases de datos no exponen puertos a internet.
+
+> 📖 **Sobre los nombres:** el ambiente de pruebas se publica en
+> `dev.estiloyconfortm.com`, pero por dentro se llama **staging** (servicios
+> `backend-staging`, archivo `.env.staging`, comando `./deploy.sh staging`).
+> Es a propósito: `development` ya está ocupado en `angular.json` por la
+> configuración de `ng serve` en tu máquina.
 
 **Tu flujo de trabajo quedará así:**
 
 | Dónde | Rama de git | Para qué |
 |---|---|---|
 | Tu PC | cualquiera | Programar (`npm run dev`) |
-| `staging.estiloyconfort.com` | `development` | Que prueben antes de publicar |
-| `estiloyconfort.com` | `main` | Clientes reales |
+| `dev.estiloyconfortm.com` | `development` | Que prueben antes de publicar |
+| `estiloyconfortm.com` | `main` | Clientes reales |
 
 ---
 
@@ -90,19 +96,14 @@ Necesitas:
 
 ## 3. Comprar el dominio
 
-Recomiendo **Cloudflare Registrar** (vende al costo, sin margen de reventa ni
-renovaciones infladas) o **Namecheap**.
+✅ **Ya está hecho: el dominio es `estiloyconfortm.com`.**
 
-1. Entra a [cloudflare.com](https://cloudflare.com) → crea cuenta
-2. **Domain Registration** → **Register Domain**
-3. Busca `estiloyconfort.com`
+Se compró en **Cloudflare Registrar** (vende al costo, sin margen de reventa ni
+renovaciones infladas). Cloudflare gestiona los DNS; volvemos a eso en el paso 7.
 
-> ⚠️ Si ese dominio ya está ocupado, elige otro (`estiloyconfortmuebles.com`,
-> `.com.mx`, etc.) y **avísame**: hay que cambiarlo en 6 archivos del repo
-> (los dos `.conf` de Nginx, `init-letsencrypt.sh`, los dos `environment.*.ts`
-> y los `.env`).
-
-Al terminar, Cloudflare gestiona tus DNS. Volveremos a esto en el paso 7.
+> ℹ️ Si algún día cambias de dominio, hay que reemplazarlo en 9 archivos:
+> los dos `.conf` de Nginx, `init-letsencrypt.sh`, `docker-compose.yml`,
+> los dos `environment.*.ts`, los dos `.env.*.example` y este manual.
 
 ---
 
@@ -323,14 +324,14 @@ si está activo, Let's Encrypt no puede validar el dominio.
 | A | `@` | `<TU_IP>` | DNS only |
 | A | `www` | `<TU_IP>` | DNS only |
 | A | `api` | `<TU_IP>` | DNS only |
-| A | `staging` | `<TU_IP>` | DNS only |
-| A | `api.staging` | `<TU_IP>` | DNS only |
+| A | `dev` | `<TU_IP>` | DNS only |
+| A | `api-dev` | `<TU_IP>` | DNS only |
 
 Espera unos minutos y verifica desde el servidor:
 
 ```bash
-for d in estiloyconfort.com www.estiloyconfort.com api.estiloyconfort.com \
-         staging.estiloyconfort.com api.staging.estiloyconfort.com; do
+for d in estiloyconfortm.com www.estiloyconfortm.com api.estiloyconfortm.com \
+         dev.estiloyconfortm.com api-dev.estiloyconfortm.com; do
   echo "$d → $(dig +short $d)"
 done
 ```
@@ -585,7 +586,7 @@ docker compose exec backend-prod node src/database/seed.js
 docker compose restart backend-prod backend-staging
 ```
 
-**Ya deberías poder entrar a https://estiloyconfort.com** 🎉
+**Ya deberías poder entrar a https://estiloyconfortm.com** 🎉
 
 ---
 
@@ -606,7 +607,7 @@ cd /opt/estiloyconfort/app/deploy
 ./scripts/deploy.sh staging
 ```
 
-Pruebas en `https://staging.estiloyconfort.com`. Cuando estés conforme:
+Pruebas en `https://dev.estiloyconfortm.com`. Cuando estés conforme:
 
 ```powershell
 # En tu PC: pasas los cambios a main

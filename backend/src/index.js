@@ -1,5 +1,6 @@
 const path = require('path');
 const express = require('express');
+const helmet = require('helmet');
 const env = require('./config/environment');
 const corsMiddleware = require('./config/cors');
 const { testConnection } = require('./config/database');
@@ -10,6 +11,28 @@ const { scheduleFixedExpenses } = require('./jobs/generateFixedExpenses');
 const { scheduleDeliveryReminders } = require('./jobs/deliveryReminders');
 
 const app = express();
+
+// En producción Nginx recibe las peticiones y las reenvía a este proceso.
+// Sin `trust proxy`, Express vería siempre la IP del proxy en lugar de la del
+// visitante, y el límite de intentos de login trataría a TODOS los usuarios
+// como uno solo: al vigésimo fallo de cualquiera, la tienda entera quedaría
+// bloqueada. El 1 significa "confía en un único proxy por delante".
+if (env.isProduction) {
+  app.set('trust proxy', 1);
+}
+
+// Cabeceras de seguridad (nosniff, no-referrer, sin X-Powered-By, etc.).
+app.use(
+  helmet({
+    // Las fotos de productos se sirven desde api.estiloyconfortm.com pero se
+    // muestran en estiloyconfortm.com. El valor por defecto de helmet
+    // (same-origin) haría que el navegador bloqueara todas las imágenes.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    // Esta API solo devuelve JSON e imágenes: la política de contenido que
+    // importa es la del frontend, y esa la pone Nginx.
+    contentSecurityPolicy: false,
+  }),
+);
 
 // Middlewares globales
 app.use(corsMiddleware);

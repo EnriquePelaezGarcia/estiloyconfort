@@ -1,3 +1,26 @@
+> ## ⚠️ DOCUMENTO SUPERADO — no seguir estos pasos
+>
+> Este plan (14 de agosto) se reemplazó el **17 de agosto** por
+> **[DEPLOY.md](../DEPLOY.md)**, que es el manual vigente.
+>
+> **Qué cambió respecto a lo que dice aquí:**
+>
+> | | Este plan | Lo que se implementó |
+> |---|---|---|
+> | Ejecución | PM2 sobre Node nativo | **Docker Compose** |
+> | Aislamiento de BD | Dos bases en un MySQL | **Dos MySQL en redes separadas** |
+> | Dominio | `estiloyconfort.com` | **`estiloyconfortm.com`** |
+> | Subdominio de pruebas | `dev.` / `api-dev.` | `dev.` / `api-dev.` *(sin cambio)* |
+> | VPS | Hetzner CX22 | **Hetzner CPX21** (la línea CX no existe fuera de Europa) |
+>
+> **Lo que este documento acertó y sigue vigente:** el diagnóstico de los
+> bloqueantes de la sección 2. Todos fueron corregidos, incluidos `helmet` y
+> el límite de intentos de login (2.3), que solo este plan había detectado.
+>
+> Se conserva como registro del análisis, no como instrucciones.
+
+---
+
 # Plan de despliegue — Estilo y Confort
 
 **Fecha:** 2026-08-14

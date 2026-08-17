@@ -22,13 +22,13 @@ fi
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${DEPLOY_DIR}"
 
-DOMAIN="estiloyconfort.com"
+DOMAIN="estiloyconfortm.com"
 DOMAINS=(
-  "estiloyconfort.com"
-  "www.estiloyconfort.com"
-  "api.estiloyconfort.com"
-  "staging.estiloyconfort.com"
-  "api.staging.estiloyconfort.com"
+  "estiloyconfortm.com"
+  "www.estiloyconfortm.com"
+  "api.estiloyconfortm.com"
+  "dev.estiloyconfortm.com"
+  "api-dev.estiloyconfortm.com"
 )
 
 # Cambia a 1 para practicar sin gastar intentos. Let's Encrypt permite solo
