@@ -66,9 +66,26 @@ docker compose run --rm --entrypoint sh certbot -c "
     -out /etc/letsencrypt/live/${DOMAIN}/fullchain.pem \
     -subj '/CN=localhost'"
 
-echo "▶️  Arrancando Nginx..."
-docker compose up -d nginx
-sleep 5
+# Nginx resuelve los nombres de sus upstreams (frontend-prod, backend-prod,
+# frontend-staging, backend-staging) AL ARRANCAR, no cuando llega la primera
+# petición. Si alguno de los cuatro no existe todavía, Nginx muere con
+# `host not found in upstream`. Por eso se levanta todo, no solo nginx:
+# `depends_on` únicamente declara los dos de producción.
+echo "▶️  Arrancando todos los servicios..."
+docker compose up -d
+
+echo "⏳ Esperando a que Nginx responda..."
+for i in $(seq 1 30); do
+  if docker compose exec -T nginx nginx -t >/dev/null 2>&1; then
+    echo "   Nginx arriba."
+    break
+  fi
+  if [[ $i -eq 30 ]]; then
+    echo "❌ Nginx no arrancó. Revisa:  docker compose logs nginx" >&2
+    exit 1
+  fi
+  sleep 2
+done
 
 # ---- 3. Borrar el falso y pedir el real ----
 echo "🗑️  Eliminando certificado temporal..."

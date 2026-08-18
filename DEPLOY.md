@@ -20,8 +20,8 @@ unas 3-4 horas.
 7. [Configurar los DNS](#7-configurar-los-dns)
 8. [Traer el código al servidor](#8-traer-el-código-al-servidor)
 9. [Configurar los secretos](#9-configurar-los-secretos)
-10. [Activar SSL](#10-activar-ssl)
-11. [Levantar la aplicación](#11-levantar-la-aplicación)
+10. [Compilar y levantar la aplicación](#10-compilar-y-levantar-la-aplicación)
+11. [Activar SSL y publicar](#11-activar-ssl-y-publicar)
 12. [Cargar la base de datos](#12-cargar-la-base-de-datos)
 13. [Operación diaria](#13-operación-diaria)
 14. [Respaldos](#14-respaldos)
@@ -548,46 +548,89 @@ Los tres están en `.gitignore`: nunca se suben al repositorio.
 
 ---
 
-## 10. Activar SSL
+## 10. Compilar y levantar la aplicación
 
-Con los DNS ya propagados (paso 7):
+> ⚠️ **El orden importa: primero se compila la app, después el SSL.** Nginx
+> resuelve los nombres de sus cuatro upstreams (`frontend-prod`, `backend-prod`,
+> `frontend-staging`, `backend-staging`) **al arrancar**, no cuando llega la
+> primera petición. Si esos contenedores no existen, Nginx no levanta y muere
+> con `host not found in upstream`. Por eso este paso va antes que el de SSL.
 
-```bash
-cd /opt/estiloyconfort/app/deploy
-./scripts/init-letsencrypt.sh tu-correo@ejemplo.com
-```
-
-El script crea un certificado temporal, arranca Nginx, pide el certificado real
-a Let's Encrypt y recarga. Te pedirá confirmar que los DNS están listos.
-
-> 🧪 **Si quieres practicar sin riesgo**, corre primero `STAGING=1 ./scripts/init-letsencrypt.sh tu-correo@ejemplo.com`.
-> Usa el servidor de pruebas de Let's Encrypt (certificados no válidos en
-> navegador, pero intentos ilimitados). Luego repite sin `STAGING=1`.
-
-Las renovaciones son automáticas de aquí en adelante.
-
----
-
-## 11. Levantar la aplicación
+### 10.1 Compilar las imágenes, una por una
 
 ```bash
-cd /opt/estiloyconfort/app/deploy
-docker compose up -d --build
+cd /opt/estiloyconfort/app/deploy && docker compose build backend-prod
 ```
 
-La primera vez tarda **10-20 minutos**: compila Angular dos veces (producción y
-staging) y descarga las imágenes de MySQL y Nginx. Es normal.
+```bash
+docker compose build frontend-prod
+```
 
-Verifica que todo está arriba:
+```bash
+docker compose build backend-staging
+```
+
+```bash
+docker compose build frontend-staging
+```
+
+> 🧠 **Por qué de una en una y no `docker compose build` a secas.** Compose
+> compila en paralelo por defecto, y cada build de Angular puede pedir 2-3 GB.
+> Dos a la vez no caben en los 4 GB del CX23 ni con el swap: el kernel mataría
+> uno a la mitad, normalmente con un error confuso de `node`. De una en una
+> tarda lo mismo en total y no falla.
+
+Los dos de Angular tardan **4-8 minutos cada uno**. Los de Express, ~1 minuto.
+
+### 10.2 Arrancar la aplicación (sin Nginx todavía)
+
+```bash
+docker compose up -d db-prod backend-prod frontend-prod db-staging backend-staging frontend-staging
+```
 
 ```bash
 docker compose ps
 ```
 
-Los 8 servicios deben decir `running`, y las bases de datos `healthy`.
+Los **6** servicios deben decir `running`, y las dos bases de datos `healthy`
+(tardan ~30 s en pasar de `starting` a `healthy`).
 
-Si algo dice `restarting` o `exited`, ve a
-[Solución de problemas](#15-solución-de-problemas).
+Si alguno dice `restarting` o `exited`, ve a
+[Solución de problemas](#15-solución-de-problemas) antes de seguir. Pedir
+certificados con la app rota solo gasta intentos de Let's Encrypt.
+
+---
+
+## 11. Activar SSL y publicar
+
+Con los seis contenedores arriba y los DNS propagados:
+
+```bash
+cd /opt/estiloyconfort/app/deploy && ./scripts/init-letsencrypt.sh enrique.pelaez.garcia@gmail.com
+```
+
+El script resuelve el problema del huevo y la gallina —Nginx no arranca sin
+certificado, pero Let's Encrypt necesita Nginx arriba para validar el dominio—
+en cinco pasos: descarga los parámetros TLS, crea un certificado **falso**,
+arranca Nginx con él, lo borra, pide el real y recarga.
+
+Te pedirá confirmar que los DNS están listos: responde `s`.
+
+> 🧪 **Practica primero sin gastar intentos.** Let's Encrypt permite solo
+> **5 certificados por dominio por semana**, y si te pasas quedas bloqueado
+> siete días. Corre primero:
+>
+> ```bash
+> STAGING=1 ./scripts/init-letsencrypt.sh enrique.pelaez.garcia@gmail.com
+> ```
+>
+> Eso usa el servidor de pruebas de Let's Encrypt: intentos ilimitados, y los
+> certificados que emite **no son válidos en el navegador** (verás una
+> advertencia de seguridad, que en este caso es lo esperado). Si termina en
+> `✅`, repite el comando sin `STAGING=1` para pedir los buenos.
+
+Las renovaciones son automáticas de aquí en adelante: el contenedor `certbot`
+revisa cada 12 horas y renueva cuando faltan menos de 30 días.
 
 ---
 
