@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const discountEngine = require('./discountEngine');
 
 function mapDelivery(row) {
   if (!row) return null;
@@ -93,6 +94,9 @@ const Delivery = {
       materialLabel: it.material_label,
       color: it.color,
     }));
+    // Docs/plan-descuentos.md: para mostrar el descuento que el propio
+    // repartidor pidió (o el que ya traía el pedido) y su estado.
+    delivery.discounts = await discountEngine.findAll('order', delivery.orderId);
     return delivery;
   },
 

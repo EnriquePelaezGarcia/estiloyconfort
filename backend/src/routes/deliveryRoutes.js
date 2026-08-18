@@ -13,6 +13,7 @@ router.get('/assignments/:id', deliveryController.getOne);
 router.patch('/assignments/:id/status', deliveryController.updateStatus);
 router.post('/assignments/:id/proof', deliveryController.saveProof);
 router.patch('/assignments/:id/payment', deliveryController.registerPayment);
+router.post('/assignments/:id/discount', deliveryController.requestDiscount);
 router.post('/assignments/:id/share', deliveryController.share);
 
 module.exports = router;

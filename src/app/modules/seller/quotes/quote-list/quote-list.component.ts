@@ -3,7 +3,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { QuotesService } from '../../../../core/services/quotes.service';
 import { NotificationService } from '../../../../core/services/notification.service';
-import { Quote, QuoteStatus } from '../../../../core/models/quote.model';
+import { Quote, QuoteDiscount, QuoteStatus } from '../../../../core/models/quote.model';
 import { SaleScheme } from '../../../../core/models/order.model';
 
 type FilterTab = 'all' | QuoteStatus;
@@ -41,6 +41,11 @@ export class QuoteListComponent implements OnInit {
   protected copiedId = signal<number | null>(null);
   /** Cotización pendiente de confirmar borrado. */
   protected pendingDelete = signal<Quote | null>(null);
+
+  /** Docs/plan-descuentos.md: descuento que el admin está por rechazar (pide motivo). */
+  protected pendingReject = signal<{ quote: Quote; discount: QuoteDiscount } | null>(null);
+  protected rejectNote = signal('');
+  protected approvingId = signal<number | null>(null);
 
   protected filtered = computed(() => {
     const tab = this.activeTab();
@@ -94,6 +99,16 @@ export class QuoteListComponent implements OnInit {
     return this.router.url.startsWith('/admin') ? '/admin' : '/vendedor';
   }
 
+  /** Docs/plan-descuentos.md: aprobar/rechazar es exclusivo del admin. */
+  protected get isAdmin(): boolean {
+    return this.panelBase === '/admin';
+  }
+
+  /** Descuento en dinero o de producto pendiente de revisar, si lo hay. */
+  protected pendingDiscountOf(quote: Quote): QuoteDiscount | null {
+    return (quote.discounts ?? []).find((d) => d.status === 'pending') ?? null;
+  }
+
   protected newQuote(): void {
     this.router.navigate([this.panelBase, 'cotizaciones', 'nueva']);
   }
@@ -136,6 +151,43 @@ export class QuoteListComponent implements OnInit {
       error: () => {
         this.pendingDelete.set(null);
         this.notification.error('No se pudo eliminar la cotización');
+      },
+    });
+  }
+
+  /** Docs/plan-descuentos.md — admin. No toca el total: ya se aplicó al capturarlo. */
+  protected approveDiscount(quote: Quote, discount: QuoteDiscount): void {
+    this.approvingId.set(discount.id);
+    this.quotesService.approveDiscount(quote.id, discount.id).subscribe({
+      next: () => {
+        this.approvingId.set(null);
+        this.notification.success('Descuento aprobado');
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.approvingId.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el descuento');
+      },
+    });
+  }
+
+  protected askRejectDiscount(quote: Quote, discount: QuoteDiscount): void {
+    this.rejectNote.set('');
+    this.pendingReject.set({ quote, discount });
+  }
+
+  protected confirmRejectDiscount(): void {
+    const target = this.pendingReject();
+    if (!target) return;
+    this.quotesService.rejectDiscount(target.quote.id, target.discount.id, this.rejectNote()).subscribe({
+      next: () => {
+        this.pendingReject.set(null);
+        this.notification.success('Descuento rechazado');
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.pendingReject.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el descuento');
       },
     });
   }

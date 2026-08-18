@@ -167,6 +167,30 @@ export class AdminService {
     );
   }
 
+  // ===== Descuentos (Docs/plan-descuentos.md) =====
+  approveOrderDiscount(orderId: number, discountId: number): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/discounts/${discountId}/approve`,
+      {},
+    );
+  }
+
+  rejectOrderDiscount(
+    orderId: number,
+    discountId: number,
+    reviewNote: string,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/discounts/${discountId}/reject`,
+      { reviewNote },
+    );
+  }
+
+  /** Badge del sidebar: descuentos pendientes de revisar, por documento. */
+  getPendingDiscountsCount(): Observable<{ data: { orders: number; quotes: number } }> {
+    return this.api.get<{ data: { orders: number; quotes: number } }>('/admin/discounts/pending-count');
+  }
+
   // ===== Reportes (Fase 4) =====
   getSalesReport(
     from?: string,

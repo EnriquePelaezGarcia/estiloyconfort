@@ -6,6 +6,7 @@ import {
   DeliveryAssignment,
   DeliveryEarnings,
   DeliveryStatus,
+  DiscountReasonCategory,
   EarningsPeriod,
   PaymentInstrument,
 } from '../models/order.model';
@@ -51,6 +52,21 @@ export class DeliveryService {
     payments: Array<{ amount: number; paymentMethod: PaymentInstrument }>,
   ): Observable<unknown> {
     return this.api.patch(`/delivery/assignments/${id}/payment`, { payments });
+  }
+
+  /**
+   * Solicita un descuento en dinero sobre el pedido de esta entrega
+   * (Docs/plan-descuentos.md RN-D2: el repartidor nunca regala productos).
+   * Se aplica de inmediato y queda pendiente de aprobación.
+   */
+  requestDiscount(
+    id: number,
+    discount: { amount: number; reasonCategory: DiscountReasonCategory; reason?: string | null },
+  ): Observable<{ data: DeliveryAssignment; message: string }> {
+    return this.api.post<{ data: DeliveryAssignment; message: string }>(
+      `/delivery/assignments/${id}/discount`,
+      discount,
+    );
   }
 
   /**

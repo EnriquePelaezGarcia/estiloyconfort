@@ -23,4 +23,8 @@ router.patch('/:id', quotesController.update);
 router.patch('/:id/confirm', quotesController.confirm);
 router.delete('/:id', quotesController.remove);
 
+// Docs/plan-descuentos.md: aprobar/rechazar es exclusivo del admin.
+router.patch('/:id/discounts/:discountId/approve', authorize('admin'), quotesController.approveDiscount);
+router.patch('/:id/discounts/:discountId/reject', authorize('admin'), quotesController.rejectDiscount);
+
 module.exports = router;

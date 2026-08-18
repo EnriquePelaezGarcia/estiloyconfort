@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const PricingConfig = require('../models/PricingConfig');
+const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { calculateCredit } = require('../utils/pricingCalculator');
@@ -121,6 +122,9 @@ const sellerController = {
   getOne: asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
+    // Docs/plan-descuentos.md: al abrir el pedido se apaga el badge de
+    // "descuento rechazado" de quien lo pidió, si era suyo.
+    await discountEngine.acknowledgeRejected('order', order.id, req.user.id);
     res.json({ data: order });
   }),
 
@@ -130,7 +134,7 @@ const sellerController = {
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('El pedido debe incluir al menos un producto');
     }
-    const order = await Order.create(req.body, req.user.id);
+    const order = await Order.create(req.body, req.user.id, req.user.role);
     res.status(201).json({ data: order, message: 'Pedido creado exitosamente' });
   }),
 
@@ -167,7 +171,7 @@ const sellerController = {
       dataToSave.notes = existing.notes ? `${existing.notes}\n${bitacora}` : bitacora;
     }
 
-    let order = await Order.update(req.params.id, dataToSave, req.user.id);
+    let order = await Order.update(req.params.id, dataToSave, req.user.id, req.user.role);
 
     // D4: si el nuevo total quedó por debajo de lo ya cobrado, se anota el
     // saldo a favor del cliente; la devolución del dinero es manual.
@@ -230,6 +234,9 @@ const sellerController = {
         // y las cotizaciones muestran en las líneas sin existencia. Va por aquí
         // y no por /admin/pricing-config porque esa ruta es solo de admin.
         fabricationDays: Number(config.fabrication_days),
+        // Docs/plan-descuentos.md RN-D4: tope de descuento en dinero para
+        // vendedor/repartidor, para validar en el cliente antes de mandarlo.
+        maxSellerDiscount: Number(config.max_seller_discount),
       },
     });
   }),

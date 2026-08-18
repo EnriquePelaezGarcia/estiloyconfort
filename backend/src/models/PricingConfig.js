@@ -31,6 +31,9 @@ const ALLOWED_KEYS = [
   // el negocio tarda lo mismo en cualquier mueble. Solo se muestra al
   // vendedor — el cliente ve "Sobre pedido", sin plazos.
   'fabrication_days',
+  // Tope de descuento en dinero para vendedor/repartidor sin pasar por un
+  // admin (Docs/plan-descuentos.md, RN-D4). El admin no tiene tope.
+  'max_seller_discount',
 ];
 
 const PricingConfig = {
@@ -64,6 +67,7 @@ const PricingConfig = {
       wholesale_price_includes_iva: 0,
       min_margin_alert: 20,
       fabrication_days: 15,
+      max_seller_discount: 2000,
     };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;

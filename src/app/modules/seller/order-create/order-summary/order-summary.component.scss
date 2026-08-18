@@ -51,7 +51,97 @@
   &__name { flex: 1; min-width: 0; }
   &__amount { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
 
+  &__amount--crossed {
+    display: block;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+    text-decoration: line-through;
+  }
+
+  &__gift-toggle {
+    margin-left: 0.4rem;
+    padding: 1px 8px;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-full;
+    background: vars.$color-bg;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    &--active {
+      background: rgba(vars.$color-gold, 0.16);
+      border-color: vars.$color-gold;
+      color: vars.$color-gold;
+    }
+  }
+
+  &--gift { opacity: 0.9; }
+
   .muted { color: vars.$color-text-secondary; font-weight: 400; }
+}
+
+// Docs/plan-descuentos.md
+.discount-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: vars.$spacing-sm;
+  padding-bottom: vars.$spacing-sm;
+  border-bottom: 1px solid vars.$color-border;
+
+  &__label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+  }
+
+  &__toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    .material-symbols-outlined {
+      font-size: 1.1rem;
+      transition: transform 0.15s ease;
+    }
+
+    &--open .material-symbols-outlined { transform: rotate(180deg); }
+  }
+
+  &__amount {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    font: inherit;
+  }
+
+  &__existing {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+
+    .material-symbols-outlined { color: vars.$color-gold; font-size: 1.1rem; }
+  }
+
+  &__existing-text { flex: 1; }
+
+  .badge {
+    &[data-status='pending']  { background: rgba(vars.$color-gold, 0.16); color: vars.$color-gold; }
+    &[data-status='approved'] { background: rgba(vars.$color-success, 0.14); color: vars.$color-success; }
+  }
 }
 
 // Referencia contra contado del crédito: peso tipográfico menor que el total,

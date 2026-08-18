@@ -49,6 +49,10 @@ router.get('/orders/:id', adminController.getOrder);
 router.patch('/orders/:id/status', adminController.updateOrderStatus);
 router.patch('/orders/:id/assign', adminController.assignDelivery);
 router.delete('/orders/:id/assembly', adminController.removeAssembly);
+// Docs/plan-descuentos.md
+router.patch('/orders/:id/discounts/:discountId/approve', adminController.approveOrderDiscount);
+router.patch('/orders/:id/discounts/:discountId/reject', adminController.rejectOrderDiscount);
+router.get('/discounts/pending-count', adminController.getPendingDiscountsCount);
 router.get('/delivery-people', adminController.getDeliveryPeople);
 router.get('/factory-order-items', adminController.getFactoryOrderItems);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);

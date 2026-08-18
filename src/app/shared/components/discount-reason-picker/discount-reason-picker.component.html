@@ -1,0 +1,23 @@
+<div class="reason-picker">
+  <div class="reason-picker__chips">
+    @for (cat of categories; track cat.value) {
+      <button
+        type="button"
+        class="reason-picker__chip"
+        [class.reason-picker__chip--active]="reasonCategory() === cat.value"
+        (click)="select(cat.value)"
+      >
+        {{ cat.label }}
+      </button>
+    }
+  </div>
+  @if (reasonCategory() === 'otro') {
+    <input
+      type="text"
+      class="reason-picker__input"
+      placeholder="Escribe el motivo…"
+      [value]="reason()"
+      (input)="onReasonInput($event)"
+    />
+  }
+</div>

@@ -430,3 +430,9 @@
     fill: currentColor;
   }
 }
+
+// Docs/plan-descuentos.md
+.badge {
+  &[data-status='pending']  { background: rgba(vars.$color-gold, 0.16); color: vars.$color-gold; }
+  &[data-status='approved'] { background: rgba(vars.$color-success, 0.14); color: vars.$color-success; }
+}

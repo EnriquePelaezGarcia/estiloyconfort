@@ -3,6 +3,7 @@ const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const Quote = require('./Quote');
 const StockReservation = require('./StockReservation');
+const discountEngine = require('./discountEngine');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
 
@@ -524,7 +525,13 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null)
     }
   }
 
-  const unitPrice = unitPriceForScheme(materialPrices, paymentMethod);
+  // Regalo de producto (Docs/plan-descuentos.md): la línea se vende a $0 pero
+  // sigue siendo una venta real — descuenta stock, sale en el ticket y en
+  // reportes. `normalUnitPrice` se conserva para el renglón de auditoría en
+  // order_discounts (lo que se hubiera cobrado).
+  const normalUnitPrice = unitPriceForScheme(materialPrices, paymentMethod);
+  const isGift = !!it.gift;
+  const unitPrice = isGift ? 0 : normalUnitPrice;
   const subtotal = unitPrice * qty;
 
   return {
@@ -540,6 +547,8 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null)
     subtotal,
     requiresFabrication,
     reserve,
+    isGift,
+    normalUnitPrice,
   };
 }
 
@@ -641,6 +650,7 @@ const Order = {
       paymentDate: p.payment_date, collectedById: p.collected_by_id,
       collectedByName: p.collected_by_name ?? null, notes: p.notes,
     }));
+    order.discounts = await discountEngine.findAll('order', id);
     return order;
   },
 
@@ -648,8 +658,11 @@ const Order = {
    * Crea un pedido con sus items en una transacción.
    * @param {object} data datos del pedido (incluye items[], cada uno con materialId, M4)
    * @param {number} sellerId id del vendedor que crea el pedido
+   * @param {string} requesterRole rol de quien crea el pedido ('seller'|'admin') —
+   *   decide si un descuento capturado aquí nace 'approved' (admin) o
+   *   'pending' (vendedor), y si aplica el tope de RN-D4.
    */
-  async create(data, sellerId) {
+  async create(data, sellerId, requesterRole = 'seller') {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -751,6 +764,36 @@ const Order = {
       }
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
+      /**
+       * Descuento en dinero (Docs/plan-descuentos.md, RN-D1/RN-D3): si el
+       * pedido nace de una cotización ya cotizada con descuento, ese
+       * descuento manda (se hereda tal cual, con su status) y se ignora
+       * `data.discount` — la cotización ya pasó por la revisión que
+       * corresponde. Si no, se captura lo que venga en el payload.
+       */
+      let moneyDiscountAmount = 0;
+      let quoteDiscountsToCopy = [];
+      if (data.fromQuoteId) {
+        // Join a quote_items para poder re-ligar cada descuento 'product' a
+        // su línea equivalente del pedido nuevo (match por producto+material,
+        // ver más abajo — la cotización no comparte ids con order_items).
+        const [qRows] = await conn.execute(
+          `SELECT qd.*, qi.product_id, qi.material_id
+             FROM quote_discounts qd
+             LEFT JOIN quote_items qi ON qi.id = qd.quote_item_id
+            WHERE qd.quote_id = ? AND qd.status IN ('pending','approved')`,
+          [data.fromQuoteId],
+        );
+        quoteDiscountsToCopy = qRows;
+        const moneyRow = quoteDiscountsToCopy.find((d) => d.discount_type === 'money');
+        if (moneyRow) moneyDiscountAmount = Number(moneyRow.amount);
+      } else if (data.discount) {
+        const normalized = discountEngine.normalizeDiscountInput(data.discount);
+        discountEngine.assertWithinCap(normalized.amount, requesterRole, config);
+        moneyDiscountAmount = normalized.amount;
+      }
+      totalAmount = Math.max(0, totalAmount - moneyDiscountAmount);
+
       // Fecha, tipo de compromiso y ventana horaria de la entrega al cliente.
       // Un pedido nuevo siempre nace 'pending', así que basta con mirar los
       // items recién resueltos.
@@ -817,6 +860,7 @@ const Order = {
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
         );
+        it.insertedItemId = itemResult.insertId;
         // M15.4: el stock siempre se descuenta de la fila (producto, material)
         // correcta, aunque quede negativo. No bloquea la venta.
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
@@ -846,6 +890,73 @@ const Order = {
         await Quote.markConverted(data.fromQuoteId, orderId, conn);
       }
 
+      // Descuentos (Docs/plan-descuentos.md): si el pedido nace de una
+      // cotización, se heredan TAL CUAL (mismo status/revisor — RN-D3, ya
+      // pasaron por la revisión que correspondía). Si no, se capturan
+      // frescos a partir de este payload (RN-D1: 'approved' si lo hizo un
+      // admin, 'pending' si no).
+      if (data.fromQuoteId && quoteDiscountsToCopy.length) {
+        for (const qd of quoteDiscountsToCopy) {
+          let itemId = null;
+          if (qd.discount_type === 'product') {
+            const match = resolvedItems.find(
+              (it) => it.productId === qd.product_id && it.materialId === qd.material_id,
+            );
+            // La línea regalada ya no está en el pedido (se quitó del
+            // carrito antes de confirmar): no hay nada que re-ligar, pero se
+            // deja constancia igual con itemId null.
+            itemId = match ? match.insertedItemId : null;
+          }
+          await discountEngine.insert('order', conn, orderId, {
+            discountType: qd.discount_type,
+            amount: Number(qd.amount),
+            reasonCategory: qd.reason_category,
+            reason: qd.reason,
+            itemId,
+            originalUnitPrice: qd.original_unit_price,
+            status: qd.status,
+            requestedBy: qd.requested_by,
+            requestedByRole: qd.requested_by_role,
+            reviewedBy: qd.reviewed_by,
+            reviewedAt: qd.reviewed_at,
+            reviewNote: qd.review_note,
+          });
+        }
+      } else {
+        const discountStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+        const reviewedFields = requesterRole === 'admin'
+          ? { reviewedBy: sellerId, reviewedAt: new Date() }
+          : {};
+        if (moneyDiscountAmount > 0) {
+          const normalized = discountEngine.normalizeDiscountInput(data.discount);
+          await discountEngine.insert('order', conn, orderId, {
+            discountType: 'money',
+            amount: normalized.amount,
+            reasonCategory: normalized.reasonCategory,
+            reason: normalized.reason,
+            status: discountStatus,
+            requestedBy: sellerId,
+            requestedByRole: requesterRole,
+            ...reviewedFields,
+          });
+        }
+        for (const it of resolvedItems) {
+          if (!it.isGift) continue;
+          await discountEngine.insert('order', conn, orderId, {
+            discountType: 'product',
+            amount: Math.round(it.normalUnitPrice * it.quantity * 100) / 100,
+            reasonCategory: 'cortesia',
+            reason: null,
+            itemId: it.insertedItemId,
+            originalUnitPrice: it.normalUnitPrice,
+            status: discountStatus,
+            requestedBy: sellerId,
+            requestedByRole: requesterRole,
+            ...reviewedFields,
+          });
+        }
+      }
+
       await conn.commit();
       return this.findById(orderId);
     } catch (err) {
@@ -856,11 +967,11 @@ const Order = {
     }
   },
 
-  async update(id, data, userId = null) {
+  async update(id, data, userId = null, requesterRole = 'seller') {
     // Si vienen items, se reemplaza el contenido del pedido en una transacción:
     // se devuelve el stock anterior, se valida/aplica el nuevo y se recalculan totales.
     if (Array.isArray(data.items)) {
-      return this.updateWithItems(id, data, userId);
+      return this.updateWithItems(id, data, userId, requesterRole);
     }
 
     // `pickupInStore` NO entra aquí a propósito: cambiar el modo de entrega
@@ -974,7 +1085,7 @@ const Order = {
    * primero devuelve el stock de los items actuales (por su material
    * congelado, M4) y luego descuenta el nuevo.
    */
-  async updateWithItems(id, data, userId = null) {
+  async updateWithItems(id, data, userId = null, requesterRole = 'seller') {
     const existing = await this.findById(id);
     if (!existing) throw new Error('Pedido no encontrado');
 
@@ -1095,6 +1206,27 @@ const Order = {
       totalAmount += assemblyCost;
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
 
+      /**
+       * Descuento en dinero (Docs/plan-descuentos.md): "una sola línea activa"
+       * (RN-D-scope) — si ya hay un 'pending'/'approved', se conserva TAL
+       * CUAL (no se pisa desde aquí; solo aprobar/rechazar lo tocan) y su
+       * monto se vuelve a restar del total recién recalculado. Si no hay
+       * ninguno activo y el payload trae `data.discount`, se crea uno nuevo.
+       */
+      const existingMoneyDiscount = (await discountEngine.findActive('order', id, conn))
+        .find((d) => d.discount_type === 'money');
+      let moneyDiscountAmount = 0;
+      let newMoneyDiscount = null;
+      if (existingMoneyDiscount) {
+        moneyDiscountAmount = Number(existingMoneyDiscount.amount);
+      } else if (data.discount) {
+        const normalized = discountEngine.normalizeDiscountInput(data.discount);
+        discountEngine.assertWithinCap(normalized.amount, requesterRole, config);
+        moneyDiscountAmount = normalized.amount;
+        newMoneyDiscount = normalized;
+      }
+      totalAmount = Math.max(0, totalAmount - moneyDiscountAmount);
+
       // 3.b Bloque de entrega: se valida la mezcla de lo que llega con lo que
       // ya tenía el pedido (§3.2) y, si algo cambió, queda en bitácora (D7).
       // En pickup no hay horario que negociar (RN-P4): se sella hoy.
@@ -1152,6 +1284,7 @@ const Order = {
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
         );
+        it.insertedItemId = itemResult.insertId;
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
 
         // RN-P5: en pickup no hay nada que apartar.
@@ -1168,6 +1301,44 @@ const Order = {
             createdBy: userId ?? existing.sellerId,
           }, conn);
         }
+      }
+
+      // 4.b Descuentos 'product' (regalos): se regeneran frescos sobre los
+      // items recién recreados — mismo criterio que las reservas de arriba.
+      // Un regalo ya aprobado vuelve a 'pending' si se vuelve a tocar el
+      // carrito (Docs/plan-descuentos.md, limitación aceptada). El descuento
+      // 'money' NO se toca aquí: ya se resolvió arriba (se conserva o se crea).
+      await discountEngine.deleteProductDiscounts('order', conn, id);
+      const giftStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+      const giftReviewedFields = requesterRole === 'admin'
+        ? { reviewedBy: userId ?? existing.sellerId, reviewedAt: new Date() }
+        : {};
+      for (const it of resolvedItems) {
+        if (!it.isGift) continue;
+        await discountEngine.insert('order', conn, id, {
+          discountType: 'product',
+          amount: Math.round(it.normalUnitPrice * it.quantity * 100) / 100,
+          reasonCategory: 'cortesia',
+          reason: null,
+          itemId: it.insertedItemId,
+          originalUnitPrice: it.normalUnitPrice,
+          status: giftStatus,
+          requestedBy: userId ?? existing.sellerId,
+          requestedByRole: requesterRole,
+          ...giftReviewedFields,
+        });
+      }
+      if (newMoneyDiscount) {
+        await discountEngine.insert('order', conn, id, {
+          discountType: 'money',
+          amount: newMoneyDiscount.amount,
+          reasonCategory: newMoneyDiscount.reasonCategory,
+          reason: newMoneyDiscount.reason,
+          status: giftStatus,
+          requestedBy: userId ?? existing.sellerId,
+          requestedByRole: requesterRole,
+          ...giftReviewedFields,
+        });
       }
 
       // 5. Recalcular el estado de pago contra el nuevo total.
@@ -1277,6 +1448,146 @@ const Order = {
 
     const order = await this.findById(id);
     return { order, refundDue };
+  },
+
+  /**
+   * Descuento en dinero capturado sobre un pedido YA EXISTENTE — la vía del
+   * repartidor (Docs/plan-descuentos.md, RN-D2: solo dinero, nunca regalo de
+   * producto) y también la que usaría un admin que quiere dar un descuento
+   * sin pasar por "editar pedido". Se aplica de inmediato (RN-D1) y recalcula
+   * el estado de pago igual que `removeAssembly`.
+   */
+  async applyMoneyDiscount(id, { amount, reasonCategory, reason, requestedBy, requestedByRole }) {
+    const existing = await this.findById(id);
+    if (!existing) {
+      const err = new Error('Pedido no encontrado');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (existing.orderStatus === 'cancelled') {
+      const err = new Error('No se puede descontar un pedido cancelado');
+      err.statusCode = 400;
+      throw err;
+    }
+    const already = (await discountEngine.findActive('order', id))
+      .find((d) => d.discount_type === 'money');
+    if (already) {
+      const err = new Error('Este pedido ya tiene un descuento en dinero activo');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const config = await PricingConfig.getMap();
+    const normalized = discountEngine.normalizeDiscountInput({ amount, reasonCategory, reason });
+    discountEngine.assertWithinCap(normalized.amount, requestedByRole, config);
+
+    const newTotal = Math.max(0, Number(existing.totalAmount) - normalized.amount);
+    const paid = Number(existing.paymentAmount) || 0;
+    const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+    const status = requestedByRole === 'admin' ? 'approved' : 'pending';
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        'UPDATE orders SET total_amount = ?, payment_status = ? WHERE id = ?',
+        [newTotal, paymentStatus, id],
+      );
+      await discountEngine.insert('order', conn, id, {
+        discountType: 'money',
+        amount: normalized.amount,
+        reasonCategory: normalized.reasonCategory,
+        reason: normalized.reason,
+        status,
+        requestedBy,
+        requestedByRole,
+        ...(status === 'approved' ? { reviewedBy: requestedBy, reviewedAt: new Date() } : {}),
+      });
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(id);
+  },
+
+  /** Aprobar no toca el total: ya se restó (o, en 'product', ya nació en $0) al capturarlo. */
+  async approveDiscount(orderId, discountId, adminId) {
+    await discountEngine.approve('order', orderId, discountId, adminId);
+    return this.findById(orderId);
+  },
+
+  /**
+   * Rechazar SÍ revierte: 'money' vuelve a sumar su monto al total; 'product'
+   * restaura el precio normal de la línea (si sigue existiendo — una edición
+   * posterior pudo haberla quitado). Mismo patrón que `removeAssembly`:
+   * recalcula payment_status y deja nota si queda saldo por cobrar.
+   */
+  async rejectDiscount(orderId, discountId, adminId, reviewNote) {
+    const existing = await this.findById(orderId);
+    if (!existing) {
+      const err = new Error('Pedido no encontrado');
+      err.statusCode = 404;
+      throw err;
+    }
+    const row = await discountEngine.findOne('order', orderId, discountId);
+    if (!row) {
+      const err = new Error('Descuento no encontrado');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (row.status !== 'pending') {
+      const err = new Error('Este descuento ya fue revisado');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const amount = Number(row.amount);
+    let newTotal = Number(existing.totalAmount) + amount;
+    const stamp = new Date().toISOString().slice(0, 10);
+    let note = `[${stamp}] Descuento rechazado por admin (+$${amount.toFixed(2)}).`;
+    if (reviewNote && reviewNote.trim()) note += ` Motivo: ${reviewNote.trim()}.`;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      if (row.discount_type === 'product' && row.order_item_id) {
+        // La línea puede haber sido borrada/recreada por una edición
+        // posterior (order_item_id ya no existe) — en ese caso solo se
+        // revierte el total, sin precio de línea que restaurar.
+        const [[item]] = await conn.execute(
+          'SELECT quantity FROM order_items WHERE id = ?', [row.order_item_id],
+        );
+        if (item) {
+          const restoredUnitPrice = Number(row.original_unit_price) || 0;
+          const restoredSubtotal = Math.round(restoredUnitPrice * item.quantity * 100) / 100;
+          await conn.execute(
+            'UPDATE order_items SET unit_price = ?, subtotal = ? WHERE id = ?',
+            [restoredUnitPrice, restoredSubtotal, row.order_item_id],
+          );
+        }
+      }
+
+      const paid = Number(existing.paymentAmount) || 0;
+      const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+      const notes = existing.notes ? `${existing.notes}\n${note}` : note;
+      await conn.execute(
+        'UPDATE orders SET total_amount = ?, payment_status = ?, notes = ? WHERE id = ?',
+        [newTotal, paymentStatus, notes, orderId],
+      );
+      await discountEngine.markRejected('order', conn, discountId, adminId, reviewNote);
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(orderId);
   },
 
   async updateStatus(id, status) {

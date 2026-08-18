@@ -39,6 +39,19 @@ export class QuotesService {
     return this.api.delete<{ message: string }>(`/quotes/${id}`);
   }
 
+  // ===== Descuentos (Docs/plan-descuentos.md) — exclusivo del admin =====
+  approveDiscount(quoteId: number, discountId: number): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/discounts/${discountId}/approve`, {})
+      .pipe(map((res) => res.data));
+  }
+
+  rejectDiscount(quoteId: number, discountId: number, reviewNote: string): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/discounts/${discountId}/reject`, { reviewNote })
+      .pipe(map((res) => res.data));
+  }
+
   /**
    * Vista pública del cliente. No requiere sesión; devuelve 404 tanto si el
    * token no existe como si la cotización ya venció.

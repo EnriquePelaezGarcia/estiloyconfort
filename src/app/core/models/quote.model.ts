@@ -1,4 +1,7 @@
-import { SaleScheme } from './order.model';
+import { DiscountReasonCategory, OrderDiscount, SaleScheme } from './order.model';
+
+/** Mismo shape que OrderDiscount (Docs/plan-descuentos.md) — nunca 'delivery_person' aquí. */
+export type QuoteDiscount = OrderDiscount;
 
 /**
  * Cotización rápida: presupuesto de solo lectura que el vendedor arma en
@@ -15,6 +18,8 @@ import { SaleScheme } from './order.model';
 export type QuoteStatus = 'open' | 'confirmed' | 'converted';
 
 export interface QuoteItem {
+  /** Docs/plan-descuentos.md: liga la línea con su descuento 'product'. */
+  id?: number;
   productId: number;
   /** Snapshot: renombrar el producto no reescribe una cotización ya enviada. */
   productName: string;
@@ -69,6 +74,8 @@ export interface Quote {
   itemCount?: number;
   /** Solo en el detalle (`getById`); el listado no las incluye. */
   items?: QuoteItem[];
+  /** Docs/plan-descuentos.md — vacío si la cotización no tiene ninguno. */
+  discounts?: QuoteDiscount[];
 }
 
 /**
@@ -111,10 +118,18 @@ export interface CreateQuoteRequest {
   pickupInStore?: boolean;
   assemblyService?: boolean;
   assemblyFloors?: number;
+  /** Docs/plan-descuentos.md — mismo shape que en el pedido. */
+  discount?: {
+    amount: number;
+    reasonCategory: DiscountReasonCategory;
+    reason?: string | null;
+  } | null;
   items: Array<{
     productId: number;
     materialId: number;
     color?: string | null;
     quantity: number;
+    /** Regala esta línea (precio $0). */
+    gift?: boolean;
   }>;
 }

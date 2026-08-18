@@ -124,6 +124,22 @@
     }
   }
 
+  // Docs/plan-descuentos.md: aprobación del admin, dentro de la misma card.
+  &__discount {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-gold, 0.1);
+    font-size: 0.78rem;
+
+    .material-symbols-outlined { color: vars.$color-gold; font-size: 1.1rem; }
+  }
+
+  &__discount-text { flex: 1; min-width: 160px; }
+
   &__actions {
     display: flex;
     flex-wrap: wrap;

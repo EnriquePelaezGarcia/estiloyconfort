@@ -1,0 +1,43 @@
+@use '../../../../styles/variables' as vars;
+
+.reason-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reason-picker__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.reason-picker__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-bg;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.reason-picker__input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  font: inherit;
+}

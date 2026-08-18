@@ -49,6 +49,8 @@ export class PricingComponent implements OnInit {
     // (Docs/plan-disponibilidad-publica.md). min(1): un plazo de 0 días haría
     // que el POS prometiera la pieza para hoy en algo que ni se ha empezado.
     fabrication_days: [DEFAULT_PRICING_CONFIG.fabrication_days, [Validators.required, Validators.min(1), Validators.max(365)]],
+    // Docs/plan-descuentos.md RN-D4 — tope de vendedor/repartidor; el admin no tiene tope.
+    max_seller_discount: [DEFAULT_PRICING_CONFIG.max_seller_discount, [Validators.required, Validators.min(0)]],
   });
 
   protected readonly materials = this.materialsStore.active;
@@ -119,6 +121,7 @@ export class PricingComponent implements OnInit {
         wholesale_price_includes_iva: v.wholesale_price_includes_iva ? 1 : 0,
         min_margin_alert: v.min_margin_alert ?? DEFAULT_PRICING_CONFIG.min_margin_alert,
         fabrication_days: v.fabrication_days ?? DEFAULT_PRICING_CONFIG.fabrication_days,
+        max_seller_discount: v.max_seller_discount ?? DEFAULT_PRICING_CONFIG.max_seller_discount,
       });
     });
 

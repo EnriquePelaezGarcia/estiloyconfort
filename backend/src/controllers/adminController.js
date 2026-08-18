@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const Order = require('../models/Order');
 const ProductManufacturerCost = require('../models/ProductManufacturerCost');
 const PricingConfig = require('../models/PricingConfig');
+const discountEngine = require('../models/discountEngine');
 const { calculateCredit, profitByCost, wholesaleProfit } = require('../utils/pricingCalculator');
 
 /**
@@ -531,7 +532,30 @@ const getOrder = asyncHandler(async (req, res) => {
       ? optionsByKey.get(`${it.productId}:${it.materialId}`) ?? []
       : [],
   }));
+  // Docs/plan-descuentos.md: apaga el badge de "rechazado" si el admin mismo
+  // había pedido un descuento que otro admin rechazó (caso raro, mismo trato).
+  await discountEngine.acknowledgeRejected('order', order.id, req.user.id);
   res.json({ data: order });
+});
+
+// PATCH /api/admin/orders/:id/discounts/:discountId/approve
+const approveOrderDiscount = asyncHandler(async (req, res) => {
+  const order = await Order.approveDiscount(req.params.id, req.params.discountId, req.user.id);
+  res.json({ data: order, message: 'Descuento aprobado' });
+});
+
+// PATCH /api/admin/orders/:id/discounts/:discountId/reject
+const rejectOrderDiscount = asyncHandler(async (req, res) => {
+  const order = await Order.rejectDiscount(
+    req.params.id, req.params.discountId, req.user.id, req.body.reviewNote,
+  );
+  res.json({ data: order, message: 'Descuento rechazado' });
+});
+
+// GET /api/admin/discounts/pending-count — badge del sidebar (pedidos + cotizaciones).
+const getPendingDiscountsCount = asyncHandler(async (req, res) => {
+  const counts = await discountEngine.countPending();
+  res.json({ data: counts });
 });
 
 // PATCH /api/admin/orders/:id/status
@@ -1023,6 +1047,9 @@ module.exports = {
   updateOrderStatus,
   assignDelivery,
   removeAssembly,
+  approveOrderDiscount,
+  rejectOrderDiscount,
+  getPendingDiscountsCount,
   getDeliveryPeople,
   getFactoryOrderItems,
   updateManufacturerDueDate,

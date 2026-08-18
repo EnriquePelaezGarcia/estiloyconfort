@@ -3,6 +3,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { SellerService } from '../../../core/services/seller.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
+import { DiscountsService } from '../../../core/services/discounts.service';
 
 interface NavItem {
   label: string;
@@ -27,6 +28,7 @@ export class AdminLayoutComponent implements OnInit {
   protected auth = inject(AuthService);
   private sellerService = inject(SellerService);
   private scheduleService = inject(DeliveryScheduleService);
+  private discountsService = inject(DiscountsService);
 
   protected sidebarOpen = signal(false);
 
@@ -44,7 +46,13 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Precios mayoreo', icon: 'store', route: 'precios-mayoreo', wholesaleOnly: true },
     { label: 'Panel de utilidades', icon: 'insights', route: 'utilidades' },
     { label: 'Nuevo pedido', icon: 'point_of_sale', route: 'punto-venta' },
-    { label: 'Cotizaciones', icon: 'request_quote', route: 'cotizaciones' },
+    {
+      label: 'Cotizaciones',
+      icon: 'request_quote',
+      route: 'cotizaciones',
+      // Docs/plan-descuentos.md: descuentos de cotización pendientes de revisar.
+      badge: () => this.discountsService.pendingCounts()?.quotes ?? 0,
+    },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
     { label: 'Gastos', icon: 'receipt_long', route: 'gastos' },
@@ -57,7 +65,13 @@ export class AdminLayoutComponent implements OnInit {
       // Exactas vencidas + hoy + mañana (Docs/plan-fecha-hora-entrega.md §6.4).
       badge: () => this.scheduleService.counts()?.badge ?? 0,
     },
-    { label: 'Todos los pedidos', icon: 'local_shipping', route: 'pedidos' },
+    {
+      label: 'Todos los pedidos',
+      icon: 'local_shipping',
+      route: 'pedidos',
+      // Docs/plan-descuentos.md: descuentos de pedido pendientes de revisar.
+      badge: () => this.discountsService.pendingCounts()?.orders ?? 0,
+    },
     { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },
   ];
@@ -75,6 +89,7 @@ export class AdminLayoutComponent implements OnInit {
       error: () => {},
     });
     this.scheduleService.refreshCounts().subscribe({ error: () => {} });
+    this.discountsService.refreshPendingCounts().subscribe({ error: () => {} });
   }
 
   protected toggleSidebar(): void {

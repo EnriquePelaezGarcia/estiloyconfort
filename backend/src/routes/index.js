@@ -17,6 +17,7 @@ const payablesRoutes = require('./payablesRoutes');
 const inventoryReservationsRoutes = require('./inventoryReservationsRoutes');
 const ticketsRoutes = require('./ticketsRoutes');
 const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
+const discountsRoutes = require('./discountsRoutes');
 
 const router = Router();
 
@@ -45,5 +46,7 @@ router.use('/payables', payablesRoutes);
 router.use('/inventory', inventoryReservationsRoutes);
 // Agenda de entregas (Docs/plan-fecha-hora-entrega.md) — admin, vendedor y repartidor (D2).
 router.use('/deliveries', deliveryScheduleRoutes);
+// Badge propio de "descuentos rechazados sin ver" — cualquier rol autenticado.
+router.use('/discounts', discountsRoutes);
 
 module.exports = router;

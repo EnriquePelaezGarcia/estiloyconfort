@@ -18,25 +18,31 @@ import { CurrencyInputDirective } from '../../../shared/directives/currency-inpu
 import { DeliveryService } from '../../../core/services/delivery.service';
 import { TicketsService } from '../../../core/services/tickets.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { DiscountsService } from '../../../core/services/discounts.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
-import { DeliveryAssignment, PaymentInstrument, PaymentStatus } from '../../../core/models/order.model';
+import {
+  DeliveryAssignment, DiscountReasonCategory, PaymentInstrument, PaymentStatus, SaleScheme,
+} from '../../../core/models/order.model';
 import {
   PAYMENT_INSTRUMENT_LABELS,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_TONE,
+  SALE_SCHEME_LABELS,
 } from '../../../core/models/order-labels';
+import { DiscountReasonPickerComponent } from '../../../shared/components/discount-reason-picker/discount-reason-picker.component';
 
 @Component({
   selector: 'app-delivery-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './delivery-detail.component.html',
   styleUrl: './delivery-detail.component.scss',
-  imports: [CurrencyPipe, ReactiveFormsModule, CurrencyInputDirective],
+  imports: [CurrencyPipe, ReactiveFormsModule, CurrencyInputDirective, DiscountReasonPickerComponent],
 })
 export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   private deliveryService = inject(DeliveryService);
   private ticketsService = inject(TicketsService);
   private notification = inject(NotificationService);
+  private discountsService = inject(DiscountsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private fb = inject(FormBuilder);
@@ -86,6 +92,17 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     const a = this.assignment();
     return a ? Math.max(0, a.totalAmount - a.paymentAmount) : 0;
   });
+
+  // ===== Descuento (Docs/plan-descuentos.md, RN-D2: solo dinero) =====
+  protected discountModalOpen = signal(false);
+  protected savingDiscount = signal(false);
+  protected discountAmount = signal<number | null>(null);
+  protected discountReasonCategory = signal<DiscountReasonCategory | null>(null);
+  protected discountReasonText = signal<string>('');
+  /** El descuento en dinero activo del pedido (pending/approved), si lo hay. */
+  protected activeMoneyDiscount = computed(
+    () => (this.assignment()?.discounts ?? []).find((d) => d.type === 'money' && d.status !== 'rejected') ?? null,
+  );
 
   protected canComplete = computed(
     () => this.hasSignature() && !!this.photoData() && this.assignment()?.deliveryStatus !== 'completed',
@@ -152,6 +169,10 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
         this.assignment.set(res.data);
         this.photoData.set(res.data.photoUrl ?? null);
         this.loading.set(false);
+        // El backend ya marcó como vistos los descuentos rechazados de este
+        // repartidor en este pedido (al abrir la entrega) — se refresca el
+        // badge del sidebar para que lo refleje.
+        this.discountsService.refreshMyRejectedCount().subscribe({ error: () => {} });
         // El toggle de loading destruye y recrea el <canvas>; hay que reenganchar el contexto.
         this.ctx = null;
         this.hasSignature.set(false);
@@ -481,6 +502,62 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     });
   }
 
+  /** Docs/plan-descuentos.md: pide un descuento en dinero (ej. mueble dañado en el trayecto). */
+  protected openDiscountModal(): void {
+    this.discountAmount.set(null);
+    this.discountReasonCategory.set(null);
+    this.discountReasonText.set('');
+    this.discountModalOpen.set(true);
+  }
+
+  protected onDiscountAmountInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const value = Number(raw);
+    this.discountAmount.set(raw === '' || Number.isNaN(value) || value <= 0 ? null : value);
+  }
+
+  protected setDiscountReasonCategory(category: DiscountReasonCategory): void {
+    this.discountReasonCategory.set(category);
+  }
+
+  protected setDiscountReasonText(reason: string): void {
+    this.discountReasonText.set(reason);
+  }
+
+  protected submitDiscount(): void {
+    const a = this.assignment();
+    const amount = this.discountAmount();
+    if (!a || amount == null) {
+      this.notification.error('Ingresa el monto a descontar');
+      return;
+    }
+    if (!this.discountReasonCategory()) {
+      this.notification.error('Selecciona el motivo del descuento');
+      return;
+    }
+    if (this.discountReasonCategory() === 'otro' && !this.discountReasonText().trim()) {
+      this.notification.error('Escribe el motivo del descuento');
+      return;
+    }
+    this.savingDiscount.set(true);
+    this.deliveryService.requestDiscount(a.id, {
+      amount,
+      reasonCategory: this.discountReasonCategory()!,
+      reason: this.discountReasonText().trim() || null,
+    }).subscribe({
+      next: (res) => {
+        this.assignment.set(res.data);
+        this.savingDiscount.set(false);
+        this.discountModalOpen.set(false);
+        this.notification.success('Descuento aplicado, pendiente de aprobación del admin');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingDiscount.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo aplicar el descuento');
+      },
+    });
+  }
+
   protected openPayment(): void {
     this.paymentLines.clear();
     this.paymentLines.push(this.buildLine(this.balance(), this.allowedInstruments()[0]));
@@ -605,4 +682,5 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   protected payLabel(s: PaymentStatus): string { return PAYMENT_STATUS_LABELS[s]; }
   protected payTone(s: PaymentStatus): string { return PAYMENT_STATUS_TONE[s]; }
+  protected schemeLabel(s: SaleScheme): string { return SALE_SCHEME_LABELS[s]; }
 }

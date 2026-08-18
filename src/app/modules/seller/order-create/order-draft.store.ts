@@ -9,13 +9,15 @@ import { QuotesService } from '../../../core/services/quotes.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { PricingService } from '../../../core/services/pricing.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
 import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
 import { availableOf, reservationsTooltip } from '../../../core/utils/stock-availability';
 import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
-  InventoryItem, InventoryMaterialPrice, OrderItem, OrderStatus, SaleScheme, StockReservationReason,
+  DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, OrderDiscount, OrderItem,
+  OrderStatus, SaleScheme, StockReservationReason,
 } from '../../../core/models/order.model';
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
@@ -42,6 +44,8 @@ export interface CartLine {
     note: string | null;
     customerName: string | null;
   } | null;
+  /** Docs/plan-descuentos.md: se regala esta línea (precio $0, sigue descontando stock). */
+  gift?: boolean;
 }
 
 /**
@@ -74,6 +78,7 @@ export class OrderDraftStore {
   private shippingService = inject(ShippingService);
   private quotesService = inject(QuotesService);
   private deliveryScheduleService = inject(DeliveryScheduleService);
+  private auth = inject(AuthService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
   readonly materialsStore = inject(MaterialsStore);
@@ -290,6 +295,31 @@ export class OrderDraftStore {
     return this.needsManualShipping() ? this.manualShippingCost() ?? 0 : 0;
   });
   /**
+   * Descuento en dinero (Docs/plan-descuentos.md). Se aplica de inmediato al
+   * capturarlo. `existingDiscounts` llega al editar un pedido o al precargar
+   * desde una cotización — si ya trae uno en dinero (pending o approved), ese
+   * manda y el campo de captura se bloquea (solo aprobar/rechazar lo tocan).
+   */
+  readonly existingDiscounts = signal<OrderDiscount[]>([]);
+  readonly activeMoneyDiscount = computed(
+    () => this.existingDiscounts().find((d) => d.type === 'money' && d.status !== 'rejected') ?? null,
+  );
+  readonly discountAmount = signal<number | null>(null);
+  readonly discountReasonCategory = signal<DiscountReasonCategory | null>(null);
+  readonly discountReasonText = signal<string>('');
+  /** RN-D4: tope para vendedor/repartidor; el admin no tiene tope. */
+  readonly isAdminRole = computed(() => this.auth.userRole() === 'admin');
+  readonly maxSellerDiscount = computed(() => this.creditConfig().max_seller_discount);
+  readonly discountExceedsCap = computed(() => {
+    if (this.isAdminRole() || this.activeMoneyDiscount()) return false;
+    const amount = this.discountAmount();
+    return amount != null && amount > this.maxSellerDiscount();
+  });
+  /** Lo que realmente resta del total: lo ya guardado, o lo que se está capturando. */
+  private effectiveDiscountAmount = computed(
+    () => this.activeMoneyDiscount()?.amount ?? this.discountAmount() ?? 0,
+  );
+  /**
    * Total de los productos ya con el tratamiento del esquema: en Crédito
    * Tienda lleva el interés (es lo que el backend guarda como total_amount);
    * en el resto es el subtotal de contado tal cual.
@@ -299,11 +329,11 @@ export class OrderDraftStore {
     return this.isCredit() && credit ? credit.creditPrice : this.total();
   });
   readonly grandTotal = computed(
-    () => this.productsTotal() + this.shippingCost() + this.assemblyCost(),
+    () => Math.max(0, this.productsTotal() + this.shippingCost() + this.assemblyCost() - this.effectiveDiscountAmount()),
   );
   /** Lo mismo que grandTotal pero al precio de contado: referencia del crédito. */
   readonly cashGrandTotal = computed(
-    () => this.total() + this.shippingCost() + this.assemblyCost(),
+    () => Math.max(0, this.total() + this.shippingCost() + this.assemblyCost() - this.effectiveDiscountAmount()),
   );
 
   readonly form = this.fb.group({
@@ -413,6 +443,9 @@ export class OrderDraftStore {
   unitPrice(line: CartLine): number | null {
     const mp = this.lineMaterialPrice(line);
     if (!mp || !mp.isQuoted) return null;
+    // Docs/plan-descuentos.md: una línea regalada se vende a $0, aunque el
+    // precio normal (mostrado tachado en el resumen) siga siendo el de mp.
+    if (line.gift) return 0;
     if (this.isWholesale()) return mp.priceMayoreo;
     if (this.isMsi() && mp.price6msi != null && mp.price6msi > 0) return mp.price6msi;
     return mp.priceCash;
@@ -654,6 +687,7 @@ export class OrderDraftStore {
           wholesale_min_qty: data.wholesaleMinQty,
           wholesale_price_includes_iva: data.wholesalePriceIncludesIva ? 1 : 0,
           fabrication_days: data.fabricationDays,
+          max_seller_discount: data.maxSellerDiscount,
         }),
       error: () => {},
     });
@@ -699,6 +733,10 @@ export class OrderDraftStore {
           deliveryPersonId: data.deliveryPersonId ?? null,
         });
         this.initialDeliveryPersonId = data.deliveryPersonId ?? null;
+        // Docs/plan-descuentos.md: descuentos ya guardados de este pedido —
+        // el de dinero (si sigue activo) bloquea la captura; los de producto
+        // se usan abajo para marcar sus líneas como regaladas.
+        this.existingDiscounts.set(data.discounts ?? []);
         // Precargar el CP de envío y recotizar para mostrar el desglose.
         // Si el CP ya no tiene tarifa (zona dada de baja, por ejemplo), se
         // recupera el costo manual que se había capturado al crear el pedido.
@@ -707,6 +745,13 @@ export class OrderDraftStore {
           this.shippingCp.set(cp);
           if (cp.length === 5) this.fetchShippingQuote(cp, data.shippingCost ?? null);
         }
+        // Docs/plan-descuentos.md: qué líneas están regaladas ahora mismo
+        // (descuento 'product' activo, no rechazado), por id de order_item.
+        const giftedItemIds = new Set(
+          (data.discounts ?? [])
+            .filter((d) => d.type === 'product' && d.status !== 'rejected')
+            .map((d) => d.itemId),
+        );
         // M4/M7: cada línea trae su propio material_id + material_label + color
         // ya congelados — se reconstruye un InventoryItem de una sola fila para
         // que la línea siga funcionando con el precio que ya tenía.
@@ -746,6 +791,7 @@ export class OrderDraftStore {
                   customerName: it.reservation.customerName,
                 }
               : null,
+            gift: giftedItemIds.has(it.id ?? -1),
           })),
         );
       },
@@ -784,6 +830,15 @@ export class OrderDraftStore {
           this.shippingCp.set(cp);
           if (cp.length === 5) this.fetchShippingQuote(cp);
         }
+        // Docs/plan-descuentos.md: los descuentos activos de la cotización se
+        // heredan tal cual al crear el pedido (el backend los copia ya
+        // aprobados/pending según su status) — aquí solo se reflejan en la
+        // UI: el dinero bloquea la captura y el regalo marca su línea.
+        const activeQuoteDiscounts = (quote.discounts ?? []).filter((d) => d.status !== 'rejected');
+        this.existingDiscounts.set(activeQuoteDiscounts);
+        const giftedItemIds = new Set(
+          activeQuoteDiscounts.filter((d) => d.type === 'product').map((d) => d.itemId),
+        );
         this.lines.set(
           (quote.items ?? []).map((it) => ({
             product: {
@@ -818,6 +873,7 @@ export class OrderDraftStore {
             materialId: it.materialId,
             color: it.color ?? null,
             quantity: it.quantity,
+            gift: giftedItemIds.has(it.id ?? -1),
           })),
         );
       },
@@ -986,6 +1042,28 @@ export class OrderDraftStore {
     this.lines.update((lines) => lines.filter((l, i) => i !== index || !this.canEditLine(l)));
   }
 
+  /** Docs/plan-descuentos.md: regala/deja de regalar esta línea (precio $0). */
+  toggleGift(index: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index ? { ...l, gift: !l.gift } : l)),
+    );
+  }
+
+  /** Captura del descuento en dinero — solo tiene efecto si no hay uno ya guardado (`activeMoneyDiscount`). */
+  onDiscountAmountInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const value = Number(raw);
+    this.discountAmount.set(raw === '' || Number.isNaN(value) || value <= 0 ? null : value);
+  }
+
+  setDiscountReasonCategory(category: DiscountReasonCategory): void {
+    this.discountReasonCategory.set(category);
+  }
+
+  setDiscountReasonText(reason: string): void {
+    this.discountReasonText.set(reason);
+  }
+
   /**
    * Valida el carrito (paso 1): carrito vacío, líneas no cotizadas en el
    * material elegido, y mínimos de mayoreo por línea. Muestra el toast
@@ -1111,6 +1189,32 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
+    // Docs/plan-descuentos.md: solo se valida si se está capturando uno
+    // NUEVO — si ya hay uno guardado (`activeMoneyDiscount`), el campo está
+    // bloqueado y no hay nada que revisar aquí.
+    if (!this.activeMoneyDiscount() && this.discountAmount() != null) {
+      if (!this.discountReasonCategory()) {
+        this.notification.error('Selecciona el motivo del descuento');
+        this._lastInvalidStep.set(2);
+        this.goToStep(2);
+        return;
+      }
+      if (this.discountReasonCategory() === 'otro' && !this.discountReasonText().trim()) {
+        this.notification.error('Escribe el motivo del descuento');
+        this._lastInvalidStep.set(2);
+        this.goToStep(2);
+        return;
+      }
+      if (this.discountExceedsCap()) {
+        this.notification.error(
+          `Este descuento supera el máximo permitido ($${this.maxSellerDiscount().toFixed(2)}). `
+          + 'Pide que un admin lo capture directamente.',
+        );
+        this._lastInvalidStep.set(2);
+        this.goToStep(2);
+        return;
+      }
+    }
 
     const raw = this.form.getRawValue();
     const pickup = this.isPickup();
@@ -1140,6 +1244,16 @@ export class OrderDraftStore {
       // Cierra la cotización de origen (si la hubo) en la misma transacción
       // del pedido. En modo edición no aplica: no se está creando nada.
       fromQuoteId: this.isEditing() ? null : this.fromQuoteId(),
+      // Docs/plan-descuentos.md: solo se manda si se está capturando uno
+      // NUEVO — si ya hay uno guardado, el backend lo conserva tal cual y
+      // esto se ignora.
+      discount: !this.activeMoneyDiscount() && this.discountAmount() != null
+        ? {
+            amount: this.discountAmount()!,
+            reasonCategory: this.discountReasonCategory()!,
+            reason: this.discountReasonText().trim() || null,
+          }
+        : null,
       // M4: cada línea manda su propio material_id + color. requiresFabrication
       // NO se manda: el backend lo DERIVA del stock (producto,material) al
       // crear la línea (M15.4) — capturarlo a mano ya no tiene sentido.
@@ -1161,6 +1275,8 @@ export class OrderDraftStore {
               customerName: l.reserve.customerName || raw.customerName || null,
             }
           : null,
+        // Docs/plan-descuentos.md: regala esta línea (precio $0).
+        gift: !!l.gift,
       })),
     };
 

@@ -158,6 +158,20 @@
     display: flex;
     flex-direction: column;
   }
+
+  // Docs/plan-descuentos.md
+  &__item-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+}
+
+// Docs/plan-descuentos.md
+.badge {
+  &[data-status='pending']  { background: rgba(#b8960c, 0.16); color: #b8960c; }
+  &[data-status='approved'] { background: rgba(vars.$color-success, 0.14); color: vars.$color-success; }
+  &[data-status='rejected'] { background: rgba(#b00020, 0.1); color: #b00020; }
 }
 
 .credit-box {

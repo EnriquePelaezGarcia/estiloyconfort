@@ -37,7 +37,10 @@ export type PricingConfigKey =
   // Plazo de fabricación en días HÁBILES cuando un mueble no tiene existencia
   // (Docs/plan-disponibilidad-publica.md). Uno solo para todo el catálogo.
   // Solo lo ve el vendedor; el cliente ve "Sobre pedido", sin plazos.
-  | 'fabrication_days';
+  | 'fabrication_days'
+  // Tope de descuento en dinero para vendedor/repartidor sin pasar por un
+  // admin (Docs/plan-descuentos.md RN-D4). El admin no tiene tope.
+  | 'max_seller_discount';
 
 /** Mapa key -> valor usado por el calculador de precios. */
 export type PricingConfigMap = Record<PricingConfigKey, number>;
@@ -58,6 +61,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   wholesale_price_includes_iva: 0,
   min_margin_alert: 20,
   fabrication_days: 15,
+  max_seller_discount: 2000,
 };
 
 export interface CalculatedPrices {
@@ -125,4 +129,6 @@ export interface CreditConfig {
    * estimada; nunca se le muestra al cliente en el catálogo.
    */
   fabricationDays: number;
+  /** Docs/plan-descuentos.md RN-D4 — tope de descuento en dinero sin admin. */
+  maxSellerDiscount: number;
 }

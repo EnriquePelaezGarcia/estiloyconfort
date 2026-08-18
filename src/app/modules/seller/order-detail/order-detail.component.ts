@@ -10,10 +10,13 @@ import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { DeliveryScheduleService, formatWindow } from '../../../core/services/delivery-schedule.service';
+import { DiscountsService } from '../../../core/services/discounts.service';
 import { isPickupWithinGrace } from '../../../core/utils/pickup';
 import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
 import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
-import { DeliveryCommitment, Order, OrderItem, OrderStatus, PaymentStatus, StockReservationReason } from '../../../core/models/order.model';
+import {
+  DeliveryCommitment, Order, OrderDiscount, OrderItem, OrderStatus, PaymentStatus, StockReservationReason,
+} from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
   ORDER_STATUS_LABELS,
@@ -64,6 +67,7 @@ export class OrderDetailComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
   private scheduleService = inject(DeliveryScheduleService);
+  private discountsService = inject(DiscountsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private fb = inject(FormBuilder);
@@ -75,6 +79,11 @@ export class OrderDetailComponent implements OnInit {
   protected savingPayment = signal(false);
   protected assemblyModalOpen = signal(false);
   protected removingAssembly = signal(false);
+
+  // ===== Descuentos (Docs/plan-descuentos.md) — aprobar/rechazar es exclusivo del admin =====
+  protected approvingDiscountId = signal<number | null>(null);
+  protected pendingRejectDiscount = signal<OrderDiscount | null>(null);
+  protected rejectDiscountNote = signal('');
 
   /** Ids de items con una asignación de fabricante en curso. */
   protected assigningManufacturer = signal<Set<number>>(new Set());
@@ -371,6 +380,9 @@ export class OrderDetailComponent implements OnInit {
         this.order.set(res.data);
         this.loading.set(false);
         this.loadDeliveryHistory(id);
+        // El backend ya marcó como vistos los descuentos rechazados de quien
+        // los pidió al abrir el pedido — se refresca el badge del sidebar.
+        this.discountsService.refreshMyRejectedCount().subscribe({ error: () => {} });
       },
       error: () => {
         this.loading.set(false);
@@ -534,6 +546,46 @@ export class OrderDetailComponent implements OnInit {
         this.removingAssembly.set(false);
         this.assemblyModalOpen.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo quitar el armado');
+      },
+    });
+  }
+
+  /** Aprobar no toca el total: ya se aplicó al capturarlo (Docs/plan-descuentos.md). */
+  protected approveDiscount(discount: OrderDiscount): void {
+    const order = this.order();
+    if (!order) return;
+    this.approvingDiscountId.set(discount.id);
+    this.adminService.approveOrderDiscount(order.id, discount.id).subscribe({
+      next: () => {
+        this.approvingDiscountId.set(null);
+        this.notification.success('Descuento aprobado');
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.approvingDiscountId.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el descuento');
+      },
+    });
+  }
+
+  protected askRejectDiscount(discount: OrderDiscount): void {
+    this.rejectDiscountNote.set('');
+    this.pendingRejectDiscount.set(discount);
+  }
+
+  protected confirmRejectDiscount(): void {
+    const order = this.order();
+    const discount = this.pendingRejectDiscount();
+    if (!order || !discount) return;
+    this.adminService.rejectOrderDiscount(order.id, discount.id, this.rejectDiscountNote()).subscribe({
+      next: () => {
+        this.pendingRejectDiscount.set(null);
+        this.notification.success('Descuento rechazado');
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.pendingRejectDiscount.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el descuento');
       },
     });
   }

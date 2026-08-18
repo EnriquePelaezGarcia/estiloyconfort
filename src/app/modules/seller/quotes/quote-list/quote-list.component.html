@@ -70,6 +70,33 @@
           </span>
         </div>
 
+        <!-- Docs/plan-descuentos.md: solo el admin ve la aprobación. -->
+        @if (isAdmin && pendingDiscountOf(q); as pending) {
+          <div class="quote-card__discount">
+            <span class="material-symbols-outlined">sell</span>
+            <span class="quote-card__discount-text">
+              @if (pending.type === 'money') {
+                Descuento -{{ pending.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              } @else {
+                Regalo (valor {{ pending.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+              }
+              @if (pending.reason) { — {{ pending.reason }} }
+              · pedido por {{ pending.requestedByName ?? 'vendedor' }}
+            </span>
+            <button
+              type="button"
+              class="btn btn--primary btn--sm"
+              [disabled]="approvingId() === pending.id"
+              (click)="approveDiscount(q, pending)"
+            >
+              <span class="material-symbols-outlined">check</span> Aprobar
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectDiscount(q, pending)">
+              <span class="material-symbols-outlined">close</span> Rechazar
+            </button>
+          </div>
+        }
+
         <div class="quote-card__actions">
           <button type="button" class="btn btn--ghost btn--sm" (click)="copyLink(q)">
             <span class="material-symbols-outlined">{{ copiedId() === q.id ? 'check' : 'link' }}</span>
@@ -136,6 +163,32 @@
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="pendingDelete.set(null)">Cancelar</button>
           <button type="button" class="btn btn--danger" (click)="confirmDelete()">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (pendingReject(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar descuento</h2>
+        <p class="muted">
+          Se revierte el descuento de <strong>{{ target.quote.customerName }}</strong> y el total vuelve a subir.
+        </p>
+        <div class="field">
+          <label for="rejectNote">Motivo (opcional)</label>
+          <textarea
+            id="rejectNote"
+            [value]="rejectNote()"
+            (input)="rejectNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingReject.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmRejectDiscount()">Rechazar</button>
         </div>
       </div>
     </div>

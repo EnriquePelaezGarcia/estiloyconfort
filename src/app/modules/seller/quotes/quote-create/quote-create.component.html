@@ -282,12 +282,24 @@
                   }
                 </div>
 
-                @if (unitPrice(l) !== null) {
+                @if (l.gift) {
+                  <span class="cart-line__price">🎁 Regalo — antes {{ lineMaterialPrice(l)?.priceCash | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
+                } @else if (unitPrice(l) !== null) {
                   <span class="cart-line__price">{{ unitPrice(l) | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u</span>
                 } @else {
                   <span class="cart-line__price cart-line__price--alert">
                     No se cotiza en este material — quítalo o cambia el material
                   </span>
+                }
+                @if (unitPrice(l) !== null || l.gift) {
+                  <button
+                    type="button"
+                    class="cart-line__gift-toggle"
+                    [class.cart-line__gift-toggle--active]="l.gift"
+                    (click)="toggleGift(i)"
+                  >
+                    🎁 {{ l.gift ? 'Regalado' : 'Regalar este producto' }}
+                  </button>
                 }
                 @if (lineWholesaleShortfall(l) > 0) {
                   <span class="cart-line__warn">
@@ -336,7 +348,60 @@
             </div>
           }
 
-          @if (shippingQuote() || hasAssembly() || isCredit()) {
+          <!-- Docs/plan-descuentos.md: descuento en dinero — bloqueado si ya
+               hay uno guardado (pending/approved), captura libre si no. -->
+          <div class="discount-capture">
+            @if (activeMoneyDiscount(); as active) {
+              <div class="discount-capture__existing" [attr.data-status]="active.status">
+                <span class="material-symbols-outlined">sell</span>
+                <span class="discount-capture__existing-text">
+                  Descuento -{{ active.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                  @if (active.reason) { ({{ active.reason }}) }
+                </span>
+                <span class="badge" [attr.data-status]="active.status">
+                  @switch (active.status) {
+                    @case ('pending') { Pendiente de aprobación }
+                    @case ('approved') { Aprobado }
+                  }
+                </span>
+              </div>
+            } @else {
+              <button
+                type="button"
+                class="discount-capture__toggle"
+                [class.discount-capture__toggle--open]="discountExpanded()"
+                [attr.aria-expanded]="discountExpanded()"
+                (click)="discountExpanded.set(!discountExpanded())"
+              >
+                Descuento en dinero
+                <span class="material-symbols-outlined">keyboard_arrow_down</span>
+              </button>
+              @if (discountExpanded()) {
+                <app-discount-reason-picker
+                  [reasonCategory]="discountReasonCategory()"
+                  [reason]="discountReasonText()"
+                  (reasonCategoryChange)="setDiscountReasonCategory($event)"
+                  (reasonChange)="setDiscountReasonText($event)"
+                />
+                <input
+                  type="number"
+                  class="discount-capture__amount"
+                  placeholder="Monto a descontar"
+                  min="0"
+                  step="0.01"
+                  [value]="discountAmount()"
+                  (input)="onDiscountAmountInput($event)"
+                />
+                @if (discountExceedsCap()) {
+                  <p class="field__error">
+                    Supera el máximo permitido ({{ maxSellerDiscount() | currency:'MXN':'symbol-narrow':'1.0-0' }}). Pide que un admin lo capture.
+                  </p>
+                }
+              }
+            }
+          </div>
+
+          @if (shippingQuote() || hasAssembly() || isCredit() || activeMoneyDiscount() || discountAmount() !== null) {
             <div class="cart-total cart-total--sub">
               <span>
                 @if (isCredit()) { Precio a crédito }
@@ -373,6 +438,23 @@
                   Servicio de armado (piso {{ assemblyFloorsValue() }})
                 </span>
                 <span class="shipping-row__price">{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            }
+            @if (activeMoneyDiscount(); as active) {
+              <div class="shipping-row">
+                <span class="shipping-row__label">
+                  <span class="material-symbols-outlined">sell</span>
+                  Descuento
+                </span>
+                <span class="shipping-row__free">-{{ active.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            } @else if (discountAmount() !== null) {
+              <div class="shipping-row">
+                <span class="shipping-row__label">
+                  <span class="material-symbols-outlined">sell</span>
+                  Descuento
+                </span>
+                <span class="shipping-row__free">-{{ discountAmount() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
               </div>
             }
             <div class="grand-total">

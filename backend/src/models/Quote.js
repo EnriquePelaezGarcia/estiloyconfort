@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const ShippingRate = require('./ShippingRate');
+const discountEngine = require('./discountEngine');
 const { addBusinessDays } = require('../utils/businessDays');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
@@ -68,6 +69,9 @@ function mapQuote(row) {
 
 function mapQuoteItem(row) {
   return {
+    // Docs/plan-descuentos.md: para poder ligar cada línea con su descuento
+    // 'product' (quote_discounts.quote_item_id).
+    id: row.id,
     productId: row.product_id,
     productName: row.product_name,
     productSku: row.product_sku ?? null,
@@ -197,14 +201,18 @@ async function resolveQuoteLine(conn, it, paymentMethod, config) {
     }
   }
 
-  const unitPrice = unitPriceForScheme(materialPrices, paymentMethod);
-  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+  const normalUnitPrice = unitPriceForScheme(materialPrices, paymentMethod);
+  if (!Number.isFinite(normalUnitPrice) || normalUnitPrice <= 0) {
     const err = new Error(
       `"${product.name}" no tiene precio en ${declared.label} para la condición de venta elegida.`,
     );
     err.statusCode = 400;
     throw err;
   }
+  // Regalo de producto (Docs/plan-descuentos.md): la línea se cotiza en $0;
+  // `normalUnitPrice` se conserva para el renglón de auditoría.
+  const isGift = !!it.gift;
+  const unitPrice = isGift ? 0 : normalUnitPrice;
   const subtotal = Math.round(unitPrice * quantity * 100) / 100;
 
   return {
@@ -217,6 +225,8 @@ async function resolveQuoteLine(conn, it, paymentMethod, config) {
     quantity,
     unitPrice,
     subtotal,
+    isGift,
+    normalUnitPrice,
   };
 }
 
@@ -363,16 +373,29 @@ const Quote = {
 
   /**
    * Crea una cotización con sus líneas en una transacción.
-   * @param {object} data { customerName, customerPhone, paymentMethod, shippingPostalCode, assemblyService, assemblyFloors, items[] }
+   * @param {object} data { customerName, customerPhone, paymentMethod, shippingPostalCode, assemblyService, assemblyFloors, items[], discount? }
    * @param {number} sellerId id del vendedor/admin que cotiza
+   * @param {string} requesterRole rol de quien cotiza — decide si el
+   *   descuento nace 'approved' (admin) o 'pending', y si aplica el tope
+   *   (Docs/plan-descuentos.md RN-D1/RN-D4).
    */
-  async create(data, sellerId) {
+  async create(data, sellerId, requesterRole = 'seller') {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
       const config = await PricingConfig.getMap();
       const p = await resolveQuotePricing(conn, data, config);
+
+      // Descuento en dinero (RN-D1): se resta del total ya calculado.
+      let moneyDiscountAmount = 0;
+      let normalizedDiscount = null;
+      if (data.discount) {
+        normalizedDiscount = discountEngine.normalizeDiscountInput(data.discount);
+        discountEngine.assertWithinCap(normalizedDiscount.amount, requesterRole, config);
+        moneyDiscountAmount = normalizedDiscount.amount;
+      }
+      const totalAmount = Math.max(0, Math.round((p.totalAmount - moneyDiscountAmount) * 100) / 100);
 
       // 16 bytes en base64url = 22 caracteres sin guiones ni signos, seguros
       // en una URL que se pega en WhatsApp.
@@ -393,7 +416,7 @@ const Quote = {
           token, sellerId, data.customerName, data.customerPhone ?? null, p.paymentMethod,
           p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel, p.pickupInStore ? 1 : 0,
           p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
-          p.subtotal, p.totalAmount,
+          p.subtotal, totalAmount,
           p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
           p.creditWeeks, p.layawayDeadline, p.wholesaleIva,
           'open', expiresAt,
@@ -402,7 +425,7 @@ const Quote = {
       const quoteId = result.insertId;
 
       for (const it of p.resolvedItems) {
-        await conn.execute(
+        const [itemResult] = await conn.execute(
           `INSERT INTO quote_items
             (quote_id, product_id, product_name, product_sku, material_id,
              material_label, color, quantity, unit_price, subtotal)
@@ -413,6 +436,40 @@ const Quote = {
             it.unitPrice, it.subtotal,
           ],
         );
+        it.insertedItemId = itemResult.insertId;
+      }
+
+      // Descuentos (RN-D1): 'approved' de una vez si lo capturó un admin.
+      const discountStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+      const reviewedFields = requesterRole === 'admin'
+        ? { reviewedBy: sellerId, reviewedAt: new Date() }
+        : {};
+      if (normalizedDiscount) {
+        await discountEngine.insert('quote', conn, quoteId, {
+          discountType: 'money',
+          amount: normalizedDiscount.amount,
+          reasonCategory: normalizedDiscount.reasonCategory,
+          reason: normalizedDiscount.reason,
+          status: discountStatus,
+          requestedBy: sellerId,
+          requestedByRole: requesterRole,
+          ...reviewedFields,
+        });
+      }
+      for (const it of p.resolvedItems) {
+        if (!it.isGift) continue;
+        await discountEngine.insert('quote', conn, quoteId, {
+          discountType: 'product',
+          amount: Math.round(it.normalUnitPrice * it.quantity * 100) / 100,
+          reasonCategory: 'cortesia',
+          reason: null,
+          itemId: it.insertedItemId,
+          originalUnitPrice: it.normalUnitPrice,
+          status: discountStatus,
+          requestedBy: sellerId,
+          requestedByRole: requesterRole,
+          ...reviewedFields,
+        });
       }
 
       await conn.commit();
@@ -430,8 +487,10 @@ const Quote = {
    * convirtió en pedido. Recalcula todo con `resolveQuotePricing` (mismas
    * reglas que `create`) y reemplaza las líneas; conserva token, status,
    * `expires_at` y `created_at`.
+   * @param {number} userId id de quien edita (dueño del descuento si captura uno nuevo).
+   * @param {string} requesterRole rol de quien edita (Docs/plan-descuentos.md).
    */
-  async update(id, data) {
+  async update(id, data, userId, requesterRole = 'seller') {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -451,6 +510,23 @@ const Quote = {
       const config = await PricingConfig.getMap();
       const p = await resolveQuotePricing(conn, data, config);
 
+      // Descuento en dinero: se conserva el activo si ya había uno (solo
+      // aprobar/rechazar lo tocan); si no hay ninguno y el payload trae uno
+      // nuevo, se crea (mismo criterio que Order.updateWithItems).
+      const existingMoneyDiscount = (await discountEngine.findActive('quote', id, conn))
+        .find((d) => d.discount_type === 'money');
+      let moneyDiscountAmount = 0;
+      let newMoneyDiscount = null;
+      if (existingMoneyDiscount) {
+        moneyDiscountAmount = Number(existingMoneyDiscount.amount);
+      } else if (data.discount) {
+        const normalized = discountEngine.normalizeDiscountInput(data.discount);
+        discountEngine.assertWithinCap(normalized.amount, requesterRole, config);
+        moneyDiscountAmount = normalized.amount;
+        newMoneyDiscount = normalized;
+      }
+      const totalAmount = Math.max(0, Math.round((p.totalAmount - moneyDiscountAmount) * 100) / 100);
+
       await conn.execute(
         `UPDATE quotes SET
            customer_name = ?, customer_phone = ?, payment_method = ?,
@@ -466,7 +542,7 @@ const Quote = {
           p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel,
           p.pickupInStore ? 1 : 0,
           p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
-          p.subtotal, p.totalAmount,
+          p.subtotal, totalAmount,
           p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
           p.creditWeeks, p.layawayDeadline, p.wholesaleIva,
           id,
@@ -475,7 +551,7 @@ const Quote = {
 
       await conn.execute('DELETE FROM quote_items WHERE quote_id = ?', [id]);
       for (const it of p.resolvedItems) {
-        await conn.execute(
+        const [itemResult] = await conn.execute(
           `INSERT INTO quote_items
             (quote_id, product_id, product_name, product_sku, material_id,
              material_label, color, quantity, unit_price, subtotal)
@@ -486,6 +562,43 @@ const Quote = {
             it.unitPrice, it.subtotal,
           ],
         );
+        it.insertedItemId = itemResult.insertId;
+      }
+
+      // Descuentos 'product': se regeneran frescos sobre las líneas recién
+      // recreadas (mismo criterio que Order.updateWithItems — un regalo ya
+      // aprobado vuelve a 'pending' si se vuelve a tocar el carrito).
+      await discountEngine.deleteProductDiscounts('quote', conn, id);
+      const giftStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+      const giftReviewedFields = requesterRole === 'admin'
+        ? { reviewedBy: userId, reviewedAt: new Date() }
+        : {};
+      for (const it of p.resolvedItems) {
+        if (!it.isGift) continue;
+        await discountEngine.insert('quote', conn, id, {
+          discountType: 'product',
+          amount: Math.round(it.normalUnitPrice * it.quantity * 100) / 100,
+          reasonCategory: 'cortesia',
+          reason: null,
+          itemId: it.insertedItemId,
+          originalUnitPrice: it.normalUnitPrice,
+          status: giftStatus,
+          requestedBy: userId,
+          requestedByRole: requesterRole,
+          ...giftReviewedFields,
+        });
+      }
+      if (newMoneyDiscount) {
+        await discountEngine.insert('quote', conn, id, {
+          discountType: 'money',
+          amount: newMoneyDiscount.amount,
+          reasonCategory: newMoneyDiscount.reasonCategory,
+          reason: newMoneyDiscount.reason,
+          status: giftStatus,
+          requestedBy: userId,
+          requestedByRole: requesterRole,
+          ...giftReviewedFields,
+        });
       }
 
       await conn.commit();
@@ -505,6 +618,7 @@ const Quote = {
     const quote = mapQuote(row);
     const [items] = await pool.execute(ITEMS_SELECT, [id]);
     quote.items = items.map(mapQuoteItem);
+    quote.discounts = await discountEngine.findAll('quote', id);
     return quote;
   },
 
@@ -567,6 +681,66 @@ const Quote = {
       `UPDATE quotes SET status = 'converted', order_id = ? WHERE id = ?`,
       [orderId, id],
     );
+  },
+
+  /** Aprobar no toca el total: ya se restó (o, en 'product', ya nació en $0) al capturarlo. */
+  async approveDiscount(quoteId, discountId, adminId) {
+    await discountEngine.approve('quote', quoteId, discountId, adminId);
+    return this.findById(quoteId);
+  },
+
+  /**
+   * Rechazar revierte: 'money' vuelve a sumar su monto al total; 'product'
+   * restaura el precio normal de la línea (si sigue existiendo). Sin
+   * `payment_amount`/`refundDue` — una cotización no cobra nada todavía.
+   */
+  async rejectDiscount(quoteId, discountId, adminId, reviewNote) {
+    const existing = await this.findById(quoteId);
+    if (!existing) {
+      const err = new Error('Cotización no encontrada');
+      err.statusCode = 404;
+      throw err;
+    }
+    const row = await discountEngine.findOne('quote', quoteId, discountId);
+    if (!row) {
+      const err = new Error('Descuento no encontrado');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (row.status !== 'pending') {
+      const err = new Error('Este descuento ya fue revisado');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) + Number(row.amount)) * 100) / 100);
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      if (row.discount_type === 'product' && row.quote_item_id) {
+        const [[item]] = await conn.execute(
+          'SELECT quantity FROM quote_items WHERE id = ?', [row.quote_item_id],
+        );
+        if (item) {
+          const restoredUnitPrice = Number(row.original_unit_price) || 0;
+          const restoredSubtotal = Math.round(restoredUnitPrice * item.quantity * 100) / 100;
+          await conn.execute(
+            'UPDATE quote_items SET unit_price = ?, subtotal = ? WHERE id = ?',
+            [restoredUnitPrice, restoredSubtotal, row.quote_item_id],
+          );
+        }
+      }
+      await conn.execute('UPDATE quotes SET total_amount = ? WHERE id = ?', [newTotal, quoteId]);
+      await discountEngine.markRejected('quote', conn, discountId, adminId, reviewNote);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(quoteId);
   },
 
   async remove(id) {

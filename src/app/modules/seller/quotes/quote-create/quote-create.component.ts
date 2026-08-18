@@ -12,13 +12,15 @@ import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
 import { addBusinessDays } from '../../../../core/utils/business-days';
 import { availableOf, reservationsTooltip } from '../../../../core/utils/stock-availability';
 import { PHONE_PATTERN, formatPhoneDigits } from '../../../../core/utils/phone';
+import { AuthService } from '../../../../core/auth/auth.service';
 import {
-  AssemblyRates, InventoryItem, InventoryMaterialPrice, SaleScheme,
+  AssemblyRates, DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, SaleScheme,
 } from '../../../../core/models/order.model';
-import { CreateQuoteRequest, Quote } from '../../../../core/models/quote.model';
+import { CreateQuoteRequest, Quote, QuoteDiscount } from '../../../../core/models/quote.model';
 import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
 import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
+import { DiscountReasonPickerComponent } from '../../../../shared/components/discount-reason-picker/discount-reason-picker.component';
 
 /**
  * Línea de la cotización. Igual que el `CartLine` del POS: el material y el
@@ -29,6 +31,8 @@ interface QuoteLine {
   materialId: number;
   color: string | null;
   quantity: number;
+  /** Docs/plan-descuentos.md: se regala esta línea (precio $0). */
+  gift?: boolean;
 }
 
 /**
@@ -45,13 +49,14 @@ interface QuoteLine {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-create.component.html',
   styleUrl: './quote-create.component.scss',
-  imports: [ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent],
+  imports: [ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent, DiscountReasonPickerComponent],
 })
 export class QuoteCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
   private quotesService = inject(QuotesService);
   private shippingService = inject(ShippingService);
   private notification = inject(NotificationService);
+  private auth = inject(AuthService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -216,6 +221,8 @@ export class QuoteCreateComponent implements OnInit {
   protected unitPrice(line: QuoteLine): number | null {
     const mp = this.lineMaterialPrice(line);
     if (!mp || !mp.isQuoted) return null;
+    // Docs/plan-descuentos.md: una línea regalada se cotiza a $0.
+    if (line.gift) return 0;
     if (this.isWholesale()) return mp.priceMayoreo;
     if (this.isMsi() && mp.price6msi != null && mp.price6msi > 0) return mp.price6msi;
     return mp.priceCash;
@@ -238,8 +245,33 @@ export class QuoteCreateComponent implements OnInit {
     return this.isCredit() && credit ? credit.creditPrice : this.subtotal();
   });
 
+  /**
+   * Descuento en dinero (Docs/plan-descuentos.md). `existingDiscounts` llega
+   * al editar una cotización — si ya trae uno en dinero activo, bloquea la
+   * captura (solo aprobar/rechazar lo tocan).
+   */
+  protected existingDiscounts = signal<QuoteDiscount[]>([]);
+  protected activeMoneyDiscount = computed(
+    () => this.existingDiscounts().find((d) => d.type === 'money' && d.status !== 'rejected') ?? null,
+  );
+  protected discountAmount = signal<number | null>(null);
+  protected discountReasonCategory = signal<DiscountReasonCategory | null>(null);
+  protected discountReasonText = signal<string>('');
+  // Colapsado por default: la mayoría de las cotizaciones no llevan descuento.
+  protected discountExpanded = signal(false);
+  protected isAdminRole = computed(() => this.auth.userRole() === 'admin');
+  protected maxSellerDiscount = computed(() => this.pricingConfig().max_seller_discount);
+  protected discountExceedsCap = computed(() => {
+    if (this.isAdminRole() || this.activeMoneyDiscount()) return false;
+    const amount = this.discountAmount();
+    return amount != null && amount > this.maxSellerDiscount();
+  });
+  private effectiveDiscountAmount = computed(
+    () => this.activeMoneyDiscount()?.amount ?? this.discountAmount() ?? 0,
+  );
+
   protected grandTotal = computed(
-    () => this.productsTotal() + this.shippingCost() + this.assemblyCost(),
+    () => Math.max(0, this.productsTotal() + this.shippingCost() + this.assemblyCost() - this.effectiveDiscountAmount()),
   );
 
   constructor() {
@@ -293,6 +325,7 @@ export class QuoteCreateComponent implements OnInit {
           wholesale_min_qty: data.wholesaleMinQty,
           wholesale_price_includes_iva: data.wholesalePriceIncludesIva ? 1 : 0,
           fabrication_days: data.fabricationDays,
+          max_seller_discount: data.maxSellerDiscount,
         }),
       error: () => {},
     });
@@ -330,6 +363,13 @@ export class QuoteCreateComponent implements OnInit {
             });
           }
         }
+        // Docs/plan-descuentos.md: descuentos ya guardados de esta cotización.
+        this.existingDiscounts.set(quote.discounts ?? []);
+        const giftedItemIds = new Set(
+          (quote.discounts ?? [])
+            .filter((d) => d.type === 'product' && d.status !== 'rejected')
+            .map((d) => d.itemId),
+        );
         this.lines.set(
           (quote.items ?? []).map((it) => ({
             product: {
@@ -359,6 +399,7 @@ export class QuoteCreateComponent implements OnInit {
             materialId: it.materialId,
             color: it.color ?? null,
             quantity: it.quantity,
+            gift: giftedItemIds.has(it.id ?? -1),
           })),
         );
         this.loadingQuote.set(false);
@@ -460,6 +501,27 @@ export class QuoteCreateComponent implements OnInit {
     this.lines.update((lines) => lines.filter((_, i) => i !== index));
   }
 
+  /** Docs/plan-descuentos.md: regala/deja de regalar esta línea (precio $0). */
+  protected toggleGift(index: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index ? { ...l, gift: !l.gift } : l)),
+    );
+  }
+
+  protected onDiscountAmountInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const value = Number(raw);
+    this.discountAmount.set(raw === '' || Number.isNaN(value) || value <= 0 ? null : value);
+  }
+
+  protected setDiscountReasonCategory(category: DiscountReasonCategory): void {
+    this.discountReasonCategory.set(category);
+  }
+
+  protected setDiscountReasonText(reason: string): void {
+    this.discountReasonText.set(reason);
+  }
+
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -486,6 +548,24 @@ export class QuoteCreateComponent implements OnInit {
       this.notification.error(`Mayoreo exige cantidad mínima por línea: ${detail}.`);
       return;
     }
+    // Docs/plan-descuentos.md: solo se valida si se está capturando uno NUEVO.
+    if (!this.activeMoneyDiscount() && this.discountAmount() != null) {
+      if (!this.discountReasonCategory()) {
+        this.notification.error('Selecciona el motivo del descuento');
+        return;
+      }
+      if (this.discountReasonCategory() === 'otro' && !this.discountReasonText().trim()) {
+        this.notification.error('Escribe el motivo del descuento');
+        return;
+      }
+      if (this.discountExceedsCap()) {
+        this.notification.error(
+          `Este descuento supera el máximo permitido ($${this.maxSellerDiscount().toFixed(2)}). `
+          + 'Pide que un admin lo capture directamente.',
+        );
+        return;
+      }
+    }
 
     const raw = this.form.getRawValue();
     const payload: CreateQuoteRequest = {
@@ -497,6 +577,14 @@ export class QuoteCreateComponent implements OnInit {
       shippingPostalCode: this.isPickup() ? null : this.shippingCp() || null,
       assemblyService: !this.isPickup() && !!raw.assemblyService,
       assemblyFloors: this.isPickup() ? 0 : this.assemblyFloorsValue(),
+      // Docs/plan-descuentos.md: solo se manda si se está capturando uno NUEVO.
+      discount: !this.activeMoneyDiscount() && this.discountAmount() != null
+        ? {
+            amount: this.discountAmount()!,
+            reasonCategory: this.discountReasonCategory()!,
+            reason: this.discountReasonText().trim() || null,
+          }
+        : null,
       // El backend recalcula precio, envío y armado con las tarifas vigentes:
       // aquí solo viaja QUÉ se cotiza, no CUÁNTO cuesta.
       items: this.lines().map((l) => ({
@@ -504,6 +592,7 @@ export class QuoteCreateComponent implements OnInit {
         materialId: l.materialId,
         color: l.color,
         quantity: l.quantity,
+        gift: !!l.gift,
       })),
     };
 

@@ -52,12 +52,27 @@
             </div>
           }
           @if (a.customerPhone) { <div><dt>Teléfono</dt><dd>{{ a.customerPhone }}</dd></div> }
+          <div><dt>Condición de venta</dt><dd>{{ schemeLabel(a.paymentMethod) }}</dd></div>
           <div><dt>Total</dt><dd>{{ a.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
           <div>
             <dt>Estado de pago</dt>
             <dd><span class="badge" [class]="payTone(a.paymentStatus)">{{ payLabel(a.paymentStatus) }}</span></dd>
           </div>
           @if (balance() > 0) { <div><dt>Por cobrar</dt><dd class="balance">{{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div> }
+          @if (activeMoneyDiscount(); as discount) {
+            <div>
+              <dt>Descuento</dt>
+              <dd>
+                -{{ discount.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                <span class="badge" [attr.data-status]="discount.status">
+                  @switch (discount.status) {
+                    @case ('pending') { Pendiente de aprobación }
+                    @case ('approved') { Aprobado }
+                  }
+                </span>
+              </dd>
+            </div>
+          }
         </dl>
 
         @if (a.assemblyService) {
@@ -106,6 +121,13 @@
         @if (balance() > 0 && a.deliveryStatus !== 'completed') {
           <button type="button" class="btn btn--success btn--block" (click)="openPayment()">
             <span class="material-symbols-outlined">payments</span> Registrar cobro
+          </button>
+        }
+
+        <!-- Docs/plan-descuentos.md RN-D2: solo dinero, nunca regalo de producto. -->
+        @if (!activeMoneyDiscount()) {
+          <button type="button" class="btn btn--ghost btn--block" (click)="openDiscountModal()">
+            <span class="material-symbols-outlined">sell</span> Solicitar descuento
           </button>
         }
 
@@ -310,6 +332,49 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+}
+
+<!-- Docs/plan-descuentos.md RN-D2: el repartidor solo pide dinero, nunca regala productos. -->
+@if (discountModalOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Solicitar descuento</h2>
+        <button type="button" class="icon-btn" (click)="discountModalOpen.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="field__hint">
+          Se aplica de inmediato al total del pedido y queda pendiente de aprobación del admin.
+        </p>
+        <app-discount-reason-picker
+          [reasonCategory]="discountReasonCategory()"
+          [reason]="discountReasonText()"
+          (reasonCategoryChange)="setDiscountReasonCategory($event)"
+          (reasonChange)="setDiscountReasonText($event)"
+        />
+        <div class="field">
+          <label for="deliveryDiscountAmount">Monto a descontar</label>
+          <input
+            id="deliveryDiscountAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            [value]="discountAmount()"
+            (input)="onDiscountAmountInput($event)"
+          />
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="discountModalOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--success" [disabled]="savingDiscount()" (click)="submitDiscount()">
+            @if (savingDiscount()) { <span class="spinner spinner--sm"></span> } @else { Aplicar descuento }
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 }

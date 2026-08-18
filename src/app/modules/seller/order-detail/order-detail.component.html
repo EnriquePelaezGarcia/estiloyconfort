@@ -166,6 +166,57 @@
         </div>
       }
 
+      <!-- Docs/plan-descuentos.md: aprobar/rechazar es exclusivo del admin. -->
+      @if (o.discounts && o.discounts.length) {
+        <div class="reserved-box no-print">
+          <h3 class="info-subtitle">Descuentos</h3>
+          <ul class="reserved-list">
+            @for (d of o.discounts; track d.id) {
+              <li class="reserved-list__item">
+                <div class="reserved-list__info">
+                  <span class="strong">
+                    @if (d.type === 'money') {
+                      -{{ d.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                    } @else {
+                      🎁 Regalo (valor {{ d.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+                    }
+                    <span class="badge" [attr.data-status]="d.status">
+                      @switch (d.status) {
+                        @case ('pending') { Pendiente }
+                        @case ('approved') { Aprobado }
+                        @case ('rejected') { Rechazado }
+                      }
+                    </span>
+                  </span>
+                  <span class="muted">
+                    {{ d.reason ?? (d.reasonCategory === 'exhibicion' ? 'Mueble de exhibición' : d.reasonCategory === 'danado' ? 'Mueble dañado' : d.reasonCategory === 'cortesia' ? 'Cortesía' : 'Otro') }}
+                    · pedido por {{ d.requestedByName ?? d.requestedByRole }}
+                  </span>
+                  @if (d.status === 'rejected' && d.reviewNote) {
+                    <span class="muted">Motivo del rechazo: {{ d.reviewNote }}</span>
+                  }
+                </div>
+                @if (isAdmin && d.status === 'pending') {
+                  <div class="reserved-list__item-actions">
+                    <button
+                      type="button"
+                      class="btn btn--primary btn--sm"
+                      [disabled]="approvingDiscountId() === d.id"
+                      (click)="approveDiscount(d)"
+                    >
+                      <span class="material-symbols-outlined">check</span> Aprobar
+                    </button>
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectDiscount(d)">
+                      <span class="material-symbols-outlined">close</span> Rechazar
+                    </button>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
       <div class="totals">
         @if (isCredit() && o.cashTotal != null) {
           <div class="totals__row"><span>Subtotal contado</span><span>{{ o.cashTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></div>
@@ -549,6 +600,33 @@
           <button type="button" class="btn btn--danger" [disabled]="removingAssembly()" (click)="confirmRemoveAssembly()">
             @if (removingAssembly()) { <span class="spinner spinner--sm"></span> } @else { Sí, quitar armado }
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: rechazar descuento (solo admin) — Docs/plan-descuentos.md ===== -->
+@if (pendingRejectDiscount(); as discount) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar descuento</h2>
+        <p class="muted">
+          Se revierte el descuento (-{{ discount.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}) y el total vuelve a subir.
+        </p>
+        <div class="field">
+          <label for="orderRejectNote">Motivo (opcional)</label>
+          <textarea
+            id="orderRejectNote"
+            [value]="rejectDiscountNote()"
+            (input)="rejectDiscountNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingRejectDiscount.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmRejectDiscount()">Rechazar</button>
         </div>
       </div>
     </div>

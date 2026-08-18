@@ -81,13 +81,31 @@ Necesitas:
 - [ ] Tu repositorio en GitHub, con las ramas `main` y `development`
 - [ ] Un rato sin interrupciones
 
-**Costo aproximado:** ~$9-10 USD/mes el servidor (CPX21 en EE.UU., con respaldos)
-+ ~$12 USD/año el dominio.
+**Costo aproximado:** ~$8.39 USD/mes el servidor (CX23 en Helsinki, con
+respaldos e IPv4) + ~$12 USD/año el dominio.
 
-> Los precios de Hetzner cambian; verifícalos en su consola antes de contratar.
-> La línea **CX** (Intel, más barata) existe solo en Alemania y Finlandia; en
-> EE.UU. se usa la línea **CPX** (AMD). Elegir Alemania ahorraría ~$4/mes pero
-> agrega ~110 ms de latencia a cada petición desde México.
+> **Por qué Helsinki y no EE.UU.** Hetzner tiene dos líneas de precio y no
+> coinciden en cobertura:
+>
+> | Línea | Dónde existe | 4 GB RAM cuestan |
+> |---|---|---|
+> | **CX** (*Cost-Optimized*, Intel) | Solo Alemania y Finlandia | ~$8-10/mes |
+> | **CPX** (*Regular Performance*, AMD) | También EE.UU. | ~$37/mes en Ashburn |
+>
+> Estar en EE.UU. bajaría la latencia desde México de ~170 ms a ~50 ms, pero
+> cuesta **$37 USD/mes más** ($450 al año). Se eligió Helsinki para empezar.
+> Como todo el despliegue está en scripts, migrar después es crear otro
+> servidor, correr el mismo script, restaurar el respaldo y mover los DNS.
+>
+> Se quiso el **CX33** ($9.99, 4 vCPU / 8 GB / 80 GB), pero en agosto 2026
+> estaba **agotado en las tres ubicaciones europeas** — es el "Limited
+> availability" que advierte esa pestaña. Se contrató el **CX23** (2 vCPU,
+> 4 GB, 40 GB) y se compensa con 4 GB de swap (paso 5.8).
+>
+> Hetzner permite **escalar el servidor después** (apagar → cambiar tipo →
+> encender, unos minutos sin reinstalar). Si aparece el CX33, vale la pena.
+> ⚠️ Al escalar, marca **"keep disk size"**: aumentar el disco hace que el
+> cambio sea irreversible, no podrías volver a un plan menor.
 
 > 💡 **Consejo:** ten a la mano un gestor de contraseñas o un archivo local
 > seguro. Vas a generar varias contraseñas largas y las necesitarás después.
@@ -123,13 +141,23 @@ renovaciones infladas). Cloudflare gestiona los DNS; volvemos a eso en el paso 7
 
 | Opción | Elige | Por qué |
 |---|---|---|
-| **Location** | Ashburn, VA (o Hillsboro, OR) | Latencia hacia México (~40 ms vs ~150 ms desde Alemania) |
+| **Type** | Shared Resources → **Cost-Optimized** → x86 (Intel/AMD) → **CX23** | 2 vCPU, 4 GB RAM, 40 GB SSD, 20 TB de tráfico |
+| **Location** | **Helsinki** | Es donde existe la línea CX (ver la nota del paso 2) |
 | **Image** | Ubuntu 24.04 | LTS, soporte hasta 2029 |
-| **Type** | Shared vCPU → **CPX21** | 3 vCPU, 4 GB RAM, 80 GB SSD. Los 4 GB son el mínimo real para dos ambientes |
 | **Networking** | IPv4 + IPv6 | La IPv4 cuesta ~€0.50/mes pero es indispensable |
 | **SSH Key** | *(ver abajo)* | Más seguro que contraseña |
-| **Backups** | Actívalos (+20%, ~€0.86/mes) | Imagen completa del disco. Vale la pena |
+| **Backups** | Actívalos (+20%, ~$2/mes) | Imagen completa del disco, 7 copias. Vale la pena |
+| **Volumes / Firewalls / Placement groups / Labels / Cloud config** | Nada | El firewall se configura dentro del servidor con `ufw` (paso 5.5) |
 | **Name** | `estiloyconfort-prod` | |
+
+> ⚠️ **Elige el Type ANTES que la Location.** Al marcar *Cost-Optimized*, las
+> ubicaciones de EE.UU. (Ashburn, Hillsboro) se ponen grises y Hetzner salta
+> solo a Helsinki. Si eliges la ubicación primero, el tipo se te va a cambiar
+> sin aviso claro.
+
+El total debe quedar en **~$8.39 USD/mes**: $6.49 del servidor + $1.30 de
+respaldos + $0.60 de la IPv4. Si te sale mucho más, quedó marcada la pestaña
+*Regular Performance* en lugar de *Cost-Optimized*.
 
 ### 4.3 Tu llave SSH
 
@@ -272,6 +300,48 @@ sudo dpkg-reconfigure --priority=low unattended-upgrades
 ```
 
 Elige **Yes**. A partir de ahora los parches críticos se instalan solos.
+
+### 5.8 Memoria de intercambio (swap)
+
+> 🧠 **Por qué:** el CX23 tiene 4 GB de RAM. Los 8 contenedores en reposo usan
+> ~2 GB, así que sobra — pero **compilar** Angular puede pedir 2-3 GB por sí
+> solo. Si eso coincide con los dos ambientes arriba, el kernel de Linux mata
+> procesos para liberar memoria, y suele elegir el que más consume: MySQL.
+> Perder la base de datos a media compilación es el peor escenario posible.
+>
+> El swap es un archivo en disco que el sistema usa cuando se agota la RAM.
+> Es mucho más lento, pero solo se toca en los picos: convierte un "se murió
+> MySQL" en un "tardó más de lo normal".
+
+Crea un archivo de 4 GB:
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+```
+
+Haz que sobreviva a los reinicios:
+
+```bash
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Baja la tendencia del sistema a usarlo (solo cuando de verdad haga falta):
+
+```bash
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+sudo sysctl -p /etc/sysctl.d/99-swappiness.conf
+```
+
+Verifica:
+
+```bash
+free -h
+```
+
+Debe aparecer una fila `Swap:` con `4.0Gi`.
 
 ---
 

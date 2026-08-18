@@ -1,4 +1,5 @@
 const Quote = require('../models/Quote');
+const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const env = require('../config/environment');
@@ -36,7 +37,7 @@ const quotesController = {
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('La cotización debe incluir al menos un producto');
     }
-    const quote = await Quote.create(req.body, req.user.id);
+    const quote = await Quote.create(req.body, req.user.id, req.user.role);
     res.status(201).json({ data: withShareUrl(quote), message: 'Cotización creada' });
   }),
 
@@ -58,7 +59,7 @@ const quotesController = {
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('La cotización debe incluir al menos un producto');
     }
-    const quote = await Quote.update(req.params.id, req.body);
+    const quote = await Quote.update(req.params.id, req.body, req.user.id, req.user.role);
     res.json({ data: withShareUrl(quote), message: 'Cotización actualizada' });
   }),
 
@@ -73,7 +74,28 @@ const quotesController = {
     const quote = await Quote.findById(req.params.id);
     if (!quote) throw ApiError.notFound('Cotización no encontrada');
     assertCanManage(quote, req.user);
+    // Docs/plan-descuentos.md: al abrir la cotización se apaga el badge de
+    // "descuento rechazado" de quien lo pidió, si era suyo.
+    await discountEngine.acknowledgeRejected('quote', quote.id, req.user.id);
     res.json({ data: withShareUrl(quote) });
+  }),
+
+  // PATCH /api/quotes/:id/discounts/:discountId/approve — admin
+  approveDiscount: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    const quote = await Quote.approveDiscount(req.params.id, req.params.discountId, req.user.id);
+    res.json({ data: withShareUrl(quote), message: 'Descuento aprobado' });
+  }),
+
+  // PATCH /api/quotes/:id/discounts/:discountId/reject — admin
+  rejectDiscount: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    const quote = await Quote.rejectDiscount(
+      req.params.id, req.params.discountId, req.user.id, req.body.reviewNote,
+    );
+    res.json({ data: withShareUrl(quote), message: 'Descuento rechazado' });
   }),
 
   // PATCH /api/quotes/:id/confirm — el cliente aceptó por WhatsApp

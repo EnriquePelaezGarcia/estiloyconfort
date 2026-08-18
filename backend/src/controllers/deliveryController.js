@@ -1,6 +1,7 @@
 const Delivery = require('../models/Delivery');
 const Payment = require('../models/Payment');
 const Order = require('../models/Order');
+const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
@@ -22,6 +23,11 @@ const deliveryController = {
     const delivery = await Delivery.findById(req.params.id);
     if (!delivery) throw ApiError.notFound('Entrega no encontrada');
     if (delivery.deliveryPersonId !== req.user.id) throw ApiError.forbidden('Entrega no asignada a ti');
+    // Docs/plan-descuentos.md: al abrir la entrega se apaga el badge de
+    // "descuento rechazado" del repartidor, si el rechazo era de él.
+    if (delivery.orderId) {
+      await discountEngine.acknowledgeRejected('order', delivery.orderId, req.user.id);
+    }
     res.json({ data: delivery });
   }),
 
@@ -106,6 +112,26 @@ const deliveryController = {
       req.user.id,
     );
     res.status(201).json({ data: result, message: 'Cobro registrado' });
+  }),
+
+  // POST /api/delivery/assignments/:id/discount — el repartidor pide un
+  // descuento en dinero (RN-D2: nunca regalo de producto) al notar algo en la
+  // entrega (ej. mueble dañado). Se aplica de inmediato y queda 'pending'.
+  requestDiscount: asyncHandler(async (req, res) => {
+    const delivery = await Delivery.findById(req.params.id);
+    if (!delivery) throw ApiError.notFound('Entrega no encontrada');
+    if (delivery.deliveryPersonId !== req.user.id) throw ApiError.forbidden('Entrega no asignada a ti');
+
+    const { amount, reasonCategory, reason } = req.body;
+    await Order.applyMoneyDiscount(delivery.orderId, {
+      amount, reasonCategory, reason,
+      requestedBy: req.user.id,
+      requestedByRole: 'delivery_person',
+    });
+    // Se devuelve con la forma de "entrega" (no la de "pedido"), igual que
+    // el resto de este controlador — el repartidor solo conoce assignmentId.
+    const updated = await Delivery.findById(req.params.id);
+    res.status(201).json({ data: updated, message: 'Descuento aplicado, pendiente de aprobación' });
   }),
 
   // POST /api/delivery/assignments/:id/share — emite el link del ticket para

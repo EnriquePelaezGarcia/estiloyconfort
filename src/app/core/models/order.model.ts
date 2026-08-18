@@ -117,6 +117,36 @@ export interface OrderItem {
   reservation?: StockReservationInfo | null;
 }
 
+/**
+ * Descuentos con aprobación de administrador (Docs/plan-descuentos.md).
+ * 'money' resta un monto del total; 'product' regala una línea del carrito
+ * (precio $0). Se aplica de inmediato y queda 'pending' hasta que el admin
+ * lo revisa — salvo que lo capture un admin, que nace 'approved'.
+ */
+export type DiscountType = 'money' | 'product';
+export type DiscountReasonCategory = 'exhibicion' | 'danado' | 'cortesia' | 'otro';
+export type DiscountStatus = 'pending' | 'approved' | 'rejected';
+export type DiscountRequesterRole = 'seller' | 'delivery_person' | 'admin';
+
+export interface OrderDiscount {
+  id: number;
+  type: DiscountType;
+  amount: number;
+  reasonCategory: DiscountReasonCategory;
+  reason: string | null;
+  /** Solo en 'product': id de la línea regalada (null si esa línea ya no existe). */
+  itemId: number | null;
+  status: DiscountStatus;
+  requestedBy: number;
+  requestedByName: string | null;
+  requestedByRole: DiscountRequesterRole;
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
 /** Motivo de una reserva de pieza (Docs/plan-reserva-de-piezas.md §3, D1). */
 export type StockReservationReason = 'color_unico' | 'pagada' | 'fecha_entrega' | 'otro';
 export type StockReservationStatus = 'active' | 'released' | 'fulfilled';
@@ -235,6 +265,8 @@ export interface Order {
   updatedAt?: string;
   items?: OrderItem[];
   payments?: OrderPayment[];
+  /** Docs/plan-descuentos.md — vacío si el pedido no tiene ninguno. */
+  discounts?: OrderDiscount[];
 }
 
 export interface Paginated<T> {
@@ -279,6 +311,16 @@ export interface CreateOrderRequest {
    * 'converted' dentro de la misma transacción del INSERT.
    */
   fromQuoteId?: number | null;
+  /**
+   * Descuento en dinero (Docs/plan-descuentos.md). Se aplica de inmediato;
+   * el backend decide si nace 'pending' o 'approved' según el rol de quien
+   * lo manda — nunca se confía en lo que declare el cliente.
+   */
+  discount?: {
+    amount: number;
+    reasonCategory: DiscountReasonCategory;
+    reason?: string | null;
+  } | null;
   items: Array<{
     productId: number;
     /** M4: el material se elige POR LÍNEA, ya no hay un material de pedido. */
@@ -299,6 +341,8 @@ export interface CreateOrderRequest {
       note?: string | null;
       customerName?: string | null;
     } | null;
+    /** Docs/plan-descuentos.md: regala esta línea (precio $0, sigue descontando stock). */
+    gift?: boolean;
   }>;
 }
 
@@ -378,7 +422,8 @@ export interface DeliveryAssignment {
   deliveryAddressLng?: number | null;
   googleMapsUrl?: string | null;
   paymentStatus: PaymentStatus;
-  paymentMethod: PaymentMethod;
+  /** Condición de venta del pedido (o.payment_method en el backend), no el instrumento de cobro. */
+  paymentMethod: SaleScheme;
   totalAmount: number;
   paymentAmount: number;
   assemblyService?: boolean;
@@ -404,6 +449,8 @@ export interface DeliveryAssignment {
     materialLabel?: string | null;
     color?: string | null;
   }>;
+  /** Docs/plan-descuentos.md — el que el repartidor pidió, o el que ya traía el pedido. */
+  discounts?: OrderDiscount[];
 }
 
 /** Tarifas vigentes del servicio de armado. */

@@ -2,8 +2,8 @@
   <h2 class="panel__title">Resumen ({{ store.lines().length }})</h2>
 
   <div class="summary-lines">
-    @for (l of store.lines(); track l.product.id + '-' + l.materialId) {
-      <div class="summary-line">
+    @for (l of store.lines(); track l.product.id + '-' + l.materialId; let i = $index) {
+      <div class="summary-line" [class.summary-line--gift]="l.gift">
         @if (l.product.primaryImage) {
           <img class="summary-line__thumb" [src]="l.product.primaryImage" [alt]="l.product.name" loading="lazy" />
         } @else {
@@ -16,9 +16,22 @@
           @if (store.lineMaterialPrice(l); as mp) {
             <span class="muted"> · {{ mp.label }}</span>
           }
+          @if (store.canEditLine(l)) {
+            <button
+              type="button"
+              class="summary-line__gift-toggle"
+              [class.summary-line__gift-toggle--active]="l.gift"
+              (click)="store.toggleGift(i)"
+            >
+              🎁 {{ l.gift ? 'Regalado' : 'Regalar' }}
+            </button>
+          }
         </span>
         <span class="summary-line__amount">
-          @if (store.unitPrice(l) !== null) {
+          @if (l.gift && store.lineMaterialPrice(l); as giftMp) {
+            <span class="summary-line__amount--crossed">{{ (giftMp.priceCash ?? 0) * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            $0 (regalo)
+          } @else if (store.unitPrice(l) !== null) {
             {{ store.unitPrice(l)! * l.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}
           } @else { — }
         </span>
@@ -26,7 +39,60 @@
     }
   </div>
 
-  @if (store.shippingQuote() || store.needsManualShipping() || store.hasAssembly() || store.isCredit()) {
+  <!-- Docs/plan-descuentos.md: descuento en dinero — bloqueado si ya hay uno
+       guardado (pending/approved), captura libre si no. -->
+  <div class="discount-capture">
+    @if (store.activeMoneyDiscount(); as active) {
+      <div class="discount-capture__existing" [attr.data-status]="active.status">
+        <span class="material-symbols-outlined">sell</span>
+        <span class="discount-capture__existing-text">
+          Descuento -{{ active.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+          @if (active.reason) { ({{ active.reason }}) }
+        </span>
+        <span class="badge" [attr.data-status]="active.status">
+          @switch (active.status) {
+            @case ('pending') { Pendiente de aprobación }
+            @case ('approved') { Aprobado }
+          }
+        </span>
+      </div>
+    } @else {
+      <button
+        type="button"
+        class="discount-capture__toggle"
+        [class.discount-capture__toggle--open]="discountExpanded()"
+        [attr.aria-expanded]="discountExpanded()"
+        (click)="discountExpanded.set(!discountExpanded())"
+      >
+        Descuento en dinero
+        <span class="material-symbols-outlined">keyboard_arrow_down</span>
+      </button>
+      @if (discountExpanded()) {
+        <app-discount-reason-picker
+          [reasonCategory]="store.discountReasonCategory()"
+          [reason]="store.discountReasonText()"
+          (reasonCategoryChange)="store.setDiscountReasonCategory($event)"
+          (reasonChange)="store.setDiscountReasonText($event)"
+        />
+        <input
+          type="number"
+          class="discount-capture__amount"
+          placeholder="Monto a descontar"
+          min="0"
+          step="0.01"
+          [value]="store.discountAmount()"
+          (input)="store.onDiscountAmountInput($event)"
+        />
+        @if (store.discountExceedsCap()) {
+          <p class="field__error">
+            Supera el máximo permitido ({{ store.maxSellerDiscount() | currency:'MXN':'symbol-narrow':'1.0-0' }}). Pide que un admin lo capture.
+          </p>
+        }
+      }
+    }
+  </div>
+
+  @if (store.shippingQuote() || store.needsManualShipping() || store.hasAssembly() || store.isCredit() || store.activeMoneyDiscount() || store.discountAmount() !== null) {
     <div class="cart-total cart-total--sub">
       <span>
         @if (store.isCredit()) { Precio a crédito }
@@ -79,6 +145,23 @@
           Servicio de armado (piso {{ store.assemblyFloorsValue() }})
         </span>
         <span class="shipping-row__price">{{ store.assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+    }
+    @if (store.activeMoneyDiscount(); as active) {
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">sell</span>
+          Descuento
+        </span>
+        <span class="shipping-row__free">-{{ active.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+    } @else if (store.discountAmount() !== null) {
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">sell</span>
+          Descuento
+        </span>
+        <span class="shipping-row__free">-{{ store.discountAmount() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       </div>
     }
     <div class="grand-total">
