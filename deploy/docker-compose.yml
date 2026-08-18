@@ -54,10 +54,12 @@ services:
              done"
 
   # ==================== PRODUCCIÓN ====================
+  # MySQL 8.4 LTS: soporte hasta 2032. La 8.0 salió de soporte en abril de 2026
+  # y ya no recibe parches. No se usa la 9.x porque son versiones "Innovation",
+  # con solo unos meses de vida cada una.
   db-prod:
-    image: mysql:8.0
+    image: mysql:8.4
     restart: unless-stopped
-    command: --default-authentication-plugin=caching_sha2_password
     environment:
       MYSQL_ROOT_PASSWORD: ${PROD_DB_ROOT_PASSWORD:?falta PROD_DB_ROOT_PASSWORD en .env}
       MYSQL_DATABASE: ${PROD_DB_NAME:-estilo_confort}
@@ -108,9 +110,8 @@ services:
 
   # ==================== PREPRODUCCIÓN ====================
   db-staging:
-    image: mysql:8.0
+    image: mysql:8.4
     restart: unless-stopped
-    command: --default-authentication-plugin=caching_sha2_password
     environment:
       MYSQL_ROOT_PASSWORD: ${STAGING_DB_ROOT_PASSWORD:?falta STAGING_DB_ROOT_PASSWORD en .env}
       MYSQL_DATABASE: ${STAGING_DB_NAME:-estilo_confort}
