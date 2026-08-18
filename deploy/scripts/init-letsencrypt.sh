@@ -45,16 +45,37 @@ echo
 read -rp "¿Los DNS ya están configurados y propagados? [s/N] " answer
 [[ "${answer}" =~ ^[sS]$ ]] || { echo "Configura los DNS primero (ver DEPLOY.md, paso 5)."; exit 1; }
 
-# ---- 1. Parámetros TLS recomendados ----
-echo "📄 Descargando configuración TLS recomendada..."
+# ---- 1. Parámetros TLS ----
+#
+# Antes esto se descargaba del repositorio de certbot en GitHub, pero esas
+# rutas cambian entre versiones y el script moría con un 404. Ahora se generan
+# aquí: sin dependencias de red, y los parámetros Diffie-Hellman quedan únicos
+# de este servidor en vez de ser los mismos que usa todo el mundo.
+echo "📄 Preparando configuración TLS..."
 docker compose run --rm --entrypoint sh certbot -c '
   if [ ! -e /etc/letsencrypt/options-ssl-nginx.conf ]; then
-    wget -qO /etc/letsencrypt/options-ssl-nginx.conf \
-      https://raw.githubusercontent.com/certbot/certbot/main/certbot-nginx/src/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf
+    cat > /etc/letsencrypt/options-ssl-nginx.conf <<EOF
+# Parámetros TLS basados en las recomendaciones de Mozilla (perfil intermedio).
+ssl_session_cache shared:le_nginx_SSL:10m;
+ssl_session_timeout 1440m;
+ssl_session_tickets off;
+
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_prefer_server_ciphers off;
+
+ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305";
+EOF
+    echo "   options-ssl-nginx.conf creado."
+  else
+    echo "   options-ssl-nginx.conf ya existe."
   fi
+
   if [ ! -e /etc/letsencrypt/ssl-dhparams.pem ]; then
-    wget -qO /etc/letsencrypt/ssl-dhparams.pem \
-      https://raw.githubusercontent.com/certbot/certbot/main/certbot/certbot/ssl-dhparams.pem
+    echo "   Generando parámetros Diffie-Hellman de 2048 bits (tarda ~1 min)..."
+    openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048 2>/dev/null
+    echo "   ssl-dhparams.pem generado."
+  else
+    echo "   ssl-dhparams.pem ya existe."
   fi'
 
 # ---- 2. Certificado falso para que Nginx pueda arrancar ----
