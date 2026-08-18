@@ -187,7 +187,10 @@ Hetzner → **Add SSH Key**.
 > 🔒 **Nunca** compartas el archivo sin `.pub` (`id_ed25519`). Ese es el privado.
 
 Haz clic en **Create & Buy now**. En ~30 segundos tendrás una **IP pública**.
-Anótala — la usarás muchas veces. En esta guía la llamo `<TU_IP>`.
+Anótala. La del servidor creado el 2026-08-17 es **`2.29.2.60`** (IPv6:
+`2a01:4f9:c014:f97e::1`), y es la que aparece en el resto de esta guía. Si
+algún día recreas el servidor, la IP cambia y hay que actualizarla aquí,
+en los DNS de Cloudflare y en `~/.ssh/config`.
 
 ---
 
@@ -201,10 +204,30 @@ Anótala — la usarás muchas veces. En esta guía la llamo `<TU_IP>`.
 ### 5.1 Entrar por primera vez
 
 ```powershell
-ssh root@<TU_IP>
+ssh root@2.29.2.60
 ```
 
 Te preguntará si confías en el servidor (`fingerprint`) → escribe `yes`.
+
+> 🔌 **Atajo y anti-desconexiones.** Las sesiones SSH ociosas se caen solas
+> (los routers y el NAT cortan lo que lleva minutos sin tráfico), y es fácil
+> no notarlo y seguir escribiendo comandos que en realidad se ejecutan en
+> Windows. Crea `C:\Users\<tu-usuario>\.ssh\config` con:
+>
+> ```
+> Host estiloyconfort
+>     HostName 2.29.2.60
+>     User enrique
+>     IdentityFile ~/.ssh/id_ed25519
+>     ServerAliveInterval 30
+>     ServerAliveCountMax 6
+> ```
+>
+> A partir de ahí basta `ssh estiloyconfort`.
+>
+> 🧭 **Cómo saber dónde estás parado:** `PS C:\...>` es tu PC;
+> `enrique@estiloyconfort-prod:~$` es el servidor. Y en el servidor,
+> `#` al final del prompt es root, `$` es usuario normal.
 
 ### 5.2 Actualizar el sistema
 
@@ -236,7 +259,7 @@ rsync --archive --chown=enrique:enrique ~/.ssh /home/enrique
 **Abre una segunda terminal** (no cierres esta) y prueba:
 
 ```powershell
-ssh enrique@<TU_IP>
+ssh enrique@2.29.2.60
 ```
 
 > ⚠️ **No cierres la sesión de root hasta confirmar que la nueva funciona.**
@@ -368,7 +391,7 @@ exit
 ```
 
 ```powershell
-ssh enrique@<TU_IP>
+ssh enrique@2.29.2.60
 ```
 
 Verifica:
@@ -391,19 +414,20 @@ si está activo, Let's Encrypt no puede validar el dominio.
 
 | Type | Name | IPv4 address | Proxy |
 |---|---|---|---|
-| A | `@` | `<TU_IP>` | DNS only |
-| A | `www` | `<TU_IP>` | DNS only |
-| A | `api` | `<TU_IP>` | DNS only |
-| A | `dev` | `<TU_IP>` | DNS only |
-| A | `api-dev` | `<TU_IP>` | DNS only |
+| A | `@` | `2.29.2.60` | DNS only |
+| A | `www` | `2.29.2.60` | DNS only |
+| A | `api` | `2.29.2.60` | DNS only |
+| A | `dev` | `2.29.2.60` | DNS only |
+| A | `api-dev` | `2.29.2.60` | DNS only |
 
 Espera unos minutos y verifica desde el servidor:
 
 ```bash
-for d in estiloyconfortm.com www.estiloyconfortm.com api.estiloyconfortm.com \
-         dev.estiloyconfortm.com api-dev.estiloyconfortm.com; do
-  echo "$d → $(dig +short $d)"
-done
+sudo apt install -y dnsutils
+```
+
+```bash
+for d in estiloyconfortm.com www.estiloyconfortm.com api.estiloyconfortm.com dev.estiloyconfortm.com api-dev.estiloyconfortm.com; do echo "$d -> $(dig +short $d)"; done
 ```
 
 Los cinco deben mostrar tu IP. Si alguno sale vacío, espera más (la propagación
@@ -444,10 +468,8 @@ sudo mkdir -p /opt/estiloyconfort
 sudo chown $USER:$USER /opt/estiloyconfort
 cd /opt/estiloyconfort
 
-git clone -b main git@github.com:TU_USUARIO/estiloyconfort.git app
+git clone -b main git@github.com:EnriquePelaezGarcia/estiloyconfort.git app
 ```
-
-> Reemplaza `TU_USUARIO` por tu usuario de GitHub.
 
 ### 8.3 Crear el worktree de staging
 
@@ -477,65 +499,52 @@ chmod +x /opt/estiloyconfort/app/deploy/scripts/*.sh
 
 ## 9. Configurar los secretos
 
-```bash
-cd /opt/estiloyconfort/app/deploy
-cp .env.example .env
-cp .env.production.example .env.production
-cp .env.staging.example .env.staging
-```
-
-### 9.1 Generar contraseñas
-
-Necesitas **8 valores aleatorios distintos**. Genera todos de una vez:
+Un script genera los tres archivos (`.env`, `.env.production`, `.env.staging`)
+con contraseñas aleatorias y verifica que sean coherentes entre sí:
 
 ```bash
-echo "PROD_DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=')"
-echo "PROD_DB_ROOT_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=')"
-echo "STAGING_DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=')"
-echo "STAGING_DB_ROOT_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=')"
-echo "--- JWT producción ---"
-echo "JWT_ACCESS_SECRET=$(openssl rand -base64 48 | tr -d '/+=')"
-echo "JWT_REFRESH_SECRET=$(openssl rand -base64 48 | tr -d '/+=')"
-echo "--- JWT staging ---"
-echo "JWT_ACCESS_SECRET=$(openssl rand -base64 48 | tr -d '/+=')"
-echo "JWT_REFRESH_SECRET=$(openssl rand -base64 48 | tr -d '/+=')"
+cd /opt/estiloyconfort/app && ./deploy/scripts/init-secrets.sh
 ```
 
-> `tr -d '/+='` quita caracteres que confunden a algunos archivos de
-> configuración. Copia toda la salida a un lugar seguro **ahora**.
+Eso es todo. El script:
 
-### 9.2 Rellenar los archivos
+1. Genera 8 valores aleatorios: 4 contraseñas de MySQL (32 bytes) y 4 secretos
+   JWT (48 bytes).
+2. Escribe los tres archivos a partir de los `.example`.
+3. Les pone permisos `600` (solo tu usuario puede leerlos).
+4. **Verifica** que `PROD_DB_PASSWORD` del `.env` sea idéntico a `DB_PASSWORD`
+   del `.env.production` (y lo mismo para staging), y que los secretos JWT de
+   producción y preproducción sean **distintos**.
+
+> 🔐 **Por qué un script y no `nano`.** El error más frecuente de este paso es
+> que la contraseña del `.env` y la del `.env.production` no coincidan por una
+> letra. El síntoma es `Access denied for user` al arrancar el backend, y no
+> apunta a la causa. El script elimina esa clase de error por completo.
+
+> 🛑 **No sobrescribe nada.** Si los archivos ya existen, se detiene. Regenerar
+> las contraseñas de MySQL después sirve de poco: el contenedor solo las aplica
+> **la primera vez** que crea la base de datos; para cambiarlas de verdad habría
+> que borrar el volumen, y con él los datos.
+
+### 9.1 Guarda una copia fuera del servidor
 
 ```bash
-nano .env
+cat /opt/estiloyconfort/app/deploy/.env /opt/estiloyconfort/app/deploy/.env.production /opt/estiloyconfort/app/deploy/.env.staging
 ```
 
-Pega las 4 contraseñas de base de datos. Guarda (`Ctrl+O`, Enter, `Ctrl+X`).
+Copia esa salida a tu gestor de contraseñas. Si un día pierdes el servidor, el
+respaldo de MySQL te devuelve los datos; pero si los secretos JWT cambian,
+todas las sesiones abiertas de tus usuarios se invalidan.
 
-```bash
-nano .env.production
-```
+### 9.2 Qué contiene cada archivo
 
-- `DB_PASSWORD` → **el mismo valor** que `PROD_DB_PASSWORD` del `.env`
-- `JWT_ACCESS_SECRET` y `JWT_REFRESH_SECRET` → los de "JWT producción"
+| Archivo | Quién lo lee | Contiene |
+|---|---|---|
+| `.env` | `docker-compose.yml` | Contraseñas con las que se **crean** las dos bases MySQL |
+| `.env.production` | contenedor `backend-prod` | Credenciales de BD, secretos JWT y `CLIENT_ORIGIN` de producción |
+| `.env.staging` | contenedor `backend-staging` | Lo mismo, pero de preproducción y con secretos **distintos** |
 
-```bash
-nano .env.staging
-```
-
-- `DB_PASSWORD` → **el mismo valor** que `STAGING_DB_PASSWORD`
-- Los JWT de "JWT staging" (distintos a los de producción, a propósito)
-
-> ⚠️ **El error más común aquí** es que `DB_PASSWORD` no coincida con
-> `PROD_DB_PASSWORD`. Si el backend no conecta a MySQL, revisa esto primero.
-
-### 9.3 Proteger los archivos
-
-```bash
-chmod 600 .env .env.production .env.staging
-```
-
-Solo tu usuario puede leerlos.
+Los tres están en `.gitignore`: nunca se suben al repositorio.
 
 ---
 
@@ -611,7 +620,7 @@ mysqldump -u root -p estilo_confort > completo.sql
 ### 12.2 Subir al servidor
 
 ```powershell
-scp estructura.sql enrique@<TU_IP>:/tmp/
+scp estructura.sql enrique@2.29.2.60:/tmp/
 ```
 
 ### 12.3 Cargar en producción
@@ -746,7 +755,7 @@ Se guardan en `/opt/estiloyconfort/backups/` y se conservan 14 días.
 Como mínimo, descarga los respaldos a tu PC de vez en cuando:
 
 ```powershell
-scp -r enrique@<TU_IP>:/opt/estiloyconfort/backups C:\Respaldos\estiloyconfort
+scp -r enrique@2.29.2.60:/opt/estiloyconfort/backups C:\Respaldos\estiloyconfort
 ```
 
 Los *Backups* de Hetzner que activaste en el paso 4.2 cubren el disco completo,
