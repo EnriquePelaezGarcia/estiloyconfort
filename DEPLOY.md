@@ -775,20 +775,34 @@ docker compose exec -e MYSQL_PWD="$DB_PASS" db-prod mysql -u estilo estilo_confo
 
 ### Automatizar
 
-Programa respaldos diarios de producción (3 AM) y semanales de staging:
+El cron corre como tu usuario, pero `/var/log` pertenece a root. Crea el
+archivo de bitácora con el dueño correcto, o los respaldos fallarían en
+silencio sin dejar rastro:
 
 ```bash
-crontab -e
+sudo touch /var/log/estiloyconfort-backup.log && sudo chown $USER:$USER /var/log/estiloyconfort-backup.log
 ```
 
-Agrega al final:
+**Pruébalo a mano antes de confiar en el cron:**
 
-```cron
-0 3 * * * /opt/estiloyconfort/app/deploy/scripts/backup.sh production >> /var/log/estiloyconfort-backup.log 2>&1
-0 4 * * 0 /opt/estiloyconfort/app/deploy/scripts/backup.sh staging >> /var/log/estiloyconfort-backup.log 2>&1
+```bash
+/opt/estiloyconfort/app/deploy/scripts/backup.sh production
 ```
 
-Se guardan en `/opt/estiloyconfort/backups/` y se conservan 14 días.
+```bash
+ls -lh /opt/estiloyconfort/backups/production/
+```
+
+Deben aparecer `db_...sql.gz` y `uploads_...tar.gz`.
+
+Y prográmalo (esta forma evita abrir el editor `nano`):
+
+```bash
+(crontab -l 2>/dev/null; echo "0 3 * * * /opt/estiloyconfort/app/deploy/scripts/backup.sh production >> /var/log/estiloyconfort-backup.log 2>&1"; echo "0 4 * * 0 /opt/estiloyconfort/app/deploy/scripts/backup.sh staging >> /var/log/estiloyconfort-backup.log 2>&1") | crontab -
+```
+
+Confirma con `crontab -l`. Producción se respalda a diario a las 3 AM;
+preproducción los domingos a las 4 AM. Se conservan 14 días.
 
 ### Respaldos fuera del servidor
 

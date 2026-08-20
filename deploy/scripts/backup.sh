@@ -35,10 +35,15 @@ DB_NAME="$(grep -E '^DB_NAME=' "${ENV_FILE}" | cut -d= -f2-)"
 
 # ---- Base de datos ----
 DB_FILE="${BACKUP_DIR}/db_${STAMP}.sql.gz"
+# --no-tablespaces evita que mysqldump consulte los tablespaces de InnoDB:
+# MySQL 8 exige el privilegio PROCESS para eso, y el usuario de la aplicacion
+# no lo tiene (ni debe tenerlo: es un permiso de administrador del servidor).
+# Sin esta opcion, cada respaldo escupe un "Access denied" alarmante que no
+# afecta a los datos pero hace dudar de si el respaldo sirve.
 # --single-transaction evita bloquear las tablas mientras se respalda,
 # así el sitio sigue funcionando durante el volcado.
 docker compose exec -T -e MYSQL_PWD="${DB_PASSWORD}" "${DB_SERVICE}" \
-  mysqldump --single-transaction --quick --routines --events \
+  mysqldump --single-transaction --quick --routines --events --no-tablespaces \
             -u "${DB_USER}" "${DB_NAME}" \
   | gzip > "${DB_FILE}"
 
