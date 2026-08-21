@@ -1,3 +1,14 @@
+<!-- Barra de regreso al pedido/cotización desde el que se abrió la ficha.
+     El borrador sigue guardado: al volver, la pantalla se repone tal cual. -->
+@if (returnUrl()) {
+  <div class="detail-return">
+    <button type="button" class="detail-return__link" (click)="goBackToDraft()">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ returnLabel() }}
+    </button>
+  </div>
+}
+
 @if (loading()) {
   <div class="detail-loading">
     <div class="spinner"></div>
@@ -48,7 +59,7 @@
                 [class.gallery__thumb--active]="activeImageIndex() === i"
                 (click)="selectImage(i)"
               >
-                <img [src]="img.image_url" [alt]="img.alt_text || product()!.name" />
+                <img [src]="img.image_url | mediaUrl" [alt]="img.alt_text || product()!.name" />
               </button>
             }
           </div>

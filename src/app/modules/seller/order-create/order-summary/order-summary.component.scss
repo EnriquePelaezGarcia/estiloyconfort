@@ -49,6 +49,37 @@
   }
 
   &__name { flex: 1; min-width: 0; }
+  // La foto abre la ficha pública del mueble: el botón es solo un envoltorio
+  // clicable, la miniatura conserva su tamaño y su borde.
+  &__thumb-btn {
+    flex-shrink: 0;
+    align-self: flex-start;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    line-height: 0;
+    cursor: pointer;
+
+    &:hover .summary-line__thumb { border-color: vars.$color-primary; }
+    &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
+  }
+
+  // El nombre también abre la ficha: botón sin cromo, se lee como el texto
+  // que ya estaba ahí hasta que el vendedor lo apunta con el mouse.
+  &__name-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover { color: vars.$color-primary; text-decoration: underline; }
+    &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
+  }
+
   &__amount { font-weight: 600; color: vars.$color-primary; white-space: nowrap; }
 
   &__amount--crossed {
@@ -69,12 +100,25 @@
     font-weight: 600;
     color: vars.$color-text-secondary;
     cursor: pointer;
+    opacity: 0;
+    transition: opacity vars.$transition-fast;
 
     &--active {
       background: rgba(vars.$color-gold, 0.16);
       border-color: vars.$color-gold;
       color: vars.$color-gold;
+      opacity: 1;
     }
+  }
+
+  // Docs/plan-descuentos.md: el disparador se revela al pasar el mouse por la
+  // linea o al enfocarla con el teclado. En pantallas tactiles (sin hover)
+  // queda siempre visible, si no el vendedor se queda sin la opcion en celular.
+  &:hover &__gift-toggle,
+  &:focus-within &__gift-toggle { opacity: 1; }
+
+  @media (hover: none) {
+    &__gift-toggle { opacity: 1; }
   }
 
   &--gift { opacity: 0.9; }

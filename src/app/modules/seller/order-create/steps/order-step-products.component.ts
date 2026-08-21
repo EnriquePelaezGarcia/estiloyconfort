@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
 import { OrderDraftStore } from '../order-draft.store';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 
 /**
  * Paso 1 — «Venta»: condición de venta, buscador de productos y carrito.
@@ -12,7 +13,7 @@ import { OrderDraftStore } from '../order-draft.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-step-products.component.html',
   styleUrl: './order-step-products.component.scss',
-  imports: [ReactiveFormsModule, CurrencyPipe],
+  imports: [ReactiveFormsModule, CurrencyPipe, MediaUrlPipe],
 })
 export class OrderStepProductsComponent {
   protected store = inject(OrderDraftStore);

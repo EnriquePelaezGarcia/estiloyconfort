@@ -5,6 +5,7 @@ import { CartService } from '../../../core/services/cart.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { CartItem, CartVariantSelection } from '../../../core/models/cart.model';
 import { environment } from '../../../../environments/environment';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 const WHATSAPP_NUMBER = environment.whatsappNumber;
 
@@ -13,7 +14,7 @@ const WHATSAPP_NUMBER = environment.whatsappNumber;
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cart.component.html',
   styleUrl: './cart.component.scss',
-  imports: [RouterLink, CurrencyPipe],
+  imports: [RouterLink, CurrencyPipe, MediaUrlPipe],
 })
 export class CartComponent {
   cart = inject(CartService);

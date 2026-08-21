@@ -186,8 +186,13 @@ const productController = {
         [req.params.id]
       );
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const image_url = `${baseUrl}/uploads/products/${req.file.filename}`;
+      // RUTA RELATIVA, NO ABSOLUTA. Antes se guardaba
+      // `${req.protocol}://${req.get('host')}/uploads/...`, lo que horneaba en
+      // la base el host desde el que se subió la foto: una imagen cargada en
+      // local quedaba como http://localhost:3000/... y moría al desplegar.
+      // Ahora la fila es portable entre ambientes y el frontend le antepone el
+      // origen del API que le toque (ver media-url.ts).
+      const image_url = `/uploads/products/${req.file.filename}`;
 
       const image = await Product.addImage(req.params.id, {
         image_url,
@@ -205,10 +210,11 @@ const productController = {
       const image = await Product.deleteImage(req.params.id, req.params.imageId);
       if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
 
-      // Eliminar archivo físico (best-effort)
+      // Eliminar archivo físico (best-effort). `new URL()` no sirve aquí: las
+      // filas nuevas son relativas y las viejas absolutas, así que basta el
+      // nombre de archivo del final de la ruta — vale para ambas formas.
       try {
-        const url = new URL(image.image_url);
-        const filename = path.basename(url.pathname);
+        const filename = path.basename(image.image_url.split('?')[0]);
         const filePath = path.join(__dirname, '../../uploads/products', filename);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch (_) {}

@@ -274,7 +274,7 @@ const sellerController = {
     let where = 'WHERE p.is_active = TRUE';
     if (search) { where += ' AND (p.name LIKE ? OR p.sku LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     const [rows] = await pool.execute(
-      `SELECT p.id, p.name, p.sku, p.availability_days, p.wholesale_min_qty,
+      `SELECT p.id, p.name, p.sku, p.slug, p.availability_days, p.wholesale_min_qty,
               (SELECT image_url FROM product_images
                 WHERE product_id = p.id ORDER BY is_primary DESC, order_display LIMIT 1) AS primary_image,
               pm.material_id, mat.code, mat.label, mat.color_policy, mat.fixed_color,
@@ -316,6 +316,9 @@ const sellerController = {
       if (!byProduct.has(r.id)) {
         byProduct.set(r.id, {
           id: r.id, name: r.name, sku: r.sku,
+          // Para abrir la ficha pública del producto (/producto/:slug) desde
+          // el carrito del POS y del builder de cotizaciones.
+          slug: r.slug ?? null,
           availability_days: r.availability_days,
           wholesaleMinQty: r.wholesale_min_qty != null ? Number(r.wholesale_min_qty) : null,
           // Miniatura para el buscador del POS y de cotizaciones. null cuando

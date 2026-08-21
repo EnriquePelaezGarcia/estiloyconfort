@@ -1,0 +1,241 @@
+@use '../../../../styles/variables' as vars;
+
+// .page-head, .btn, .icon-btn, .field, .modal* y .spinner son globales
+// (src/styles/_business.scss). Aquí solo va lo propio de esta pantalla.
+
+.page-head__hint {
+  margin-top: 0.35rem;
+  max-width: 46ch;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: vars.$spacing-lg;
+  padding: 0.75rem 1rem;
+  border-radius: vars.$radius-md;
+  background: rgba(vars.$color-secondary, 0.1);
+  border: 1px solid rgba(vars.$color-secondary, 0.25);
+  font-size: 0.86rem;
+  color: vars.$color-text;
+
+  .material-symbols-outlined {
+    font-size: 1.2rem;
+    color: vars.$color-secondary;
+  }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: vars.$spacing-xl 0;
+  color: vars.$color-text-secondary;
+}
+
+// ===== Lista =====
+.cat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.cat-list__empty {
+  padding: vars.$spacing-xl;
+  text-align: center;
+  color: vars.$color-text-secondary;
+  background: vars.$color-surface;
+  border: 1px dashed vars.$color-border;
+  border-radius: vars.$radius-lg;
+}
+
+.cat {
+  display: grid;
+  grid-template-columns: auto 96px 1fr auto;
+  align-items: center;
+  gap: vars.$spacing-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+
+  &--inactive {
+    // Oculta de la portada: se apaga sin esconderla, para poder reactivarla.
+    opacity: 0.6;
+  }
+}
+
+.cat__order {
+  display: flex;
+  flex-direction: column;
+
+  .icon-btn { width: 28px; height: 28px; }
+  .icon-btn:disabled { opacity: 0.3; cursor: default; }
+}
+
+// ===== Miniatura =====
+// Es un <label> con el input file dentro: toda la miniatura es el disparador.
+.cat__photo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 72px;
+  border-radius: vars.$radius-md;
+  overflow: hidden;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+  cursor: pointer;
+
+  input[type='file'] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &:hover .cat__photo-overlay { opacity: 1; }
+}
+
+.cat__photo-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(vars.$color-primary-dark, 0.55);
+  color: #fff;
+  opacity: 0;
+  transition: opacity vars.$transition-fast;
+}
+
+.cat__photo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.68rem;
+  line-height: 1.1;
+  text-align: center;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.4rem; }
+}
+
+// ===== Cuerpo =====
+.cat__body { min-width: 0; }
+
+.cat__name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: vars.$color-primary;
+  margin: 0;
+}
+
+.cat__desc {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: vars.$color-text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+}
+
+.tag {
+  padding: 0.1rem 0.45rem;
+  border-radius: vars.$radius-sm;
+  font-size: 0.7rem;
+  font-weight: 600;
+
+  &--muted {
+    background: vars.$color-bg;
+    color: vars.$color-text-secondary;
+  }
+  &--warn {
+    background: rgba(vars.$color-secondary, 0.15);
+    color: vars.$color-secondary;
+  }
+}
+
+.cat__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.btn--sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.btn--ghost.btn--danger {
+  background: transparent;
+  border-color: vars.$color-border;
+  color: vars.$color-error;
+
+  &:hover:not(:disabled) { background: rgba(vars.$color-error, 0.08); }
+}
+
+// ===== Modal =====
+.modal__title {
+  padding: vars.$spacing-lg vars.$spacing-lg 0;
+  margin: 0 0 vars.$spacing-md;
+  font-size: 1.2rem;
+  color: vars.$color-primary;
+}
+
+.modal__text {
+  padding: 0 vars.$spacing-lg;
+  margin: 0 0 vars.$spacing-md;
+  font-size: 0.9rem;
+  color: vars.$color-text;
+}
+
+.modal .field,
+.modal .field__hint {
+  padding: 0 vars.$spacing-lg;
+}
+
+.field__hint {
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+}
+
+// ===== Responsive =====
+@media (max-width: 720px) {
+  .cat {
+    grid-template-columns: auto 72px 1fr;
+    grid-template-areas:
+      'order photo body'
+      'actions actions actions';
+  }
+
+  .cat__order { grid-area: order; }
+  .cat__photo { grid-area: photo; width: 72px; height: 56px; }
+  .cat__body { grid-area: body; }
+  .cat__actions { grid-area: actions; justify-content: flex-start; }
+}

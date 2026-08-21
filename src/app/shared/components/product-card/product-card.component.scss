@@ -116,9 +116,29 @@
     }
 
     &--featured {
-      right: v.$spacing-sm;
       background: v.$color-primary;
       color: #fff;
+    }
+
+    &--offer {
+      background: v.$color-error;
+      color: #fff;
+    }
+  }
+
+  // Columna de badges de la esquina derecha; los de la izquierda siguen
+  // posicionados uno a uno porque nunca coinciden entre sí.
+  &__badges {
+    position: absolute;
+    top: v.$spacing-sm;
+    right: v.$spacing-sm;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+
+    .product-card__badge {
+      position: static;
     }
   }
 

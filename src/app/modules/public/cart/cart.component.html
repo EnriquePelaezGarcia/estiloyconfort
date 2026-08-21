@@ -20,7 +20,7 @@
             <article class="cart-item">
               <div class="cart-item__image">
                 @if (item.primaryImage) {
-                  <img [src]="item.primaryImage" [alt]="item.name" loading="lazy" />
+                  <img [src]="item.primaryImage | mediaUrl" [alt]="item.name" loading="lazy" />
                 } @else {
                   <span class="material-symbols-outlined">chair</span>
                 }

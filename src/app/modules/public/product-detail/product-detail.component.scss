@@ -6,6 +6,32 @@
   padding: 0 v.$spacing-lg;
 }
 
+/* Barra de regreso al pedido/cotización (solo cuando la ficha se abrió desde
+   el punto de venta o el builder de cotizaciones, con ?volver=). */
+.detail-return {
+  background: rgba(v.$color-primary, 0.06);
+  border-bottom: 1px solid rgba(v.$color-primary, 0.12);
+
+  &__link {
+    display: flex;
+    align-items: center;
+    gap: v.$spacing-xs;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: v.$spacing-sm v.$spacing-lg;
+    background: none;
+    border: 0;
+    font-family: v.$font-body;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: v.$color-primary;
+    cursor: pointer;
+
+    &:hover { color: v.$color-primary-dark; }
+    .material-symbols-outlined { font-size: 1.1rem; }
+  }
+}
+
 .detail-loading,
 .detail-error {
   display: flex;

@@ -28,6 +28,12 @@ export const adminRoutes: Routes = [
         title: 'Catálogo - Panel Admin',
       },
       {
+        path: 'categorias',
+        loadComponent: () =>
+          import('./categories/categories.component').then((m) => m.CategoriesComponent),
+        title: 'Categorías - Panel Admin',
+      },
+      {
         path: 'inventario',
         loadComponent: () =>
           import('./inventory/inventory.component').then((m) => m.InventoryComponent),

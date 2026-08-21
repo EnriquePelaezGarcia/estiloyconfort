@@ -18,6 +18,7 @@ const inventoryReservationsRoutes = require('./inventoryReservationsRoutes');
 const ticketsRoutes = require('./ticketsRoutes');
 const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
 const discountsRoutes = require('./discountsRoutes');
+const reviewsRoutes = require('./reviewsRoutes');
 
 const router = Router();
 
@@ -48,5 +49,7 @@ router.use('/inventory', inventoryReservationsRoutes);
 router.use('/deliveries', deliveryScheduleRoutes);
 // Badge propio de "descuentos rechazados sin ver" — cualquier rol autenticado.
 router.use('/discounts', discountsRoutes);
+// Reseñas de Google para la portada — público, sin autenticar.
+router.use('/reviews', reviewsRoutes);
 
 module.exports = router;

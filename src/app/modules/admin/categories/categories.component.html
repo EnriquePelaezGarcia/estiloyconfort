@@ -1,0 +1,184 @@
+<div class="page-head">
+  <div>
+    <span class="page-head__overline">Catálogo</span>
+    <h1 class="page-head__title">Categorías</h1>
+    <p class="page-head__hint">
+      Son las colecciones que salen en la portada. El orden de esta lista es el
+      orden en que aparecen ahí.
+    </p>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <span class="material-symbols-outlined">add</span>
+    Nueva categoría
+  </button>
+</div>
+
+@if (bedroomWithoutPhoto(); as sinFoto) {
+  <p class="notice">
+    <span class="material-symbols-outlined">info</span>
+    El banner grande de la portada usa <strong>{{ sinFoto.name }}</strong> y no se
+    pinta sin foto. Súbele una para que aparezca.
+  </p>
+}
+
+@if (loading()) {
+  <div class="loading"><span class="spinner"></span> Cargando categorías…</div>
+} @else {
+  <ul class="cat-list">
+    @for (cat of categories(); track cat.id; let first = $first; let last = $last) {
+      <li class="cat" [class.cat--inactive]="!cat.is_active">
+        <div class="cat__order">
+          <button
+            type="button"
+            class="icon-btn"
+            [disabled]="first"
+            (click)="move(cat, -1)"
+            aria-label="Subir"
+          >
+            <span class="material-symbols-outlined">keyboard_arrow_up</span>
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            [disabled]="last"
+            (click)="move(cat, 1)"
+            aria-label="Bajar"
+          >
+            <span class="material-symbols-outlined">keyboard_arrow_down</span>
+          </button>
+        </div>
+
+        <label class="cat__photo" [attr.aria-busy]="uploadingId() === cat.id">
+          @if (uploadingId() === cat.id) {
+            <span class="spinner"></span>
+          } @else if (cat.image_url) {
+            <img [src]="cat.image_url | mediaUrl" [alt]="cat.name" loading="lazy" />
+            <span class="cat__photo-overlay">
+              <span class="material-symbols-outlined">photo_camera</span>
+            </span>
+          } @else {
+            <span class="cat__photo-empty">
+              <span class="material-symbols-outlined">add_photo_alternate</span>
+              <span>Subir foto</span>
+            </span>
+          }
+          <input
+            type="file"
+            accept="image/*"
+            (change)="onImageSelected($event, cat)"
+            [attr.aria-label]="'Cambiar foto de ' + cat.name"
+          />
+        </label>
+
+        <div class="cat__body">
+          <h2 class="cat__name">{{ cat.name }}</h2>
+          @if (cat.description) {
+            <p class="cat__desc">{{ cat.description }}</p>
+          }
+          <p class="cat__meta">
+            <span class="cat__count">{{ cat.product_count ?? 0 }} producto(s)</span>
+            @if (!cat.is_active) {
+              <span class="tag tag--muted">Oculta de la portada</span>
+            }
+            @if (!cat.image_url) {
+              <span class="tag tag--warn">Sin foto</span>
+            }
+          </p>
+        </div>
+
+        <div class="cat__actions">
+          @if (cat.image_url) {
+            <button type="button" class="btn btn--ghost btn--sm" (click)="removeImage(cat)">
+              Quitar foto
+            </button>
+          }
+          <button type="button" class="btn btn--ghost btn--sm" (click)="toggleActive(cat)">
+            {{ cat.is_active ? 'Ocultar' : 'Mostrar' }}
+          </button>
+          <button type="button" class="btn btn--ghost btn--sm" (click)="openEdit(cat)">
+            Editar
+          </button>
+          <button
+            type="button"
+            class="btn btn--ghost btn--sm btn--danger"
+            (click)="confirmDelete(cat)"
+          >
+            Eliminar
+          </button>
+        </div>
+      </li>
+    } @empty {
+      <li class="cat-list__empty">
+        Todavía no hay categorías. Crea la primera para que la portada tenga
+        colecciones que mostrar.
+      </li>
+    }
+  </ul>
+}
+
+<!-- ===== ALTA / EDICIÓN ===== -->
+@if (editing() !== undefined) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <form class="modal" (click)="$event.stopPropagation()" [formGroup]="form" (ngSubmit)="save()">
+      <h2 class="modal__title">
+        {{ isEditMode() ? 'Editar categoría' : 'Nueva categoría' }}
+      </h2>
+
+      <div class="field">
+        <label for="name">Nombre</label>
+        <input id="name" type="text" formControlName="name" placeholder="Ej. Tocadores y Vanities" />
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <p class="field__error">El nombre es obligatorio</p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="description">Descripción</label>
+        <textarea
+          id="description"
+          formControlName="description"
+          rows="2"
+          placeholder="Opcional. No sale en la portada, solo ayuda a identificarla."
+        ></textarea>
+      </div>
+
+      @if (isEditMode()) {
+        <p class="field__hint">La foto se cambia desde la lista, con clic en la miniatura.</p>
+      } @else {
+        <p class="field__hint">Al guardar podrás subirle la foto desde la lista.</p>
+      }
+
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn--primary" [disabled]="saving()">
+          @if (saving()) { <span class="spinner spinner--sm"></span> }
+          {{ isEditMode() ? 'Guardar cambios' : 'Crear categoría' }}
+        </button>
+      </div>
+    </form>
+  </div>
+}
+
+<!-- ===== CONFIRMACIÓN DE BORRADO ===== -->
+@if (deleting(); as target) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal modal--sm" (click)="$event.stopPropagation()">
+      <h2 class="modal__title">¿Eliminar «{{ target.name }}»?</h2>
+      @if ((target.product_count ?? 0) > 0) {
+        <p class="modal__text">
+          Tiene {{ target.product_count }} producto(s) asignados, así que no se
+          puede eliminar. Si solo quieres sacarla de la portada, usa
+          <strong>Ocultar</strong>.
+        </p>
+      } @else {
+        <p class="modal__text">
+          No tiene productos asignados. Esta acción no se puede deshacer.
+        </p>
+      }
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="cancelDelete()">Cancelar</button>
+        <button type="button" class="btn btn--danger" (click)="doDelete()">Eliminar</button>
+      </div>
+    </div>
+  </div>
+}

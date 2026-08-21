@@ -9,6 +9,7 @@ import { QuotesService } from '../../../core/services/quotes.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
 import { PricingService } from '../../../core/services/pricing.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
+import { DraftHandoffService } from '../../../core/services/draft-handoff.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
 import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
@@ -49,6 +50,32 @@ export interface CartLine {
 }
 
 /**
+ * Foto del borrador para el viaje de ida y vuelta a la ficha pública del
+ * producto (DraftHandoffService). Solo lleva lo que el vendedor CAPTURÓ: los
+ * catálogos (franjas, repartidores, tarifas, config de crédito) los vuelve a
+ * pedir `init()` al reconstruirse la pantalla.
+ */
+export interface OrderDraftSnapshot {
+  form: ReturnType<OrderDraftStore['form']['getRawValue']>;
+  lines: CartLine[];
+  editId: number | null;
+  orderStatus: OrderStatus | null;
+  originalPaymentAmount: number;
+  originalItems: OrderItem[];
+  pickupGrace: boolean;
+  fromQuoteId: number | null;
+  quoteCustomerName: string;
+  shippingCp: string;
+  shippingQuote: ShippingQuote | null;
+  manualShippingCost: number | null;
+  existingDiscounts: OrderDiscount[];
+  discountAmount: number | null;
+  discountReasonCategory: DiscountReasonCategory | null;
+  discountReasonText: string;
+  submitAttempted: boolean;
+}
+
+/**
  * Plazo estimado cuando el pedido tiene alguna pieza agotada o sobre pedido:
  * el vendedor ya no comprometa una fecha exacta, así que se sugiere un
  * estimado razonable (editable) en lugar de dejarlo vacío.
@@ -81,6 +108,7 @@ export class OrderDraftStore {
   private auth = inject(AuthService);
   private fb = inject(FormBuilder);
   private router = inject(Router);
+  private handoff = inject(DraftHandoffService);
   readonly materialsStore = inject(MaterialsStore);
 
   readonly saving = signal(false);
@@ -537,9 +565,100 @@ export class OrderDraftStore {
   /** Se pone en true tras un guardado exitoso, para que el guard de salida no pregunte al navegar al detalle. */
   private savedSuccessfully = false;
 
+  /**
+   * Salida deliberada a la ficha pública del producto: el borrador queda
+   * guardado y se repone al volver, así que el guard no tiene qué advertir.
+   */
+  private leavingToProduct = false;
+
   /** Para el guard de "salir sin guardar": hay algo que se perdería. */
   hasPendingChanges(): boolean {
-    return this.lines().length > 0 && !this.savedSuccessfully;
+    return this.lines().length > 0 && !this.savedSuccessfully && !this.leavingToProduct;
+  }
+
+  // ===== Ida y vuelta a la ficha pública del producto =====
+
+  /**
+   * Abre /producto/:slug con el material YA elegido en esta línea. Antes de
+   * salir deja el borrador completo en el `DraftHandoffService`: al regresar
+   * —con el botón "Volver" de la ficha o con el Atrás del navegador— la
+   * pantalla se reconstruye exactamente como estaba.
+   */
+  openProductPage(line: CartLine): void {
+    const slug = line.product.slug;
+    if (!slug) {
+      this.notification.info('Este mueble todavía no tiene ficha en el catálogo público.');
+      return;
+    }
+    const returnUrl = this.router.url;
+    this.handoff.stash('order', returnUrl, this.snapshot());
+    this.leavingToProduct = true;
+    this.router
+      .navigate(['/producto', slug], {
+        queryParams: { material: line.materialId, volver: returnUrl },
+      })
+      .then((ok) => {
+        // Navegación cancelada (guard, ruta inválida): se deshace el traspaso
+        // para no dejar una foto que reaparezca más tarde.
+        if (!ok) {
+          this.leavingToProduct = false;
+          this.handoff.discard();
+        }
+      });
+  }
+
+  /**
+   * Regreso de la ficha: repone el borrador. Devuelve `false` cuando no había
+   * nada que reponer —el caso normal, la pantalla se abrió de cero— para que
+   * el shell siga con su carga habitual de ?edit / ?fromQuote.
+   */
+  restoreFromHandoff(): boolean {
+    const snap = this.handoff.take<OrderDraftSnapshot>('order', this.router.url);
+    if (!snap) return false;
+
+    // El formulario primero: sus `valueChanges` recomponen validadores y el
+    // modo pickup/armado, igual que cuando el vendedor los capturó a mano.
+    this.form.patchValue(snap.form);
+
+    this.lines.set(snap.lines);
+    this.editId.set(snap.editId);
+    this.orderStatus.set(snap.orderStatus);
+    this.originalPaymentAmount.set(snap.originalPaymentAmount);
+    this.originalItems.set(snap.originalItems);
+    this.pickupGrace.set(snap.pickupGrace);
+    this.fromQuoteId.set(snap.fromQuoteId);
+    this.quoteCustomerName.set(snap.quoteCustomerName);
+    this.shippingCp.set(snap.shippingCp);
+    this.shippingQuote.set(snap.shippingQuote);
+    this.manualShippingCost.set(snap.manualShippingCost);
+    this.existingDiscounts.set(snap.existingDiscounts);
+    this.discountAmount.set(snap.discountAmount);
+    this.discountReasonCategory.set(snap.discountReasonCategory);
+    this.discountReasonText.set(snap.discountReasonText);
+    this.submitAttempted.set(snap.submitAttempted);
+    return true;
+  }
+
+  private snapshot(): OrderDraftSnapshot {
+    return {
+      form: this.form.getRawValue(),
+      lines: this.lines(),
+      editId: this.editId(),
+      orderStatus: this.orderStatus(),
+      originalPaymentAmount: this.originalPaymentAmount(),
+      originalItems: this.originalItems(),
+      pickupGrace: this.pickupGrace(),
+      fromQuoteId: this.fromQuoteId(),
+      quoteCustomerName: this.quoteCustomerName(),
+      shippingCp: this.shippingCp(),
+      shippingQuote: this.shippingQuote(),
+      manualShippingCost: this.manualShippingCost(),
+      existingDiscounts: this.existingDiscounts(),
+      discountAmount: this.discountAmount(),
+      discountReasonCategory: this.discountReasonCategory(),
+      discountReasonText: this.discountReasonText(),
+      submitAttempted: this.submitAttempted(),
+    };
   }
 
   constructor() {
@@ -761,6 +880,7 @@ export class OrderDraftStore {
               id: it.productId,
               name: it.productName ?? '',
               sku: it.productSku ?? '',
+              slug: it.productSlug ?? null,
               availability_days: 0,
               primaryImage: it.imageUrl ?? null,
               materialPrices: [
@@ -845,6 +965,7 @@ export class OrderDraftStore {
               id: it.productId,
               name: it.productName,
               sku: it.productSku ?? '',
+              slug: it.productSlug ?? null,
               availability_days: 0,
               primaryImage: it.imageUrl ?? null,
               materialPrices: [

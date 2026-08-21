@@ -8,6 +8,7 @@ import { QuotesService } from '../../../../core/services/quotes.service';
 import { ShippingService } from '../../../../core/services/shipping.service';
 import { PricingService } from '../../../../core/services/pricing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { DraftHandoffService } from '../../../../core/services/draft-handoff.service';
 import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
 import { addBusinessDays } from '../../../../core/utils/business-days';
 import { availableOf, reservationsTooltip } from '../../../../core/utils/stock-availability';
@@ -21,6 +22,7 @@ import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
 import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
 import { DiscountReasonPickerComponent } from '../../../../shared/components/discount-reason-picker/discount-reason-picker.component';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 
 /**
  * Línea de la cotización. Igual que el `CartLine` del POS: el material y el
@@ -33,6 +35,24 @@ interface QuoteLine {
   quantity: number;
   /** Docs/plan-descuentos.md: se regala esta línea (precio $0). */
   gift?: boolean;
+}
+
+/**
+ * Foto del borrador para el viaje de ida y vuelta a la ficha pública del
+ * producto (DraftHandoffService). Igual que la del POS: solo lo capturado,
+ * los catálogos los repide `ngOnInit`.
+ */
+interface QuoteDraftSnapshot {
+  form: ReturnType<QuoteCreateComponent['form']['getRawValue']>;
+  lines: QuoteLine[];
+  editingId: number | null;
+  shippingCp: string;
+  shippingQuote: ShippingQuote | null;
+  existingDiscounts: QuoteDiscount[];
+  discountAmount: number | null;
+  discountReasonCategory: DiscountReasonCategory | null;
+  discountReasonText: string;
+  discountExpanded: boolean;
 }
 
 /**
@@ -49,7 +69,7 @@ interface QuoteLine {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-create.component.html',
   styleUrl: './quote-create.component.scss',
-  imports: [ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent, DiscountReasonPickerComponent],
+  imports: [ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent, DiscountReasonPickerComponent, MediaUrlPipe],
 })
 export class QuoteCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -60,6 +80,7 @@ export class QuoteCreateComponent implements OnInit {
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private handoff = inject(DraftHandoffService);
 
   protected saving = signal(false);
   protected loadingQuote = signal(false);
@@ -330,8 +351,64 @@ export class QuoteCreateComponent implements OnInit {
       error: () => {},
     });
 
+    // Regreso de la ficha pública de un producto: se repone el borrador tal
+    // cual quedó, sin recargar la cotización del servidor (pisaría lo
+    // capturado desde entonces).
+    if (this.restoreFromHandoff()) return;
+
     const idParam = this.route.snapshot.paramMap.get('id');
     if (idParam) this.loadForEdit(Number(idParam));
+  }
+
+  // ===== Ida y vuelta a la ficha pública del producto =====
+
+  /** Abre /producto/:slug con el material YA elegido en esta línea. */
+  protected openProductPage(line: QuoteLine): void {
+    const slug = line.product.slug;
+    if (!slug) {
+      this.notification.info('Este mueble todavía no tiene ficha en el catálogo público.');
+      return;
+    }
+    const returnUrl = this.router.url;
+    this.handoff.stash('quote', returnUrl, this.snapshot());
+    this.router
+      .navigate(['/producto', slug], {
+        queryParams: { material: line.materialId, volver: returnUrl },
+      })
+      .then((ok) => {
+        if (!ok) this.handoff.discard();
+      });
+  }
+
+  private restoreFromHandoff(): boolean {
+    const snap = this.handoff.take<QuoteDraftSnapshot>('quote', this.router.url);
+    if (!snap) return false;
+    this.form.patchValue(snap.form);
+    this.lines.set(snap.lines);
+    this.editingId.set(snap.editingId);
+    this.shippingCp.set(snap.shippingCp);
+    this.shippingQuote.set(snap.shippingQuote);
+    this.existingDiscounts.set(snap.existingDiscounts);
+    this.discountAmount.set(snap.discountAmount);
+    this.discountReasonCategory.set(snap.discountReasonCategory);
+    this.discountReasonText.set(snap.discountReasonText);
+    this.discountExpanded.set(snap.discountExpanded);
+    return true;
+  }
+
+  private snapshot(): QuoteDraftSnapshot {
+    return {
+      form: this.form.getRawValue(),
+      lines: this.lines(),
+      editingId: this.editingId(),
+      shippingCp: this.shippingCp(),
+      shippingQuote: this.shippingQuote(),
+      existingDiscounts: this.existingDiscounts(),
+      discountAmount: this.discountAmount(),
+      discountReasonCategory: this.discountReasonCategory(),
+      discountReasonText: this.discountReasonText(),
+      discountExpanded: this.discountExpanded(),
+    };
   }
 
   /**
@@ -376,6 +453,7 @@ export class QuoteCreateComponent implements OnInit {
               id: it.productId,
               name: it.productName,
               sku: it.productSku ?? '',
+              slug: it.productSlug ?? null,
               availability_days: 0,
               primaryImage: it.imageUrl ?? null,
               materialPrices: [

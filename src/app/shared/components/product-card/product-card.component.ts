@@ -8,8 +8,9 @@ import {
   signal,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Product } from '../../../core/models/product.model';
+import { Product, hasOffer } from '../../../core/models/product.model';
 import { PriceDisplayComponent } from '../price-display/price-display.component';
+import { mediaUrl } from '../../../core/utils/media-url';
 
 @Component({
   selector: 'app-product-card',
@@ -31,9 +32,13 @@ export class ProductCardComponent {
    */
   protected images = computed<string[]>(() => {
     const p = this.product();
-    if (p.gallery?.length) return p.gallery;
-    return p.primary_image ? [p.primary_image] : [];
+    const raw = p.gallery?.length ? p.gallery : p.primary_image ? [p.primary_image] : [];
+    // La base guarda rutas relativas; el origen lo pone el ambiente.
+    return raw.map((src) => mediaUrl(src)!).filter(Boolean);
   });
+
+  /** Regla compartida con la portada: ver hasOffer() en el modelo. */
+  protected onOffer = computed(() => hasOffer(this.product()));
 
   protected activeIndex = signal(0);
 

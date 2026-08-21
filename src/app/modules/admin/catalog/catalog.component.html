@@ -397,6 +397,15 @@
             <label for="wholesaleMinQty">Mínimo de mayoreo</label>
             <input id="wholesaleMinQty" type="number" formControlName="wholesaleMinQty" min="1" step="1" placeholder="Usa el global" />
           </div>
+          <div class="field">
+            <label for="priceList">Precio de lista (antes)</label>
+            <input id="priceList" type="number" formControlName="priceList" min="0" step="0.01" placeholder="Sin oferta" />
+            <p class="field__hint">
+              Solo para la etiqueta <strong>OFERTA</strong> de la portada: se tacha junto al
+              precio de contado. Déjalo vacío si el producto no está en oferta; si es menor o
+              igual al precio de venta se ignora.
+            </p>
+          </div>
         </div>
 
         <div class="checkbox-row">
@@ -414,7 +423,7 @@
         <div class="image-grid">
           @for (img of productImages(); track img.id) {
             <div class="image-card" [class.image-card--primary]="img.is_primary">
-              <img [src]="img.image_url" [alt]="img.alt_text" loading="lazy" />
+              <img [src]="img.image_url | mediaUrl" [alt]="img.alt_text" loading="lazy" />
               <div class="image-card__overlay">
                 @if (!img.is_primary) {
                   <button

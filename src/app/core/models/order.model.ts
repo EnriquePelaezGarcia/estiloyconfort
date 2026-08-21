@@ -102,6 +102,8 @@ export interface OrderItem {
   requiresFabrication?: boolean;
   /** Foto principal vigente del producto (tabla product_images); null si no tiene. No es congelada. */
   imageUrl?: string | null;
+  /** Slug vigente del producto, para abrir su ficha pública (/producto/:slug). */
+  productSlug?: string | null;
   /** Fabricante al que se le compra este item, si el admin ya lo asignó. */
   manufacturerId?: number | null;
   manufacturerName?: string | null;
@@ -395,6 +397,8 @@ export interface InventoryItem {
   id: number;
   name: string;
   sku: string;
+  /** Slug del catálogo público; null si el producto no lo tiene capturado. */
+  slug?: string | null;
   availability_days: number;
   /** Override de cantidad mínima de mayoreo; NULL = usa el global (M12). */
   wholesaleMinQty?: number | null;

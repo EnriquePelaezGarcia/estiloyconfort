@@ -85,13 +85,16 @@ function mapQuoteItem(row) {
      * congelada como el precio — si el catálogo cambia la foto, la
      * cotización muestra la actual. */
     imageUrl: row.primary_image ?? null,
+    /** Slug VIGENTE del producto, para abrir su ficha pública desde el builder. */
+    productSlug: row.product_slug ?? null,
   };
 }
 
 const ITEMS_SELECT = `
   SELECT qi.*,
          (SELECT image_url FROM product_images
-            WHERE product_id = qi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
+            WHERE product_id = qi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image,
+         (SELECT slug FROM products WHERE id = qi.product_id) AS product_slug
   FROM quote_items qi WHERE qi.quote_id = ? ORDER BY qi.id
 `;
 

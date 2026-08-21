@@ -7,6 +7,9 @@
       } @else {
         —
       }
+      @if (showList()) {
+        <s class="price-display__was">{{ priceList() | currency:'MXN':'symbol-narrow':'1.2-2' }}</s>
+      }
     </span>
   </div>
   <div class="price-display__msi">

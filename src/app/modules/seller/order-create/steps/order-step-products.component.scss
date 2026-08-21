@@ -97,6 +97,37 @@
 
   &__info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   &__name { font-weight: 600; font-size: 0.88rem; }
+  // La foto abre la ficha pública del mueble: el botón es solo un envoltorio
+  // clicable, la miniatura conserva su tamaño y su borde.
+  &__thumb-btn {
+    flex-shrink: 0;
+    align-self: flex-start;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    line-height: 0;
+    cursor: pointer;
+
+    &:hover .cart-line__thumb { border-color: vars.$color-primary; }
+    &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
+  }
+
+  // El nombre también abre la ficha: botón sin cromo, se lee como el texto
+  // que ya estaba ahí hasta que el vendedor lo apunta con el mouse.
+  &__name--link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover { color: vars.$color-primary; text-decoration: underline; }
+    &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
+  }
+
   &__price { font-size: 0.78rem; color: vars.$color-text-secondary; }
   &__price--alert { color: #dc2626; font-weight: 600; }
   &__subtotal { font-weight: 600; color: vars.$color-primary; min-width: 80px; text-align: right; }

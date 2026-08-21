@@ -221,7 +221,7 @@
             @for (p of searchResults(); track p.id) {
               <button type="button" class="result" (click)="addProduct(p)">
                 @if (p.primaryImage) {
-                  <img class="result__thumb" [src]="p.primaryImage" [alt]="p.name" loading="lazy" />
+                  <img class="result__thumb" [src]="p.primaryImage | mediaUrl" [alt]="p.name" loading="lazy" />
                 } @else {
                   <span class="result__thumb result__thumb--empty">
                     <span class="material-symbols-outlined">chair</span>
@@ -247,15 +247,30 @@
         } @else {
           @for (l of lines(); track l.product.id + '-' + l.materialId; let i = $index) {
             <div class="cart-line" [class.cart-line--alert]="unitPrice(l) === null">
-              @if (l.product.primaryImage) {
-                <img class="cart-line__thumb" [src]="l.product.primaryImage" [alt]="l.product.name" loading="lazy" />
-              } @else {
-                <span class="cart-line__thumb cart-line__thumb--empty">
-                  <span class="material-symbols-outlined">chair</span>
-                </span>
-              }
+              <!-- Foto y nombre abren la ficha pública del mueble con ESTE
+                   material ya elegido; la cotización queda guardada y se repone
+                   al volver. -->
+              <button
+                type="button"
+                class="cart-line__thumb-btn"
+                title="Ver ficha del producto"
+                (click)="openProductPage(l)"
+              >
+                @if (l.product.primaryImage) {
+                  <img class="cart-line__thumb" [src]="l.product.primaryImage | mediaUrl" [alt]="l.product.name" loading="lazy" />
+                } @else {
+                  <span class="cart-line__thumb cart-line__thumb--empty">
+                    <span class="material-symbols-outlined">chair</span>
+                  </span>
+                }
+              </button>
               <div class="cart-line__info">
-                <span class="cart-line__name">{{ l.product.name }}</span>
+                <button
+                  type="button"
+                  class="cart-line__name cart-line__name--link"
+                  title="Ver ficha del producto"
+                  (click)="openProductPage(l)"
+                >{{ l.product.name }}</button>
 
                 <div class="cart-line__variant">
                   @if (l.product.materialPrices.length > 1) {
@@ -298,7 +313,7 @@
                     [class.cart-line__gift-toggle--active]="l.gift"
                     (click)="toggleGift(i)"
                   >
-                    🎁 {{ l.gift ? 'Regalado' : 'Regalar este producto' }}
+                    {{ l.gift ? 'Regalado' : 'Regalar este producto' }}
                   </button>
                 }
                 @if (lineWholesaleShortfall(l) > 0) {

@@ -1,63 +1,122 @@
 <!-- ===== HERO ===== -->
+<!-- Sin texto encima: el mensaje y el llamado a la acción viven en el bloque
+     de abajo, para que la foto se vea completa. -->
 <section class="hero">
-  <img class="hero__bg" [src]="heroImage" alt="" aria-hidden="true" />
-  <div class="hero__overlay"></div>
-  <div class="hero__container">
-    <div class="hero__content">
-      <span class="hero__ornament">✦</span>
-      <h1 class="hero__title">
-        Estilo y Confort<br />
-        <em>para tu Hogar</em>
-      </h1>
-      <p class="hero__subtitle">
-        Descubre una curaduría excepcional de mobiliario que transforma
-        espacios en refugios de serenidad y elegancia.
-      </p>
-      <a routerLink="/catalogo" class="hero__btn">
-        Ver Catálogo
-        <span class="material-symbols-outlined">arrow_forward</span>
-      </a>
-    </div>
-  </div>
+  <img class="hero__bg" [src]="heroImage" alt="Sala amueblada por Estilo y Confort" />
 </section>
 
-<!-- ===== CATEGORÍAS ===== -->
-<section class="categories">
-  <div class="categories__inner">
-    <div class="categories__header">
-      <span class="label-overline">Colecciones</span>
-      <h2 class="section-title">Explora por Estancia</h2>
+<!-- ===== FRASE + IR A LA TIENDA ===== -->
+<section class="tagline">
+  <p class="tagline__text">
+    Muebles en tendencia diseñados para tu espacio…
+  </p>
+  <a routerLink="/catalogo" class="tagline__link">Ir a la tienda</a>
+</section>
+
+<!-- ===== DESTACADOS ===== -->
+@if (featured().length) {
+  <section class="featured">
+    <div class="product-carousel-wrapper">
+      <div class="product-carousel" #carousel>
+        @for (product of featured(); track product.id) {
+          <a class="mini-card" [routerLink]="['/producto', product.slug]">
+            <div class="mini-card__img-wrap">
+              @if (product.primary_image) {
+                <img
+                  [src]="product.primary_image | mediaUrl"
+                  [alt]="product.name"
+                  class="mini-card__img"
+                  loading="lazy"
+                />
+              } @else {
+                <div class="mini-card__placeholder">
+                  <span class="material-symbols-outlined">chair</span>
+                </div>
+              }
+              @if (isOnOffer(product)) {
+                <span class="mini-card__badge">Oferta</span>
+              }
+            </div>
+            <h3 class="mini-card__name">{{ product.name }}</h3>
+            <p class="mini-card__price">
+              {{ product.price_from | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              @if (isOnOffer(product)) {
+                <s>{{ product.price_list | currency:'MXN':'symbol-narrow':'1.2-2' }}</s>
+              }
+            </p>
+          </a>
+        }
+      </div>
     </div>
+
+    <div class="featured__controls">
+      <button class="carousel-btn" (click)="scrollLeft()" aria-label="Anterior">
+        <span class="material-symbols-outlined">arrow_back</span>
+      </button>
+      <button class="carousel-btn" (click)="scrollRight()" aria-label="Siguiente">
+        <span class="material-symbols-outlined">arrow_forward</span>
+      </button>
+    </div>
+  </section>
+}
+
+<!-- ===== BANNER DE RECÁMARA ===== -->
+@if (bedroomCategory(); as bedroom) {
+  <section class="feature-banner">
+    <div class="feature-banner__header">
+      <div>
+        <span class="label-overline">Esenciales</span>
+        <h2 class="section-title">Arma tu recámara</h2>
+      </div>
+      <a
+        class="feature-banner__link"
+        routerLink="/catalogo"
+        [queryParams]="{ categoria: bedroom.slug }"
+      >Ver todo</a>
+    </div>
+    <a
+      class="feature-banner__media"
+      routerLink="/catalogo"
+      [queryParams]="{ categoria: bedroom.slug }"
+      [attr.aria-label]="'Ver productos de ' + bedroom.name"
+    >
+      <img [src]="bedroom.image_url | mediaUrl" [alt]="bedroom.name" loading="lazy" />
+    </a>
+  </section>
+}
+
+<!-- ===== COLECCIÓN (CATEGORÍAS) ===== -->
+<section class="collection">
+  <div class="collection__header">
+    <span class="label-overline">Comprar por</span>
+    <h2 class="section-title">Colección</h2>
   </div>
-  <div class="categories__grid">
+
+  <div class="collection__grid">
     @for (cat of categories(); track cat.id) {
       <a
+        class="collection-item"
         routerLink="/catalogo"
         [queryParams]="{ categoria: cat.slug }"
-        class="category-item"
         [attr.aria-label]="'Ver productos de ' + cat.name"
       >
-        <div class="category-item__ring">
-          <div class="category-item__img-wrap">
-            @if (cat.image_url) {
-              <img [src]="cat.image_url" [alt]="cat.name" loading="lazy" />
-            } @else {
-              <div class="category-item__fallback">
-                <span class="material-symbols-outlined">chair</span>
-              </div>
-            }
-          </div>
+        <div class="collection-item__img-wrap">
+          @if (cat.image_url) {
+            <img [src]="cat.image_url | mediaUrl" [alt]="cat.name" loading="lazy" />
+          } @else {
+            <div class="collection-item__fallback">
+              <span class="material-symbols-outlined">chair</span>
+            </div>
+          }
         </div>
-        <span class="category-item__label">{{ cat.name }}</span>
+        <span class="collection-item__label">{{ cat.name }}</span>
       </a>
     } @empty {
       @if (categoriesLoading()) {
-        @for (i of [1, 2, 3, 4, 5]; track i) {
-          <div class="category-item category-item--skeleton">
-            <div class="category-item__ring">
-              <div class="category-item__img-wrap"></div>
-            </div>
-            <span class="category-item__label-skeleton"></span>
+        @for (i of [1, 2, 3, 4]; track i) {
+          <div class="collection-item collection-item--skeleton">
+            <div class="collection-item__img-wrap"></div>
+            <span class="collection-item__label-skeleton"></span>
           </div>
         }
       }
@@ -65,66 +124,72 @@
   </div>
 </section>
 
-<!-- ===== NOVEDADES ===== -->
-<section class="arrivals">
-  <div class="arrivals__inner">
-    <div class="arrivals__header">
-      <div>
-        <span class="label-overline">Catálogo</span>
-        <h2 class="section-title">Novedades</h2>
-      </div>
-      <div class="arrivals__controls">
-        <button class="carousel-btn" (click)="scrollLeft()" aria-label="Anterior">
-          <span class="material-symbols-outlined">arrow_back</span>
-        </button>
-        <button class="carousel-btn" (click)="scrollRight()" aria-label="Siguiente">
-          <span class="material-symbols-outlined">arrow_forward</span>
-        </button>
-      </div>
-    </div>
-  </div>
-  <div class="product-carousel-wrapper">
-    <div class="product-carousel" #carousel>
-      @for (product of products; track product.name) {
-        <div class="product-card">
-          <div class="product-card__img-wrap">
-            <img [src]="product.image" [alt]="product.name" class="product-card__img" loading="lazy" />
-            @if (product.badge) {
-              <span class="product-card__badge">{{ product.badge }}</span>
-            }
-            <div class="product-card__overlay">
-              <span class="product-card__cta">Ver Detalle</span>
-            </div>
-          </div>
-          <div class="product-card__body">
-            <h3 class="product-card__name">{{ product.name }}</h3>
-            <p class="product-card__price">{{ product.price }}</p>
-          </div>
-        </div>
+<!-- ===== RESEÑAS ===== -->
+<!-- Solo se pinta si Google devolvió reseñas: sin la llave configurada, o si
+     la consulta falla, el backend responde vacío y esta sección desaparece
+     en vez de dejar un bloque a medias. -->
+@if (hasReviews()) {
+  <section class="reviews">
+    <div class="reviews__header">
+      <span class="label-overline">Lo que dicen nuestros clientes</span>
+      @if (reviews()?.rating) {
+        <p class="reviews__score">
+          {{ reviews()?.rating }} / 5 en Google
+          <span class="reviews__count">({{ reviews()?.total }} calificaciones)</span>
+        </p>
       }
     </div>
-  </div>
-</section>
 
-<!-- ===== NEWSLETTER ===== -->
-<section class="newsletter">
-  <div class="newsletter__inner">
-    <span class="newsletter__ornament">✦</span>
-    <span class="label-overline label-overline--light">Únete a nuestra comunidad</span>
-    <h2 class="newsletter__title">
-      Inspiración y exclusividad<br />
-      <em>directamente en tu correo</em>
-    </h2>
-    <form class="newsletter__form" (submit)="$event.preventDefault()">
-      <input
-        type="email"
-        class="newsletter__input"
-        placeholder="Tu correo electrónico"
-        required
-        aria-label="Correo electrónico"
-      />
-      <button type="submit" class="newsletter__btn">Suscribirme</button>
-    </form>
-    <p class="newsletter__disclaimer">Al suscribirte, aceptas nuestra Política de Privacidad.</p>
+    <div class="reviews__grid">
+      @for (review of reviews()?.reviews; track review.text) {
+        <article class="review">
+          <div class="review__stars" [attr.aria-label]="review.rating + ' de 5 estrellas'">
+            @for (filled of stars(review.rating); track $index) {
+              <span class="material-symbols-outlined" [class.is-filled]="filled">star</span>
+            }
+          </div>
+          <p class="review__text">{{ review.text }}</p>
+          <p class="review__author">
+            <!-- Los términos de Google piden enlazar al perfil del autor
+                 cuando se muestra su reseña. -->
+            @if (review.profileUrl) {
+              <a [href]="review.profileUrl" target="_blank" rel="noopener">{{ review.author }}</a>
+            } @else {
+              {{ review.author }}
+            }
+            @if (review.when) {
+              <span class="review__when">· {{ review.when }}</span>
+            }
+          </p>
+        </article>
+      }
+    </div>
+
+    <div class="reviews__links">
+      @if (reviews()?.url) {
+        <a [href]="reviews()?.url" target="_blank" rel="noopener" class="reviews__link">
+          Ver todas en Google
+        </a>
+      }
+      @if (facebookUrl) {
+        <a [href]="facebookUrl" target="_blank" rel="noopener" class="reviews__link">
+          Ver opiniones en Facebook
+        </a>
+      }
+    </div>
+  </section>
+}
+
+<!-- ===== COMPRA POR WHATSAPP ===== -->
+<section class="wa-cta">
+  <div class="wa-cta__inner">
+    <h2 class="wa-cta__title">¿Quieres comprar por WhatsApp?</h2>
+    <p class="wa-cta__text">
+      Escríbenos y te atendemos personalmente: te mandamos fotos, medidas y
+      formas de pago del mueble que te interese.
+    </p>
+    <a [href]="whatsappUrl" target="_blank" rel="noopener" class="wa-cta__btn">
+      Escribir por WhatsApp
+    </a>
   </div>
 </section>

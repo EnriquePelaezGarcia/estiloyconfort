@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { CurrencyPipe } from '@angular/common';
 import { OrderDraftStore } from '../order-draft.store';
 import { DiscountReasonPickerComponent } from '../../../../shared/components/discount-reason-picker/discount-reason-picker.component';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 
 /**
  * Columna lateral del paso 2 («Cliente y entrega»): líneas del carrito en
@@ -13,7 +14,7 @@ import { DiscountReasonPickerComponent } from '../../../../shared/components/dis
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-summary.component.html',
   styleUrl: './order-summary.component.scss',
-  imports: [CurrencyPipe, DiscountReasonPickerComponent],
+  imports: [CurrencyPipe, DiscountReasonPickerComponent, MediaUrlPipe],
 })
 export class OrderSummaryComponent {
   protected store = inject(OrderDraftStore);

@@ -28,6 +28,16 @@ const env = {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
+
+  // Reseñas de Google (Places API). Sin apiKey el endpoint responde vacío y
+  // la home simplemente no pinta el bloque: no se rompe nada.
+  google: {
+    apiKey: process.env.GOOGLE_PLACES_API_KEY || '',
+    // Opcional: si se omite, se resuelve una vez con placeQuery y se cachea.
+    placeId: process.env.GOOGLE_PLACE_ID || '',
+    placeQuery:
+      process.env.GOOGLE_PLACE_QUERY || 'Mueblería Estilo y Confort, Puebla, México',
+  }
 };
 
 // Origen canónico para construir enlaces públicos (cotizaciones, tickets de

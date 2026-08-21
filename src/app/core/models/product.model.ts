@@ -48,6 +48,12 @@ export interface Product {
   /** Override de cantidad mínima de mayoreo; NULL = usa el global (M12). */
   wholesale_min_qty: number | null;
   margin_percentage: number;
+  /**
+   * Precio de lista ("antes") para la etiqueta de OFERTA. Captura manual y
+   * opcional: no se deriva de los costos como los precios de venta (M2/M14).
+   * null = el producto no está en oferta.
+   */
+  price_list: number | null;
   /** Catálogo público: el mínimo/máximo entre los materiales cotizados (M5/H5). */
   price_from?: number | null;
   price_to?: number | null;
@@ -161,6 +167,8 @@ export interface ProductPayload {
   availability_days: number;
   wholesale_min_qty: number | null;
   margin_percentage: number;
+  /** Precio de lista para la etiqueta de OFERTA; null = sin oferta. */
+  price_list: number | null;
   stock_alert_level: number;
   is_featured: boolean;
   is_active?: boolean;
@@ -187,4 +195,22 @@ export interface ProductDeclaredMaterial {
   label: string;
   isActive: boolean;
   stockQuantity: number;
+}
+
+/**
+ * ¿El producto se anuncia como oferta? Solo si el precio de lista existe y de
+ * verdad es mayor que el de venta: tachar un número menor o igual sería
+ * engañoso, así que ese caso se trata como "sin oferta".
+ *
+ * Vive aquí y no en cada componente porque la regla la aplican por igual la
+ * portada, la tarjeta del catálogo y el bloque de precio.
+ */
+export function hasOffer(product: Product): boolean {
+  if (product.price_list === null || product.price_list === undefined) return false;
+  if (product.price_from === null || product.price_from === undefined) return false;
+  // mysql2 entrega las columnas DECIMAL como cadena, así que sin Number() la
+  // comparación sería alfabética: "9000" > "10000" daría true.
+  const list = Number(product.price_list);
+  const price = Number(product.price_from);
+  return Number.isFinite(list) && Number.isFinite(price) && list > price;
 }

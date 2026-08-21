@@ -38,6 +38,11 @@ export class OrderCreateComponent implements OnInit, HasPendingChanges {
   ngOnInit(): void {
     this.store.init();
 
+    // Regreso de la ficha pública de un producto: se repone el borrador tal
+    // cual quedó y NO se vuelve a cargar nada del servidor — pisaría lo que
+    // el vendedor ya había capturado.
+    if (this.store.restoreFromHandoff()) return;
+
     // ?edit / ?fromQuote se leen UNA SOLA VEZ aquí (snapshot, no reactivo):
     // si se leyeran en cada paso, cada ida y vuelta relanzaría las peticiones
     // y pisaría lo que el vendedor ya escribió (Docs/plan-punto-venta-2-pasos.md §8.4).

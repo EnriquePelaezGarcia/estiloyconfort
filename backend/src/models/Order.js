@@ -81,6 +81,8 @@ function mapItem(row) {
     /** Foto principal del producto (tabla product_images). No es congelada:
      * si el catálogo cambia la foto, el pedido muestra la vigente. */
     imageUrl: row.primary_image ?? null,
+    /** Slug VIGENTE del producto, para abrir su ficha pública desde el POS. */
+    productSlug: row.product_slug ?? null,
     /** Fabricante al que se le compra este item (tabla manufacturers). */
     manufacturerId: row.manufacturer_id ?? null,
     manufacturerName: row.manufacturer_name ?? null,
@@ -631,7 +633,8 @@ const Order = {
               r.reason AS reservation_reason, r.note AS reservation_note,
               r.customer_name AS reservation_customer_name,
               (SELECT image_url FROM product_images
-                WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
+                WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image,
+              (SELECT slug FROM products WHERE id = oi.product_id) AS product_slug
        FROM order_items oi
        LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
        LEFT JOIN users rb ON rb.id = oi.ready_by

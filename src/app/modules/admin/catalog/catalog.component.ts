@@ -15,6 +15,7 @@ import { Manufacturer } from '../../../core/models/manufacturing.model';
 import { Category } from '../../../core/models/category.model';
 import { CalculatedPrices, DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 function slugify(value: string): string {
   return value
@@ -91,7 +92,7 @@ type PriceMode = 'margin' | 'price';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './catalog.component.html',
   styleUrl: './catalog.component.scss',
-  imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective],
+  imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective, MediaUrlPipe],
 })
 export class CatalogComponent implements OnInit {
   private productService = inject(ProductService);
@@ -313,6 +314,12 @@ export class CatalogComponent implements OnInit {
     marginPercentage: [null as number | null, [Validators.min(0), Validators.max(99)]],
     /** Modo inverso: precio de contado deseado, del que se despeja el margen. */
     targetCashPrice: [null as number | null, [Validators.min(0)]],
+    /**
+     * Precio de lista ("antes") que la portada tacha junto al badge OFERTA.
+     * Vacío = el producto no está en oferta. Es el único precio de captura
+     * manual: los de venta se derivan de los costos por fabricante (M2/M14).
+     */
+    priceList: [null as number | null, [Validators.min(0)]],
     wholesaleMinQty: [null as number | null, [Validators.min(1)]],
     stockAlertLevel: [5, [Validators.required, Validators.min(0)]],
     isFeatured: [false],
@@ -464,6 +471,7 @@ export class CatalogComponent implements OnInit {
       availabilityDays: 0,
       marginPercentage: null,
       targetCashPrice: null,
+      priceList: null,
       wholesaleMinQty: null,
       stockAlertLevel: 5,
       isFeatured: false,
@@ -512,6 +520,7 @@ export class CatalogComponent implements OnInit {
           availabilityDays: full.availability_days,
           marginPercentage: full.margin_percentage,
           targetCashPrice: null,
+          priceList: full.price_list,
           wholesaleMinQty: full.wholesale_min_qty,
           stockAlertLevel: full.stock_alert_level,
           isFeatured: full.is_featured,
@@ -591,6 +600,7 @@ export class CatalogComponent implements OnInit {
       weight_volumetric: raw.weight ?? null,
       availability_days: raw.availabilityDays ?? 0,
       wholesale_min_qty: raw.wholesaleMinQty ?? null,
+      price_list: raw.priceList ?? null,
       // Sin base_cost ni precios (M2/M14): son derivados de los costos por
       // fabricante que se guardan aparte en saveCosts(); el backend los ignora
       // si se envían. Tampoco captura existencias (M15): eso vive en Admin → Inventario.

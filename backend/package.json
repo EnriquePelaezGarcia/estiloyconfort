@@ -9,6 +9,8 @@
     "test": "node --test test/**/*.test.js",
     "db:seed": "node src/database/seed.js",
     "db:seed:2026": "node src/database/seed_products_2026.js",
+    "db:seed:categories": "node src/database/seed_categories.js",
+    "db:migrate:image-urls": "node src/database/migrate_relative_image_urls.js",
     "db:schema:fase4": "node src/database/run-schema.js schema_fase4.sql"
   },
   "keywords": [

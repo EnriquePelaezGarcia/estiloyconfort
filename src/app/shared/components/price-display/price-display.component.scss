@@ -43,6 +43,16 @@
     }
   }
 
+  // "Antes" de una oferta: acompaña al precio de contado, nunca lo sustituye.
+  &__was {
+    margin-left: 0.4em;
+    font-family: v.$font-headline;
+    font-size: 0.8em;
+    font-weight: 500;
+    color: v.$color-text-secondary;
+    text-decoration-thickness: 1px;
+  }
+
   &--detail &__amount--main {
     font-size: 1.75rem;
   }

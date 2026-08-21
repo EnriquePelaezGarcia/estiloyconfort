@@ -39,6 +39,7 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
     { label: 'Usuarios', icon: 'group', route: 'usuarios' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
+    { label: 'Categorías', icon: 'category', route: 'categorias' },
     { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
     { label: 'Reservas', icon: 'bookmark', route: 'reservas' },
     { label: 'Reglas de precios', icon: 'percent', route: 'reglas-precios' },

@@ -6,23 +6,27 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CurrencyPipe, TitleCasePipe } from '@angular/common';
 import { ProductService } from '../../../core/services/product.service';
 import { CartService } from '../../../core/services/cart.service';
 import { MaterialPrices, Product, ProductVariant } from '../../../core/models/product.model';
 import { CartVariantSelection } from '../../../core/models/cart.model';
 import { PriceDisplayComponent } from '../../../shared/components/price-display/price-display.component';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { mediaUrl } from '../../../core/utils/media-url';
 
 @Component({
   selector: 'app-product-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './product-detail.component.html',
   styleUrl: './product-detail.component.scss',
-  imports: [RouterLink, CurrencyPipe, TitleCasePipe, PriceDisplayComponent],
+  imports: [RouterLink, CurrencyPipe, TitleCasePipe, PriceDisplayComponent, MediaUrlPipe],
 })
 export class ProductDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private productService = inject(ProductService);
   private cartService = inject(CartService);
 
@@ -37,6 +41,27 @@ export class ProductDetailComponent implements OnInit {
 
   /** Material elegido para cotizar y agregar al carrito (M4/M6). */
   selectedMaterial = signal<number | null>(null);
+
+  private queryParams = toSignal(this.route.queryParamMap, {
+    initialValue: this.route.snapshot.queryParamMap,
+  });
+
+  /**
+   * El vendedor llegó aquí desde una línea del punto de venta o del builder de
+   * cotizaciones (`?volver=`), normalmente para enseñarle la ficha al cliente.
+   * Se le pinta una barra para regresar a su borrador, que sigue guardado
+   * (DraftHandoffService). Solo se acepta una ruta interna: un `volver`
+   * apuntando a otro sitio sería un redirect abierto.
+   */
+  returnUrl = computed(() => {
+    const raw = this.queryParams().get('volver');
+    return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+  });
+
+  /** "Volver a la cotización" o "Volver al pedido", según de dónde venga. */
+  returnLabel = computed(() =>
+    this.returnUrl()?.includes('/cotizaciones') ? 'Volver a la cotización' : 'Volver al pedido',
+  );
 
   /**
    * Los materiales DECLARADOS del producto (M2), cotizados o "No aplica"
@@ -73,8 +98,8 @@ export class ProductDetailComponent implements OnInit {
 
   activeImage = computed(() => {
     const p = this.product();
-    if (!p?.images?.length) return p?.primary_image ?? null;
-    return p.images[this.activeImageIndex()]?.image_url ?? p.primary_image;
+    if (!p?.images?.length) return mediaUrl(p?.primary_image);
+    return mediaUrl(p.images[this.activeImageIndex()]?.image_url ?? p.primary_image);
   });
 
   variantTypes = computed(() => {
@@ -115,15 +140,30 @@ export class ProductDetailComponent implements OnInit {
         next: p => {
           this.product.set(p);
           this.loading.set(false);
+          // `?material=<id>`: el vendedor abrió la ficha desde una línea de un
+          // pedido o cotización, así que la ficha nace mostrando EL material
+          // que ya eligió — no el precio de otro.
+          const quoted = (p.materialPrices ?? []).filter((m) => m.base_cost != null);
+          const requested = Number(this.route.snapshot.queryParamMap.get('material'));
+          const preselected = quoted.find((m) => m.material_id === requested);
+          if (preselected) {
+            this.selectedMaterial.set(preselected.material_id);
+            return;
+          }
           // M5: si solo hay UN material cotizado, se elige solo y la ficha no
           // pregunta; con varios, el cliente decide — no hay "el" precio hasta
           // que elige.
-          const quoted = (p.materialPrices ?? []).filter((m) => m.base_cost != null);
           if (quoted.length === 1) this.selectedMaterial.set(quoted[0].material_id);
         },
         error: () => { this.loading.set(false); this.error.set(true); },
       });
     });
+  }
+
+  /** Regresa al pedido o cotización, que se repone desde el DraftHandoffService. */
+  goBackToDraft(): void {
+    const url = this.returnUrl();
+    if (url) this.router.navigateByUrl(url);
   }
 
   selectMaterial(materialId: number): void {
