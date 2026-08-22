@@ -1,6 +1,35 @@
+const fs = require('fs');
+const path = require('path');
 const nodemailer = require('nodemailer');
 const env = require('../config/environment');
 const { RESET_TOKEN_TTL_MINUTES } = require('./passwordUtils');
+
+// Morado exacto tomado del logotipo (public/branding/logo-positivo.png), para
+// que el correo de recuperación se sienta parte de la misma marca.
+const BRAND_PURPLE = '#4B3554';
+const BRAND_PURPLE_DARK = '#372740';
+const BRAND_LAVENDER_BG = '#F6F3F9';
+const BRAND_LAVENDER_BORDER = '#E4DCEA';
+
+// Copia de 440×129 optimizada para correo (25 KB) del logo original en
+// public/branding/, que pesa 156 KB y mide 3031×888: demasiado para un
+// header de email. Se adjunta embebida (cid), no como URL externa, porque
+// la mayoría de los clientes de correo bloquean imágenes remotas por
+// defecto y el logo se vería roto en el primer vistazo.
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'email-logo.png');
+const LOGO_CID = 'logo-estiloyconfort';
+let logoAttachment = null;
+try {
+  logoAttachment = {
+    filename: 'estilo-y-confort.png',
+    content: fs.readFileSync(LOGO_PATH),
+    cid: LOGO_CID,
+    contentDisposition: 'inline',
+  };
+} catch {
+  // Sin el archivo el correo se manda igual, solo que sin logo. No debe
+  // tumbar el arranque del backend por un asset faltante.
+}
 
 /**
  * Envío de correo transaccional (Docs/plan-modulo-contrasenas.md §5).
@@ -42,7 +71,7 @@ function escapeHtml(value) {
  * Quien llama decide qué hacer con el fallo. Para la recuperación de
  * contraseña, la respuesta al cliente NO cambia (§4.2 regla 6).
  */
-async function sendMail({ to, subject, text, html }) {
+async function sendMail({ to, subject, text, html, attachments }) {
   const activeTransporter = getTransporter();
 
   if (!activeTransporter) {
@@ -61,7 +90,7 @@ async function sendMail({ to, subject, text, html }) {
     return { delivered: false, consoleMode: true };
   }
 
-  await activeTransporter.sendMail({ from: env.mail.from, to, subject, text, html });
+  await activeTransporter.sendMail({ from: env.mail.from, to, subject, text, html, attachments });
   return { delivered: true, consoleMode: false };
 }
 
@@ -92,32 +121,78 @@ async function sendPasswordResetEmail({ to, fullName, token }) {
     'Mueblería Estilo y Confort',
   ].join('\n');
 
+  // Tabla, no <div>: es lo único que Outlook de escritorio renderiza sin
+  // recortar el fondo ni el ancho. El logo va con width/height explícitos
+  // para que el hueco no "salte" el diseño mientras la imagen carga.
   const html = `
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;max-width:520px">
-  <p>${escapeHtml(greeting)}</p>
-  <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en <strong>Estilo y Confort</strong>.</p>
-  <p style="margin:28px 0">
-    <a href="${escapeHtml(url)}"
-       style="background:#b45309;color:#ffffff;padding:12px 22px;border-radius:6px;text-decoration:none;display:inline-block">
-      Elegir nueva contraseña
-    </a>
-  </p>
-  <p style="font-size:13px;color:#6b7280">
-    El enlace vence en ${RESET_TOKEN_TTL_MINUTES} minutos y solo se puede usar una vez.<br>
-    Si el botón no funciona, copia esta dirección en tu navegador:<br>
-    <span style="word-break:break-all">${escapeHtml(url)}</span>
-  </p>
-  <p style="font-size:13px;color:#6b7280">
-    Si no fuiste tú, ignora este mensaje: tu contraseña actual sigue funcionando.
-  </p>
-  <p style="font-size:13px;color:#6b7280">Mueblería Estilo y Confort</p>
-</div>`.trim();
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND_LAVENDER_BG};padding:32px 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid ${BRAND_LAVENDER_BORDER};border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="background:${BRAND_PURPLE};height:6px;line-height:6px;font-size:1px">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:32px 32px 8px">
+            <img src="cid:${LOGO_CID}" alt="Mueblería Estilo y Confort" width="220" height="64" style="display:block;width:220px;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 36px 8px">
+            <p style="margin:0 0 16px;font-size:16px;color:${BRAND_PURPLE_DARK}">${escapeHtml(greeting)}</p>
+            <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3f3247">
+              Recibimos una solicitud para restablecer la contraseña de tu cuenta en
+              <strong>Estilo y Confort</strong>.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 36px 28px">
+            <a href="${escapeHtml(url)}"
+               style="background:${BRAND_PURPLE};color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:8px;text-decoration:none;display:inline-block">
+              Elegir nueva contraseña
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 36px 8px">
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6">
+              El enlace vence en ${RESET_TOKEN_TTL_MINUTES} minutos y solo se puede usar una vez.
+              Si el botón no funciona, copia esta dirección en tu navegador:
+            </p>
+            <p style="margin:0;font-size:13px;word-break:break-all">
+              <a href="${escapeHtml(url)}" style="color:${BRAND_PURPLE}">${escapeHtml(url)}</a>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 36px 0">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="border-top:1px solid ${BRAND_LAVENDER_BORDER};font-size:1px;line-height:1px">&nbsp;</td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 36px 32px">
+            <p style="margin:0 0 12px;font-size:13px;color:#6b7280;line-height:1.6">
+              Si no fuiste tú, ignora este mensaje: tu contraseña actual sigue funcionando.
+            </p>
+            <p style="margin:0;font-size:13px;color:${BRAND_PURPLE};font-weight:bold">
+              Mueblería Estilo y Confort
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`.trim();
 
   return sendMail({
     to,
     subject: 'Restablece tu contraseña — Estilo y Confort',
     text,
     html,
+    attachments: logoAttachment ? [logoAttachment] : undefined,
   });
 }
 

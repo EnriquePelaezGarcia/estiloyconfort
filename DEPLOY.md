@@ -965,6 +965,9 @@ docker compose logs -f backend-prod  # logs en vivo
 docker compose restart backend-prod  # reiniciar
 docker compose down                  # apagar todo
 docker compose up -d                 # encender todo
+
+# Esquema del módulo de contraseñas (una sola vez por ambiente, repetible)
+docker compose exec backend-prod npm run db:schema:passwords
 ```
 
 ---

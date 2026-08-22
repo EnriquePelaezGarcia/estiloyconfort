@@ -6,7 +6,20 @@
 > técnico.
 
 **Fecha de la decisión:** 22 de agosto de 2026
-**Estado:** aprobado, pendiente de ejecución
+**Estado:** implementado el 22-ago-2026 y probado en local.
+
+| Ambiente | Esquema aplicado | Envío de correo |
+|---|---|---|
+| Local | ✅ | ✅ real vía Resend, con plantilla de marca (logo + morado, sección 5) |
+| Preproducción (`dev.estiloyconfortm.com`) | ⬜ pendiente | ⬜ pendiente |
+| Producción (`estiloyconfortm.com`) | ⬜ pendiente | ⬜ pendiente |
+
+Dominio `send.estiloyconfortm.com` **verificado en Resend** (DNS en Cloudflare, DKIM/SPF/MX
+en verde). La API key ya existe y está guardada fuera del repo; falta ponerla en el
+`SMTP_PASS` de cada ambiente al desplegar.
+
+Los pasos por ambiente están en `DEPLOY.md`, sección 13 → *Módulo de contraseñas:
+pasos de una sola vez*.
 
 ---
 
@@ -204,6 +217,7 @@ obligaría a consultar la base de datos en todas las llamadas del sistema.
 - `backend/src/models/PasswordReset.js`
 - `backend/src/utils/mailer.js`
 - `backend/src/middleware/mustChangePassword.js`
+- `backend/src/assets/email-logo.png` — logo de marca para el correo, ver sección 5
 
 **Modificados**
 
@@ -262,6 +276,32 @@ enfriamiento de la sección 4.2 no son opcionales: son lo que impide que alguien
 
 El día que se agreguen correos de cotizaciones o confirmaciones de pedido, esos competirán
 por la misma bolsa y habrá que rehacer la cuenta.
+
+### Plantilla de marca (logo y morado)
+
+Probado en local el 22-ago-2026: llegó a bandeja de entrada (no spam) en Gmail, con logo
+y estilos visibles.
+
+- **Morado:** `#4B3554`, tomado por muestreo de píxel directo del logotipo
+  (`public/branding/logo-positivo.png`), no inventado a ojo. Variantes en el archivo:
+  `BRAND_PURPLE_DARK` (`#372740`, saludo), `BRAND_LAVENDER_BG` (`#F6F3F9`, fondo exterior)
+  y `BRAND_LAVENDER_BORDER` (`#E4DCEA`, bordes).
+- **Logo:** `backend/src/assets/email-logo.png`, 440×129 px, 25 KB. Es una copia reducida
+  del original (`public/branding/logo-positivo.png`, 3031×888 px, 156 KB) — demasiado pesado
+  y ancho para un header de correo. Se generó una sola vez con `System.Drawing` desde
+  PowerShell; no hay script repetible en el repo porque no se espera regenerarlo salvo que
+  cambie el logo de marca.
+- **Se adjunta embebido (`cid`), no por URL externa.** La mayoría de los clientes de correo
+  bloquean imágenes remotas por defecto; con `cid` el logo se ve desde el primer segundo.
+  `sendMail()` en `mailer.js` ahora acepta un parámetro `attachments` genérico, pensado para
+  que otros correos del sistema (cotizaciones, pedidos) puedan reusarlo el día que existan.
+- **HTML armado con `<table>`, no `<div>`.** Es lo único que Outlook de escritorio respeta
+  sin romper el ancho ni el fondo del diseño.
+- **El `text` plano no cambió.** Sigue siendo el mismo de antes, para clientes de correo
+  muy antiguos que solo lo leen a él.
+- **Alcance deliberado: solo el correo de recuperación de contraseña.** No hay otros correos
+  todavía en el sistema; el día que se agreguen, decidir si reusan esta misma plantilla de
+  marca o no es una decisión aparte.
 
 ### Pasos manuales (fuera del código)
 
