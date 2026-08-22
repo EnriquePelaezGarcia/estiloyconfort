@@ -307,13 +307,18 @@
                   </span>
                 }
                 @if (unitPrice(l) !== null || l.gift) {
+                  <!-- La etiqueta no cambia: lo que dice si el regalo está
+                       aplicado es el color (dorado) de la pastilla.
+                       `aria-pressed` lo anuncia para quien no ve ese color. -->
                   <button
                     type="button"
                     class="cart-line__gift-toggle"
                     [class.cart-line__gift-toggle--active]="l.gift"
+                    [attr.aria-pressed]="!!l.gift"
+                    [title]="l.gift ? 'Quitar el regalo de esta línea' : 'Regalar esta línea (precio $0)'"
                     (click)="toggleGift(i)"
                   >
-                    {{ l.gift ? 'Regalado' : 'Regalar este producto' }}
+                    Gratis
                   </button>
                 }
                 @if (lineWholesaleShortfall(l) > 0) {
