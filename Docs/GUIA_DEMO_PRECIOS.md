@@ -55,8 +55,8 @@ falta darle acceso, y en ese caso el admin marca los muebles listos por él—.
 2. Busca **"Zapatera Vanity"** y ábrela para editar.
 3. En la sección **Costos por fabricante** verán una tabla con una fila por
    fabricante y una **columna por cada material** que el producto declara
-   (MDF, Melamina Blanca, Melamina Color). Para no complicar la demo, toda
-   esta sección usa solo la columna **MDF**:
+   (MDF, Melamina). Para no complicar la demo, toda esta sección usa
+   solo la columna **MDF**:
 
    | Fabricante | MDF |
    |---|---|
@@ -343,14 +343,13 @@ pública ni al agregarlo en el punto de venta. Se ve un solo precio, exacto
 (sin el prefijo "Desde $"). Eso es **M5**: el selector solo aparece cuando el
 producto se cotiza en 2 o más materiales.
 
-Ya existen en el catálogo cinco ejemplos de este caso, sembrados por
+Ya existen en el catálogo cuatro ejemplos de este caso, sembrados por
 `seed_products_2026.js`, cada uno ejercitando algo distinto:
 
 | Producto | Material | Qué demuestra |
 |---|---|---|
-| Ropero Génova | Solo Melamina Blanca | M5 (sin selector) |
-| Ropero Toscana | Solo MDF | Mismo tipo de mueble que Génova, material distinto: el preset de categoría es solo un default, no una regla |
-| Base King | Solo Madera | Un material fuera de los 3 originales, dado de alta sin ninguna migración |
+| Ropero Toscana | Solo MDF | M5 (sin selector). Un ropero en MDF aunque el preset de su categoría diga otra cosa: el preset es solo un default, no una regla |
+| Base King | Solo Madera | Un material fuera de los originales, dado de alta sin ninguna migración |
 | Cama Tapizada Roma | Solo Tela | `color_policy = 'required'`: toda línea con este material exige un color |
 | Silla Nórdica | Solo Plástico | Alta de material nuevo, mismo patrón |
 
@@ -361,25 +360,24 @@ pedido**. Un ropero de Melamina y una base de cama de Madera no podían ir en
 el mismo pedido: había que partir la venta en dos. Eso ya no aplica.
 
 1. Como **vendedor**, crea un pedido nuevo.
-2. Agrega **Ropero Génova** (queda en Melamina Blanca, su único material).
+2. Agrega **Ropero Toscana** (queda en MDF, su único material).
 3. Agrega también **Base King** (queda en Madera).
 4. Mira el carrito: **cada línea trae y muestra su propio material**, con su
    propio precio — no hay un selector de material para todo el pedido.
 5. Completa los datos y crea el pedido.
 
-**Qué debe pasar:** el pedido se levanta sin fricción, con una línea de
-Melamina y otra de Madera al mismo tiempo. Antes esto era imposible.
+**Qué debe pasar:** el pedido se levanta sin fricción, con una línea de MDF
+y otra de Madera al mismo tiempo. Antes esto era imposible.
 
-> El seed ya deja sembrado exactamente este pedido (Génova + Base King) para
+> El seed ya deja sembrado exactamente este pedido (Toscana + Base King) para
 > quien solo quiera **ver** el resultado sin crearlo: búscalo en **Todos los
 > pedidos** por el cliente *"Cliente de prueba — pedido mixto M4"*.
 
 **Existencia por material (M15).** El mismo concepto aplica al stock: el
-producto **Tocador Luna** del seed tiene 1 pieza en MDF, 1 en Melamina
-Blanca y 0 en Melamina Color — tres números independientes del mismo mueble.
-Vender 2 en MDF deja esa columna en **-1** (vendido y pendiente de fabricar)
-sin tocar ni la de Melamina Blanca ni la de Melamina Color. Se ve en
-**Admin → Inventario**, filtrando por "Tocador Luna": aparecen 3 renglones,
+producto **Tocador Luna** del seed tiene 1 pieza en MDF y 1 en Melamina — dos
+números independientes del mismo mueble. Vender 2 en MDF deja esa columna en
+**-1** (vendido y pendiente de fabricar) sin tocar la de Melamina. Se ve en
+**Admin → Inventario**, filtrando por "Tocador Luna": aparecen 2 renglones,
 uno por material, cada uno con su propio stock y su propio valor.
 
 ### 14.3 Encender el Mayoreo
@@ -398,7 +396,7 @@ hasta que se prende el interruptor.
      hay columna "Mayoreo".
 3. Activa la casilla **Mayoreo activo** y guarda.
 4. Repite el recorrido: ahora sí aparece todo lo anterior.
-5. En **Nuevo pedido**, elige **Mayoreo** y agrega **Ropero Génova** con
+5. En **Nuevo pedido**, elige **Mayoreo** y agrega **Ropero Toscana** con
    cantidad 1. El sistema avisa en vivo: *"Mayoreo exige mínimo 6 — faltan
    5"* (M12) y no deja enviar. Sube la cantidad a 6 y el aviso desaparece.
 6. Con la cantidad correcta, crea el pedido. En el resumen y en el ticket
@@ -437,8 +435,8 @@ como se entrega en producción.
 | 12 | Admin marca listo | El estado cambia y queda registrado quién lo marcó |
 | 13 | Costo sin "Define precio" | El precio no se mueve, pero el fabricante sí es asignable |
 | 14.1 | Producto de 1 solo material | Sin selector de material, precio exacto (sin "Desde") |
-| 14.2 | Pedido Ropero Génova + Base King | Se levanta con una línea de Melamina y otra de Madera — antes imposible |
-| 14.2 | Vender 2 Tocador Luna en MDF | MDF queda en -1; Melamina Blanca y Color no se tocan |
+| 14.2 | Pedido Ropero Toscana + Base King | Se levanta con una línea de MDF y otra de Madera — antes imposible |
+| 14.2 | Vender 2 Tocador Luna en MDF | MDF queda en -1; Melamina no se toca |
 | 14.3 | Mayoreo apagado | No aparece en POS, menú, utilidades ni modal de costos |
 | 14.3 | Mayoreo con cantidad insuficiente | Aviso en vivo, no deja enviar hasta cumplir el mínimo |
 | 14.3 | Ticket de Mayoreo | Siempre desglosa Subtotal + IVA = Total, aunque no pidan factura |
@@ -457,7 +455,7 @@ node src/database/seed_products_2026.js
 ```
 
 Reescribe los 54 productos del Excel original (con sus costos y precios en
-MDF/Melamina Blanca/Melamina Color) más los 5 productos mono-material y el
+MDF/Melamina) más los 4 productos mono-material y el
 Tocador Luna de existencia partida de la §14. No pisa nombre, margen ni
 costos de un producto que ya existe — solo agrega lo que falte. No borra
 pedidos ni clientes.

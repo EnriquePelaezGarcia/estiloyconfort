@@ -247,7 +247,7 @@ const manufacturingController = {
   // Un mismo producto se le compra a varios fabricantes, así que aparece una vez
   // bajo CADA uno, con SUS costos por material (M3) y el isBaseCost calculado
   // POR MATERIAL (RN-02): un fabricante puede mandar el costo en MDF y no en
-  // Melamina Color, aunque sea el mismo producto.
+  // Melamina, aunque sea el mismo producto.
   catalogByManufacturer: asyncHandler(async (req, res) => {
     const { manufacturerId } = req.query;
     const conditions = ['p.is_active = TRUE', 'pmc.is_active = TRUE'];

@@ -54,7 +54,11 @@ test('Caso 1 — Espejo Vanity / MDF', () => {
   assert.equal(wProfit.marginPct, 25.04);
 });
 
-test('Caso 2 — Espejo Vanity / Melamina Blanca (costoBase = costo + 600)', () => {
+// El costo 1950 venía de la fórmula del Excel para Melamina Blanca
+// (1350 + 600). Ese material se dio de baja el 21-ago-2026, pero el caso se
+// conserva tal cual: lo que prueba es la aritmética de precios sobre un
+// segundo costo base, y eso no depende de qué material lo produjo.
+test('Caso 2 — Espejo Vanity con costo base 1950', () => {
   const prices = calculatePrices(1950, 29.3, CONFIG);
   assert.equal(prices.price_cash, 3310);
   assert.equal(prices.price_6msi, 3650);

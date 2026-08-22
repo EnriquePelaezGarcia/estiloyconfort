@@ -322,8 +322,8 @@ total salga en $0, en negativo o en notación rara.**
 esa línea.
 
 ### C-07 · Elegir material y color
-**Pasos:** para un mismo producto, cámbialo entre MDF, Melamina Blanca y Melamina Color.
-**Esperado:** el precio **cambia** al cambiar el material (Melamina Color es el más
+**Pasos:** para un mismo producto, cámbialo entre MDF y Melamina.
+**Esperado:** el precio **cambia** al cambiar el material (Melamina es el más
 caro). Si un material no está disponible para ese mueble, debe decirlo, no mostrar $0.
 
 ### C-08 · Vender algo que no hay en almacén
@@ -859,9 +859,8 @@ verifica que ahora use el otro.
 haría parecer que ese mueble es gratis de producir.
 
 ### K-08 · Precios por material
-**Pasos:** revisa el mismo producto en MDF, Melamina Blanca y Melamina Color.
-**Esperado:** Melamina Blanca cuesta más que MDF (unos $600 de costo extra) y Melamina
-Color más que Blanca (unos $1,000 de costo extra).
+**Pasos:** revisa el mismo producto en MDF y Melamina.
+**Esperado:** Melamina cuesta más que MDF (unos $1,000 de costo extra).
 
 ### K-09 · Configuración global de precios ⭐
 **Pasos:** en Reglas de precios, cambia el IVA de 16% a 10% y observa la vista previa.

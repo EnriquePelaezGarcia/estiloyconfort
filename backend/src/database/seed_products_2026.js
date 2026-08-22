@@ -3,14 +3,14 @@
  * materiales (Fase 6 de plan-catalogo-de-materiales-y-mayoreo.md):
  *
  *   1. Los 54 productos originales (§7 de REGLAS_NEGOCIO_MUEBLERIA.md), cada
- *      uno declarado en los TRES materiales de siempre (MDF, Melamina Blanca,
- *      Melamina Color) con los costos de los dos fabricantes de prueba.
- *   2. Cinco productos de UN SOLO material — el caso real que motivó todo el
+ *      uno declarado en los DOS materiales de siempre (MDF, Melamina)
+ *      con los costos de los dos fabricantes de prueba.
+ *   2. Cuatro productos de UN SOLO material — el caso real que motivó todo el
  *      plan (§1.2): un mueble que solo existe en un material no debe romper
  *      un pedido que también lleva otro material.
  *   3. Tocador Luna con existencia partida entre dos materiales (M15): vender
- *      2 en MDF debe dejar MDF en -1 SIN tocar la fila de Melamina Blanca.
- *   4. Un pedido de prueba que MEZCLA Ropero Génova (Melamina) + Base King
+ *      2 en MDF debe dejar MDF en -1 SIN tocar la fila de Melamina.
+ *   4. Un pedido de prueba que MEZCLA Ropero Toscana (MDF) + Base King
  *      (Madera) en el mismo pedido — antes de este plan, imposible. Es la
  *      prueba de aceptación de M4.
  *
@@ -22,9 +22,13 @@
  * para reimportar nombre/margen/costos desde cero.
  *
  * Los costos del §7 son de prueba (D1 del plan original): el Excel modelaba
- * Melamina como costoMdf + extra fijo (600 blanca, 1000 color); en la
- * realidad cada fabricante cotiza cada material por separado. El seed usa
- * esa fórmula solo como PUNTO DE PARTIDA.
+ * Melamina como costoMdf + extra fijo (1000 para melamina); en la realidad cada
+ * fabricante cotiza cada material por separado. El seed usa esa fórmula solo
+ * como PUNTO DE PARTIDA.
+ *
+ * Melamina Blanca se dio de baja del catálogo el 21-ago-2026 por decisión del
+ * dueño (ver remove_melamina_blanca.js). El extra de 600 que la modelaba se
+ * fue con ella.
  *
  * `NA` en el Excel → ese fabricante no tiene fila para ese producto en NINGÚN
  * material (RN-03): no es un $0, es la ausencia de la fila en
@@ -42,16 +46,15 @@ const Order = require('../models/Order');
 const MANUFACTURER_PERRUCHO = 'Angel Mondragon'; // apodo en el Excel: "Perrucho"
 const MANUFACTURER_CARLOS = 'Carlos Garcia';
 
-const EXTRA_BLANCA = 600;
-const EXTRA_COLOR_DEFAULT = 1000;
+const EXTRA_MELAMINA_DEFAULT = 1000;
 
 /** Marcador único del pedido de prueba de M4, para poder detectarlo en reruns. */
-const SEED_ORDER_MARKER = 'SEED-M4-GENOVA-BASEKING';
+const SEED_ORDER_MARKER = 'SEED-M4-TOSCANA-BASEKING';
 
 /**
  * Los 54 productos de §7, normalizados (§9.5: trim + colapso de espacios,
  * erratas corregidas). Cada fila:
- *   [nombre, slug, costoMdfPerrucho, costoMdfCarlos, margen, extraColorPerrucho?, extraColorCarlos?]
+ *   [nombre, slug, costoMdfPerrucho, costoMdfCarlos, margen, extraMelaminaPerrucho?, extraMelaminaCarlos?]
  * `null` en un costo MDF = "NA" en el Excel = ese fabricante no hace el mueble
  * (en ningún material, RN-03). Los dos últimos campos solo se usan en las 2
  * excepciones documentadas (§9.6); el resto usa el default de 1000.
@@ -124,11 +127,13 @@ const PRODUCTOS = [
  */
 const PRODUCTOS_UN_MATERIAL = [
   // M5 (sin selector de material en la ficha/POS) + M2. Es la mitad del
-  // pedido mixto de aceptación de M4 (con Base King, abajo).
-  ['Ropero Génova', 'ropero-genova', 'MELAMINA_BLANCA', 3400, 28.0],
-  // Misma categoría (roperos) que Génova pero en un material distinto: prueba
+  // pedido mixto de aceptación de M4 (con Base King, abajo). También prueba
   // que M10 (preset de categoría) es solo un default de formulario, no una
   // regla que fuerce a los roperos a un material.
+  //
+  // Antes este papel lo hacía Ropero Génova, en Melamina Blanca. Al darse de
+  // baja ese material (21-ago-2026) el producto se fue con él, porque no
+  // existía en ningún otro; Toscana lo reemplaza como mitad del pedido mixto.
   ['Ropero Toscana', 'ropero-toscana', 'MDF', 3300, 28.0],
   // Material fuera de los 3 originales del ENUM viejo — no existe migración
   // que lo explique, nace directo en el catálogo dinámico.
@@ -141,13 +146,12 @@ const PRODUCTOS_UN_MATERIAL = [
 ];
 
 /** costoMdf null (NA) => ningún costo para ese fabricante (RN-03). */
-function materialCosts(materialIdMap, costoMdf, extraColorOverride) {
+function materialCosts(materialIdMap, costoMdf, extraMelaminaOverride) {
   if (costoMdf === null) return [];
-  const extraColor = extraColorOverride ?? EXTRA_COLOR_DEFAULT;
+  const extraMelamina = extraMelaminaOverride ?? EXTRA_MELAMINA_DEFAULT;
   return [
     { materialId: materialIdMap.MDF, cost: costoMdf, affectsBaseCost: true },
-    { materialId: materialIdMap.MELAMINA_BLANCA, cost: costoMdf + EXTRA_BLANCA, affectsBaseCost: true },
-    { materialId: materialIdMap.MELAMINA_COLOR, cost: costoMdf + extraColor, affectsBaseCost: true },
+    { materialId: materialIdMap.MELAMINA, cost: costoMdf + extraMelamina, affectsBaseCost: true },
   ];
 }
 
@@ -193,12 +197,12 @@ async function upsertProduct({ name, slug, sku, margin, materialIds, wholesaleMi
 
 async function importCatalogo54(materialIdMap, manufacturers, force) {
   const { idPerrucho, idCarlos } = manufacturers;
-  const materialIds = [materialIdMap.MDF, materialIdMap.MELAMINA_BLANCA, materialIdMap.MELAMINA_COLOR];
+  const materialIds = [materialIdMap.MDF, materialIdMap.MELAMINA];
   const slugsImportados = new Set();
   const resultados = { creados: [], actualizados: [], sinTocar: [] };
   let seq = 1;
 
-  for (const [nombre, slug, costoMdfPerrucho, costoMdfCarlos, margen, extraColorPerrucho, extraColorCarlos] of PRODUCTOS) {
+  for (const [nombre, slug, costoMdfPerrucho, costoMdfCarlos, margen, extraMelaminaPerrucho, extraMelaminaCarlos] of PRODUCTOS) {
     slugsImportados.add(slug);
     const sku = `EC-${String(seq).padStart(3, '0')}`;
     seq += 1;
@@ -210,8 +214,8 @@ async function importCatalogo54(materialIdMap, manufacturers, force) {
 
     // Costos por fabricante: solo se insertan/actualizan si la fila aún no
     // existe (no se pisa una edición manual), salvo con --force.
-    const costsPerrucho = materialCosts(materialIdMap, costoMdfPerrucho, extraColorPerrucho);
-    const costsCarlos = materialCosts(materialIdMap, costoMdfCarlos, extraColorCarlos);
+    const costsPerrucho = materialCosts(materialIdMap, costoMdfPerrucho, extraMelaminaPerrucho);
+    const costsCarlos = materialCosts(materialIdMap, costoMdfCarlos, extraMelaminaCarlos);
 
     for (const [manufacturerId, costs] of [[idPerrucho, costsPerrucho], [idCarlos, costsCarlos]]) {
       if (!costs.length) continue;
@@ -265,14 +269,19 @@ async function importUnMaterial(materialIdMap, manufacturers, force, startSeq) {
 
 /**
  * M15: el caso que motivó el modelo de stock por (producto, material).
- * Tocador Luna con 1 en MDF, 1 en Melamina Blanca, 0 en Melamina Color —
- * vender 2 en MDF debe dejar MDF en -1 sin tocar Melamina Blanca (§7.2).
+ * Tocador Luna con 1 en MDF y 1 en Melamina — vender 2 en MDF debe
+ * dejar MDF en -1 sin tocar Melamina (§7.2).
+ *
+ * El testigo "que no se toca" era Melamina Blanca hasta que se dio de baja
+ * (21-ago-2026); Melamina lo sustituye con existencia 1, porque una
+ * fila en 0 no probaría nada: hay que ver que un número distinto de cero
+ * sigue intacto después de vender del otro material.
  */
 async function importTocadorLuna(materialIdMap, manufacturers, force, seq) {
   const { idPerrucho, idCarlos } = manufacturers;
   const slug = 'tocador-luna';
   const sku = `EC-${String(seq).padStart(3, '0')}`;
-  const materialIds = [materialIdMap.MDF, materialIdMap.MELAMINA_BLANCA, materialIdMap.MELAMINA_COLOR];
+  const materialIds = [materialIdMap.MDF, materialIdMap.MELAMINA];
 
   const { id: productId, status } = await upsertProduct({
     name: 'Tocador Luna', slug, sku, margin: 30.6, materialIds, force,
@@ -293,8 +302,7 @@ async function importTocadorLuna(materialIdMap, manufacturers, force, seq) {
   // prueba de aceptación, no un dato que el admin vaya a tocar a mano.
   const stockByMaterial = [
     [materialIdMap.MDF, 1],
-    [materialIdMap.MELAMINA_BLANCA, 1],
-    [materialIdMap.MELAMINA_COLOR, 0],
+    [materialIdMap.MELAMINA, 1],
   ];
   for (const [materialId, stock] of stockByMaterial) {
     await pool.execute(
@@ -308,11 +316,11 @@ async function importTocadorLuna(materialIdMap, manufacturers, force, seq) {
 
 /**
  * Prueba de aceptación de M4 (§6 del plan): un pedido que mezcla Ropero
- * Génova (Melamina Blanca) + Base King (Madera) — antes de este plan, dos
- * materiales distintos en el mismo pedido era imposible. Idempotente por el
- * marcador en notas_pedido: no se duplica en reruns.
+ * Toscana (MDF) + Base King (Madera) — antes de este plan, dos materiales
+ * distintos en el mismo pedido era imposible. Idempotente por el marcador en
+ * notas_pedido: no se duplica en reruns.
  */
-async function seedPedidoMixto(genova, baseKing) {
+async function seedPedidoMixto(roperoToscana, baseKing) {
   const [[already]] = await pool.execute(
     'SELECT id, order_number FROM orders WHERE notas_pedido = ? LIMIT 1',
     [SEED_ORDER_MARKER],
@@ -337,13 +345,13 @@ async function seedPedidoMixto(genova, baseKing) {
       paymentMethod: 'cash',
       notasPedido: SEED_ORDER_MARKER,
       items: [
-        { productId: genova.productId, materialId: genova.materialId, color: null, quantity: 1 },
+        { productId: roperoToscana.productId, materialId: roperoToscana.materialId, color: null, quantity: 1 },
         { productId: baseKing.productId, materialId: baseKing.materialId, color: null, quantity: 1 },
       ],
     },
     seller.id,
   );
-  console.log(`\n✅ Pedido mixto de prueba creado: ${order.orderNumber} (#${order.id}) — Génova (Melamina) + Base King (Madera)`);
+  console.log(`\n✅ Pedido mixto de prueba creado: ${order.orderNumber} (#${order.id}) — Toscana (MDF) + Base King (Madera)`);
   return order;
 }
 
@@ -354,7 +362,7 @@ async function run() {
 
   const materials = await Material.findAll({ includeInactive: true });
   const materialIdMap = Object.fromEntries(materials.map((m) => [m.code, m.id]));
-  for (const code of ['MDF', 'MELAMINA_BLANCA', 'MELAMINA_COLOR', 'MADERA', 'TELA', 'PLASTICO']) {
+  for (const code of ['MDF', 'MELAMINA', 'MADERA', 'TELA', 'PLASTICO']) {
     if (!materialIdMap[code]) {
       throw new Error(`Falta el material '${code}' en el catálogo — ejecuta antes schema_materials_catalog.sql`);
     }
@@ -382,7 +390,7 @@ async function run() {
   ]);
 
   const creados = [...catalogo54.creados, ...unMaterial.creados];
-  if (tocadorLuna.status === 'created') creados.push(`${tocadorLuna.sku} Tocador Luna (#${tocadorLuna.productId}, MDF=1/Blanca=1/Color=0)`);
+  if (tocadorLuna.status === 'created') creados.push(`${tocadorLuna.sku} Tocador Luna (#${tocadorLuna.productId}, MDF=1/Color=1)`);
   const actualizados = [...catalogo54.actualizados, ...unMaterial.actualizados];
   if (tocadorLuna.status === 'updated') actualizados.push(`Tocador Luna (#${tocadorLuna.productId})`);
   const sinTocar = [...catalogo54.sinTocar, ...unMaterial.sinTocar];
@@ -400,8 +408,8 @@ async function run() {
     console.log(`\n⏭️  Sin tocar nombre/margen/costos (ya existían, corre con --force para reimportar): ${sinTocar.length}`);
   }
 
-  // 4) Pedido mixto de prueba: Génova (Melamina) + Base King (Madera) — M4.
-  await seedPedidoMixto(unMaterial.ids['ropero-genova'], unMaterial.ids['base-king']);
+  // 4) Pedido mixto de prueba: Toscana (MDF) + Base King (Madera) — M4.
+  await seedPedidoMixto(unMaterial.ids['ropero-toscana'], unMaterial.ids['base-king']);
 
   const [sobrantes] = await pool.query(
     `SELECT id, name, slug FROM products WHERE slug NOT IN (?) ORDER BY id`,

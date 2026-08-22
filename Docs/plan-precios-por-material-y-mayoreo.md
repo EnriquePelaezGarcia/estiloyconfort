@@ -1,6 +1,25 @@
 # Plan: Precios por material, Mayoreo y catálogo 2026
 
-> **Estado:** pendiente de aprobación.
+> 🔴 **Melamina Blanca ya no existe (21-ago-2026).** Este documento la nombra
+> repetidamente como uno de los tres materiales del negocio. El dueño la dio de
+> baja del catálogo y se purgó de la base con
+> [remove_melamina_blanca.js](backend/src/database/remove_melamina_blanca.js):
+> ya no hay material, ni costos, ni precios, ni productos, ni pedidos con ella.
+> Donde abajo se lean tres materiales, hoy son dos: **MDF** y **Melamina
+> Color**. El diseño de tres columnas fijas
+> (`cost_mdf`/`cost_melamina_blanca`/`cost_melamina_color`) que aquí se
+> especifica **tampoco existe ya**: lo reemplazó la tabla `materials` de
+> [plan-catalogo-de-materiales-y-mayoreo.md](plan-catalogo-de-materiales-y-mayoreo.md).
+> El SQL y los tipos de este documento se conservan tal cual porque son el
+> registro de lo que se ejecutó en su momento, no instrucciones vigentes.
+>
+> 🔵 Y el material que aquí se llama **Melamina Color** hoy se llama solo
+> **Melamina** (22-ago-2026, `rename_melamina_color.js`): al quedar una sola
+> melamina, el apellido dejó de distinguir de nada. `code` pasó de
+> `MELAMINA_COLOR` a `MELAMINA`.
+
+> **Estado:** implementado y cerrado. Superado por
+> [plan-catalogo-de-materiales-y-mayoreo.md](plan-catalogo-de-materiales-y-mayoreo.md).
 > **Proyecto:** Mueblería Estilo y Confort — Angular 20 (standalone + signals) + Node/Express + MySQL 8.
 > **Fuente de reglas:** [REGLAS_NEGOCIO_MUEBLERIA.md](REGLAS_NEGOCIO_MUEBLERIA.md) (RN-01…RN-16).
 > **Antecedentes:** [plan-precios-por-fabricante.md](plan-precios-por-fabricante.md) (ya implementado), [ESPEC_CALCULADORA_PRECIOS.md](ESPEC_CALCULADORA_PRECIOS.md).

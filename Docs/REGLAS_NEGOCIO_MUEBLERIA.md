@@ -6,6 +6,28 @@ El archivo no está llegando al chat. Te lo pego completo aquí — cópialo a `
 **Objetivo:** Documento de especificación para implementar el motor de precios y utilidades en un proyecto Angular.
 **Moneda:** MXN. **Locale:** es-MX.
 
+> 🔴 **Melamina Blanca ya no existe (21-ago-2026).** El dueño la dio de baja
+> del catálogo y se purgó del sistema con
+> [remove_melamina_blanca.js](backend/src/database/remove_melamina_blanca.js):
+> hoy el negocio maneja **dos** materiales de tablero, MDF y Melamina, no
+> tres. Con ella se fueron el extra fijo de $600 sobre el costo MDF y el factor
+> de mayoreo `factorMayoreoMelaminaBlanca`.
+>
+> 🔵 **Y "Melamina Color" pasó a llamarse solo "Melamina" (22-ago-2026).** Al
+> quedar una sola melamina el apellido ya no distinguía de nada
+> (`rename_melamina_color.js`). Donde este documento diga "Melamina Color",
+> hoy es "Melamina" — mismo material, mismo costo, mismo extra de $1,000
+> sobre MDF.
+>
+> **Este documento no se corrigió, a propósito.** Es la transcripción fiel del
+> Excel `Muebleria_Estilo_Confort 2026 v1.xlsx`, que sigue existiendo y sigue
+> teniendo sus columnas de Melamina Blanca. Reescribirlo lo volvería una
+> descripción falsa de ese archivo, que es justo lo que este documento sirve
+> para consultar. Léelo como el retrato de la hoja de cálculo en su momento;
+> para saber qué materiales maneja el sistema **hoy**, la fuente es la tabla
+> `materials` y
+> [plan-catalogo-de-materiales-y-mayoreo.md](plan-catalogo-de-materiales-y-mayoreo.md).
+
 ---
 
 ## 1. Resumen del modelo

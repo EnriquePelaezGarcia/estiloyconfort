@@ -1110,7 +1110,10 @@ export class OrderDraftStore {
 
   /**
    * Color inicial de una línea según la política de material (M6):
-   *   - 'fixed'    → el color fijo del material (Melamina Blanca = "Blanco").
+   *   - 'fixed'    → el color fijo del material. Hoy ningún material del
+   *     catálogo usa esta política: el último era Melamina Blanca (fija en
+   *     "Blanco"), dada de baja el 21-ago-2026. La rama se conserva porque
+   *     la política sigue siendo válida y un material nuevo puede pedirla.
    *   - 'required' → nada: el vendedor tiene que capturarlo.
    *   - 'free'     → editable desde el inicio. El MDF es una placa que se
    *     pinta a pedido; sin nada capturado se asume "Blanco" (el mismo

@@ -1,6 +1,29 @@
 # Plan: Catálogo de materiales y módulo de Mayoreo
 
-> **Estado:** decisiones de negocio confirmadas con el dueño (11-ago-2026). Listo para implementar desde la Fase 1.
+> 🔴 **Melamina Blanca ya no existe (21-ago-2026).** Este plan la usa como
+> ejemplo recurrente — es el único material con `color_policy = 'fixed'` que
+> llegó a existir, y el Ropero Génova se apoyaba en ella. El dueño la dio de
+> baja y se purgó de la base con
+> [remove_melamina_blanca.js](backend/src/database/remove_melamina_blanca.js).
+> Las secciones normativas de abajo (seed de `materials`, maquetas del POS,
+> pruebas de aceptación) ya están actualizadas: donde estaba Melamina Blanca
+> ahora va **Melamina**, y el papel del Ropero Génova lo hace el **Ropero
+> Toscana** (MDF). La narrativa histórica que explica *por qué* se diseñó así
+> conserva sus ejemplos originales — son el registro de una decisión tomada
+> cuando el material sí existía. **Nada de lo que aquí se lea sobre Melamina
+> Blanca describe el sistema actual.**
+
+> 🔵 **"Melamina Color" ahora se llama "Melamina" (22-ago-2026).** Consecuencia
+> directa de lo anterior: al quedar una sola melamina en el catálogo, el
+> apellido "Color" dejó de distinguir de nada. Cambiaron el `label` y el `code`
+> (`MELAMINA_COLOR` → `MELAMINA`) con
+> [rename_melamina_color.js](backend/src/database/rename_melamina_color.js);
+> el `id` no se tocó, así que ninguna FK se movió. **`color_policy` sigue en
+> `required`**: la melamina viene en colores y la línea de pedido sigue
+> necesitando saber cuál. Las secciones normativas de abajo ya dicen
+> "Melamina"; la narrativa histórica conserva el nombre viejo.
+
+> **Estado:** implementado. Decisiones de negocio confirmadas con el dueño (11-ago-2026).
 > **Proyecto:** Mueblería Estilo y Confort — Angular 20 (standalone + signals) + Node/Express + MySQL 8.
 > **Reemplaza el supuesto central de:** [plan-precios-por-material-y-mayoreo.md](plan-precios-por-material-y-mayoreo.md) — **ya implementado y cerrado** (Fase 9 / contract incluida).
 > **Audiencia:** autocontenido. No requiere contexto de ninguna conversación previa ni de ningún otro documento. Todo lo necesario para implementar está aquí.
@@ -188,7 +211,7 @@ Es la lista más importante de esta sección. Todo lo de aquí se consideró y s
 ### Definición de "terminado" para la fase completa
 
 - [ ] `npm test` en verde, con los valores esperados intactos.
-- [ ] Ningún `grep` encuentra `MELAMINA_BLANCA`, `MELAMINA_COLOR`, `MATERIAL_COLUMN`, `WHOLESALE_FACTOR_KEY` ni `sanitizeMaterial` fuera de los `code` del seed.
+- [ ] Ningún `grep` encuentra `MELAMINA_BLANCA`, `MATERIAL_COLUMN`, `WHOLESALE_FACTOR_KEY` ni `sanitizeMaterial` fuera de los `code` del seed.
 - [ ] Un pedido puede mezclar materiales distintos por línea (M4).
 - [ ] Un producto con stock en dos materiales los cuenta por separado (M15).
 - [ ] Alta de un material nuevo desde *Admin → Materiales*, **sin tocar el esquema**.
@@ -428,8 +451,8 @@ Con materiales dinámicos eso no escala: la tela también necesita color obligat
 
 | `color_policy` | Comportamiento en el POS y en la ficha | Validación en backend | Ejemplo |
 |---|---|---|---|
-| `fixed` | El campo se **rellena con `fixed_color` y se deshabilita** | Si llega un color distinto de `fixed_color` → **400** | Melamina Blanca → "Blanco" |
-| `required` | Campo **obligatorio**; sin él no se guarda la línea | Si llega vacío o nulo → **400** | Melamina Color, Tela |
+| `fixed` | El campo se **rellena con `fixed_color` y se deshabilita** | Si llega un color distinto de `fixed_color` → **400** | *(hoy ningún material la usa; la usaba Melamina Blanca → "Blanco")* |
+| `required` | Campo **obligatorio**; sin él no se guarda la línea | Si llega vacío o nulo → **400** | Melamina, Tela |
 | `free` | Editable y **opcional** | Se acepta cualquier texto, incluido vacío | MDF, Madera, Plástico |
 
 **Reglas de implementación:**
@@ -465,6 +488,8 @@ Es el apartado más importante de esta sección, porque es lo que un implementad
 `order_items` guarda `material_id` **y** `material_label VARCHAR(80)`.
 
 Con `ENUM` el valor era autodescriptivo. Con una tabla, renombrar "Melamina Color" a "Melamina Texturizada" reescribiría **la historia de todos los tickets ya impresos**. El `material_id` sirve para agrupar y reportar; el `material_label` es lo que se muestra en documentos históricos.
+
+> El caso hipotético de este párrafo se volvió real el 22-ago-2026: "Melamina Color" pasó a llamarse "Melamina". `rename_melamina_color.js` respetó M7 y **no** tocó los `material_label` ya congelados (en su momento no había ninguno con ese texto, pero el script trae la salvaguarda igual). Reescribirlos exige pedirlo a mano con `--incluir-historicos`.
 
 Es el mismo criterio que ya se aplica a `unit_price` y `unit_cost`: **lo que se cobró no se re-deriva.**
 
@@ -654,7 +679,7 @@ Es coherente con la operación real: la mayoría de los muebles se mandan hacer,
 1. `order_items.requires_fabrication` ya existe. Deja de capturarse a mano y pasa a **derivarse** del stock de `(producto, material)` al crear la línea. Se **congela**: si después entra mercancía, la línea no cambia de estado.
 2. El descuento de existencias es sobre la fila `(product_id, material_id)` correcta, **no sobre el producto**. Es el bug de §15.1 y la razón de todo este apartado.
 3. **El stock puede quedar en negativo.** No se valida contra cero: significa "vendido y pendiente de fabricar", que es información útil, no un error. La pantalla de inventario los muestra en rojo.
-4. La ficha pública muestra disponibilidad **por material**: *"MDF: en existencia · Melamina Color: 15 días"*.
+4. La ficha pública muestra disponibilidad **por material**: *"MDF: en existencia · Melamina: 15 días"*.
 
 #### 15.5 Consecuencia: el valor de inventario por fin es correcto
 
@@ -735,16 +760,17 @@ orders                              order_items
 `backend/src/database/schema_materials_catalog.sql`, en este orden:
 
 1. `TRUNCATE` de transaccional y catálogo — reutiliza [reset_catalog_data.sql](backend/src/database/reset_catalog_data.sql), agregando `product_material_prices` y `product_materials`.
-2. `CREATE TABLE materials` + seed inicial. **Estos valores exactos** — los `code` de los tres primeros deben conservarse tal cual, porque el seed de productos y los tests los usan por nombre:
+2. `CREATE TABLE materials` + seed inicial. **Estos valores exactos** — los `code` de los dos primeros deben conservarse tal cual, porque el seed de productos y los tests los usan por nombre:
 
    | `code` | `label` | `color_policy` | `fixed_color` | `wholesale_factor` | `sort_order` |
    |---|---|---|---|---|---|
    | `MDF` | MDF | `free` | `NULL` | `NULL` → usa el global | 1 |
-   | `MELAMINA_BLANCA` | Melamina Blanca | `fixed` | `Blanco` | `NULL` | 2 |
-   | `MELAMINA_COLOR` | Melamina Color | `required` | `NULL` | `NULL` | 3 |
-   | `MADERA` | Madera | `free` | `NULL` | `NULL` | 4 |
-   | `TELA` | Tela | `required` | `NULL` | `NULL` | 5 |
-   | `PLASTICO` | Plástico | `free` | `NULL` | `NULL` | 6 |
+   | `MELAMINA` | Melamina | `required` | `NULL` | `NULL` | 2 |
+   | `MADERA` | Madera | `free` | `NULL` | `NULL` | 3 |
+   | `TELA` | Tela | `required` | `NULL` | `NULL` | 4 |
+   | `PLASTICO` | Plástico | `free` | `NULL` | `NULL` | 5 |
+
+   > `MELAMINA_BLANCA` (`Melamina Blanca`, `fixed`, `Blanco`, `sort_order` 2) estuvo en este seed hasta el 21-ago-2026. Se quitó al darse de baja el material; dejarla aquí la resucitaría en cada instalación limpia.
 
    `wholesale_factor` en `NULL` es lo correcto y lo esperado: todos heredan `wholesale_factor_default = 1.3340` (M9). Solo se llena cuando el negocio quiera diferenciar un material.
 3. `CREATE TABLE product_materials` (con `stock_quantity INT NOT NULL DEFAULT 0`, M15), `product_manufacturer_costs`, `category_material_presets`.
@@ -829,24 +855,24 @@ Se carga **una vez** con `provideAppInitializer` en [app.config.ts](src/app/app.
    Nombre, SKU, Categoría ──► precarga el preset de materiales (M10)
 
 ② ¿En qué materiales se ofrece?          ← el paso nuevo, y el importante
-   ☑ MDF           ☑ Melamina Blanca   ☑ Melamina Color
-   ☐ Madera        ☐ Tela              ☐ Plástico
+   ☑ MDF           ☑ Melamina          ☐ Madera
+   ☐ Tela          ☐ Plástico
    (premarcados por la categoría; se editan libremente)
    ⚠️ Aquí NO se capturan existencias: eso vive en Admin → Inventario (M15)
 
 ③ Costos por fabricante  — solo columnas de lo marcado en ②
-   Fabricante │ MDF         │ Mel. Blanca │ Mel. Color │
-   ───────────┼─────────────┼─────────────┼────────────┤
-   Perrucho   │  $ 1,350    │  $ 1,950    │  ⚠ falta   │   ← M2: hueco visible
-   Carlos     │  $ 1,100    │  $ 1,700    │  $ 2,100   │
-   ───────────┼─────────────┼─────────────┼────────────┤
-   Costo base │  $ 1,350 ⬆  │  $ 1,950 ⬆  │  $ 2,100 ⬆ │
+   Fabricante │ MDF         │ Mel. Color │
+   ───────────┼─────────────┼────────────┤
+   Perrucho   │  $ 1,350    │  ⚠ falta   │   ← M2: hueco visible
+   Carlos     │  $ 1,100    │  $ 2,100   │
+   ───────────┼─────────────┼────────────┤
+   Costo base │  $ 1,350 ⬆  │  $ 2,100 ⬆ │
 
 ④ % Ganancia ──► precios en vivo con PricingService
    Contado / 6 MSI / Crédito / Mayoreo (Mayoreo oculto si wholesale_enabled=false)
 ```
 
-Para un ropero solo de melamina, el paso ② deja una casilla marcada y el ③ es una sola columna. **La complejidad la paga el producto que la necesita.**
+Para un ropero de un solo material, el paso ② deja una casilla marcada y el ③ es una sola columna. **La complejidad la paga el producto que la necesita.**
 
 ### 4.3 POS — el material baja a la línea (M4)
 
@@ -856,7 +882,7 @@ Para un ropero solo de melamina, el paso ② deja una casilla marcada y el ③ e
 - Cada línea del pedido lleva su propio material:
 
 ```
-Ropero Génova       [Melamina Blanca ▾]  Color: Blanco (fijo)   x1   $6,340
+Ropero Sevilla      [Melamina ▾]         Color: [Chocolate  ]   x1   $6,340
                     ✓ En existencia
 Base King           [Madera] ← 1 material: sin selector (M5)    x1   $3,120
                     ✓ En existencia
@@ -924,27 +950,27 @@ Un checklist operativo, no código — pero conviene que viva en el plan:
 
 ## Fase 6 — Seed
 
-[seed_products_2026.js](backend/src/database/seed_products_2026.js) se reescribe contra el modelo nuevo. Además de los 54 productos actuales (3 materiales), **agregar al menos uno de cada caso real** que motivó este plan:
+[seed_products_2026.js](backend/src/database/seed_products_2026.js) se reescribe contra el modelo nuevo. Además de los 54 productos actuales (2 materiales), **agregar al menos uno de cada caso real** que motivó este plan:
 
 | Producto | Materiales | Qué ejercita |
 |---|---|---|
-| Ropero Génova | Solo Melamina Blanca | M5 (sin selector), M2 |
-| Ropero Toscana | Solo MDF | Dos productos de la misma categoría con materiales distintos → **prueba que M10 es default, no regla** |
-| Base King | Solo Madera | Material fuera de los 3 originales |
+| Ropero Toscana | Solo MDF | M5 (sin selector), M2. Un ropero en MDF aunque el preset de su categoría diga otra cosa → **prueba que M10 es default, no regla** |
+| Base King | Solo Madera | Material fuera de los originales |
 | Cama Tapizada Roma | Solo Tela | `color_policy = 'required'` |
 | Silla Nórdica | Solo Plástico | Alta de material sin migración |
+
+> Aquí había un quinto producto, **Ropero Génova**, declarado únicamente en Melamina Blanca. Al darse de baja ese material (21-ago-2026) el producto se fue con él: no existía en ningún otro y se habría quedado sin precio ni stock. Toscana asumió su papel.
 
 **Existencias del seed (M15).** Sembrar el caso que motivó M15: **el mismo tocador con stock en dos materiales distintos**.
 
 | Producto | Material | Stock |
 |---|---|---|
 | Tocador Luna | MDF | **1** |
-| Tocador Luna | Melamina Blanca | **1** |
-| Tocador Luna | Melamina Color | **0** |
+| Tocador Luna | Melamina | **1** |
 
-Con eso, vender dos tocadores de MDF debe dejar `MDF = -1` y **no tocar** la fila de melamina. Ese es el error de §15.1 convertido en prueba.
+Con eso, vender dos tocadores de MDF debe dejar `MDF = -1` y **no tocar** la fila de Melamina. Ese es el error de §15.1 convertido en prueba. El testigo tiene que ser distinto de cero: una fila en 0 que sigue en 0 no prueba nada.
 
-Un pedido de seed que **mezcle** Ropero Génova (Melamina) + Base King (Madera) — el caso que hoy es imposible. Es la prueba de aceptación de M4.
+Un pedido de seed que **mezcle** Ropero Toscana (MDF) + Base King (Madera) — el caso que hoy es imposible. Es la prueba de aceptación de M4.
 
 Idempotencia por `slug`, igual que hoy: no se pisan `margin_percentage` ni costos si el producto ya existe.
 
@@ -962,18 +988,18 @@ Sigue vigente **H11 (§0.5)**: el proyecto no hace pruebas unitarias salvo donde
 
 | Caso | Esperado |
 |---|---|
-| Pedido con Ropero (Melamina) + Base (Madera) | ✅ Se levanta. Cada línea con su precio. **Es la razón de ser del plan.** |
+| Pedido con Ropero (MDF) + Base (Madera) | ✅ Se levanta. Cada línea con su precio. **Es la razón de ser del plan.** |
 | Producto de 1 material | Ficha sin selector, precio exacto sin "Desde". POS agrega directo. |
 | Material declarado sin costo capturado | Aparece en `/api/admin/pricing-gaps` y en el modal como ⚠, no como $0. |
 | Desactivar un material usado en pedidos | Desaparece de los selectores; los pedidos históricos siguen mostrando su `material_label`. |
 | **Renombrar un material** | Los tickets históricos **no cambian** (M7). El catálogo sí. |
-| Línea de Melamina Blanca con color "Chocolate" | 400 desde el backend, por `color_policy = 'fixed'`. |
+| Línea de un material `fixed` con un color distinto al suyo | 400 desde el backend, por `color_policy = 'fixed'`. *(Sin material `fixed` en el catálogo, este caso solo se puede probar dando de alta uno.)* |
 | Línea de Tela sin color | 400 — `color_policy = 'required'`. |
 | Mayoreo con `wholesale_enabled = FALSE` | El esquema no aparece; un POST directo a la API se rechaza. |
 | Mayoreo por debajo del mínimo | 400 indicando producto y faltante. |
 | Cambiar el factor de un material | Reprecia **solo el mayoreo de ese material**. Contado, MSI y crédito intactos. |
 | Cambiar el material de una línea de un pedido cerrado | La utilidad histórica **no se mueve**: `unit_price` y `unit_cost` están congelados. |
-| **Tocador con 1 en MDF y 1 en Melamina: vender 2 de MDF** | 🔴 `MDF = -1`, **melamina intacta en 1**. La segunda línea nace con `requires_fabrication = TRUE`. **Es la razón de ser de M15.** |
+| **Tocador con 1 en MDF y 1 en Melamina: vender 2 de MDF** | 🔴 `MDF = -1`, **Melamina intacta en 1**. La segunda línea nace con `requires_fabrication = TRUE`. **Es la razón de ser de M15.** |
 | Vender un material con stock 0 | ✅ Procede. Línea marcada como fabricación con los días de `products.availability_days`. **No se bloquea.** |
 | Valor total del inventario | Suma **todas** las filas con existencia, cada una a su costo real. Un producto con stock en 2 materiales aporta 2 renglones. Comparar contra la suma a mano: si sale de menos, algo asume una fila por producto. |
 | Material con existencia pero **sin costo** capturado | El valor sale `NULL`, no cero. Aparece en `/api/admin/pricing-gaps`. |

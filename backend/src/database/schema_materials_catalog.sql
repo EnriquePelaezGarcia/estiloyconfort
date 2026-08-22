@@ -57,15 +57,26 @@ CREATE TABLE materials (
 
 -- Seed inicial. Estos `code` exactos: el seed de productos y los tests de
 -- precios los usan por nombre. wholesale_factor en NULL es lo correcto: los
--- seis heredan wholesale_factor_default (M9) hasta que el negocio quiera
+-- cinco heredan wholesale_factor_default (M9) hasta que el negocio quiera
 -- diferenciar alguno.
+--
+-- MELAMINA_BLANCA ('Melamina Blanca', color_policy 'fixed', fixed_color
+-- 'Blanco', sort_order 2) estuvo aquí hasta el 21-ago-2026, cuando el dueño
+-- la dio de baja del negocio. Se quita del seed a propósito: dejarla la
+-- resucitaría en cada instalación limpia, justo después de haberla purgado
+-- con remove_melamina_blanca.js. El único material fijo que quedaba se fue
+-- con ella — `color_policy = 'fixed'` sigue soportado, pero hoy nadie lo usa.
+--
+-- Al quedar una sola melamina, el 22-ago-2026 'MELAMINA_COLOR'/'Melamina
+-- Color' se renombró a 'MELAMINA'/'Melamina' (rename_melamina_color.js): el
+-- apellido "Color" ya no distinguía de nada. Sigue en `required` — la
+-- melamina viene en colores y la línea de pedido necesita saber cuál.
 INSERT INTO materials (code, label, color_policy, fixed_color, wholesale_factor, sort_order) VALUES
   ('MDF',              'MDF',              'free',     NULL,      NULL, 1),
-  ('MELAMINA_BLANCA',  'Melamina Blanca',  'fixed',    'Blanco',  NULL, 2),
-  ('MELAMINA_COLOR',   'Melamina Color',   'required', NULL,      NULL, 3),
-  ('MADERA',           'Madera',           'free',     NULL,      NULL, 4),
-  ('TELA',             'Tela',             'required', NULL,      NULL, 5),
-  ('PLASTICO',         'Plástico',         'free',     NULL,      NULL, 6);
+  ('MELAMINA',         'Melamina',         'required', NULL,      NULL, 2),
+  ('MADERA',           'Madera',           'free',     NULL,      NULL, 3),
+  ('TELA',             'Tela',             'required', NULL,      NULL, 4),
+  ('PLASTICO',         'Plástico',         'free',     NULL,      NULL, 5);
 
 -- ═══ 3. Declaración de materiales por producto + stock (M2, M15) ═══════════
 -- Responde a la vez "¿se vende así?" (fila presente) y "¿cuánto tengo?"

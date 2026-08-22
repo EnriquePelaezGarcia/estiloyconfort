@@ -156,7 +156,7 @@ viene del catálogo de materiales:
 
 | `colorPolicy` | Comportamiento del campo de color |
 |---|---|
-| `'fixed'` | Se llena con `fixedColor` del material y el input queda **deshabilitado** (ej. Melamina Blanca → "Blanco") |
+| `'fixed'` | Se llena con `fixedColor` del material y el input queda **deshabilitado**. Ningún material del catálogo usa hoy esta política — el último fue Melamina Blanca, dada de baja el 21-ago-2026 — pero sigue soportada para el material que la necesite |
 | `'required'` | Arranca **vacío** y el placeholder dice «Color (obligatorio)»; el vendedor debe capturarlo |
 | `'free'` | Editable siempre. Si el material es MDF (`code === 'MDF'`) arranca con "Blanco" por defecto; en cualquier otro material arranca vacío |
 

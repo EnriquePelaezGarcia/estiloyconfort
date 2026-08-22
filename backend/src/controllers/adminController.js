@@ -606,7 +606,7 @@ function toDateOnly(value) {
 /**
  * Fabricantes candidatos a surtir cada LÍNEA (producto + material_id
  * congelado, M4): solo los que tienen costo registrado en ESE material. El
- * mismo fabricante puede cotizar un producto en MDF y no en Melamina Color
+ * mismo fabricante puede cotizar un producto en MDF y no en Melamina
  * (RN-03), así que el filtro no puede ser solo por producto.
  *
  * Sin costo capturado no hay a quién asignar — es lo que permite congelar

@@ -58,7 +58,11 @@ describe('PricingService — paridad con el backend', () => {
     expect(wProfit?.marginPct).toBe(25.04);
   });
 
-  it('Caso 2 — Espejo Vanity / Melamina Blanca (costoBase = costo + 600)', () => {
+  // El costo 1950 venía de la fórmula del Excel para Melamina Blanca
+  // (1350 + 600). Ese material se dio de baja el 21-ago-2026, pero el caso se
+  // conserva tal cual: lo que prueba es la aritmética de precios sobre un
+  // segundo costo base, y eso no depende de qué material lo produjo.
+  it('Caso 2 — Espejo Vanity con costo base 1950', () => {
     const prices = PricingService.calculatePrices(1950, 29.3, CONFIG);
     expect(prices.price_cash).toBe(3310);
     expect(prices.price_6msi).toBe(3650);
