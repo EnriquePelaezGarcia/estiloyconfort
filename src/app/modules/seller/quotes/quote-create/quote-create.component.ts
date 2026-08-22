@@ -376,7 +376,13 @@ export class QuoteCreateComponent implements OnInit {
         queryParams: { material: line.materialId, volver: returnUrl },
       })
       .then((ok) => {
-        if (!ok) this.handoff.discard();
+        if (!ok) {
+          this.handoff.discard();
+          return;
+        }
+        // Igual que en el POS: la ficha debe abrir arriba, no a la altura a la
+        // que estaba la cotización.
+        window.scrollTo({ top: 0 });
       });
   }
 

@@ -163,7 +163,8 @@ export class ProductDetailComponent implements OnInit {
   /** Regresa al pedido o cotización, que se repone desde el DraftHandoffService. */
   goBackToDraft(): void {
     const url = this.returnUrl();
-    if (url) this.router.navigateByUrl(url);
+    if (!url) return;
+    this.router.navigateByUrl(url).then(() => window.scrollTo({ top: 0 }));
   }
 
   selectMaterial(materialId: number): void {

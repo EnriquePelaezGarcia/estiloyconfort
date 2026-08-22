@@ -603,7 +603,12 @@ export class OrderDraftStore {
         if (!ok) {
           this.leavingToProduct = false;
           this.handoff.discard();
+          return;
         }
+        // El router de la app no reposiciona el scroll entre rutas: sin esto
+        // la ficha abre a la altura a la que estaba el carrito y el vendedor
+        // ni siquiera ve la barra de "Volver al pedido".
+        window.scrollTo({ top: 0 });
       });
   }
 
