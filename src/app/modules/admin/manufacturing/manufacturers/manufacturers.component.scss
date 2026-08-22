@@ -67,6 +67,49 @@
   .field:last-child { margin-bottom: 0; }
 }
 
+// ===== Contraseña temporal del acceso (mismo patrón que Usuarios) =====
+.confirm-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: vars.$spacing-md;
+
+  .material-symbols-outlined {
+    font-size: 2.5rem;
+    color: vars.$color-error;
+    background: rgba(vars.$color-error, 0.1);
+    border-radius: 50%;
+    padding: vars.$spacing-sm;
+  }
+}
+
+.confirm-title {
+  text-align: center;
+  font-size: 1.2rem;
+  color: vars.$color-primary;
+  margin-bottom: vars.$spacing-sm;
+}
+
+.confirm-text {
+  text-align: center;
+  color: vars.$color-text-secondary;
+  font-size: 0.9rem;
+}
+
+.temp-password {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--border, #d4d4d8);
+  border-radius: 8px;
+  background: var(--surface-2, #fafafa);
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  user-select: all;
+  word-break: break-all;
+}
+
 // ===== Responsive: tabla en tarjetas (móvil) =====
 @media (max-width: vars.$bp-tablet) {
   .table thead { display: none; }

@@ -4,6 +4,7 @@ import { ManufacturingService } from '../../../../core/services/manufacturing.se
 import { AdminService } from '../../../../core/services/admin.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { Manufacturer, ManufacturerInput } from '../../../../core/models/manufacturing.model';
+import { CreateUserResponse } from '../../../../core/models/admin.model';
 
 /**
  * Alta y edición de fabricantes. `manufacturers` es LA entidad Fabricante: a
@@ -47,11 +48,19 @@ export class ManufacturersComponent implements OnInit {
     createAccess: [false],
     accessFullName: [''],
     accessEmail: [''],
-    accessPassword: [''],
   });
 
   protected isModalOpen = computed(() => this.editing() !== undefined);
   protected isEditMode = computed(() => !!this.editing());
+
+  /**
+   * Contraseña temporal recién generada para el acceso del fabricante. Solo
+   * vive en memoria y solo hasta que se cierre el modal, igual que en
+   * Usuarios: el servidor no la guarda en claro ni la puede repetir.
+   */
+  protected temporaryPassword = signal<string | null>(null);
+  protected accessUserName = signal('');
+  protected copied = signal(false);
 
   ngOnInit(): void {
     this.loadManufacturers();
@@ -87,19 +96,16 @@ export class ManufacturersComponent implements OnInit {
     const checked = (event.target as HTMLInputElement).checked;
     this.createAccess.set(checked);
 
-    const { accessFullName, accessEmail, accessPassword } = this.form.controls;
+    const { accessFullName, accessEmail } = this.form.controls;
     if (checked) {
       accessFullName.addValidators(Validators.required);
       accessEmail.addValidators([Validators.required, Validators.email]);
-      accessPassword.addValidators([Validators.required, Validators.minLength(8)]);
     } else {
       accessFullName.clearValidators();
       accessEmail.clearValidators();
-      accessPassword.clearValidators();
     }
     accessFullName.updateValueAndValidity();
     accessEmail.updateValueAndValidity();
-    accessPassword.updateValueAndValidity();
   }
 
   // ===== Modal =====
@@ -117,7 +123,6 @@ export class ManufacturersComponent implements OnInit {
       createAccess: false,
       accessFullName: '',
       accessEmail: '',
-      accessPassword: '',
     });
   }
 
@@ -136,18 +141,15 @@ export class ManufacturersComponent implements OnInit {
       createAccess: false,
       accessFullName: '',
       accessEmail: '',
-      accessPassword: '',
     });
   }
 
   private resetAccessValidators(): void {
-    const { accessFullName, accessEmail, accessPassword } = this.form.controls;
+    const { accessFullName, accessEmail } = this.form.controls;
     accessFullName.clearValidators();
     accessEmail.clearValidators();
-    accessPassword.clearValidators();
     accessFullName.updateValueAndValidity();
     accessEmail.updateValueAndValidity();
-    accessPassword.updateValueAndValidity();
   }
 
   protected closeModal(): void {
@@ -214,13 +216,12 @@ export class ManufacturersComponent implements OnInit {
       .createUser({
         fullName: raw.accessFullName!.trim(),
         email: raw.accessEmail!.trim(),
-        password: raw.accessPassword!,
         phone: raw.phone?.trim() || null,
         roleId,
         manufacturerId: manufacturer.id,
       })
       .subscribe({
-        next: () => this.finish('Fabricante creado con su acceso al sistema'),
+        next: (res) => this.finishWithAccess(res),
         error: (err: { error?: { message?: string } }) =>
           this.finishWithWarning(
             `Fabricante creado, pero no se pudo crear su acceso: ${
@@ -228,6 +229,36 @@ export class ManufacturersComponent implements OnInit {
             }. Créalo desde Usuarios.`,
           ),
       });
+  }
+
+  /**
+   * La contraseña la genera el servidor y solo se ve una vez: se muestra en
+   * el mismo modal que el reset administrativo de Usuarios, no en un toast.
+   */
+  private finishWithAccess(res: CreateUserResponse): void {
+    this.saving.set(false);
+    this.closeModal();
+    this.loadManufacturers();
+    this.accessUserName.set(res.user.fullName);
+    this.copied.set(false);
+    this.temporaryPassword.set(res.temporaryPassword);
+  }
+
+  protected async copyTemporaryPassword(): Promise<void> {
+    const password = this.temporaryPassword();
+    if (!password) return;
+    try {
+      await navigator.clipboard.writeText(password);
+      this.copied.set(true);
+    } catch {
+      this.notification.info('Cópiala manualmente de la pantalla');
+    }
+  }
+
+  protected closeTemporaryPassword(): void {
+    this.temporaryPassword.set(null);
+    this.accessUserName.set('');
+    this.copied.set(false);
   }
 
   private finish(message: string): void {

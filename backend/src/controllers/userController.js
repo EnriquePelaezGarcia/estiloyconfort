@@ -5,7 +5,7 @@ const PasswordReset = require('../models/PasswordReset');
 const PasswordAudit = require('../models/PasswordAudit');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { validateRegister } = require('../utils/validators');
+const { validateAdminCreateUser } = require('../utils/validators');
 const { generateTemporaryPassword } = require('../utils/passwordUtils');
 const { pool } = require('../config/database');
 
@@ -49,12 +49,17 @@ const getById = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/users  (solo admin) — crea usuario con cualquier rol.
+ *
+ * La contraseña la genera el servidor, igual que en el reset administrativo:
+ * el admin nunca elige ni conoce la definitiva. Se devuelve UNA sola vez para
+ * que la copie y se la entregue al colaborador, que queda con
+ * `must_change_password` y solo puede cambiarla al iniciar sesión.
  */
 const create = asyncHandler(async (req, res) => {
-  const errors = validateRegister(req.body);
+  const errors = validateAdminCreateUser(req.body);
   if (errors.length) throw ApiError.badRequest(errors.join(', '));
 
-  const { email, password, fullName, phone, roleId, manufacturerId } = req.body;
+  const { email, fullName, phone, roleId, manufacturerId } = req.body;
   const normalizedEmail = email.trim().toLowerCase();
 
   const role = await Role.findById(roleId);
@@ -64,7 +69,8 @@ const create = asyncHandler(async (req, res) => {
     throw ApiError.conflict('El email ya está registrado');
   }
 
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, SALT_ROUNDS);
   const id = await User.create({
     email: normalizedEmail,
     passwordHash,
@@ -72,9 +78,23 @@ const create = asyncHandler(async (req, res) => {
     phone: phone || null,
     roleId,
     manufacturerId: await resolveManufacturerId(role, manufacturerId),
+    mustChangePassword: true,
   });
 
-  res.status(201).json(await User.findById(id));
+  await PasswordAudit.log({
+    userId: id,
+    actorId: req.user.id,
+    action: PasswordAudit.ACTIONS.ADMIN_CREATE,
+    ip: req.ip,
+  });
+
+  res.status(201).json({
+    user: await User.findById(id),
+    temporaryPassword,
+    message:
+      'Cópiala ahora y entrégala al colaborador: no se volverá a mostrar. ' +
+      'El sistema le pedirá cambiarla al iniciar sesión.',
+  });
 });
 
 /**

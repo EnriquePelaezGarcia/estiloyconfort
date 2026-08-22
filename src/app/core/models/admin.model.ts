@@ -1,4 +1,4 @@
-import { UserRole } from './user.model';
+import { User, UserRole } from './user.model';
 
 export interface Role {
   id: number;
@@ -53,15 +53,25 @@ export interface LowStockProduct {
   stock_alert_level: number;
 }
 
-/** Payload para crear un usuario desde el panel admin. */
+/**
+ * Payload para crear un usuario desde el panel admin. Sin `password`: el
+ * servidor genera una temporal y el usuario queda con `mustChangePassword`,
+ * igual que en el reset administrativo.
+ */
 export interface CreateUserRequest {
   email: string;
-  password: string;
   fullName: string;
   phone?: string | null;
   roleId: number;
   /** Fabricante que representa. Solo se guarda si el rol es 'manufacturer'. */
   manufacturerId?: number | null;
+}
+
+/** Respuesta al crear un usuario: la temporal llega una sola vez. */
+export interface CreateUserResponse {
+  user: User;
+  temporaryPassword: string;
+  message: string;
 }
 
 /** Payload para editar un usuario existente. */

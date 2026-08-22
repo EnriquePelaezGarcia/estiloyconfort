@@ -18,8 +18,10 @@ const ACTIONS = {
   RESET_REQUESTED: 'reset_requested',
   /** El enlace se consumió y la contraseña quedó cambiada. */
   RESET_COMPLETED: 'reset_completed',
-  /** Un admin generó una contraseña temporal. */
+  /** Un admin generó una contraseña temporal para un usuario existente. */
   ADMIN_RESET: 'admin_reset',
+  /** Un admin dio de alta un usuario con contraseña temporal. */
+  ADMIN_CREATE: 'admin_create',
   /** El correo no se pudo enviar. Ver §4.2 regla 6. */
   MAIL_FAILED: 'mail_failed',
 };

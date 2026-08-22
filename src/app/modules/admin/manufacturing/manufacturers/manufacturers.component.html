@@ -151,18 +151,10 @@
                   <p class="field__error">Ingresa un correo válido</p>
                 }
               </div>
-              <div class="field">
-                <label for="accessPassword">Contraseña</label>
-                <input
-                  id="accessPassword"
-                  type="password"
-                  formControlName="accessPassword"
-                  autocomplete="new-password"
-                />
-                @if (form.get('accessPassword')?.invalid && form.get('accessPassword')?.touched) {
-                  <p class="field__error">Mínimo 8 caracteres</p>
-                }
-              </div>
+              <p class="field__hint">
+                La contraseña la genera el sistema. Se mostrará una sola vez al crear el
+                fabricante y deberá cambiarla al iniciar sesión.
+              </p>
             </div>
           }
         } @else {
@@ -179,6 +171,36 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Contraseña temporal generada (se muestra UNA vez) ===== -->
+@if (temporaryPassword(); as password) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <div class="confirm-icon"><span class="material-symbols-outlined">lock_reset</span></div>
+        <h2 class="confirm-title">Contraseña temporal</h2>
+        <p class="confirm-text">
+          Para <strong>{{ accessUserName() }}</strong>. Cópiala ahora y entrégasela:
+          <strong>no se volverá a mostrar</strong> y el sistema no la guarda en claro.
+        </p>
+
+        <p class="temp-password">{{ password }}</p>
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="copyTemporaryPassword()">
+            <span class="material-symbols-outlined">
+              {{ copied() ? 'check' : 'content_copy' }}
+            </span>
+            {{ copied() ? 'Copiada' : 'Copiar' }}
+          </button>
+          <button type="button" class="btn" (click)="closeTemporaryPassword()">
+            Ya la guardé
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 }

@@ -48,6 +48,7 @@ interface QuoteDraftSnapshot {
   editingId: number | null;
   shippingCp: string;
   shippingQuote: ShippingQuote | null;
+  manualShippingCost: number | null;
   existingDiscounts: QuoteDiscount[];
   discountAmount: number | null;
   discountReasonCategory: DiscountReasonCategory | null;
@@ -83,6 +84,8 @@ export class QuoteCreateComponent implements OnInit {
   private handoff = inject(DraftHandoffService);
 
   protected saving = signal(false);
+  /** Marca que ya se intentó enviar, para resaltar el costo de envío manual obligatorio. */
+  protected submitAttempted = signal(false);
   protected loadingQuote = signal(false);
   protected searching = signal(false);
   protected searchResults = signal<InventoryItem[]>([]);
@@ -170,8 +173,24 @@ export class QuoteCreateComponent implements OnInit {
   // ===== Envío por CP (mismo mecanismo que el POS) =====
   protected shippingCp = signal('');
   protected shippingQuote = signal<ShippingQuote | null>(null);
+  /**
+   * Costo de envío capturado a mano cuando el CP no tiene cobertura (sin
+   * zona configurada en `shipping_rates`). Null = todavía no lo escribió;
+   * distinto de 0, que es un envío gratis intencional. Mismo mecanismo que
+   * el POS (order-draft.store.ts).
+   */
+  protected manualShippingCost = signal<number | null>(null);
+  /** CP completo (5 dígitos) pero sin tarifa configurada: hay que capturar el costo a mano. */
+  protected needsManualShipping = computed(
+    () => !this.isPickup() && this.shippingCp().length === 5 && !this.shippingQuote(),
+  );
   /** RN-P2: si el cliente recoge en tienda no hay envío que cotizar. */
-  protected shippingCost = computed(() => (this.isPickup() ? 0 : this.shippingQuote()?.price ?? 0));
+  protected shippingCost = computed(() => {
+    if (this.isPickup()) return 0;
+    const quote = this.shippingQuote();
+    if (quote) return quote.price;
+    return this.needsManualShipping() ? this.manualShippingCost() ?? 0 : 0;
+  });
 
   // ===== Recoge en tienda =====
   private pickupSig = toSignal(this.form.controls.pickupInStore.valueChanges, {
@@ -251,6 +270,19 @@ export class QuoteCreateComponent implements OnInit {
 
   protected unquotedLines = computed(() => this.lines().filter((l) => this.unitPrice(l) === null));
   protected hasUnquotedLines = computed(() => this.unquotedLines().length > 0);
+
+  /**
+   * Líneas sin color capturado. El color fijo ('fixed') siempre lo trae; el
+   * resto ('free', p.ej. MDF, y 'required', p.ej. Melamina) no puede
+   * cotizarse en blanco — se le va a decir al cliente ese color.
+   */
+  protected linesMissingColor = computed(() =>
+    this.lines().filter((l) => {
+      const mp = this.lineMaterialPrice(l);
+      return !!mp && mp.colorPolicy !== 'fixed' && !(l.color ?? '').trim();
+    }),
+  );
+  protected hasLinesMissingColor = computed(() => this.linesMissingColor().length > 0);
 
   /** Suma de las líneas, sin envío ni armado (precio de contado en crédito). */
   protected subtotal = computed(() =>
@@ -394,6 +426,7 @@ export class QuoteCreateComponent implements OnInit {
     this.editingId.set(snap.editingId);
     this.shippingCp.set(snap.shippingCp);
     this.shippingQuote.set(snap.shippingQuote);
+    this.manualShippingCost.set(snap.manualShippingCost);
     this.existingDiscounts.set(snap.existingDiscounts);
     this.discountAmount.set(snap.discountAmount);
     this.discountReasonCategory.set(snap.discountReasonCategory);
@@ -409,6 +442,7 @@ export class QuoteCreateComponent implements OnInit {
       editingId: this.editingId(),
       shippingCp: this.shippingCp(),
       shippingQuote: this.shippingQuote(),
+      manualShippingCost: this.manualShippingCost(),
       existingDiscounts: this.existingDiscounts(),
       discountAmount: this.discountAmount(),
       discountReasonCategory: this.discountReasonCategory(),
@@ -441,7 +475,11 @@ export class QuoteCreateComponent implements OnInit {
           this.shippingCp.set(cp);
           if (cp.length === 5) {
             this.shippingService.quoteByPostalCode(cp).subscribe({
-              next: (q) => this.shippingQuote.set(q),
+              next: (q) => {
+                this.shippingQuote.set(q);
+                // Sin zona configurada, el costo guardado se capturó a mano.
+                if (!q) this.manualShippingCost.set(quote.shippingCost ?? null);
+              },
               error: () => this.shippingQuote.set(null),
             });
           }
@@ -514,6 +552,7 @@ export class QuoteCreateComponent implements OnInit {
   protected onShippingCpInput(event: Event): void {
     const cp = (event.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 5);
     this.shippingCp.set(cp);
+    this.manualShippingCost.set(null);
     if (cp.length === 5) {
       this.shippingService.quoteByPostalCode(cp).subscribe({
         next: (q) => this.shippingQuote.set(q),
@@ -522,6 +561,13 @@ export class QuoteCreateComponent implements OnInit {
     } else {
       this.shippingQuote.set(null);
     }
+  }
+
+  /** Costo de envío a mano cuando el CP no tiene zona configurada. */
+  protected onManualShippingCostInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const value = Number(raw);
+    this.manualShippingCost.set(raw === '' || Number.isNaN(value) || value < 0 ? null : value);
   }
 
   /** Agrega el producto con su primer material cotizado (M5). */
@@ -544,11 +590,26 @@ export class QuoteCreateComponent implements OnInit {
         {
           product,
           materialId: defaultMaterial.materialId,
-          color: defaultMaterial.colorPolicy === 'fixed' ? defaultMaterial.fixedColor : null,
+          color: this.initialColorFor(defaultMaterial),
           quantity: 1,
         },
       ];
     });
+  }
+
+  /**
+   * Color inicial de una línea según la política de material (M6), mismo
+   * criterio que el POS (order-draft.store.ts):
+   *   - 'fixed'    → el color fijo del material.
+   *   - 'required' → nada: el vendedor tiene que capturarlo (p.ej. Melamina).
+   *   - 'free'     → el MDF es una placa que se pinta a pedido; sin nada
+   *     capturado se asume "Blanco" (mismo default histórico de
+   *     products.color), pero el vendedor lo cambia escribiendo otro color.
+   */
+  private initialColorFor(mp: InventoryMaterialPrice): string | null {
+    if (mp.colorPolicy === 'fixed') return mp.fixedColor;
+    if (mp.colorPolicy === 'required') return null;
+    return mp.code === 'MDF' ? 'Blanco' : null;
   }
 
   /** Cambiar el material reprecia SOLO esa línea (M4). */
@@ -558,13 +619,11 @@ export class QuoteCreateComponent implements OnInit {
       lines.map((l, i) => {
         if (i !== index) return l;
         const mp = l.product.materialPrices.find((m) => m.materialId === materialId);
-        // Un color incompatible con el nuevo material no se arrastra en silencio (M6 §6.2.4).
-        const color =
-          mp?.colorPolicy === 'fixed'
-            ? mp.fixedColor
-            : mp?.colorPolicy === 'required'
-              ? null
-              : l.color;
+        if (!mp) return { ...l, materialId };
+        // Un color incompatible con el nuevo material no se arrastra en silencio
+        // (M6 §6.2.4). Si ya traía un color libre capturado a mano, se respeta
+        // al cambiar entre dos materiales 'free' — no se pisa lo ya escrito.
+        const color = mp.colorPolicy === 'free' ? (l.color ?? this.initialColorFor(mp)) : this.initialColorFor(mp);
         return { ...l, materialId, color };
       }),
     );
@@ -607,9 +666,14 @@ export class QuoteCreateComponent implements OnInit {
   }
 
   protected submit(): void {
+    this.submitAttempted.set(true);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.notification.error('Ingresa el nombre del cliente');
+      return;
+    }
+    if (this.needsManualShipping() && this.manualShippingCost() === null) {
+      this.notification.error('Este CP no tiene cobertura automática: ingresa el costo de envío manualmente.');
       return;
     }
     if (this.lines().length === 0) {
@@ -620,6 +684,13 @@ export class QuoteCreateComponent implements OnInit {
       this.notification.error(
         `Estos muebles no se cotizan en el material elegido: ` +
           `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material.`,
+      );
+      return;
+    }
+    if (this.hasLinesMissingColor()) {
+      this.notification.error(
+        `Falta capturar el color de: ` +
+          `${this.linesMissingColor().map((l) => l.product.name).join(', ')}.`,
       );
       return;
     }
@@ -659,6 +730,8 @@ export class QuoteCreateComponent implements OnInit {
       // RN-P2: en pickup no hay CP que cotizar ni armado que sumar.
       pickupInStore: this.isPickup(),
       shippingPostalCode: this.isPickup() ? null : this.shippingCp() || null,
+      // CP sin cobertura automática: el costo lo capturó el vendedor a mano.
+      manualShippingCost: this.needsManualShipping() ? this.manualShippingCost() : null,
       assemblyService: !this.isPickup() && !!raw.assemblyService,
       assemblyFloors: this.isPickup() ? 0 : this.assemblyFloorsValue(),
       // Docs/plan-descuentos.md: solo se manda si se está capturando uno NUEVO.

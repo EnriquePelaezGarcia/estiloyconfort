@@ -5,6 +5,7 @@ import { User } from '../models/user.model';
 import { AdminResetPasswordResponse } from '../models/auth.model';
 import {
   CreateUserRequest,
+  CreateUserResponse,
   DashboardStats,
   Role,
   UpdateUserRequest,
@@ -81,8 +82,12 @@ export class AdminService {
     return this.api.get<User[]>('/users');
   }
 
-  createUser(payload: CreateUserRequest): Observable<User> {
-    return this.api.post<User>('/users', payload);
+  /**
+   * Crea un usuario. La temporal que devuelve llega UNA sola vez, igual que
+   * en resetUserPassword: quien llame debe mostrarla de inmediato.
+   */
+  createUser(payload: CreateUserRequest): Observable<CreateUserResponse> {
+    return this.api.post<CreateUserResponse>('/users', payload);
   }
 
   updateUser(id: number, payload: UpdateUserRequest): Observable<User> {

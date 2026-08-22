@@ -26,6 +26,19 @@ function validateRegister(body) {
   return errors;
 }
 
+/**
+ * Alta de usuario hecha por un admin (POST /api/users). A diferencia de
+ * validateRegister, no pide `password`: el servidor genera una temporal y el
+ * usuario queda con `must_change_password`, igual que en el reset
+ * administrativo (Docs/plan-modulo-contrasenas.md).
+ */
+function validateAdminCreateUser(body) {
+  const errors = [];
+  if (!isValidEmail(body.email)) errors.push('Email inválido');
+  if (!isNonEmptyString(body.fullName)) errors.push('El nombre completo es obligatorio');
+  return errors;
+}
+
 function validateLogin(body) {
   const errors = [];
   if (!isValidEmail(body.email)) errors.push('Email inválido');
@@ -74,6 +87,7 @@ module.exports = {
   isValidPassword,
   isNonEmptyString,
   validateRegister,
+  validateAdminCreateUser,
   validateLogin,
   validatePasswordChange,
   validateResetPassword,

@@ -94,11 +94,19 @@ const User = {
   /**
    * @returns {number} id del usuario creado
    */
-  async create({ email, passwordHash, fullName, phone = null, roleId, manufacturerId = null }) {
+  async create({
+    email,
+    passwordHash,
+    fullName,
+    phone = null,
+    roleId,
+    manufacturerId = null,
+    mustChangePassword = false,
+  }) {
     const [result] = await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, phone, role_id, manufacturer_id)
-       VALUES (:email, :passwordHash, :fullName, :phone, :roleId, :manufacturerId)`,
-      { email, passwordHash, fullName, phone, roleId, manufacturerId },
+      `INSERT INTO users (email, password_hash, full_name, phone, role_id, manufacturer_id, must_change_password)
+       VALUES (:email, :passwordHash, :fullName, :phone, :roleId, :manufacturerId, :mustChangePassword)`,
+      { email, passwordHash, fullName, phone, roleId, manufacturerId, mustChangePassword },
     );
     return result.insertId;
   },

@@ -116,6 +116,12 @@ export interface CreateQuoteRequest {
   customerPhone: string;
   paymentMethod: SaleScheme;
   shippingPostalCode?: string | null;
+  /**
+   * CP sin tarifa configurada (sin zona en `shipping_rates`): costo de envío
+   * capturado a mano por el vendedor. Igual que en el pedido (POS): el
+   * backend solo lo usa cuando el CP no tiene cobertura automática.
+   */
+  manualShippingCost?: number | null;
   /** Recoge en tienda: el backend ignora CP y armado, y solo admite pago completo. */
   pickupInStore?: boolean;
   assemblyService?: boolean;

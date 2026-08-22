@@ -7,7 +7,12 @@ import { ManufacturingService } from '../../../core/services/manufacturing.servi
 import { NotificationService } from '../../../core/services/notification.service';
 import { User, UserRole } from '../../../core/models/user.model';
 import { Manufacturer } from '../../../core/models/manufacturing.model';
-import { CreateUserRequest, Role, UpdateUserRequest } from '../../../core/models/admin.model';
+import {
+  CreateUserRequest,
+  CreateUserResponse,
+  Role,
+  UpdateUserRequest,
+} from '../../../core/models/admin.model';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrador',
@@ -59,7 +64,6 @@ export class UsersComponent implements OnInit {
     fullName: ['', [Validators.required, Validators.minLength(3)]],
     email: ['', [Validators.required, Validators.email]],
     phone: [''],
-    password: ['', [Validators.minLength(8)]],
     roleId: [null as number | null, Validators.required],
     manufacturerId: [null as number | null],
     isActive: [true],
@@ -138,8 +142,6 @@ export class UsersComponent implements OnInit {
   protected openCreate(): void {
     this.editing.set(null);
     this.form.reset({ isActive: true, roleId: null, manufacturerId: null });
-    this.form.controls.password.addValidators(Validators.required);
-    this.form.controls.password.updateValueAndValidity();
   }
 
   protected openEdit(user: User): void {
@@ -148,13 +150,10 @@ export class UsersComponent implements OnInit {
       fullName: user.fullName,
       email: user.email,
       phone: user.phone ?? '',
-      password: '',
       roleId: this.roles().find((r) => r.name === user.role)?.id ?? null,
       manufacturerId: user.manufacturerId ?? null,
       isActive: user.isActive,
     });
-    this.form.controls.password.clearValidators();
-    this.form.controls.password.updateValueAndValidity();
   }
 
   protected closeModal(): void {
@@ -188,12 +187,11 @@ export class UsersComponent implements OnInit {
         fullName: raw.fullName!,
         email: raw.email!,
         phone: raw.phone || null,
-        password: raw.password!,
         roleId: raw.roleId!,
         manufacturerId: raw.manufacturerId ?? null,
       };
       this.adminService.createUser(payload).subscribe({
-        next: (created) => this.onSaved(created, 'Usuario creado'),
+        next: (res) => this.onCreated(res),
         error: (err) => this.onError(err),
       });
     }
@@ -210,6 +208,19 @@ export class UsersComponent implements OnInit {
     this.saving.set(false);
     this.notification.success(message);
     this.closeModal();
+  }
+
+  /**
+   * La temporal solo se ve una vez: se reusa el mismo modal del reset
+   * administrativo en vez de un simple toast de éxito.
+   */
+  private onCreated(res: CreateUserResponse): void {
+    this.users.update((list) => [...list, res.user]);
+    this.saving.set(false);
+    this.closeModal();
+    this.resetUserName.set(res.user.fullName);
+    this.copied.set(false);
+    this.temporaryPassword.set(res.temporaryPassword);
   }
 
   private onError(err: { error?: { message?: string } }): void {

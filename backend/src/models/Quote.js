@@ -183,8 +183,15 @@ async function resolveQuoteLine(conn, it, paymentMethod, config) {
     throw err;
   }
 
-  // Un material con color fijo impone su color; el resto queda como venga.
+  // Coherencia material ↔ color por línea (M6 §6.2), misma regla que
+  // Order.js: el frontend deshabilita/exige el campo, pero esta no puede ser
+  // la única defensa — cualquiera puede pegarle directo a la API.
   const rawColor = (it.color ?? '').trim();
+  if (declared.colorPolicy === 'required' && !rawColor) {
+    const err = new Error(`${declared.label} requiere especificar un color.`);
+    err.statusCode = 400;
+    throw err;
+  }
   const color = declared.colorPolicy === 'fixed' ? (declared.fixedColor ?? null) : (rawColor || null);
 
   const quantity = Math.max(1, Math.trunc(Number(it.quantity)) || 1);
@@ -287,8 +294,9 @@ async function resolveQuotePricing(conn, data, config) {
     resolvedItems.push(resolved);
   }
 
-  // Envío: se congela la tarifa vigente. Un CP fuera de cobertura no es
-  // un error — se cotiza sin envío y el vendedor lo acuerda aparte.
+  // Envío: se congela la tarifa vigente. Un CP fuera de cobertura no es un
+  // error — se usa el costo que el vendedor capturó a mano (mismo mecanismo
+  // que el pedido en Order.js).
   const rawCp = String(data.shippingPostalCode ?? '').replace(/\D/g, '').slice(0, 5);
   const shippingPostalCode = pickupInStore || rawCp.length !== 5 ? null : rawCp;
   let shippingCost = 0;
@@ -298,6 +306,8 @@ async function resolveQuotePricing(conn, data, config) {
     if (quote) {
       shippingCost = quote.price;
       shippingZoneLabel = quote.label;
+    } else {
+      shippingCost = Math.max(0, Number(data.manualShippingCost) || 0);
     }
   }
 

@@ -223,6 +223,12 @@
     max-width: 180px;
 
     &::placeholder { color: vars.$color-text-secondary; }
+
+    // Color obligatorio sin capturar: mismo tratamiento que .field--error.
+    &--error {
+      border-color: vars.$color-error !important;
+      &::placeholder { color: vars.$color-error; }
+    }
   }
 
   &__warn {
