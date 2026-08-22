@@ -29,6 +29,22 @@ const env = {
     .map((origin) => origin.trim())
     .filter(Boolean),
 
+  // Correo transaccional: hoy solo la recuperación de contraseña.
+  //
+  // Sin SMTP_HOST o sin SMTP_PASS el mailer entra en modo consola: escribe el
+  // enlace en el log en vez de enviarlo, y el backend arranca igual. Permite
+  // desarrollar en local sin cuenta de correo y evita que una llave faltante
+  // en staging tire toda la API. Ver utils/mailer.js.
+  mail: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT, 10) || 465,
+    user: process.env.SMTP_USER || '',
+    password: process.env.SMTP_PASS || '',
+    from:
+      process.env.MAIL_FROM ||
+      'Estilo y Confort <no-responder@send.estiloyconfortm.com>',
+  },
+
   // Reseñas de Google (Places API). Sin apiKey el endpoint responde vacío y
   // la home simplemente no pinta el bloque: no se rompe nada.
   google: {
@@ -44,6 +60,10 @@ const env = {
 // venta que se mandan por WhatsApp). Es el primero de CLIENT_ORIGIN, así que
 // ese debe ser el dominio principal, no el alias con www.
 env.clientOrigin = env.clientOrigins[0];
+
+// El envío real necesita servidor y contraseña. Con uno solo de los dos el
+// transporte fallaría en cada correo, así que se prefiere el modo consola.
+env.mail.enabled = Boolean(env.mail.host && env.mail.password);
 
 env.isProduction = env.nodeEnv === 'production';
 

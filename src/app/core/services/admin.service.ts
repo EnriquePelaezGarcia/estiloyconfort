@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { User } from '../models/user.model';
+import { AdminResetPasswordResponse } from '../models/auth.model';
 import {
   CreateUserRequest,
   DashboardStats,
@@ -86,6 +87,16 @@ export class AdminService {
 
   updateUser(id: number, payload: UpdateUserRequest): Observable<User> {
     return this.api.patch<User>(`/users/${id}`, payload);
+  }
+
+  /**
+   * Genera una contraseña temporal para el usuario.
+   *
+   * Llega UNA sola vez: no se guarda en claro en ningún lado y no se puede
+   * volver a consultar. Quien llame debe mostrarla de inmediato.
+   */
+  resetUserPassword(id: number): Observable<AdminResetPasswordResponse> {
+    return this.api.post<AdminResetPasswordResponse>(`/users/${id}/reset-password`, {});
   }
 
   toggleUserStatus(id: number): Observable<User> {

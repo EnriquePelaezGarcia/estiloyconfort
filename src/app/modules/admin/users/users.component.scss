@@ -402,3 +402,21 @@
     &.actions { justify-content: flex-end; }
   }
 }
+
+// Contraseña temporal recién generada por un reset administrativo.
+// Monoespaciada y bien espaciada porque se dicta por teléfono o se teclea a
+// mano: hay que poder distinguir cada carácter sin dudar.
+.temp-password {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--border, #d4d4d8);
+  border-radius: 8px;
+  background: var(--surface-2, #fafafa);
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  user-select: all;
+  word-break: break-all;
+}

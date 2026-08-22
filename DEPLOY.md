@@ -744,6 +744,50 @@ git checkout main && git merge development && git push origin main
 El script de producción **respalda la base de datos automáticamente antes de
 desplegar**, y verifica que el API responda antes de darse por terminado.
 
+### Módulo de contraseñas: pasos de una sola vez
+
+Este módulo (spec en `Docs/plan-modulo-contrasenas.md`) necesita dos cosas que
+`deploy.sh` **no** hace solo. Van una única vez por ambiente.
+
+**1. Aplicar el esquema.** Agrega dos tablas y dos columnas en `users`. El
+script es repetible: correrlo dos veces no rompe nada.
+
+```bash
+cd /opt/estiloyconfort/app/deploy
+docker compose exec backend-staging npm run db:schema:passwords   # preproducción
+docker compose exec backend-prod    npm run db:schema:passwords   # producción
+```
+
+**2. Configurar el envío de correo.** Sin esto, "olvidé mi contraseña" no falla:
+el backend escribe el enlace en el log en vez de enviarlo (`docker compose logs
+backend-prod`). Útil para probar, inservible para los usuarios reales.
+
+Agrega a `.env.staging` y `.env.production`:
+
+```
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_USER=resend
+SMTP_PASS=re_...                     # API key de Resend
+MAIL_FROM="Estilo y Confort <no-responder@send.estiloyconfortm.com>"
+```
+
+Antes hay que dar de alta el subdominio `send.estiloyconfortm.com` en
+[resend.com](https://resend.com) y capturar en Cloudflare los tres registros DNS
+que entrega. Se usa un subdominio y no el dominio raíz para que, si algún día se
+activa Cloudflare Email Routing, su SPF no choque con el de Resend.
+
+Después de tocar el `.env`, reinicia el contenedor:
+
+```bash
+docker compose restart backend-prod
+```
+
+**Recordatorio de operación:** el administrador no puede ver la contraseña de
+nadie —son hash bcrypt, es irreversible—. Lo que puede es generar una temporal
+desde *Usuarios → botón de llave*, que se muestra **una sola vez** y obliga al
+colaborador a cambiarla al entrar.
+
 ### Ver qué está pasando
 
 ```bash

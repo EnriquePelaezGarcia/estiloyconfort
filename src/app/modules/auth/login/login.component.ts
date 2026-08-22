@@ -9,7 +9,7 @@ import { LoginRequest } from '../../../core/models/auth.model';
   selector: 'app-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login.component.html',
-  styleUrl: './login.component.scss',
+  styleUrls: ['./login.component.scss', '../auth-extras.scss'],
   imports: [ReactiveFormsModule, RouterLink],
 })
 export class LoginComponent {
@@ -35,6 +35,13 @@ export class LoginComponent {
 
     this.authService.login(this.form.getRawValue() as LoginRequest).subscribe({
       next: (res) => {
+        // Entró con una contraseña temporal que le dio un administrador: el
+        // resto del sistema le responde 403 hasta que la cambie, así que se le
+        // lleva directo ahí en vez de a su panel.
+        if (res.user.mustChangePassword) {
+          this.router.navigate(['/auth/cambiar-contrasena']);
+          return;
+        }
         this.notification.success(`Bienvenido, ${res.user.fullName}`);
         this.router.navigate([this.authService.dashboardRoute()]);
       },

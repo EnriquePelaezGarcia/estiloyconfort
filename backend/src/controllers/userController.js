@@ -1,9 +1,12 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Role = require('../models/Role');
+const PasswordReset = require('../models/PasswordReset');
+const PasswordAudit = require('../models/PasswordAudit');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateRegister } = require('../utils/validators');
+const { generateTemporaryPassword } = require('../utils/passwordUtils');
 const { pool } = require('../config/database');
 
 const SALT_ROUNDS = 10;
@@ -132,4 +135,49 @@ const remove = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-module.exports = { list, getById, create, update, toggleStatus, remove };
+/**
+ * POST /api/users/:id/reset-password  (solo admin)
+ *
+ * Genera una contraseña temporal y la devuelve UNA sola vez: no se guarda en
+ * claro en ningún lado, no se manda por correo y no se puede volver a
+ * consultar. El admin la copia y se la entrega al colaborador.
+ *
+ * El usuario queda con `must_change_password`, así que la temporal solo sirve
+ * para entrar y cambiarla. El admin nunca conoce la contraseña definitiva.
+ */
+const resetPassword = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+
+  // Si el admin se resetea a sí mismo queda encerrado en la pantalla de cambio
+  // con una contraseña que él mismo acaba de generar: no aporta nada y confunde.
+  if (id === req.user.id) {
+    throw ApiError.badRequest(
+      'Para cambiar tu propia contraseña usa la opción Cambiar contraseña',
+    );
+  }
+
+  const user = await User.findById(id);
+  if (!user) throw ApiError.notFound('Usuario no encontrado');
+
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, SALT_ROUNDS);
+
+  await User.updatePassword(id, passwordHash, { mustChangePassword: true });
+  // Un enlace de recuperación pendiente ya no debe funcionar.
+  await PasswordReset.invalidatePendingForUser(id);
+  await PasswordAudit.log({
+    userId: id,
+    actorId: req.user.id,
+    action: PasswordAudit.ACTIONS.ADMIN_RESET,
+    ip: req.ip,
+  });
+
+  res.json({
+    temporaryPassword,
+    message:
+      'Cópiala ahora y entrégala al colaborador: no se volverá a mostrar. ' +
+      'El sistema le pedirá cambiarla al iniciar sesión.',
+  });
+});
+
+module.exports = { list, getById, create, update, toggleStatus, remove, resetPassword };

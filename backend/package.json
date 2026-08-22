@@ -15,7 +15,8 @@
     "db:remove-melamina-blanca": "node src/database/remove_melamina_blanca.js",
     "db:rename-melamina": "node src/database/rename_melamina_color.js",
     "content:push": "node src/database/push_content_to_env.js",
-    "db:schema:fase4": "node src/database/run-schema.js schema_fase4.sql"
+    "db:schema:fase4": "node src/database/run-schema.js schema_fase4.sql",
+    "db:schema:passwords": "node src/database/run-schema.js schema_password_reset.sql"
   },
   "keywords": [
     "express",
@@ -36,6 +37,7 @@
     "multer": "^2.2.0",
     "mysql2": "^3.11.5",
     "node-cron": "^4.6.0",
+    "nodemailer": "^9.0.5",
     "stream-json": "^3.5.0"
   },
   "devDependencies": {

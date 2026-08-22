@@ -33,10 +33,48 @@ function validateLogin(body) {
   return errors;
 }
 
+/**
+ * Cambio de contraseña sabiendo la anterior.
+ *
+ * Exigir que la nueva sea distinta evita el caso del reset administrativo en
+ * que el usuario "cambia" la temporal por la misma temporal y la deja viva.
+ */
+function validatePasswordChange(body) {
+  const errors = [];
+  if (!isNonEmptyString(body.currentPassword)) {
+    errors.push('La contraseña actual es obligatoria');
+  }
+  if (!isValidPassword(body.newPassword)) {
+    errors.push('La nueva contraseña debe tener al menos 8 caracteres');
+  }
+  if (
+    isNonEmptyString(body.currentPassword) &&
+    body.currentPassword === body.newPassword
+  ) {
+    errors.push('La nueva contraseña debe ser distinta de la actual');
+  }
+  return errors;
+}
+
+/**
+ * Cambio de contraseña desde el enlace del correo. No pide la anterior: el
+ * token ES la credencial.
+ */
+function validateResetPassword(body) {
+  const errors = [];
+  if (!isNonEmptyString(body.token)) errors.push('El token es obligatorio');
+  if (!isValidPassword(body.newPassword)) {
+    errors.push('La contraseña debe tener al menos 8 caracteres');
+  }
+  return errors;
+}
+
 module.exports = {
   isValidEmail,
   isValidPassword,
   isNonEmptyString,
   validateRegister,
   validateLogin,
+  validatePasswordChange,
+  validateResetPassword,
 };

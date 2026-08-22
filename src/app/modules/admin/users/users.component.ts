@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { User, UserRole } from '../../../core/models/user.model';
@@ -25,6 +26,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 })
 export class UsersComponent implements OnInit {
   private adminService = inject(AdminService);
+  private auth = inject(AuthService);
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
@@ -41,6 +43,17 @@ export class UsersComponent implements OnInit {
   protected editing = signal<User | null | undefined>(undefined);
   /** Usuario marcado para eliminar (confirmación). */
   protected deleting = signal<User | null>(null);
+
+  /** Usuario marcado para restablecer contraseña (confirmación). */
+  protected resetting = signal<User | null>(null);
+  protected resettingInProgress = signal(false);
+  /**
+   * Contraseña temporal recién generada. Solo vive en memoria y solo hasta que
+   * se cierre el modal: el servidor no la guarda en claro ni la puede repetir.
+   */
+  protected temporaryPassword = signal<string | null>(null);
+  protected resetUserName = signal('');
+  protected copied = signal(false);
 
   protected form = this.fb.group({
     fullName: ['', [Validators.required, Validators.minLength(3)]],
@@ -215,6 +228,70 @@ export class UsersComponent implements OnInit {
       },
       error: () => this.notification.error('No se pudo cambiar el estado'),
     });
+  }
+
+  // ===== Restablecer contraseña =====
+  // El admin NO puede ver la contraseña de nadie: son hash bcrypt, es
+  // irreversible. Lo que puede es generar una temporal que el usuario está
+  // obligado a cambiar al entrar. Ver Docs/plan-modulo-contrasenas.md.
+
+  /** El admin no se resetea a sí mismo: para eso está Cambiar contraseña. */
+  protected canReset(user: User): boolean {
+    return user.id !== this.auth.currentUser()?.id;
+  }
+
+  protected confirmReset(user: User): void {
+    this.resetting.set(user);
+  }
+
+  protected cancelReset(): void {
+    this.resetting.set(null);
+  }
+
+  protected executeReset(): void {
+    const user = this.resetting();
+    if (!user) return;
+    this.resettingInProgress.set(true);
+
+    this.adminService.resetUserPassword(user.id).subscribe({
+      next: (res) => {
+        this.resettingInProgress.set(false);
+        this.resetting.set(null);
+        this.resetUserName.set(user.fullName);
+        this.copied.set(false);
+        this.temporaryPassword.set(res.temporaryPassword);
+        // La lista debe reflejar que ese usuario trae contraseña temporal.
+        this.users.update((list) =>
+          list.map((u) => (u.id === user.id ? { ...u, mustChangePassword: true } : u)),
+        );
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.resettingInProgress.set(false);
+        this.resetting.set(null);
+        this.notification.error(
+          err?.error?.message ?? 'No se pudo restablecer la contraseña',
+        );
+      },
+    });
+  }
+
+  protected async copyTemporaryPassword(): Promise<void> {
+    const password = this.temporaryPassword();
+    if (!password) return;
+    try {
+      await navigator.clipboard.writeText(password);
+      this.copied.set(true);
+    } catch {
+      // Sin permiso de portapapeles (o sin HTTPS) queda visible en pantalla
+      // para copiarla a mano: no es un error que valga la pena escalar.
+      this.notification.info('Cópiala manualmente de la pantalla');
+    }
+  }
+
+  protected closeTemporaryPassword(): void {
+    this.temporaryPassword.set(null);
+    this.resetUserName.set('');
+    this.copied.set(false);
   }
 
   // ===== Delete =====

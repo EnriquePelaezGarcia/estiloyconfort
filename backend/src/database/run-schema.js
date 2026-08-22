@@ -23,6 +23,11 @@ async function run() {
     port: parseInt(process.env.DB_PORT, 10) || 3306,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
+    // Los .sql viejos abren con `USE estilo_confort;` y esa sentencia gana, así
+    // que siguen comportándose igual. Seleccionar la base aquí permite escribir
+    // archivos nuevos sin `USE`, que es lo que necesitan los ambientes donde la
+    // base NO se llama estilo_confort (staging y producción usan DB_NAME).
+    database: process.env.DB_NAME || 'estilo_confort',
     multipleStatements: true,
   });
 

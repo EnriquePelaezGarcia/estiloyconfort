@@ -3,7 +3,14 @@ import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { Observable, map, tap, throwError } from 'rxjs';
 import { ApiService } from '../services/api.service';
-import { AuthResponse, LoginRequest } from '../models/auth.model';
+import {
+  AuthResponse,
+  ChangePasswordRequest,
+  ForgotPasswordRequest,
+  LoginRequest,
+  MessageResponse,
+  ResetPasswordRequest,
+} from '../models/auth.model';
 import { User, UserRole } from '../models/user.model';
 
 const TOKEN_KEY = 'eyc_access_token';
@@ -32,6 +39,13 @@ export class AuthService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly isAuthenticated = computed(() => !!this._currentUser());
   readonly userRole = computed(() => this._currentUser()?.role ?? null);
+  /**
+   * El usuario entró con una contraseña temporal y no puede hacer nada hasta
+   * cambiarla. El guard lo usa para encerrarlo en /auth/cambiar-contrasena.
+   */
+  readonly mustChangePassword = computed(
+    () => this._currentUser()?.mustChangePassword === true,
+  );
   readonly dashboardRoute = computed(() => {
     const role = this.userRole();
     return role ? (ROLE_ROUTES[role] ?? '/') : '/';
@@ -45,6 +59,53 @@ export class AuthService {
           this.storeSession(res);
           this._isLoading.set(false);
         },
+        error: () => this._isLoading.set(false),
+      }),
+    );
+  }
+
+  /**
+   * Cambio de contraseña sabiendo la actual. Sirve tanto para el cambio
+   * voluntario como para el forzado tras un reset administrativo.
+   *
+   * El backend devuelve tokens nuevos porque los anteriores quedaron obsoletos
+   * al sellar la fecha del cambio: sin guardarlos, el usuario perdería la
+   * sesión que acaba de usar.
+   */
+  changePassword(payload: ChangePasswordRequest): Observable<AuthResponse> {
+    this._isLoading.set(true);
+    return this.api.post<AuthResponse>('/auth/change-password', payload).pipe(
+      tap({
+        next: (res) => {
+          this.storeSession(res);
+          this._isLoading.set(false);
+        },
+        error: () => this._isLoading.set(false),
+      }),
+    );
+  }
+
+  /**
+   * Solicita el enlace de recuperación. La respuesta es siempre la misma exista
+   * o no la cuenta, así que no sirve para averiguar qué correos están
+   * registrados: la interfaz debe mostrarla tal cual.
+   */
+  forgotPassword(payload: ForgotPasswordRequest): Observable<MessageResponse> {
+    this._isLoading.set(true);
+    return this.api.post<MessageResponse>('/auth/forgot-password', payload).pipe(
+      tap({
+        next: () => this._isLoading.set(false),
+        error: () => this._isLoading.set(false),
+      }),
+    );
+  }
+
+  /** Consume el token del correo. No inicia sesión: hay que entrar después. */
+  resetPassword(payload: ResetPasswordRequest): Observable<MessageResponse> {
+    this._isLoading.set(true);
+    return this.api.post<MessageResponse>('/auth/reset-password', payload).pipe(
+      tap({
+        next: () => this._isLoading.set(false),
         error: () => this._isLoading.set(false),
       }),
     );

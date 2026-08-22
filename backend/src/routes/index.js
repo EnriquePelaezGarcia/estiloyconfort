@@ -19,12 +19,18 @@ const ticketsRoutes = require('./ticketsRoutes');
 const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
 const discountsRoutes = require('./discountsRoutes');
 const reviewsRoutes = require('./reviewsRoutes');
+const blockIfMustChangePassword = require('../middleware/mustChangePassword');
 
 const router = Router();
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Quien trae una contraseña temporal solo puede cambiarla: aquí se corta el
+// acceso al resto de la API. Va antes de los sub-routers para no repetirlo en
+// cada archivo de rutas. No consulta la BD: lee la bandera del access token.
+router.use(blockIfMustChangePassword);
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);

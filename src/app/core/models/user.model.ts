@@ -10,6 +10,10 @@ export interface User {
   manufacturerId?: number | null;
   manufacturerName?: string | null;
   isActive: boolean;
+  /** Trae una contraseña temporal del admin y debe cambiarla al iniciar sesión. */
+  mustChangePassword?: boolean;
+  /** Última vez que cambió su contraseña. null = nunca desde que existe el módulo. */
+  passwordChangedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

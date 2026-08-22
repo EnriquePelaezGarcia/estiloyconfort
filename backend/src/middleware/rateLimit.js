@@ -27,4 +27,47 @@ const authLimiter = rateLimit({
   },
 });
 
-module.exports = { authLimiter };
+/**
+ * Recuperación de contraseña, eje 1: por IP.
+ *
+ * `forgot-password` es público y cada llamada legítima manda un correo, así que
+ * se limita más fuerte que el login. No lleva `skipSuccessfulRequests`: aquí
+ * TODAS las peticiones responden 200 —incluso las de correos inexistentes, por
+ * la regla de respuesta genérica—, así que saltarse las exitosas dejaría el
+ * límite sin efecto.
+ */
+const forgotPasswordIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    message: 'Demasiadas solicitudes. Espera unos minutos e intenta de nuevo.',
+  },
+});
+
+/**
+ * Recuperación de contraseña, eje 2: por dirección de correo.
+ *
+ * El eje de IP solo no basta: un atacante rota direcciones IP y vuelve a
+ * disparar contra el mismo buzón. Este segundo eje protege a cada dirección sin
+ * importar de dónde venga la petición. Y al revés tampoco basta: el eje de
+ * correo no frena a quien dispara contra muchas direcciones distintas.
+ *
+ * `keyGeneratorIpFallback: false` desactiva la validación que exige normalizar
+ * IPv6 en el keyGenerator: aquí la llave es un correo, no una IP.
+ */
+const forgotPasswordEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  keyGenerator: (req) =>
+    String(req.body?.email || '').trim().toLowerCase() || 'sin-correo',
+  validate: { keyGeneratorIpFallback: false },
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    message: 'Demasiadas solicitudes para esta dirección. Intenta de nuevo más tarde.',
+  },
+});
+
+module.exports = { authLimiter, forgotPasswordIpLimiter, forgotPasswordEmailLimiter };

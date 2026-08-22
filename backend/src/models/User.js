@@ -14,6 +14,9 @@ function mapUser(row) {
     manufacturerId: row.manufacturer_id ?? null,
     manufacturerName: row.manufacturer_name ?? null,
     isActive: !!row.is_active,
+    /** Trae una contraseña temporal del admin y no puede usar el sistema hasta cambiarla. */
+    mustChangePassword: !!row.must_change_password,
+    passwordChangedAt: row.password_changed_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -22,7 +25,8 @@ function mapUser(row) {
 const BASE_SELECT = `
   SELECT u.id, u.email, u.full_name, u.phone, u.role_id, r.name AS role_name,
          u.manufacturer_id, m.name AS manufacturer_name,
-         u.is_active, u.created_at, u.updated_at
+         u.is_active, u.must_change_password, u.password_changed_at,
+         u.created_at, u.updated_at
   FROM users u
   JOIN roles r ON r.id = u.role_id
   LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
@@ -35,7 +39,9 @@ const User = {
   async findByEmailWithPassword(email) {
     const [rows] = await pool.query(
       `SELECT u.id, u.email, u.password_hash, u.full_name, u.phone,
-              u.role_id, r.name AS role_name, u.is_active, u.created_at, u.updated_at
+              u.role_id, r.name AS role_name, u.is_active,
+              u.must_change_password, u.password_changed_at,
+              u.created_at, u.updated_at
        FROM users u JOIN roles r ON r.id = u.role_id
        WHERE u.email = :email`,
       { email },
@@ -44,9 +50,32 @@ const User = {
     return { ...mapUser(rows[0]), passwordHash: rows[0].password_hash };
   },
 
+  /**
+   * Usuario por correo, sin el hash. Para "olvidé mi contraseña", donde nunca
+   * se compara ninguna contraseña.
+   */
+  async findByEmail(email) {
+    const [rows] = await pool.query(`${BASE_SELECT} WHERE u.email = :email`, { email });
+    return mapUser(rows[0]);
+  },
+
   async findById(id) {
     const [rows] = await pool.query(`${BASE_SELECT} WHERE u.id = :id`, { id });
     return mapUser(rows[0]);
+  },
+
+  async findByIdWithPassword(id) {
+    const [rows] = await pool.query(
+      `SELECT u.id, u.email, u.password_hash, u.full_name, u.phone,
+              u.role_id, r.name AS role_name, u.is_active,
+              u.must_change_password, u.password_changed_at,
+              u.created_at, u.updated_at
+       FROM users u JOIN roles r ON r.id = u.role_id
+       WHERE u.id = :id`,
+      { id },
+    );
+    if (!rows[0]) return null;
+    return { ...mapUser(rows[0]), passwordHash: rows[0].password_hash };
   },
 
   async findAll() {
@@ -72,6 +101,29 @@ const User = {
       { email, passwordHash, fullName, phone, roleId, manufacturerId },
     );
     return result.insertId;
+  },
+
+  /**
+   * Cambia el hash de la contraseña y sella la fecha.
+   *
+   * `password_changed_at` es lo que caduca las sesiones abiertas en otros
+   * dispositivos: /auth/refresh rechaza cualquier token emitido antes de esta
+   * fecha. Por eso se escribe SIEMPRE, venga el cambio del propio usuario, del
+   * enlace de recuperación o de un reset administrativo.
+   *
+   * `mustChangePassword` en true solo lo usa el reset administrativo: la
+   * temporal sirve para entrar y para nada más.
+   */
+  async updatePassword(id, passwordHash, { mustChangePassword = false } = {}) {
+    await pool.query(
+      `UPDATE users
+          SET password_hash = :passwordHash,
+              must_change_password = :mustChangePassword,
+              password_changed_at = NOW()
+        WHERE id = :id`,
+      { id, passwordHash, mustChangePassword: mustChangePassword ? 1 : 0 },
+    );
+    return this.findById(id);
   },
 
   async update(id, fields) {

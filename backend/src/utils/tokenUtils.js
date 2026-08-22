@@ -3,7 +3,13 @@ const env = require('../config/environment');
 
 /**
  * Genera un access token de corta duración.
- * @param {{ id: number, role: string }} payload
+ *
+ * `mustChangePassword` viaja dentro del token a propósito: permite que
+ * middleware/mustChangePassword bloquee el sistema sin consultar la base de
+ * datos en cada petición. Como el token dura 15 minutos y se reemite al cambiar
+ * la contraseña, la bandera nunca queda obsoleta por mucho tiempo.
+ *
+ * @param {{ id: number, role: string, mustChangePassword?: boolean }} payload
  */
 function generateAccessToken(payload) {
   return jwt.sign(payload, env.jwt.accessSecret, {

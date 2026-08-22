@@ -1,0 +1,69 @@
+// Complementos de estilo para las pantallas de contraseña
+// (olvidé / restablecer / cambiar). Se cargan JUNTO con login.component.scss,
+// que aporta el diseño de dos paneles y los campos del formulario.
+//
+// Vive aparte para no tocar la hoja del login, que ya está probada en
+// producción.
+
+// Mensaje de éxito. Mismo bloque que .login-error pero en verde: se usa cuando
+// la operación salió bien y el usuario tiene que leer algo antes de continuar.
+.login-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+// Aviso de que el usuario NO puede salir de esta pantalla hasta cambiar su
+// contraseña temporal.
+.login-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+// Enlace con aspecto de botón principal, para las pantallas que terminan en
+// "vuelve a iniciar sesión" en vez de en un envío de formulario.
+.btn-submit--link {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+// Pie del formulario: "¿Olvidaste tu contraseña?" bajo el botón de ingresar.
+.login-form__aside {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    opacity: 0.85;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+// Requisitos de la contraseña, bajo el campo.
+.password-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}

@@ -59,11 +59,26 @@
                 <span class="status__dot"></span>
                 {{ user.isActive ? 'Activo' : 'Inactivo' }}
               </button>
+              @if (user.mustChangePassword) {
+                <span class="muted" title="Debe cambiar su contraseña al iniciar sesión">
+                  · clave temporal
+                </span>
+              }
             </td>
             <td data-label="Acciones" class="actions">
               <button type="button" class="icon-btn" (click)="openEdit(user)" title="Editar">
                 <span class="material-symbols-outlined">edit</span>
               </button>
+              @if (canReset(user)) {
+                <button
+                  type="button"
+                  class="icon-btn"
+                  (click)="confirmReset(user)"
+                  title="Restablecer contraseña"
+                >
+                  <span class="material-symbols-outlined">key</span>
+                </button>
+              }
               <button type="button" class="icon-btn icon-btn--danger" (click)="confirmDelete(user)" title="Eliminar">
                 <span class="material-symbols-outlined">delete</span>
               </button>
@@ -186,6 +201,75 @@
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="cancelDelete()">Cancelar</button>
           <button type="button" class="btn btn--danger" (click)="executeDelete()">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Confirmar restablecimiento de contraseña ===== -->
+@if (resetting(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <div class="confirm-icon"><span class="material-symbols-outlined">key</span></div>
+        <h2 class="confirm-title">Restablecer contraseña</h2>
+        <p class="confirm-text">
+          Se generará una contraseña temporal para <strong>{{ target.fullName }}</strong>.
+          Su contraseña actual dejará de funcionar de inmediato y sus sesiones abiertas
+          se cerrarán.
+        </p>
+        <p class="confirm-text">
+          La verás <strong>una sola vez</strong> para entregársela. El sistema le pedirá
+          cambiarla al iniciar sesión, y esa nueva contraseña no la conocerá nadie más.
+        </p>
+        <div class="modal__foot">
+          <button
+            type="button"
+            class="btn btn--ghost"
+            (click)="cancelReset()"
+            [disabled]="resettingInProgress()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn"
+            (click)="executeReset()"
+            [disabled]="resettingInProgress()"
+          >
+            {{ resettingInProgress() ? 'Generando…' : 'Generar contraseña' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Contraseña temporal generada (se muestra UNA vez) ===== -->
+@if (temporaryPassword(); as password) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <div class="confirm-icon"><span class="material-symbols-outlined">lock_reset</span></div>
+        <h2 class="confirm-title">Contraseña temporal</h2>
+        <p class="confirm-text">
+          Para <strong>{{ resetUserName() }}</strong>. Cópiala ahora y entrégasela:
+          <strong>no se volverá a mostrar</strong> y el sistema no la guarda en claro.
+        </p>
+
+        <p class="temp-password">{{ password }}</p>
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="copyTemporaryPassword()">
+            <span class="material-symbols-outlined">
+              {{ copied() ? 'check' : 'content_copy' }}
+            </span>
+            {{ copied() ? 'Copiada' : 'Copiar' }}
+          </button>
+          <button type="button" class="btn" (click)="closeTemporaryPassword()">
+            Ya la guardé
+          </button>
         </div>
       </div>
     </div>
