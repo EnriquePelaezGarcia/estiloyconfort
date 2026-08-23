@@ -71,7 +71,7 @@ function escapeHtml(value) {
  * Quien llama decide qué hacer con el fallo. Para la recuperación de
  * contraseña, la respuesta al cliente NO cambia (§4.2 regla 6).
  */
-async function sendMail({ to, subject, text, html, attachments }) {
+async function sendMail({ to, subject, text, html, attachments, replyTo }) {
   const activeTransporter = getTransporter();
 
   if (!activeTransporter) {
@@ -90,7 +90,15 @@ async function sendMail({ to, subject, text, html, attachments }) {
     return { delivered: false, consoleMode: true };
   }
 
-  await activeTransporter.sendMail({ from: env.mail.from, to, subject, text, html, attachments });
+  await activeTransporter.sendMail({
+    from: env.mail.from,
+    to,
+    subject,
+    text,
+    html,
+    attachments,
+    replyTo,
+  });
   return { delivered: true, consoleMode: false };
 }
 
@@ -196,4 +204,73 @@ async function sendPasswordResetEmail({ to, fullName, token }) {
   });
 }
 
-module.exports = { sendMail, sendPasswordResetEmail };
+/**
+ * Correo del formulario público de Contacto.
+ *
+ * `replyTo` es el correo del cliente: quien lo reciba en `env.contact.email`
+ * puede darle "Responder" directo en su cliente de correo, sin copiar y
+ * pegar la dirección a mano.
+ */
+async function sendContactMessage({ name, email, phone, message }) {
+  const safeName = String(name || '').trim() || 'Alguien del sitio';
+  const text = [
+    `Nombre: ${safeName}`,
+    `Correo: ${email}`,
+    phone ? `Teléfono: ${phone}` : null,
+    '',
+    'Mensaje:',
+    message,
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+
+  const html = `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND_LAVENDER_BG};padding:32px 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid ${BRAND_LAVENDER_BORDER};border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="background:${BRAND_PURPLE};height:6px;line-height:6px;font-size:1px">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:32px 32px 8px">
+            <img src="cid:${LOGO_CID}" alt="Mueblería Estilo y Confort" width="220" height="64" style="display:block;width:220px;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 36px 0">
+            <p style="margin:0 0 20px;font-size:16px;color:${BRAND_PURPLE_DARK}">
+              Nuevo mensaje desde el formulario de contacto del sitio:
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;color:#3f3247;margin-bottom:20px">
+              <tr><td style="padding:4px 0;width:90px;color:#6b7280">Nombre</td><td style="padding:4px 0">${escapeHtml(safeName)}</td></tr>
+              <tr><td style="padding:4px 0;color:#6b7280">Correo</td><td style="padding:4px 0"><a href="mailto:${escapeHtml(email)}" style="color:${BRAND_PURPLE}">${escapeHtml(email)}</a></td></tr>
+              ${phone ? `<tr><td style="padding:4px 0;color:#6b7280">Teléfono</td><td style="padding:4px 0">${escapeHtml(phone)}</td></tr>` : ''}
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280">Mensaje</p>
+            <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3f3247;white-space:pre-wrap;border-left:3px solid ${BRAND_LAVENDER_BORDER};padding-left:12px">${escapeHtml(message)}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 36px 32px">
+            <p style="margin:0;font-size:13px;color:#6b7280">
+              Responde este correo para contestarle directo a ${escapeHtml(safeName)}.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`.trim();
+
+  return sendMail({
+    to: env.contact.email,
+    subject: `Contacto desde el sitio — ${safeName}`,
+    text,
+    html,
+    attachments: logoAttachment ? [logoAttachment] : undefined,
+    replyTo: email,
+  });
+}
+
+module.exports = { sendMail, sendPasswordResetEmail, sendContactMessage };

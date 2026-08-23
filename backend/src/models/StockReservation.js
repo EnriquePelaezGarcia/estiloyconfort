@@ -74,7 +74,11 @@ const StockReservation = {
   async listActiveByProductMaterial(productId, materialId, { excludeOrderId, conn } = {}) {
     const runner = conn ?? pool;
     const params = [productId, materialId];
-    let sql = `SELECT r.*, o.customer_name AS order_customer_name
+    // order_number: Docs/plan-venta-multiesquema.md RN-G10 — para poder
+    // nombrar el folio de la nota hermana en el mensaje de bloqueo, en vez
+    // de solo el nombre del cliente (que en una venta partida es el MISMO
+    // cliente, y confundiría el aviso).
+    let sql = `SELECT r.*, o.customer_name AS order_customer_name, o.order_number AS order_order_number
                  FROM stock_reservations r
                  JOIN orders o ON o.id = r.order_id
                 WHERE r.product_id = ? AND r.material_id = ? AND r.status = 'active'`;

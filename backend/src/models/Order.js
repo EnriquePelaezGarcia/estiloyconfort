@@ -311,6 +311,8 @@ function mapOrder(row) {
   return {
     id: row.id,
     orderNumber: row.order_number,
+    /** Docs/plan-venta-multiesquema.md D1/RN-G2: null = venta simple (el caso normal). */
+    saleGroupId: row.sale_group_id ?? null,
     shareToken: row.share_token ?? null,
     sellerId: row.seller_id,
     sellerName: row.seller_name ?? null,
@@ -409,7 +411,7 @@ const BASE_SELECT = `
  *   creación) — sus propias reservas activas no cuentan contra sí mismas
  *   (Docs/plan-reserva-de-piezas.md §4.2).
  */
-async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null) {
+async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null, groupOrderIds = null) {
   const [[product]] = await conn.execute(
     'SELECT id, name, sku, wholesale_min_qty FROM products WHERE id = ?', [it.productId],
   );
@@ -499,12 +501,21 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null)
     const [detail] = await StockReservation.listActiveByProductMaterial(
       product.id, materialId, { excludeOrderId: orderId, conn },
     );
-    const detailTxt = detail
-      ? ` — ${detail.customer_name ?? detail.order_customer_name ?? 'reserva sin cliente'}`
-      : '';
+    // RN-G10 (Docs/plan-venta-multiesquema.md): dentro de una venta partida
+    // las notas se resuelven en orden, en la misma transacción, así que la
+    // nota 2 puede toparse con una reserva que hizo su propia hermana (la
+    // nota 1). Es el bloqueo correcto — pero el mensaje debe decir que es
+    // "la otra nota de esta misma venta", no confundir al vendedor con un
+    // tercero desconocido (el nombre del cliente sería el mismo en los dos).
+    const isSiblingNote = !!(groupOrderIds && detail && groupOrderIds.includes(detail.order_id));
     const err = new Error(
-      `Solo hay ${Math.max(0, available)} pieza(s) disponible(s) de "${product.name}" en `
-      + `${declared.label}; ${reservedByOthers} está(n) apartada(s)${detailTxt}.`,
+      isSiblingNote
+        ? `La pieza de "${product.name}" en ${declared.label} ya quedó apartada por la otra nota de esta `
+          + `misma venta (folio ${detail.order_order_number ?? detail.order_id}). Revisa el reparto de piezas `
+          + 'entre las notas.'
+        : `Solo hay ${Math.max(0, available)} pieza(s) disponible(s) de "${product.name}" en `
+          + `${declared.label}; ${reservedByOthers} está(n) apartada(s)`
+          + `${detail ? ` — ${detail.customer_name ?? detail.order_customer_name ?? 'reserva sin cliente'}` : ''}.`,
     );
     err.statusCode = 400;
     throw err;
@@ -582,11 +593,33 @@ async function adjustMaterialStock(conn, productId, materialId, delta) {
 const Order = {
   ORDER_STATUSES,
 
-  /** Genera un número de pedido tipo EC-20260620-0007 */
-  async generateOrderNumber() {
-    const [[{ n }]] = await pool.execute('SELECT COUNT(*) AS n FROM orders');
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    return `EC-${date}-${String(Number(n) + 1).padStart(4, '0')}`;
+  /**
+   * Genera un número de pedido tipo EC-20260620-0007.
+   *
+   * Docs/plan-venta-multiesquema.md §6.1: recibe `conn` porque se llama
+   * DENTRO de la transacción de create() — usar `pool` (conexión aparte)
+   * hacía que el COUNT(*) no viera el insert todavía pendiente, así que dos
+   * pedidos seguidos en la misma transacción (createSplit) salían con el
+   * mismo folio. También corrige la carrera entre transacciones concurrentes:
+   * `INSERT ... ON DUPLICATE KEY UPDATE` toma el lock de la fila del día, así
+   * que dos vendedores guardando a la vez serializan en vez de colisionar.
+   *
+   * Cambia la semántica del folio: deja de ser "pedidos totales en la BD" y
+   * pasa a ser un consecutivo del día, que es lo que el formato ya sugería.
+   */
+  async generateOrderNumber(conn = pool) {
+    const now = new Date();
+    const dateOnly = now.toISOString().slice(0, 10);
+    const date = dateOnly.replace(/-/g, '');
+    await conn.execute(
+      'INSERT INTO order_sequences (seq_date, last_seq) VALUES (?, 1) '
+      + 'ON DUPLICATE KEY UPDATE last_seq = last_seq + 1',
+      [dateOnly],
+    );
+    const [[{ last_seq: lastSeq }]] = await conn.execute(
+      'SELECT last_seq FROM order_sequences WHERE seq_date = ?', [dateOnly],
+    );
+    return `EC-${date}-${String(lastSeq).padStart(4, '0')}`;
   },
 
   async findAll({ status, sellerId, deliveryPersonId, page = 1, limit = 20 } = {}) {
@@ -673,7 +706,38 @@ const Order = {
     order.discounts = await discountEngine.findAll('order', id);
     // Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno.
     order.extraCharges = await extraChargeEngine.findAll('order', id);
+    // Docs/plan-venta-multiesquema.md §7.1: solo un SELECT extra, y solo si
+    // el pedido pertenece a un grupo — la inmensa mayoría no lo hace.
+    if (order.saleGroupId) {
+      const [siblings] = await pool.execute(
+        `SELECT id, order_number, payment_method, total_amount, payment_status
+           FROM orders WHERE sale_group_id = ? AND id != ? ORDER BY id`,
+        [order.saleGroupId, id],
+      );
+      order.groupSiblings = siblings.map((s) => ({
+        id: s.id,
+        orderNumber: s.order_number,
+        paymentMethod: s.payment_method,
+        totalAmount: Number(s.total_amount),
+        paymentStatus: s.payment_status,
+      }));
+    } else {
+      order.groupSiblings = [];
+    }
     return order;
+  },
+
+  /**
+   * Todas las notas de una venta partida (Docs/plan-venta-multiesquema.md D9,
+   * §7.1) — impresión conjunta y ticket digital de grupo. `null`/`''` no
+   * cuenta como grupo: no se listan todos los pedidos sueltos por accidente.
+   */
+  async findByGroup(saleGroupId) {
+    if (!saleGroupId) return [];
+    const [rows] = await pool.execute(
+      `${BASE_SELECT} WHERE o.sale_group_id = ? ORDER BY o.id`, [saleGroupId],
+    );
+    return Promise.all(rows.map((row) => this.findById(row.id)));
   },
 
   /**
@@ -688,8 +752,27 @@ const Order = {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      const orderId = await this.createOne(conn, data, sellerId, requesterRole);
+      await conn.commit();
+      return this.findById(orderId);
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  },
 
-      const orderNumber = await this.generateOrderNumber();
+  /**
+   * Docs/plan-venta-multiesquema.md §7.1 (fase 3): cuerpo de create()
+   * extraído SIN cambio de comportamiento, para que createSplit() (fase 4)
+   * pueda llamarlo N veces dentro de UNA sola transacción compartida.
+   * Recibe `conn` ya abierta y en transacción — no la abre, no hace commit
+   * ni rollback; eso sigue siendo responsabilidad de quien llama.
+   * @returns {number} el id del pedido recién creado.
+   */
+  async createOne(conn, data, sellerId, requesterRole = 'seller', opts = {}) {
+      const orderNumber = await this.generateOrderNumber(conn);
       const items = Array.isArray(data.items) ? data.items : [];
       if (!items.length) {
         const err = new Error('El pedido debe incluir al menos un producto');
@@ -724,7 +807,7 @@ const Order = {
       let total = 0;
       const resolvedItems = [];
       for (const it of items) {
-        const resolved = await resolveOrderLine(conn, it, paymentMethod, config);
+        const resolved = await resolveOrderLine(conn, it, paymentMethod, config, null, opts.groupOrderIds ?? null);
         total += resolved.subtotal;
         resolvedItems.push(resolved);
       }
@@ -886,8 +969,27 @@ const Order = {
         if (moneyRow) moneyDiscountAmount = Number(moneyRow.amount);
       } else if (data.discount) {
         const normalized = discountEngine.normalizeDiscountInput(data.discount);
-        discountEngine.assertWithinCap(normalized.amount, requesterRole, config);
+        // RN-G5 (Docs/plan-venta-multiesquema.md): en una venta partida el
+        // tope ya se validó UNA vez en createSplit() contra la SUMA de los
+        // descuentos de todas las notas — volver a topar aquí cada nota por
+        // separado dejaría pasar montos que sumados sí exceden el tope.
+        if (!opts.skipDiscountCap) {
+          discountEngine.assertWithinCap(normalized.amount, requesterRole, config);
+        }
         moneyDiscountAmount = normalized.amount;
+      }
+      // Docs/plan-venta-multiesquema.md §6.3: antes se recortaba en silencio
+      // con Math.max(0, ...) — un descuento mayor al total desaparecía sin
+      // error ni rastro. Ahora se rechaza diciendo el máximo aplicable; el
+      // Math.max(0, ...) queda solo como red de seguridad aritmética, ya
+      // inalcanzable por esta vía.
+      if (moneyDiscountAmount > totalAmount) {
+        const err = new Error(
+          `El descuento (${moneyDiscountAmount.toFixed(2)}) supera el total de esta nota `
+          + `(${totalAmount.toFixed(2)}). El máximo aplicable aquí es ${totalAmount.toFixed(2)}.`,
+        );
+        err.statusCode = 400;
+        throw err;
       }
       totalAmount = Math.max(0, totalAmount - moneyDiscountAmount);
 
@@ -1097,8 +1199,146 @@ const Order = {
         }
       }
 
+      return orderId;
+  },
+
+  /**
+   * Venta partida — N pedidos hermanados por un `sale_group_id` común, uno
+   * por condición de venta presente en el carrito (Docs/plan-venta-multiesquema.md
+   * D1/D2, fase 4). Todo ocurre en UNA transacción: si algo falla a medio
+   * grupo, NINGUNA nota se crea (P10).
+   *
+   * @param {object} data campos compartidos del pedido (cliente, dirección,
+   *   entrega, notas, pickupInStore...) + shippingCost/shippingPostalCode/
+   *   assemblyService/assemblyFloors (D3: se aplican solo a la nota que
+   *   `carriesShipping`) + `saleGroups`:
+   *   [{ paymentMethod, items, discount, extraCharges, carriesShipping }, ...]
+   *   — `itemIndex` de cada `extraCharges[]` es LOCAL a los `items[]` de esa
+   *   nota, no del carrito completo (RN-G12).
+   * @param {number} sellerId
+   * @param {string} requesterRole
+   * @returns {{ saleGroupId: string, orders: object[] }}
+   */
+  async createSplit(data, sellerId, requesterRole = 'seller') {
+    const groups = Array.isArray(data.saleGroups) ? data.saleGroups : [];
+
+    // ─── Validaciones de forma, antes de tocar la BD (§7.1) ──────────────
+    if (groups.length < 2 || groups.length > 4) {
+      const err = new Error('Una venta partida necesita entre 2 y 4 notas (una por condición de venta), D2.');
+      err.statusCode = 400;
+      throw err;
+    }
+    const schemes = groups.map((g) => g.paymentMethod);
+    if (new Set(schemes).size !== schemes.length) {
+      const err = new Error('Cada nota de la venta partida debe tener una condición de venta distinta (RN-G1).');
+      err.statusCode = 400;
+      throw err;
+    }
+    groups.forEach((g, idx) => {
+      if (!Array.isArray(g.items) || !g.items.length) {
+        const err = new Error(`La nota ${idx + 1} de la venta partida no tiene productos.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    });
+
+    // D3/RN-G4: exactamente una nota lleva envío y armado.
+    const shippingCarriers = groups.filter((g) => g.carriesShipping);
+    if (shippingCarriers.length !== 1) {
+      const err = new Error('Exactamente una nota de la venta partida debe llevar el envío y el armado (RN-G4).');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // RN-G6: pickup en tienda es todo-o-nada dentro del grupo, y exige pago
+    // completo en TODAS las notas (misma regla que hoy, aplicada a cada una).
+    const pickupInStore = !!data.pickupInStore;
+    if (pickupInStore) {
+      const invalidScheme = groups.some((g) => !PICKUP_PAYMENT_METHODS.includes(g.paymentMethod));
+      if (invalidScheme) {
+        const err = new Error(
+          'Recoge en tienda solo admite pago completo (contado, MSI o mayoreo) en TODAS las notas de la venta (RN-G6).',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    // RN-G12: hasta 5 cargos extra por nota, con itemIndex dentro del rango
+    // de ESA nota (no del carrito completo).
+    groups.forEach((g, idx) => {
+      const extraCharges = Array.isArray(g.extraCharges) ? g.extraCharges : [];
+      if (extraCharges.length > extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT) {
+        const err = new Error(
+          `Nota ${idx + 1}: máximo ${extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT} cargos extra por nota (RN-G12).`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+      const outOfRange = extraCharges.some((ec) => {
+        const i = Number(ec.itemIndex);
+        return !Number.isInteger(i) || i < 0 || i >= g.items.length;
+      });
+      if (outOfRange) {
+        const err = new Error(
+          `Nota ${idx + 1}: un cargo extra apunta a una línea que no está en esta nota (RN-G12).`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    });
+
+    // RN-G5: el tope de descuento se valida UNA VEZ, contra la SUMA de los
+    // descuentos de todas las notas — no por nota, o un vendedor con tope de
+    // $500 daría $500 en cada una y se autorizaría el doble solo.
+    const config = await PricingConfig.getMap();
+    let discountSum = 0;
+    for (const g of groups) {
+      if (g.discount) {
+        discountSum += discountEngine.normalizeDiscountInput(g.discount).amount;
+      }
+    }
+    if (discountSum > 0) {
+      discountEngine.assertWithinCap(discountSum, requesterRole, config);
+    }
+
+    // ─── Creación: una transacción, N llamadas a createOne (RN-G10: en
+    // orden, sobre la misma conexión, para que el stock y las reservas de
+    // una nota vean correctamente lo que ya resolvió su hermana) ─────────
+    const saleGroupId = crypto.randomBytes(12).toString('hex');
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const orderIds = [];
+      for (const g of groups) {
+        const carriesShipping = !!g.carriesShipping;
+        const noteData = {
+          ...data,
+          paymentMethod: g.paymentMethod,
+          items: g.items,
+          discount: g.discount ?? null,
+          extraCharges: Array.isArray(g.extraCharges) ? g.extraCharges : [],
+          // D3/RN-G4: el servidor fuerza $0 en las notas que no cargan el
+          // envío/armado — no confía en lo que mande el cliente por nota.
+          shippingCost: carriesShipping ? data.shippingCost : 0,
+          shippingPostalCode: carriesShipping ? data.shippingPostalCode : null,
+          assemblyService: carriesShipping ? data.assemblyService : false,
+          assemblyFloors: carriesShipping ? data.assemblyFloors : 0,
+          // D12: las cotizaciones quedan fuera de alcance de la venta partida v1.
+          fromQuoteId: null,
+        };
+        // eslint-disable-next-line no-await-in-loop
+        const orderId = await this.createOne(conn, noteData, sellerId, requesterRole, {
+          skipDiscountCap: true,
+          groupOrderIds: orderIds.slice(),
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await conn.execute('UPDATE orders SET sale_group_id = ? WHERE id = ?', [saleGroupId, orderId]);
+        orderIds.push(orderId);
+      }
       await conn.commit();
-      return this.findById(orderId);
+      const orders = await Promise.all(orderIds.map((id) => this.findById(id)));
+      return { saleGroupId, orders };
     } catch (err) {
       await conn.rollback();
       throw err;
@@ -1247,6 +1487,24 @@ const Order = {
       // 2. Resolver los nuevos items y validar (stock ya restaurado).
       const items = Array.isArray(data.items) ? data.items : [];
       const paymentMethod = data.paymentMethod ?? existing.paymentMethod ?? 'cash';
+
+      // RN-G1 (Docs/plan-venta-multiesquema.md §7.1): una nota de una venta
+      // partida no puede cambiar a la condición de venta que ya usa su
+      // hermana — dejaría dos notas del grupo con el mismo esquema, y el
+      // grupo existe precisamente para separarlos. `sale_group_id` no está
+      // en el UPDATE de más abajo, así que se conserva solo sin tocarlo.
+      if (existing.saleGroupId && paymentMethod !== existing.paymentMethod) {
+        const clash = (existing.groupSiblings || []).some((s) => s.paymentMethod === paymentMethod);
+        if (clash) {
+          const err = new Error(
+            'Esta nota es parte de una venta partida: no puede cambiar a una condición de venta '
+            + 'que ya usa su nota hermana.',
+          );
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
       const config = await PricingConfig.getMap();
       if (paymentMethod === 'wholesale' && !Number(config.wholesale_enabled)) {
         const err = new Error('El esquema de Mayoreo no está activo.');
@@ -1427,6 +1685,15 @@ const Order = {
         discountEngine.assertWithinCap(normalized.amount, requesterRole, config);
         moneyDiscountAmount = normalized.amount;
         newMoneyDiscount = normalized;
+      }
+      // Docs/plan-venta-multiesquema.md §6.3 — ver el gemelo en create().
+      if (moneyDiscountAmount > totalAmount) {
+        const err = new Error(
+          `El descuento (${moneyDiscountAmount.toFixed(2)}) supera el total de esta nota `
+          + `(${totalAmount.toFixed(2)}). El máximo aplicable aquí es ${totalAmount.toFixed(2)}.`,
+        );
+        err.statusCode = 400;
+        throw err;
       }
       totalAmount = Math.max(0, totalAmount - moneyDiscountAmount);
 

@@ -19,6 +19,7 @@ const ticketsRoutes = require('./ticketsRoutes');
 const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
 const discountsRoutes = require('./discountsRoutes');
 const reviewsRoutes = require('./reviewsRoutes');
+const contactRoutes = require('./contactRoutes');
 const blockIfMustChangePassword = require('../middleware/mustChangePassword');
 
 const router = Router();
@@ -57,5 +58,7 @@ router.use('/deliveries', deliveryScheduleRoutes);
 router.use('/discounts', discountsRoutes);
 // Reseñas de Google para la portada — público, sin autenticar.
 router.use('/reviews', reviewsRoutes);
+// Formulario de contacto de la página /contacto — público, sin autenticar.
+router.use('/contact', contactRoutes);
 
 module.exports = router;

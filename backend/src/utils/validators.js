@@ -82,6 +82,30 @@ function validateResetPassword(body) {
   return errors;
 }
 
+/**
+ * Formulario público de contacto. El teléfono es opcional (no todos quieren
+ * dejarlo); nombre, correo y mensaje sí son obligatorios porque sin ellos no
+ * hay a quién ni qué responder.
+ */
+function validateContactMessage(body) {
+  const errors = [];
+  if (!isNonEmptyString(body.name) || body.name.trim().length > 120) {
+    errors.push('El nombre es obligatorio (máximo 120 caracteres)');
+  }
+  if (!isValidEmail(body.email)) errors.push('Email inválido');
+  if (body.phone && String(body.phone).trim().length > 30) {
+    errors.push('El teléfono es demasiado largo');
+  }
+  if (
+    !isNonEmptyString(body.message) ||
+    body.message.trim().length < 10 ||
+    body.message.trim().length > 4000
+  ) {
+    errors.push('El mensaje debe tener entre 10 y 4000 caracteres');
+  }
+  return errors;
+}
+
 module.exports = {
   isValidEmail,
   isValidPassword,
@@ -91,4 +115,5 @@ module.exports = {
   validateLogin,
   validatePasswordChange,
   validateResetPassword,
+  validateContactMessage,
 };

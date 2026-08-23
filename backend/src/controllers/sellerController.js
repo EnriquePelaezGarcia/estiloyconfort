@@ -138,6 +138,18 @@ const sellerController = {
     res.status(201).json({ data: order, message: 'Pedido creado exitosamente' });
   }),
 
+  // POST /api/seller/orders/split — venta partida (Docs/plan-venta-multiesquema.md
+  // §7.2). No toca /orders: la venta de un solo esquema sigue su camino de
+  // siempre, byte por byte.
+  createSplit: asyncHandler(async (req, res) => {
+    if (!req.body.customerName) throw ApiError.badRequest('El nombre del cliente es obligatorio');
+    if (!Array.isArray(req.body.saleGroups) || req.body.saleGroups.length < 2) {
+      throw ApiError.badRequest('Una venta partida necesita al menos 2 notas (saleGroups).');
+    }
+    const { saleGroupId, orders } = await Order.createSplit(req.body, req.user.id, req.user.role);
+    res.status(201).json({ data: { saleGroupId, orders }, message: 'Venta partida creada exitosamente' });
+  }),
+
   // PATCH /api/seller/orders/:id
   // 'pending' se edita libre. 'fabricating'/'ready' solo permiten cambiar
   // items de stock por otros de stock (los de fabricación deben llegar

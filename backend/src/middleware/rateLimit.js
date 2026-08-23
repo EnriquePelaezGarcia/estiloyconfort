@@ -70,4 +70,23 @@ const forgotPasswordEmailLimiter = rateLimit({
   },
 });
 
-module.exports = { authLimiter, forgotPasswordIpLimiter, forgotPasswordEmailLimiter };
+/**
+ * Formulario público de Contacto: cada llamada legítima manda un correo real,
+ * así que se limita por IP para que nadie lo use para inundar el buzón.
+ */
+const contactIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    message: 'Demasiados mensajes enviados. Espera unos minutos e intenta de nuevo.',
+  },
+});
+
+module.exports = {
+  authLimiter,
+  forgotPasswordIpLimiter,
+  forgotPasswordEmailLimiter,
+  contactIpLimiter,
+};

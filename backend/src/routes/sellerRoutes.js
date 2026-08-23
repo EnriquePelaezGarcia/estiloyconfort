@@ -21,6 +21,7 @@ router.post('/credit-quote', sellerController.creditQuote);
 router.get('/orders', sellerController.list);
 router.get('/orders/:id', sellerController.getOne);
 router.post('/orders', sellerController.create);
+router.post('/orders/split', sellerController.createSplit);
 router.patch('/orders/:id', sellerController.update);
 router.delete('/orders/:id', sellerController.remove);
 // Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente.

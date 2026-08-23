@@ -53,7 +53,14 @@ const env = {
     placeId: process.env.GOOGLE_PLACE_ID || '',
     placeQuery:
       process.env.GOOGLE_PLACE_QUERY || 'Mueblería Estilo y Confort, Puebla, México',
-  }
+  },
+
+  // Buzón que recibe los mensajes del formulario público de Contacto. Es un
+  // alias de Email Routing sobre el dominio propio, no una cuenta comprada
+  // (ver memoria "correo-corporativo-email-routing").
+  contact: {
+    email: process.env.CONTACT_EMAIL || 'muebleria@estiloyconfortm.com',
+  },
 };
 
 // Origen canónico para construir enlaces públicos (cotizaciones, tickets de
