@@ -44,6 +44,15 @@
             >
               Gratis
             </button>
+            <!-- Docs/plan-aprobaciones-admin.md D5: enlace de texto discreto,
+                 nunca un botón — solo se busca cuando hace falta. -->
+            <button
+              type="button"
+              class="summary-line__extra-charge-toggle"
+              (click)="toggleExtraChargeForm(i)"
+            >
+              + cargo extra
+            </button>
           }
         </span>
         <span class="summary-line__amount">
@@ -55,8 +64,40 @@
           } @else { — }
         </span>
       </div>
+
+      <!-- Cargos extra de ESTA línea (D5): nada visible si no hay ninguno. -->
+      @if (l.extraCharges?.length) {
+        <ul class="summary-line__charges">
+          @for (ec of l.extraCharges; track ec.label + ec.amount; let ci = $index) {
+            <li class="summary-line__charge">
+              <span>{{ ec.label }}</span>
+              <span class="summary-line__charge-amount">
+                {{ ec.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                <button
+                  type="button"
+                  class="summary-line__charge-remove"
+                  title="Quitar este cargo extra"
+                  (click)="store.removeExtraCharge(i, ci)"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </span>
+            </li>
+          }
+        </ul>
+      }
+      @if (openExtraChargeLine() === i) {
+        <app-extra-charge-picker
+          (added)="addExtraCharge(i, $event)"
+          (cancelled)="openExtraChargeLine.set(null)"
+        />
+      }
     }
   </div>
+
+  @if (store.extraChargesCount() > 0) {
+    <p class="extra-charges-count">{{ store.extraChargesCount() }}/{{ store.MAX_EXTRA_CHARGES }} cargos extra</p>
+  }
 
   <!-- Docs/plan-descuentos.md: descuento en dinero — bloqueado si ya hay uno
        guardado (pending/approved), captura libre si no. -->
@@ -111,7 +152,7 @@
     }
   </div>
 
-  @if (store.shippingQuote() || store.needsManualShipping() || store.hasAssembly() || store.isCredit() || store.activeMoneyDiscount() || store.discountAmount() !== null) {
+  @if (store.shippingQuote() || store.needsManualShipping() || store.hasAssembly() || store.isCredit() || store.activeMoneyDiscount() || store.discountAmount() !== null || store.extraChargesCount() > 0) {
     <div class="cart-total cart-total--sub">
       <span>
         @if (store.isCredit()) { Precio a crédito }
@@ -156,6 +197,13 @@
           <span class="shipping-row__price">{{ store.manualShippingCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
         }
       </div>
+      @if (store.manualShippingCost() !== null) {
+        <!-- Docs/plan-aprobaciones-admin.md RN-SM1: solo el vendedor lo ve —
+             el admin lo captura ya aprobado. -->
+        @if (!store.isAdminRole()) {
+          <p class="field__hint">Quedará pendiente de aprobación de un admin.</p>
+        }
+      }
     }
     @if (!store.isPickup() && store.hasAssembly()) {
       <div class="shipping-row">
@@ -164,6 +212,15 @@
           Servicio de armado (piso {{ store.assemblyFloorsValue() }})
         </span>
         <span class="shipping-row__price">{{ store.assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      </div>
+    }
+    @if (store.extraChargesTotal() > 0) {
+      <div class="shipping-row">
+        <span class="shipping-row__label">
+          <span class="material-symbols-outlined">build</span>
+          Cargos extra ({{ store.extraChargesCount() }})
+        </span>
+        <span class="shipping-row__price">{{ store.extraChargesTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       </div>
     }
     @if (store.activeMoneyDiscount(); as active) {

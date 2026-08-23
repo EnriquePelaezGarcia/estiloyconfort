@@ -1,0 +1,143 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Administración</p>
+    <h1 class="page-head__title">Aprobaciones</h1>
+    <p class="page-head__sub">
+      Descuentos, regalos, envío manual y cargos extra de pedidos y cotizaciones — todo en un solo lugar.
+    </p>
+  </div>
+</header>
+
+<nav class="tabbar">
+  <button type="button" class="tabbar__tab" [class.tabbar__tab--active]="activeTab() === 'pending'" (click)="setTab('pending')">
+    Pendientes
+  </button>
+  <button type="button" class="tabbar__tab" [class.tabbar__tab--active]="activeTab() === 'reviewed'" (click)="setTab('reviewed')">
+    Historial
+  </button>
+</nav>
+
+<div class="toolbar">
+  <select class="filter-select" (change)="setTypeFilter($event)">
+    <option value="all">Todos los tipos</option>
+    @for (t of typeOptions; track t) {
+      <option [value]="t">{{ typeLabels[t] }}</option>
+    }
+  </select>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando…</p></div>
+} @else if (filtered().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">task_alt</span>
+    <p>
+      @if (activeTab() === 'pending') { No hay nada pendiente de revisar. }
+      @else { Todavía no hay historial. }
+    </p>
+  </div>
+} @else {
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tipo</th><th>Documento</th><th>Cliente</th><th>Motivo</th>
+          <th class="num">Monto</th><th>Pedido por</th><th>Fecha</th>
+          @if (activeTab() === 'reviewed') { <th>Revisado</th> }
+          <th class="actions-col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of filtered(); track item.id) {
+          <tr>
+            <td data-label="Tipo">
+              <span class="approval-type">
+                <span class="material-symbols-outlined">{{ typeIcons[item.type] }}</span>
+                {{ typeLabels[item.type] }}
+              </span>
+            </td>
+            <td data-label="Documento">
+              <a [routerLink]="detailLink(item)" class="strong">{{ item.documentLabel }}</a>
+            </td>
+            <td data-label="Cliente">{{ item.customerName }}</td>
+            <td data-label="Motivo" class="muted">{{ item.label }}</td>
+            <td data-label="Monto" class="num">
+              @if (item.originalAmount !== null) {
+                <span class="approval-amount__original">{{ item.originalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                →
+              }
+              {{ item.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+            </td>
+            <td data-label="Pedido por" class="muted">{{ item.requestedByName ?? '—' }}</td>
+            <td data-label="Fecha" class="muted">{{ item.requestedAt | date:'d MMM y' }}</td>
+            @if (activeTab() === 'reviewed') {
+              <td data-label="Revisado" class="muted">
+                {{ item.reviewedByName ?? '—' }}
+                @if (item.reviewedAt) { · {{ item.reviewedAt | date:'d MMM y' }} }
+              </td>
+            }
+            <td class="actions">
+              @if (activeTab() === 'pending') {
+                <input
+                  type="number"
+                  class="approval-amount-input"
+                  min="0"
+                  step="0.01"
+                  [value]="item.amount"
+                  #amt
+                  title="Monto a aprobar"
+                />
+                <button
+                  type="button"
+                  class="btn btn--primary btn--sm"
+                  [disabled]="processingId() === item.id"
+                  (click)="approve(item, amt.value)"
+                >
+                  <span class="material-symbols-outlined">check</span> Aprobar
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" (click)="askReject(item)">
+                  <span class="material-symbols-outlined">close</span> Rechazar
+                </button>
+              } @else {
+                <span class="badge" [class]="statusTone(item.status)">{{ statusLabel(item.status) }}</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (hasMoreReviewed()) {
+    <div class="load-more">
+      <button type="button" class="btn btn--ghost" (click)="loadMoreReviewed()">Cargar más</button>
+    </div>
+  }
+}
+
+<!-- ===== Modal: rechazar (con nota) ===== -->
+@if (pendingReject(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar {{ typeLabels[target.type] | lowercase }}</h2>
+        <p class="muted">
+          {{ target.documentLabel }} — {{ target.customerName }} ({{ target.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+        </p>
+        <div class="field">
+          <label for="approvalsRejectNote">Motivo (opcional)</label>
+          <textarea
+            id="approvalsRejectNote"
+            [value]="rejectNote()"
+            (input)="rejectNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingReject.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmReject()">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

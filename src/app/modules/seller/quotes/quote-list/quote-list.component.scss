@@ -140,6 +140,16 @@
 
   &__discount-text { flex: 1; min-width: 160px; }
 
+  // Docs/plan-aprobaciones-admin.md RN-MOD1: monto editable al aprobar.
+  &__approve-amount {
+    width: 6.5rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    font: inherit;
+    font-size: 0.78rem;
+  }
+
   &__actions {
     display: flex;
     flex-wrap: wrap;

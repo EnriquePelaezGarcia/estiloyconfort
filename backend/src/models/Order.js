@@ -3,7 +3,9 @@ const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const Quote = require('./Quote');
 const StockReservation = require('./StockReservation');
+const ShippingRate = require('./ShippingRate');
 const discountEngine = require('./discountEngine');
+const extraChargeEngine = require('./extraChargeEngine');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
 
@@ -348,6 +350,19 @@ function mapOrder(row) {
     totalAmount: Number(row.total_amount),
     shippingCost: row.shipping_cost != null ? Number(row.shipping_cost) : 0,
     shippingPostalCode: row.shipping_postal_code ?? null,
+    /**
+     * Aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM):
+     * 'none' = no aplica (pickup, o el CP sí tenía tarifa de `shipping_rates`
+     * — esa vía no cambia). `shippingCostRequested` es el snapshot de lo que
+     * pidió el vendedor, para mostrar "Solicitado -> Aprobado" si el admin lo
+     * modifica al aprobar.
+     */
+    shippingCostStatus: row.shipping_cost_status ?? 'none',
+    shippingCostRequested: row.shipping_cost_requested != null ? Number(row.shipping_cost_requested) : null,
+    shippingCostReviewedBy: row.shipping_cost_reviewed_by ?? null,
+    shippingCostReviewedByName: row.shipping_cost_reviewed_by_name ?? null,
+    shippingCostReviewedAt: row.shipping_cost_reviewed_at ?? null,
+    shippingCostReviewNote: row.shipping_cost_review_note ?? null,
     assemblyService: !!row.assembly_service,
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
@@ -369,10 +384,12 @@ function mapOrder(row) {
 }
 
 const BASE_SELECT = `
-  SELECT o.*, s.full_name AS seller_name, d.full_name AS delivery_person_name
+  SELECT o.*, s.full_name AS seller_name, d.full_name AS delivery_person_name,
+         shr.full_name AS shipping_cost_reviewed_by_name
   FROM orders o
   LEFT JOIN users s ON s.id = o.seller_id
   LEFT JOIN users d ON d.id = o.delivery_person_id
+  LEFT JOIN users shr ON shr.id = o.shipping_cost_reviewed_by
 `;
 
 /**
@@ -654,6 +671,8 @@ const Order = {
       collectedByName: p.collected_by_name ?? null, notes: p.notes,
     }));
     order.discounts = await discountEngine.findAll('order', id);
+    // Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno.
+    order.extraCharges = await extraChargeEngine.findAll('order', id);
     return order;
   },
 
@@ -755,6 +774,46 @@ const Order = {
       const shippingPostalCode = pickupInStore ? null : (data.shippingPostalCode ?? null);
       totalAmount += shippingCost;
 
+      /**
+       * Aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM1):
+       * si el pedido nace de una cotización, el estado se HEREDA tal cual (ya
+       * pasó su revisión); si no, se determina aquí — 'none' si no aplica o
+       * el CP sí tiene tarifa de catálogo (`shipping_rates`, sigue sin
+       * aprobación como hoy), 'pending'/'approved' si el CP no tiene tarifa y
+       * alguien lo capturó a mano.
+       */
+      let shippingCostStatus = 'none';
+      let shippingCostRequested = null;
+      let shippingCostReviewedBy = null;
+      let shippingCostReviewedAt = null;
+      let shippingCostReviewNote = null;
+      if (data.fromQuoteId) {
+        const [[quoteShipping]] = await conn.execute(
+          `SELECT shipping_cost_status, shipping_cost_requested, shipping_cost_reviewed_by,
+                  shipping_cost_reviewed_at, shipping_cost_review_note
+             FROM quotes WHERE id = ?`,
+          [data.fromQuoteId],
+        );
+        if (quoteShipping) {
+          shippingCostStatus = quoteShipping.shipping_cost_status;
+          shippingCostRequested = quoteShipping.shipping_cost_requested != null
+            ? Number(quoteShipping.shipping_cost_requested) : null;
+          shippingCostReviewedBy = quoteShipping.shipping_cost_reviewed_by;
+          shippingCostReviewedAt = quoteShipping.shipping_cost_reviewed_at;
+          shippingCostReviewNote = quoteShipping.shipping_cost_review_note;
+        }
+      } else if (!pickupInStore && shippingPostalCode) {
+        const rate = await ShippingRate.quoteByPostalCode(shippingPostalCode);
+        if (!rate) {
+          shippingCostStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+          shippingCostRequested = shippingCost;
+          if (requesterRole === 'admin') {
+            shippingCostReviewedBy = sellerId;
+            shippingCostReviewedAt = new Date();
+          }
+        }
+      }
+
       // Servicio de armado: el servidor calcula el costo con las tarifas
       // vigentes (snapshot en el pedido); el cliente solo manda flag + pisos.
       // RN-P2: el armado es un servicio a domicilio — en pickup no aplica.
@@ -766,6 +825,41 @@ const Order = {
         totalAmount += assemblyCost;
       }
       const deliveryType = assemblyService ? 'with_installation' : 'standard';
+
+      /**
+       * Cargos extra por modificación al mueble (Docs/plan-aprobaciones-admin.md
+       * RN-EC2): suman al total de inmediato, igual que el descuento resta. Si
+       * el pedido nace de una cotización, se hereda la suma de los activos tal
+       * cual (ya se sumó al cotizar); si no, se valida y suma lo que venga en
+       * `data.extraCharges[]` (cada uno con `itemIndex` — la posición en
+       * `items[]`, porque el id real del renglón todavía no existe aquí).
+       */
+      let quoteExtraChargesToCopy = [];
+      let normalizedExtraCharges = [];
+      let extraChargesTotal = 0;
+      if (data.fromQuoteId) {
+        const [qecRows] = await conn.execute(
+          `SELECT ec.*, qi.product_id, qi.material_id
+             FROM quote_extra_charges ec
+             LEFT JOIN quote_items qi ON qi.id = ec.quote_item_id
+            WHERE ec.quote_id = ? AND ec.status IN ('pending','approved')`,
+          [data.fromQuoteId],
+        );
+        quoteExtraChargesToCopy = qecRows;
+        extraChargesTotal = qecRows.reduce((s, r) => s + Number(r.amount), 0);
+      } else if (Array.isArray(data.extraCharges) && data.extraCharges.length) {
+        if (data.extraCharges.length > extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT) {
+          const err = new Error(`Máximo ${extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT} cargos extra por pedido.`);
+          err.statusCode = 400;
+          throw err;
+        }
+        normalizedExtraCharges = data.extraCharges.map((ec) => ({
+          ...extraChargeEngine.normalizeExtraChargeInput(ec),
+          itemIndex: Number(ec.itemIndex),
+        }));
+        extraChargesTotal = normalizedExtraCharges.reduce((s, r) => s + r.amount, 0);
+      }
+      totalAmount += extraChargesTotal;
 
       /**
        * Descuento en dinero (Docs/plan-descuentos.md, RN-D1/RN-D3): si el
@@ -824,10 +918,12 @@ const Order = {
            expected_delivery_date, delivery_commitment, delivery_window_start,
            delivery_window_end, delivery_slot_id,
            total_amount, shipping_cost, shipping_postal_code,
+           shipping_cost_status, shipping_cost_requested, shipping_cost_reviewed_by,
+           shipping_cost_reviewed_at, shipping_cost_review_note,
            assembly_service, assembly_floors, assembly_cost,
            notas_fabricante, notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -841,6 +937,8 @@ const Order = {
           schedule.deliveryCommitment, schedule.deliveryWindowStart,
           schedule.deliveryWindowEnd, schedule.deliverySlotId,
           totalAmount, shippingCost, shippingPostalCode,
+          shippingCostStatus, shippingCostRequested, shippingCostReviewedBy,
+          shippingCostReviewedAt, shippingCostReviewNote,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
           data.notasFabricante ?? null, data.notasPedido ?? null,
           data.instruccionesEntrega ?? null,
@@ -956,6 +1054,45 @@ const Order = {
             requestedBy: sellerId,
             requestedByRole: requesterRole,
             ...reviewedFields,
+          });
+        }
+      }
+
+      // Cargos extra (Docs/plan-aprobaciones-admin.md RN-EC): igual que los
+      // descuentos, se heredan tal cual desde la cotización o se capturan
+      // frescos desde el payload, ligados a la línea recién insertada.
+      if (data.fromQuoteId && quoteExtraChargesToCopy.length) {
+        for (const ec of quoteExtraChargesToCopy) {
+          const match = resolvedItems.find(
+            (it) => it.productId === ec.product_id && it.materialId === ec.material_id,
+          );
+          await extraChargeEngine.insert('order', conn, orderId, {
+            itemId: match ? match.insertedItemId : null,
+            label: ec.label,
+            amount: Number(ec.amount),
+            status: ec.status,
+            requestedBy: ec.requested_by,
+            requestedByRole: ec.requested_by_role,
+            reviewedBy: ec.reviewed_by,
+            reviewedAt: ec.reviewed_at,
+            reviewNote: ec.review_note,
+          });
+        }
+      } else if (normalizedExtraCharges.length) {
+        const chargeStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+        const chargeReviewedFields = requesterRole === 'admin'
+          ? { reviewedBy: sellerId, reviewedAt: new Date() }
+          : {};
+        for (const ec of normalizedExtraCharges) {
+          const item = Number.isInteger(ec.itemIndex) ? resolvedItems[ec.itemIndex] : null;
+          await extraChargeEngine.insert('order', conn, orderId, {
+            itemId: item ? item.insertedItemId : null,
+            label: ec.label,
+            amount: ec.amount,
+            status: chargeStatus,
+            requestedBy: sellerId,
+            requestedByRole: requesterRole,
+            ...chargeReviewedFields,
           });
         }
       }
@@ -1189,6 +1326,69 @@ const Order = {
         : existing.shippingPostalCode);
       totalAmount += shippingCost;
 
+      /**
+       * Aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM1):
+       * si esta edición TOCA el envío se recalcula igual que en `create()`
+       * (vuelve a `pending`/`approved` si sigue sin tarifa de catálogo — un
+       * monto editado es, en efecto, uno nuevo); si no lo toca, se conserva
+       * el estado que ya tenía.
+       */
+      let shippingCostStatus = existing.shippingCostStatus ?? 'none';
+      let shippingCostRequested = existing.shippingCostRequested ?? null;
+      let shippingCostReviewedBy = existing.shippingCostReviewedBy ?? null;
+      let shippingCostReviewedAt = existing.shippingCostReviewedAt ?? null;
+      let shippingCostReviewNote = existing.shippingCostReviewNote ?? null;
+      if (pickupInStore) {
+        shippingCostStatus = 'none';
+        shippingCostRequested = null;
+        shippingCostReviewedBy = null;
+        shippingCostReviewedAt = null;
+        shippingCostReviewNote = null;
+      } else if (data.shippingCost !== undefined) {
+        const rate = shippingPostalCode ? await ShippingRate.quoteByPostalCode(shippingPostalCode) : null;
+        if (rate || !shippingPostalCode) {
+          shippingCostStatus = 'none';
+          shippingCostRequested = null;
+          shippingCostReviewedBy = null;
+          shippingCostReviewedAt = null;
+          shippingCostReviewNote = null;
+        } else {
+          shippingCostStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+          shippingCostRequested = shippingCost;
+          shippingCostReviewedBy = requesterRole === 'admin' ? (userId ?? existing.sellerId) : null;
+          shippingCostReviewedAt = requesterRole === 'admin' ? new Date() : null;
+          shippingCostReviewNote = null;
+        }
+      }
+
+      /**
+       * Cargos extra (Docs/plan-aprobaciones-admin.md RN-EC4): si esta edición
+       * manda `data.extraCharges` (array, aunque venga vacío), se reemplazan
+       * TODOS los de este pedido por los nuevos — mismo criterio que el
+       * regalo (RN-D7): uno ya aprobado vuelve a `pending` si se vuelve a
+       * tocar el carrito. Si no viene el arreglo (caller que no lo toca,
+       * p.ej. el repartidor pidiendo un descuento), se conservan tal cual.
+       */
+      const replacesExtraCharges = Array.isArray(data.extraCharges);
+      let normalizedExtraCharges = [];
+      let extraChargesTotal = 0;
+      if (replacesExtraCharges) {
+        if (data.extraCharges.length > extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT) {
+          const err = new Error(`Máximo ${extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT} cargos extra por pedido.`);
+          err.statusCode = 400;
+          throw err;
+        }
+        normalizedExtraCharges = data.extraCharges.map((ec) => ({
+          ...extraChargeEngine.normalizeExtraChargeInput(ec),
+          itemIndex: Number(ec.itemIndex),
+        }));
+        extraChargesTotal = normalizedExtraCharges.reduce((s, r) => s + r.amount, 0);
+      } else {
+        extraChargesTotal = (await extraChargeEngine.findActive('order', id, conn))
+          .reduce((s, r) => s + Number(r.amount), 0);
+      }
+      totalAmount += extraChargesTotal;
+
       // Servicio de armado: si la edición lo modifica se recalcula con las
       // tarifas vigentes; si no viene en la edición se conserva el snapshot.
       let assemblyService = !!existing.assemblyService;
@@ -1358,6 +1558,8 @@ const Order = {
            delivery_commitment = ?, delivery_window_start = ?,
            delivery_window_end = ?, delivery_slot_id = ?, notes = ?,
            total_amount = ?, shipping_cost = ?, shipping_postal_code = ?,
+           shipping_cost_status = ?, shipping_cost_requested = ?, shipping_cost_reviewed_by = ?,
+           shipping_cost_reviewed_at = ?, shipping_cost_review_note = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
            notas_fabricante = ?, notas_pedido = ?, instrucciones_entrega = ?,
            cash_total = ?, down_payment = ?,
@@ -1376,6 +1578,8 @@ const Order = {
           schedule.deliveryWindowStart, schedule.deliveryWindowEnd, schedule.deliverySlotId,
           data.notes !== undefined ? data.notes : existing.notes,
           totalAmount, shippingCost, shippingPostalCode,
+          shippingCostStatus, shippingCostRequested, shippingCostReviewedBy,
+          shippingCostReviewedAt, shippingCostReviewNote,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
           data.notasFabricante !== undefined ? data.notasFabricante : existing.notasFabricante,
           data.notasPedido !== undefined ? data.notasPedido : existing.notasPedido,
@@ -1384,6 +1588,29 @@ const Order = {
           id,
         ],
       );
+
+      // Cargos extra (RN-EC4): si esta edición los reemplaza, se borran todos
+      // los de este pedido y se reinsertan frescos ligados a las líneas RECIÉN
+      // creadas arriba (mismo criterio que el regalo con `deleteProductDiscounts`).
+      if (replacesExtraCharges) {
+        await extraChargeEngine.deleteAll('order', conn, id);
+        const chargeStatus = requesterRole === 'admin' ? 'approved' : 'pending';
+        const chargeReviewedFields = requesterRole === 'admin'
+          ? { reviewedBy: userId ?? existing.sellerId, reviewedAt: new Date() }
+          : {};
+        for (const ec of normalizedExtraCharges) {
+          const item = Number.isInteger(ec.itemIndex) ? resolvedItems[ec.itemIndex] : null;
+          await extraChargeEngine.insert('order', conn, id, {
+            itemId: item ? item.insertedItemId : null,
+            label: ec.label,
+            amount: ec.amount,
+            status: chargeStatus,
+            requestedBy: userId ?? existing.sellerId,
+            requestedByRole: requesterRole,
+            ...chargeReviewedFields,
+          });
+        }
+      }
 
       await conn.commit();
       return this.findById(id);
@@ -1516,9 +1743,38 @@ const Order = {
     return this.findById(id);
   },
 
-  /** Aprobar no toca el total: ya se restó (o, en 'product', ya nació en $0) al capturarlo. */
-  async approveDiscount(orderId, discountId, adminId) {
-    await discountEngine.approve('order', orderId, discountId, adminId);
+  /**
+   * Aprobar. Para 'money' no toca el total salvo que `newAmount` venga
+   * (Docs/plan-aprobaciones-admin.md RN-MOD1): en ese caso se ajusta
+   * `total_amount` por la diferencia contra lo ya restado. Para 'product'
+   * modificar el monto solo corrige el valor de referencia (RN-MOD2), nunca
+   * toca el total — la línea ya vale $0 sin importar este número.
+   */
+  async approveDiscount(orderId, discountId, adminId, newAmount = null) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const result = await discountEngine.approve('order', orderId, discountId, adminId, newAmount, conn);
+      if (result.discount_type === 'money' && result.amount !== result.oldAmount) {
+        const [[row]] = await conn.execute(
+          'SELECT total_amount, payment_amount FROM orders WHERE id = ?', [orderId],
+        );
+        const delta = result.oldAmount - result.amount;
+        const newTotal = Math.max(0, Math.round((Number(row.total_amount) + delta) * 100) / 100);
+        const paid = Number(row.payment_amount) || 0;
+        const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+        await conn.execute(
+          'UPDATE orders SET total_amount = ?, payment_status = ? WHERE id = ?',
+          [newTotal, paymentStatus, orderId],
+        );
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
     return this.findById(orderId);
   },
 
@@ -1590,6 +1846,175 @@ const Order = {
     } finally {
       conn.release();
     }
+    return this.findById(orderId);
+  },
+
+  // ===== Cargos extra por modificación (Docs/plan-aprobaciones-admin.md RN-EC) =====
+
+  /**
+   * Cargo extra capturado sobre un pedido YA EXISTENTE (RN-EC6) — el cliente
+   * pidió la modificación después de crear el pedido. Se aplica de inmediato
+   * (suma al total) y respeta el tope de 5 activos (RN-EC1).
+   */
+  async applyExtraCharge(id, { itemId, label, amount, requestedBy, requestedByRole }) {
+    const existing = await this.findById(id);
+    if (!existing) { const err = new Error('Pedido no encontrado'); err.statusCode = 404; throw err; }
+    if (existing.orderStatus === 'cancelled') {
+      const err = new Error('No se puede agregar un cargo extra a un pedido cancelado');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (itemId != null && !(existing.items ?? []).some((it) => it.id === Number(itemId))) {
+      const err = new Error('La línea indicada no pertenece a este pedido');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const normalized = extraChargeEngine.normalizeExtraChargeInput({ label, amount });
+    const status = requestedByRole === 'admin' ? 'approved' : 'pending';
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await extraChargeEngine.assertMaxActive('order', id, conn);
+      const newTotal = Math.round((Number(existing.totalAmount) + normalized.amount) * 100) / 100;
+      await conn.execute('UPDATE orders SET total_amount = ? WHERE id = ?', [newTotal, id]);
+      await extraChargeEngine.insert('order', conn, id, {
+        itemId: itemId ?? null,
+        label: normalized.label,
+        amount: normalized.amount,
+        status,
+        requestedBy,
+        requestedByRole,
+        ...(status === 'approved' ? { reviewedBy: requestedBy, reviewedAt: new Date() } : {}),
+      });
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(id);
+  },
+
+  /** Igual que `approveDiscount`: puede modificar el monto (RN-MOD1) y ajusta el total por la diferencia. */
+  async approveExtraCharge(orderId, chargeId, adminId, newAmount = null) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const result = await extraChargeEngine.approve('order', orderId, chargeId, adminId, newAmount, conn);
+      if (result.amount !== result.oldAmount) {
+        const [[row]] = await conn.execute('SELECT total_amount FROM orders WHERE id = ?', [orderId]);
+        const newTotal = Math.max(
+          0, Math.round((Number(row.total_amount) + (result.amount - result.oldAmount)) * 100) / 100,
+        );
+        await conn.execute('UPDATE orders SET total_amount = ? WHERE id = ?', [newTotal, orderId]);
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(orderId);
+  },
+
+  /** Rechazar revierte: resta del total el monto de ese cargo (RN-EC3). */
+  async rejectExtraCharge(orderId, chargeId, adminId, reviewNote) {
+    const existing = await this.findById(orderId);
+    if (!existing) { const err = new Error('Pedido no encontrado'); err.statusCode = 404; throw err; }
+    const row = await extraChargeEngine.findOne('order', orderId, chargeId);
+    if (!row) { const err = new Error('Cargo extra no encontrado'); err.statusCode = 404; throw err; }
+    if (row.status !== 'pending') { const err = new Error('Este cargo extra ya fue revisado'); err.statusCode = 400; throw err; }
+
+    const amount = Number(row.amount);
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) - amount) * 100) / 100);
+    const paid = Number(existing.paymentAmount) || 0;
+    const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+    const stamp = new Date().toISOString().slice(0, 10);
+    let note = `[${stamp}] Cargo extra "${row.label}" rechazado por admin (-$${amount.toFixed(2)}).`;
+    if (reviewNote && reviewNote.trim()) note += ` Motivo: ${reviewNote.trim()}.`;
+    const notes = existing.notes ? `${existing.notes}\n${note}` : note;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute(
+        'UPDATE orders SET total_amount = ?, payment_status = ?, notes = ? WHERE id = ?',
+        [newTotal, paymentStatus, notes, orderId],
+      );
+      await extraChargeEngine.markRejected('order', conn, chargeId, adminId, reviewNote);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(orderId);
+  },
+
+  // ===== Envío manual con aprobación (Docs/plan-aprobaciones-admin.md RN-SM) =====
+
+  /** Aprobar puede modificar el monto (RN-SM3) y ajusta el total por la diferencia. */
+  async approveShippingCost(orderId, adminId, newAmount = null) {
+    const existing = await this.findById(orderId);
+    if (!existing) { const err = new Error('Pedido no encontrado'); err.statusCode = 404; throw err; }
+    if (existing.shippingCostStatus !== 'pending') {
+      const err = new Error('El envío de este pedido no tiene nada pendiente de aprobar');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const oldAmount = Number(existing.shippingCost) || 0;
+    let amount = oldAmount;
+    if (newAmount !== null && newAmount !== undefined) {
+      const normalized = Math.round((Number(newAmount) || 0) * 100) / 100;
+      if (!(normalized >= 0)) { const err = new Error('El monto no puede ser negativo.'); err.statusCode = 400; throw err; }
+      amount = normalized;
+    }
+    const delta = amount - oldAmount;
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) + delta) * 100) / 100);
+    const paid = Number(existing.paymentAmount) || 0;
+    const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+
+    await pool.execute(
+      `UPDATE orders SET shipping_cost = ?, total_amount = ?, payment_status = ?,
+              shipping_cost_status = 'approved', shipping_cost_reviewed_by = ?, shipping_cost_reviewed_at = NOW()
+        WHERE id = ?`,
+      [amount, newTotal, paymentStatus, adminId, orderId],
+    );
+    return this.findById(orderId);
+  },
+
+  /** Rechazar revierte el total y deja el pedido sin costo de envío asignado (RN-SM2). */
+  async rejectShippingCost(orderId, adminId, reviewNote) {
+    const existing = await this.findById(orderId);
+    if (!existing) { const err = new Error('Pedido no encontrado'); err.statusCode = 404; throw err; }
+    if (existing.shippingCostStatus !== 'pending') {
+      const err = new Error('El envío de este pedido no tiene nada pendiente de aprobar');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const amount = Number(existing.shippingCost) || 0;
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) - amount) * 100) / 100);
+    const paid = Number(existing.paymentAmount) || 0;
+    const paymentStatus = paid >= newTotal && newTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+    const stamp = new Date().toISOString().slice(0, 10);
+    let note = `[${stamp}] Envío manual rechazado por admin (-$${amount.toFixed(2)}). El pedido quedó sin costo de envío.`;
+    if (reviewNote && reviewNote.trim()) note += ` Motivo: ${reviewNote.trim()}.`;
+    const notes = existing.notes ? `${existing.notes}\n${note}` : note;
+
+    await pool.execute(
+      `UPDATE orders SET shipping_cost = 0, shipping_cost_requested = NULL, total_amount = ?, payment_status = ?,
+              notes = ?, shipping_cost_status = 'rejected', shipping_cost_reviewed_by = ?,
+              shipping_cost_reviewed_at = NOW(), shipping_cost_review_note = ?
+        WHERE id = ?`,
+      [newTotal, paymentStatus, notes, adminId, (reviewNote ?? '').trim() || null, orderId],
+    );
     return this.findById(orderId);
   },
 

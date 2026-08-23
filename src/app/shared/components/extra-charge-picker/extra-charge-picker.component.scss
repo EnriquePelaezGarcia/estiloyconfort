@@ -1,0 +1,55 @@
+@use '../../../../styles/variables' as vars;
+
+.extra-charge-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px dashed vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+}
+
+.extra-charge-picker__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.extra-charge-picker__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-full;
+  background: vars.$color-surface;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+
+  &:hover { border-color: vars.$color-primary; color: vars.$color-primary; }
+
+  &--active {
+    background: vars.$color-primary;
+    border-color: vars.$color-primary;
+    color: #fff;
+  }
+}
+
+.extra-charge-picker__input,
+.extra-charge-picker__amount {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.extra-charge-picker__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}

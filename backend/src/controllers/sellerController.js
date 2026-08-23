@@ -198,6 +198,19 @@ const sellerController = {
     res.json({ message: 'Pedido cancelado' });
   }),
 
+  // POST /api/seller/orders/:id/extra-charges — cargo extra sobre un pedido
+  // YA EXISTENTE (Docs/plan-aprobaciones-admin.md RN-EC6). Vendedor y admin.
+  applyExtraCharge: asyncHandler(async (req, res) => {
+    const order = await Order.applyExtraCharge(req.params.id, {
+      itemId: req.body.itemId ?? null,
+      label: req.body.label,
+      amount: req.body.amount,
+      requestedBy: req.user.id,
+      requestedByRole: req.user.role,
+    });
+    res.status(201).json({ data: order, message: 'Cargo extra agregado' });
+  }),
+
   // POST /api/seller/payments
   registerPayment: asyncHandler(async (req, res) => {
     const { orderId, amount, payments } = req.body;
@@ -239,6 +252,24 @@ const sellerController = {
         maxSellerDiscount: Number(config.max_seller_discount),
       },
     });
+  }),
+
+  // GET /api/seller/materials/:materialId/colors — Docs/plan-aprobaciones-admin.md
+  // §11.1: autocompletar sin tabla nueva. Colores ya usados para ese material
+  // en pedidos y cotizaciones, para sugerir (no restringir) al capturar.
+  materialColors: asyncHandler(async (req, res) => {
+    const materialId = Number(req.params.materialId);
+    if (!materialId) throw ApiError.badRequest('materialId inválido');
+    const [rows] = await pool.query(
+      `SELECT DISTINCT color FROM order_items
+         WHERE material_id = ? AND color IS NOT NULL AND color <> ''
+       UNION
+       SELECT DISTINCT color FROM quote_items
+         WHERE material_id = ? AND color IS NOT NULL AND color <> ''
+       ORDER BY color LIMIT 30`,
+      [materialId, materialId],
+    );
+    res.json({ data: rows.map((r) => r.color) });
   }),
 
   // GET /api/seller/assembly-rates — tarifas vigentes del servicio de armado (para cotizar en el POS)

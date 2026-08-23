@@ -143,6 +143,11 @@
           <input id="maxSellerDiscount" type="number" formControlName="max_seller_discount" min="0" step="1" />
           <p class="field__hint">{{ itemMeta('max_seller_discount')?.description ?? 'Monto máximo que un vendedor o repartidor puede descontar sin ayuda de un admin. El admin no tiene tope.' }}</p>
         </div>
+        <div class="field">
+          <label for="maxDeliveriesPerSlot">{{ itemMeta('max_deliveries_per_slot')?.label ?? 'Alerta de horario saturado' }} (entregas)</label>
+          <input id="maxDeliveriesPerSlot" type="number" formControlName="max_deliveries_per_slot" min="1" step="1" />
+          <p class="field__hint">{{ itemMeta('max_deliveries_per_slot')?.description ?? 'Cuántas entregas de "Día preciso" en el mismo horario se consideran normales. No bloquea agendar por encima, solo avisa.' }}</p>
+        </div>
 
         <div class="card__foot">
           <button type="submit" class="btn btn--primary" [disabled]="saving()">

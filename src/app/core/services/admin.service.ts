@@ -184,10 +184,15 @@ export class AdminService {
   }
 
   // ===== Descuentos (Docs/plan-descuentos.md) =====
-  approveOrderDiscount(orderId: number, discountId: number): Observable<{ data: Order; message: string }> {
+  /** `amount` opcional (Docs/plan-aprobaciones-admin.md RN-MOD1): modifica el monto al aprobar. */
+  approveOrderDiscount(
+    orderId: number,
+    discountId: number,
+    amount?: number,
+  ): Observable<{ data: Order; message: string }> {
     return this.api.patch<{ data: Order; message: string }>(
       `/admin/orders/${orderId}/discounts/${discountId}/approve`,
-      {},
+      amount != null ? { amount } : {},
     );
   }
 
@@ -202,9 +207,47 @@ export class AdminService {
     );
   }
 
-  /** Badge del sidebar: descuentos pendientes de revisar, por documento. */
+  /** Badge del sidebar: descuentos pendientes de revisar, por documento. No se toca (D6). */
   getPendingDiscountsCount(): Observable<{ data: { orders: number; quotes: number } }> {
     return this.api.get<{ data: { orders: number; quotes: number } }>('/admin/discounts/pending-count');
+  }
+
+  // ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
+
+  approveOrderExtraCharge(
+    orderId: number,
+    chargeId: number,
+    amount?: number,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/extra-charges/${chargeId}/approve`,
+      amount != null ? { amount } : {},
+    );
+  }
+
+  rejectOrderExtraCharge(
+    orderId: number,
+    chargeId: number,
+    reviewNote: string,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/extra-charges/${chargeId}/reject`,
+      { reviewNote },
+    );
+  }
+
+  approveOrderShipping(orderId: number, amount?: number): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/shipping-cost/approve`,
+      amount != null ? { amount } : {},
+    );
+  }
+
+  rejectOrderShipping(orderId: number, reviewNote: string): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/shipping-cost/reject`,
+      { reviewNote },
+    );
   }
 
   // ===== Reportes (Fase 4) =====

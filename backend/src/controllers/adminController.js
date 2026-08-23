@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const ProductManufacturerCost = require('../models/ProductManufacturerCost');
 const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
+const extraChargeEngine = require('../models/extraChargeEngine');
 const { calculateCredit, profitByCost, wholesaleProfit } = require('../utils/pricingCalculator');
 
 /**
@@ -539,8 +540,9 @@ const getOrder = asyncHandler(async (req, res) => {
 });
 
 // PATCH /api/admin/orders/:id/discounts/:discountId/approve
+// Docs/plan-aprobaciones-admin.md RN-MOD1: body.amount opcional para modificar el monto al aprobar.
 const approveOrderDiscount = asyncHandler(async (req, res) => {
-  const order = await Order.approveDiscount(req.params.id, req.params.discountId, req.user.id);
+  const order = await Order.approveDiscount(req.params.id, req.params.discountId, req.user.id, req.body.amount);
   res.json({ data: order, message: 'Descuento aprobado' });
 });
 
@@ -553,9 +555,39 @@ const rejectOrderDiscount = asyncHandler(async (req, res) => {
 });
 
 // GET /api/admin/discounts/pending-count — badge del sidebar (pedidos + cotizaciones).
+// No se toca ni se generaliza (Docs/plan-aprobaciones-admin.md D6): el badge
+// nuevo de "Aprobaciones" usa /admin/approvals/pending-count, aparte.
 const getPendingDiscountsCount = asyncHandler(async (req, res) => {
   const counts = await discountEngine.countPending();
   res.json({ data: counts });
+});
+
+// ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
+
+// PATCH /api/admin/orders/:id/extra-charges/:chargeId/approve
+const approveOrderExtraCharge = asyncHandler(async (req, res) => {
+  const order = await Order.approveExtraCharge(req.params.id, req.params.chargeId, req.user.id, req.body.amount);
+  res.json({ data: order, message: 'Cargo extra aprobado' });
+});
+
+// PATCH /api/admin/orders/:id/extra-charges/:chargeId/reject
+const rejectOrderExtraCharge = asyncHandler(async (req, res) => {
+  const order = await Order.rejectExtraCharge(
+    req.params.id, req.params.chargeId, req.user.id, req.body.reviewNote,
+  );
+  res.json({ data: order, message: 'Cargo extra rechazado' });
+});
+
+// PATCH /api/admin/orders/:id/shipping-cost/approve
+const approveOrderShipping = asyncHandler(async (req, res) => {
+  const order = await Order.approveShippingCost(req.params.id, req.user.id, req.body.amount);
+  res.json({ data: order, message: 'Envío aprobado' });
+});
+
+// PATCH /api/admin/orders/:id/shipping-cost/reject
+const rejectOrderShipping = asyncHandler(async (req, res) => {
+  const order = await Order.rejectShippingCost(req.params.id, req.user.id, req.body.reviewNote);
+  res.json({ data: order, message: 'Envío rechazado' });
 });
 
 // PATCH /api/admin/orders/:id/status
@@ -1050,6 +1082,10 @@ module.exports = {
   approveOrderDiscount,
   rejectOrderDiscount,
   getPendingDiscountsCount,
+  approveOrderExtraCharge,
+  rejectOrderExtraCharge,
+  approveOrderShipping,
+  rejectOrderShipping,
   getDeliveryPeople,
   getFactoryOrderItems,
   updateManufacturerDueDate,

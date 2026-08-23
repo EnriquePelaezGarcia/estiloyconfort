@@ -1,0 +1,72 @@
+@use '../../../../styles/variables' as vars;
+
+// Mismo patrón que admin-orders.component.scss (.tabbar).
+.tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: vars.$spacing-md;
+  border-bottom: 1px solid vars.$color-border;
+
+  &__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.9rem;
+    font-family: vars.$font-body;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+
+    &:hover { color: vars.$color-primary; }
+
+    &--active {
+      color: vars.$color-primary;
+      border-bottom-color: vars.$color-primary;
+    }
+  }
+}
+
+.approval-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+
+  .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-text-secondary; }
+}
+
+.approval-amount__original {
+  color: vars.$color-text-secondary;
+  text-decoration: line-through;
+}
+
+.approval-amount-input {
+  width: 5.5rem;
+  padding: 0.3rem 0.5rem;
+  margin-right: 0.3rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: vars.$spacing-md;
+}

@@ -46,6 +46,14 @@ export class SellerService {
     return this.api.delete<{ message: string }>(`/seller/orders/${id}`);
   }
 
+  /** Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente. */
+  applyExtraCharge(
+    orderId: number,
+    payload: { itemId: number | null; label: string; amount: number },
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.post<{ data: Order; message: string }>(`/seller/orders/${orderId}/extra-charges`, payload);
+  }
+
   assignDelivery(
     id: number,
     deliveryPersonId: number,
@@ -76,6 +84,11 @@ export class SellerService {
   /** Tarifas vigentes del servicio de armado para cotizar en el POS. */
   getAssemblyRates(): Observable<{ data: AssemblyRates }> {
     return this.api.get<{ data: AssemblyRates }>('/seller/assembly-rates');
+  }
+
+  /** Docs/plan-aprobaciones-admin.md §11.1: colores ya usados para ese material, para el datalist. */
+  getMaterialColors(materialId: number): Observable<{ data: string[] }> {
+    return this.api.get<{ data: string[] }>(`/seller/materials/${materialId}/colors`);
   }
 
   searchInventory(search?: string): Observable<{ data: InventoryItem[] }> {

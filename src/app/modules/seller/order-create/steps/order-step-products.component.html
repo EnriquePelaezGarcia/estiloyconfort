@@ -108,8 +108,21 @@
                   [value]="l.color ?? ''"
                   [disabled]="mp.colorPolicy === 'fixed' || !store.canEditLine(l)"
                   [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
+                  [attr.list]="'order-colors-' + l.materialId"
                   (input)="store.changeLineColor(i, $event)"
                 />
+                <!-- Docs/plan-aprobaciones-admin.md §11.1: sugerencias, no restricción. -->
+                <datalist [id]="'order-colors-' + l.materialId">
+                  @for (c of store.colorSuggestionsFor(l.materialId); track c) {
+                    <option [value]="c"></option>
+                  }
+                </datalist>
+                <!-- §11.2: aviso no bloqueante de color repetido en el mismo pedido. -->
+                @if (store.duplicateColorIndexes().has(i)) {
+                  <span class="cart-line__color-warning" title="Revisa si es el mismo color u otro a propósito">
+                    Ya escribiste "{{ l.color }}" en otra línea — ¿es el mismo color?
+                  </span>
+                }
               }
             </div>
 

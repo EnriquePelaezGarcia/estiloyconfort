@@ -51,6 +51,8 @@ export class PricingComponent implements OnInit {
     fabrication_days: [DEFAULT_PRICING_CONFIG.fabrication_days, [Validators.required, Validators.min(1), Validators.max(365)]],
     // Docs/plan-descuentos.md RN-D4 — tope de vendedor/repartidor; el admin no tiene tope.
     max_seller_discount: [DEFAULT_PRICING_CONFIG.max_seller_discount, [Validators.required, Validators.min(0)]],
+    // Docs/plan-aprobaciones-admin.md §11.3 — umbral de aviso, no de bloqueo.
+    max_deliveries_per_slot: [DEFAULT_PRICING_CONFIG.max_deliveries_per_slot, [Validators.required, Validators.min(1)]],
   });
 
   protected readonly materials = this.materialsStore.active;
@@ -122,6 +124,7 @@ export class PricingComponent implements OnInit {
         min_margin_alert: v.min_margin_alert ?? DEFAULT_PRICING_CONFIG.min_margin_alert,
         fabrication_days: v.fabrication_days ?? DEFAULT_PRICING_CONFIG.fabrication_days,
         max_seller_discount: v.max_seller_discount ?? DEFAULT_PRICING_CONFIG.max_seller_discount,
+        max_deliveries_per_slot: v.max_deliveries_per_slot ?? DEFAULT_PRICING_CONFIG.max_deliveries_per_slot,
       });
     });
 

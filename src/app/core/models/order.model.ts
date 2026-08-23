@@ -134,6 +134,11 @@ export interface OrderDiscount {
   id: number;
   type: DiscountType;
   amount: number;
+  /**
+   * Docs/plan-aprobaciones-admin.md RN-MOD1/3: monto solicitado antes de que
+   * el admin lo modificara al aprobar; null si aprobó tal cual se pidió.
+   */
+  originalAmount: number | null;
   reasonCategory: DiscountReasonCategory;
   reason: string | null;
   /** Solo en 'product': id de la línea regalada (null si esa línea ya no existe). */
@@ -148,6 +153,32 @@ export interface OrderDiscount {
   reviewNote: string | null;
   createdAt: string;
 }
+
+/**
+ * Cargo extra por modificación al mueble (Docs/plan-aprobaciones-admin.md
+ * RN-EC) — ej. "Cambiar focos a LED — $1,200". Mismo ciclo de aprobación que
+ * el descuento, pero SUMA al total en vez de restar.
+ */
+export interface OrderExtraCharge {
+  id: number;
+  label: string;
+  amount: number;
+  originalAmount: number | null;
+  /** Línea del carrito a la que está ligado; null si esa línea ya no existe. */
+  itemId: number | null;
+  status: DiscountStatus;
+  requestedBy: number;
+  requestedByName: string | null;
+  requestedByRole: 'seller' | 'admin';
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+/** Estado de aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM). */
+export type ShippingCostStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
 /** Motivo de una reserva de pieza (Docs/plan-reserva-de-piezas.md §3, D1). */
 export type StockReservationReason = 'color_unico' | 'pagada' | 'fecha_entrega' | 'otro';
@@ -246,6 +277,18 @@ export interface Order {
   shippingCost?: number | null;
   /** Código postal de entrega usado para cotizar el envío. */
   shippingPostalCode?: string | null;
+  /**
+   * Aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM):
+   * 'none' = no aplica (pickup, o el CP tuvo tarifa de catálogo — esa vía no
+   * cambia). `shippingCostRequested` es lo que pidió el vendedor, para
+   * mostrar "Solicitado -> Aprobado" si el admin lo modificó.
+   */
+  shippingCostStatus?: ShippingCostStatus;
+  shippingCostRequested?: number | null;
+  shippingCostReviewedBy?: number | null;
+  shippingCostReviewedByName?: string | null;
+  shippingCostReviewedAt?: string | null;
+  shippingCostReviewNote?: string | null;
   /** TRUE si el pedido incluye servicio de armado (subida por pisos + armado). */
   assemblyService?: boolean;
   /** Piso de entrega (0 = planta baja, solo tarifa base). */
@@ -269,6 +312,8 @@ export interface Order {
   payments?: OrderPayment[];
   /** Docs/plan-descuentos.md — vacío si el pedido no tiene ninguno. */
   discounts?: OrderDiscount[];
+  /** Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno. */
+  extraCharges?: OrderExtraCharge[];
 }
 
 export interface Paginated<T> {
@@ -323,6 +368,14 @@ export interface CreateOrderRequest {
     reasonCategory: DiscountReasonCategory;
     reason?: string | null;
   } | null;
+  /**
+   * Cargos extra por modificación al mueble (Docs/plan-aprobaciones-admin.md
+   * RN-EC2). `itemIndex` es la posición en `items[]` — el id real de la línea
+   * todavía no existe al armar este payload. Al editar un pedido, este
+   * arreglo reemplaza TODOS los cargos existentes (RN-EC4, mismo criterio que
+   * el regalo); omitirlo conserva los que ya había.
+   */
+  extraCharges?: Array<{ itemIndex: number; label: string; amount: number }>;
   items: Array<{
     productId: number;
     /** M4: el material se elige POR LÍNEA, ya no hay un material de pedido. */

@@ -81,10 +81,11 @@ const quotesController = {
   }),
 
   // PATCH /api/quotes/:id/discounts/:discountId/approve — admin
+  // Docs/plan-aprobaciones-admin.md RN-MOD1: body.amount opcional para modificar el monto al aprobar.
   approveDiscount: asyncHandler(async (req, res) => {
     const existing = await Quote.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Cotización no encontrada');
-    const quote = await Quote.approveDiscount(req.params.id, req.params.discountId, req.user.id);
+    const quote = await Quote.approveDiscount(req.params.id, req.params.discountId, req.user.id, req.body.amount);
     res.json({ data: withShareUrl(quote), message: 'Descuento aprobado' });
   }),
 
@@ -96,6 +97,58 @@ const quotesController = {
       req.params.id, req.params.discountId, req.user.id, req.body.reviewNote,
     );
     res.json({ data: withShareUrl(quote), message: 'Descuento rechazado' });
+  }),
+
+  // ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
+
+  // POST /api/quotes/:id/extra-charges — cargo extra sobre una cotización YA
+  // EXISTENTE (RN-EC6). Vendedor (dueño) o admin.
+  applyExtraCharge: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    assertCanManage(existing, req.user);
+    const quote = await Quote.applyExtraCharge(req.params.id, {
+      itemId: req.body.itemId ?? null,
+      label: req.body.label,
+      amount: req.body.amount,
+      requestedBy: req.user.id,
+      requestedByRole: req.user.role,
+    });
+    res.status(201).json({ data: withShareUrl(quote), message: 'Cargo extra agregado' });
+  }),
+
+  // PATCH /api/quotes/:id/extra-charges/:chargeId/approve — admin
+  approveExtraCharge: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    const quote = await Quote.approveExtraCharge(req.params.id, req.params.chargeId, req.user.id, req.body.amount);
+    res.json({ data: withShareUrl(quote), message: 'Cargo extra aprobado' });
+  }),
+
+  // PATCH /api/quotes/:id/extra-charges/:chargeId/reject — admin
+  rejectExtraCharge: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    const quote = await Quote.rejectExtraCharge(
+      req.params.id, req.params.chargeId, req.user.id, req.body.reviewNote,
+    );
+    res.json({ data: withShareUrl(quote), message: 'Cargo extra rechazado' });
+  }),
+
+  // PATCH /api/quotes/:id/shipping-cost/approve — admin
+  approveShippingCost: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    const quote = await Quote.approveShippingCost(req.params.id, req.user.id, req.body.amount);
+    res.json({ data: withShareUrl(quote), message: 'Envío aprobado' });
+  }),
+
+  // PATCH /api/quotes/:id/shipping-cost/reject — admin
+  rejectShippingCost: asyncHandler(async (req, res) => {
+    const existing = await Quote.findById(req.params.id);
+    if (!existing) throw ApiError.notFound('Cotización no encontrada');
+    const quote = await Quote.rejectShippingCost(req.params.id, req.user.id, req.body.reviewNote);
+    res.json({ data: withShareUrl(quote), message: 'Envío rechazado' });
   }),
 
   // PATCH /api/quotes/:id/confirm — el cliente aceptó por WhatsApp
@@ -152,6 +205,10 @@ const quotesController = {
         expiresAt: quote.expiresAt,
         createdAt: quote.createdAt,
         items: quote.items,
+        // Docs/plan-aprobaciones-admin.md RN-EC8: desglosados por etiqueta
+        // (ya vienen filtrados sin los rechazados desde Quote.findByToken).
+        // Solo label/amount — nunca status ni quién lo pidió.
+        extraCharges: (quote.extraCharges ?? []).map((c) => ({ label: c.label, amount: c.amount })),
       },
     });
   }),

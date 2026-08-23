@@ -234,6 +234,12 @@ export const adminRoutes: Routes = [
         title: 'Reportes - Panel Admin',
       },
       {
+        path: 'aprobaciones',
+        loadComponent: () =>
+          import('./approvals/approvals.component').then((m) => m.ApprovalsComponent),
+        title: 'Aprobaciones - Panel Admin',
+      },
+      {
         path: 'clientes-credito',
         loadComponent: () =>
           import('../seller/credit-clients/credit-clients.component').then(

@@ -187,6 +187,9 @@
             <p class="field__hint">Sin tarifa configurada para este CP: pon el costo que se le cobrará al cliente (0 = envío gratis).</p>
             @if (submitAttempted() && manualShippingCost() === null) {
               <p class="field__error">Ingresa el costo de envío para este CP.</p>
+            } @else if (manualShippingCost() !== null && !isAdminRole()) {
+              <!-- Docs/plan-aprobaciones-admin.md RN-SM1 -->
+              <p class="field__hint">Quedará pendiente de aprobación de un admin.</p>
             }
           </div>
         }
@@ -196,7 +199,7 @@
             <input type="checkbox" formControlName="assemblyService" />
             <span>Incluye servicio de armado</span>
           </label>
-          <p class="field__hint">Subida por pisos y armado. Un solo cargo por pedido.</p>
+          <p class="field__hint">Un solo cargo por pedido; con o sin elevador se cobra igual.</p>
 
           @if (hasAssembly()) {
             <div class="field">
@@ -316,8 +319,21 @@
                       [value]="l.color ?? ''"
                       [disabled]="mp.colorPolicy === 'fixed'"
                       [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
+                      [attr.list]="'quote-colors-' + l.materialId"
                       (input)="changeLineColor(i, $event)"
                     />
+                    <!-- Docs/plan-aprobaciones-admin.md §11.1: sugerencias, no restricción. -->
+                    <datalist [id]="'quote-colors-' + l.materialId">
+                      @for (c of colorSuggestionsFor(l.materialId); track c) {
+                        <option [value]="c"></option>
+                      }
+                    </datalist>
+                    <!-- §11.2: aviso no bloqueante de color repetido en el mismo documento. -->
+                    @if (duplicateColorIndexes().has(i)) {
+                      <span class="cart-line__color-warning" title="Revisa si es el mismo color u otro a propósito">
+                        Ya escribiste "{{ l.color }}" en otra línea — ¿es el mismo color?
+                      </span>
+                    }
                   }
                 </div>
 
@@ -344,6 +360,31 @@
                   >
                     Gratis
                   </button>
+                  <!-- Docs/plan-aprobaciones-admin.md D5: enlace de texto discreto. -->
+                  <button type="button" class="cart-line__extra-charge-toggle" (click)="toggleExtraChargeForm(i)">
+                    + cargo extra
+                  </button>
+                }
+                @if (l.extraCharges?.length) {
+                  <ul class="cart-line__charges">
+                    @for (ec of l.extraCharges; track ec.label + ec.amount; let ci = $index) {
+                      <li class="cart-line__charge">
+                        <span>{{ ec.label }}</span>
+                        <span class="cart-line__charge-amount">
+                          {{ ec.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                          <button type="button" title="Quitar este cargo extra" (click)="removeExtraCharge(i, ci)">
+                            <span class="material-symbols-outlined">close</span>
+                          </button>
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (openExtraChargeLine() === i) {
+                  <app-extra-charge-picker
+                    (added)="addExtraCharge(i, $event)"
+                    (cancelled)="openExtraChargeLine.set(null)"
+                  />
                 }
                 @if (lineWholesaleShortfall(l) > 0) {
                   <span class="cart-line__warn">
@@ -445,7 +486,11 @@
             }
           </div>
 
-          @if (shippingQuote() || needsManualShipping() || hasAssembly() || isCredit() || activeMoneyDiscount() || discountAmount() !== null) {
+          @if (extraChargesCount() > 0) {
+            <p class="extra-charges-count">{{ extraChargesCount() }}/{{ MAX_EXTRA_CHARGES }} cargos extra</p>
+          }
+
+          @if (shippingQuote() || needsManualShipping() || hasAssembly() || isCredit() || activeMoneyDiscount() || discountAmount() !== null || extraChargesCount() > 0) {
             <div class="cart-total cart-total--sub">
               <span>
                 @if (isCredit()) { Precio a crédito }
@@ -497,6 +542,15 @@
                   Servicio de armado (piso {{ assemblyFloorsValue() }})
                 </span>
                 <span class="shipping-row__price">{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            }
+            @if (extraChargesTotal() > 0) {
+              <div class="shipping-row">
+                <span class="shipping-row__label">
+                  <span class="material-symbols-outlined">build</span>
+                  Cargos extra ({{ extraChargesCount() }})
+                </span>
+                <span class="shipping-row__price">{{ extraChargesTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
               </div>
             }
             @if (activeMoneyDiscount(); as active) {

@@ -15,12 +15,16 @@ router.get('/dashboard', sellerController.dashboard);
 router.get('/inventory', sellerController.inventory);
 router.get('/credit-config', sellerController.creditConfig);
 router.get('/assembly-rates', sellerController.assemblyRates);
+// Docs/plan-aprobaciones-admin.md §11.1: colores ya usados, para autocompletar.
+router.get('/materials/:materialId/colors', sellerController.materialColors);
 router.post('/credit-quote', sellerController.creditQuote);
 router.get('/orders', sellerController.list);
 router.get('/orders/:id', sellerController.getOne);
 router.post('/orders', sellerController.create);
 router.patch('/orders/:id', sellerController.update);
 router.delete('/orders/:id', sellerController.remove);
+// Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente.
+router.post('/orders/:id/extra-charges', sellerController.applyExtraCharge);
 router.post('/orders/:id/share', ticketsController.share);
 router.patch('/orders/:id/assign', adminController.assignDelivery);
 router.get('/delivery-people', adminController.getDeliveryPeople);

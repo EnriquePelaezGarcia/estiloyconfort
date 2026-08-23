@@ -342,6 +342,27 @@
   margin-top: 0.3rem;
 }
 
+/**
+ * Docs/plan-textos-ayuda.md — global para que todo `field__hint` del proyecto
+ * comparta tono y tamaño. Antes vivía duplicado en 5 archivos SCSS con
+ * tamaños distintos (0.76rem/0.82rem) y color de nivel "contenido"
+ * ($color-text-secondary); baja a Tertiary, el cuarto nivel de texto que
+ * define .interface-design/system.md.
+ */
+.field__hint {
+  font-size: 0.75rem;
+  color: vars.$color-text-tertiary;
+  line-height: 1.45;
+  margin-top: 0.25rem;
+
+  // Docs/plan-aprobaciones-admin.md §11.3 — mismo semáforo visual que
+  // min_margin_alert (pricing.component): aviso, nunca bloqueo.
+  &--alert {
+    color: #92620a;
+    font-weight: 600;
+  }
+}
+
 .field--error {
   label { color: vars.$color-error; }
 

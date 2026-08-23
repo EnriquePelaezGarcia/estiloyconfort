@@ -60,6 +60,13 @@ module.exports = {
         assemblyFloors: order.assemblyFloors,
         assemblyCost: order.assemblyCost,
 
+        // Docs/plan-aprobaciones-admin.md RN-EC8: desglosados por etiqueta;
+        // los rechazados no se muestran. Solo label/amount — nunca status ni
+        // quién lo pidió (mismo criterio de lista blanca de todo este objeto).
+        extraCharges: (order.extraCharges ?? [])
+          .filter((c) => c.status !== 'rejected')
+          .map((c) => ({ label: c.label, amount: c.amount })),
+
         totalAmount: order.totalAmount,
         paymentAmount: order.paymentAmount,
         // El saldo es justo lo que el cliente abre el link a consultar.

@@ -31,6 +31,9 @@ function mapDiscount(row) {
     reason: row.reason ?? null,
     itemId: row.order_item_id ?? row.quote_item_id ?? null,
     originalUnitPrice: row.original_unit_price != null ? Number(row.original_unit_price) : null,
+    // Docs/plan-aprobaciones-admin.md RN-MOD1/3: monto solicitado antes de que
+    // el admin lo modificara al aprobar; null si aprobó tal cual se pidió.
+    originalAmount: row.original_amount != null ? Number(row.original_amount) : null,
     status: row.status,
     requestedBy: row.requested_by,
     requestedByName: row.requested_by_name ?? null,
@@ -153,16 +156,37 @@ const discountEngine = {
     return row ?? null;
   },
 
-  /** Aprobar NO toca el total: ya se restó (o, en 'product', ya nació en $0) al capturarlo. */
-  async approve(kind, ownerId, discountId, adminId) {
-    const row = await this.findOne(kind, ownerId, discountId);
+  /**
+   * Aprobar. Para 'money' esto NO toca el total salvo que `newAmount` venga
+   * (RN-MOD1): el llamador (Order.js/Quote.js) ve `oldAmount` vs. `amount` en
+   * el resultado y ajusta `total_amount` por la diferencia. Para 'product'
+   * modificar el monto solo corrige el valor de referencia mostrado
+   * (RN-MOD2) — el total nunca se toca, la línea ya vale $0 sin importar
+   * este número. Corre dentro de la transacción de quien llama (`conn`) para
+   * poder ajustar el total de forma atómica.
+   */
+  async approve(kind, ownerId, discountId, adminId, newAmount = null, conn = pool) {
+    const row = await this.findOne(kind, ownerId, discountId, conn);
     if (!row) { const e = new Error('Descuento no encontrado'); e.statusCode = 404; throw e; }
     if (row.status !== 'pending') { const e = new Error('Este descuento ya fue revisado'); e.statusCode = 400; throw e; }
-    await pool.execute(
-      `UPDATE ${table(kind)} SET status='approved', reviewed_by=?, reviewed_at=NOW() WHERE id = ?`,
-      [adminId, discountId],
+
+    const oldAmount = Number(row.amount);
+    let amount = oldAmount;
+    let originalAmount = null;
+    if (newAmount !== null && newAmount !== undefined) {
+      const normalized = Math.round((Number(newAmount) || 0) * 100) / 100;
+      if (!(normalized > 0)) { const e = new Error('El monto debe ser mayor a 0.'); e.statusCode = 400; throw e; }
+      if (normalized !== oldAmount) {
+        originalAmount = oldAmount;
+        amount = normalized;
+      }
+    }
+
+    await conn.execute(
+      `UPDATE ${table(kind)} SET status='approved', reviewed_by=?, reviewed_at=NOW(), amount=?, original_amount=? WHERE id = ?`,
+      [adminId, amount, originalAmount, discountId],
     );
-    return row;
+    return { ...row, amount, oldAmount };
   },
 
   /** Solo marca el estado; revertir el total es responsabilidad de Order.js/Quote.js (conoce sus propias columnas). */

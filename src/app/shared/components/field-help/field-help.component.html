@@ -1,0 +1,22 @@
+<button
+  type="button"
+  class="field-help-icon"
+  [attr.aria-label]="label()"
+  [attr.aria-expanded]="open()"
+  [attr.aria-describedby]="open() ? popoverId : null"
+  [title]="label()"
+  (click)="toggle($event)"
+>
+  <span class="material-symbols-outlined">info</span>
+</button>
+
+@if (open()) {
+  <div
+    class="field-help-popover"
+    [id]="popoverId"
+    role="tooltip"
+    (click)="$event.stopPropagation()"
+  >
+    {{ text() }}
+  </div>
+}

@@ -1,0 +1,37 @@
+<div class="extra-charge-picker">
+  <div class="extra-charge-picker__chips">
+    @for (s of suggestions; track s) {
+      <button
+        type="button"
+        class="extra-charge-picker__chip"
+        [class.extra-charge-picker__chip--active]="label() === s"
+        (click)="pick(s)"
+      >
+        {{ s }}
+      </button>
+    }
+  </div>
+  <input
+    type="text"
+    class="extra-charge-picker__input"
+    placeholder="¿Qué se modificó? (ej. Cambiar focos a LED)"
+    maxlength="120"
+    [value]="label()"
+    (input)="onLabelInput($event)"
+  />
+  <input
+    type="number"
+    class="extra-charge-picker__amount"
+    placeholder="Monto"
+    min="0"
+    step="0.01"
+    [value]="amount()"
+    (input)="onAmountInput($event)"
+  />
+  <div class="extra-charge-picker__actions">
+    <button type="button" class="btn btn--ghost btn--sm" (click)="cancel()">Cancelar</button>
+    <button type="button" class="btn btn--primary btn--sm" [disabled]="!canAdd()" (click)="confirm()">
+      Agregar
+    </button>
+  </div>
+</div>

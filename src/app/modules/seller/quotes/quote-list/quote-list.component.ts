@@ -3,7 +3,8 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { QuotesService } from '../../../../core/services/quotes.service';
 import { NotificationService } from '../../../../core/services/notification.service';
-import { Quote, QuoteDiscount, QuoteStatus } from '../../../../core/models/quote.model';
+import { ApprovalsService } from '../../../../core/services/approvals.service';
+import { Quote, QuoteDiscount, QuoteExtraCharge, QuoteStatus } from '../../../../core/models/quote.model';
 import { SaleScheme } from '../../../../core/models/order.model';
 
 type FilterTab = 'all' | QuoteStatus;
@@ -31,6 +32,7 @@ const SCHEME_LABELS: Record<SaleScheme, string> = {
 export class QuoteListComponent implements OnInit {
   private quotesService = inject(QuotesService);
   private notification = inject(NotificationService);
+  private approvalsService = inject(ApprovalsService);
   private router = inject(Router);
 
   protected loading = signal(true);
@@ -46,6 +48,14 @@ export class QuoteListComponent implements OnInit {
   protected pendingReject = signal<{ quote: Quote; discount: QuoteDiscount } | null>(null);
   protected rejectNote = signal('');
   protected approvingId = signal<number | null>(null);
+
+  // ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
+  protected pendingRejectCharge = signal<{ quote: Quote; charge: QuoteExtraCharge } | null>(null);
+  protected rejectChargeNote = signal('');
+  protected approvingChargeId = signal<number | null>(null);
+  protected pendingRejectShipping = signal<Quote | null>(null);
+  protected rejectShippingNote = signal('');
+  protected approvingShippingId = signal<number | null>(null);
 
   protected filtered = computed(() => {
     const tab = this.activeTab();
@@ -109,6 +119,11 @@ export class QuoteListComponent implements OnInit {
     return (quote.discounts ?? []).find((d) => d.status === 'pending') ?? null;
   }
 
+  /** Docs/plan-aprobaciones-admin.md: cargo extra pendiente de revisar, si lo hay. */
+  protected pendingChargeOf(quote: Quote): QuoteExtraCharge | null {
+    return (quote.extraCharges ?? []).find((c) => c.status === 'pending') ?? null;
+  }
+
   protected newQuote(): void {
     this.router.navigate([this.panelBase, 'cotizaciones', 'nueva']);
   }
@@ -155,14 +170,15 @@ export class QuoteListComponent implements OnInit {
     });
   }
 
-  /** Docs/plan-descuentos.md — admin. No toca el total: ya se aplicó al capturarlo. */
-  protected approveDiscount(quote: Quote, discount: QuoteDiscount): void {
+  /** Docs/plan-descuentos.md — admin. `newAmount` opcional modifica el monto al aprobar (RN-MOD1). */
+  protected approveDiscount(quote: Quote, discount: QuoteDiscount, newAmount?: string): void {
     this.approvingId.set(discount.id);
-    this.quotesService.approveDiscount(quote.id, discount.id).subscribe({
+    this.quotesService.approveDiscount(quote.id, discount.id, newAmount ? Number(newAmount) : undefined).subscribe({
       next: () => {
         this.approvingId.set(null);
         this.notification.success('Descuento aprobado');
         this.load();
+        this.refreshApprovalsBadge();
       },
       error: (err: { error?: { message?: string } }) => {
         this.approvingId.set(null);
@@ -184,10 +200,91 @@ export class QuoteListComponent implements OnInit {
         this.pendingReject.set(null);
         this.notification.success('Descuento rechazado');
         this.load();
+        this.refreshApprovalsBadge();
       },
       error: (err: { error?: { message?: string } }) => {
         this.pendingReject.set(null);
         this.notification.error(err?.error?.message ?? 'No se pudo rechazar el descuento');
+      },
+    });
+  }
+
+  // ===== Cargos extra (Docs/plan-aprobaciones-admin.md) =====
+
+  protected approveCharge(quote: Quote, charge: QuoteExtraCharge, newAmount?: string): void {
+    this.approvingChargeId.set(charge.id);
+    this.quotesService.approveExtraCharge(quote.id, charge.id, newAmount ? Number(newAmount) : undefined).subscribe({
+      next: () => {
+        this.approvingChargeId.set(null);
+        this.notification.success('Cargo extra aprobado');
+        this.load();
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.approvingChargeId.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el cargo extra');
+      },
+    });
+  }
+
+  protected askRejectCharge(quote: Quote, charge: QuoteExtraCharge): void {
+    this.rejectChargeNote.set('');
+    this.pendingRejectCharge.set({ quote, charge });
+  }
+
+  protected confirmRejectCharge(): void {
+    const target = this.pendingRejectCharge();
+    if (!target) return;
+    this.quotesService.rejectExtraCharge(target.quote.id, target.charge.id, this.rejectChargeNote()).subscribe({
+      next: () => {
+        this.pendingRejectCharge.set(null);
+        this.notification.success('Cargo extra rechazado');
+        this.load();
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.pendingRejectCharge.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el cargo extra');
+      },
+    });
+  }
+
+  // ===== Envío manual (Docs/plan-aprobaciones-admin.md RN-SM) =====
+
+  protected approveShipping(quote: Quote, newAmount?: string): void {
+    this.approvingShippingId.set(quote.id);
+    this.quotesService.approveShippingCost(quote.id, newAmount ? Number(newAmount) : undefined).subscribe({
+      next: () => {
+        this.approvingShippingId.set(null);
+        this.notification.success('Envío aprobado');
+        this.load();
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.approvingShippingId.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el envío');
+      },
+    });
+  }
+
+  protected askRejectShipping(quote: Quote): void {
+    this.rejectShippingNote.set('');
+    this.pendingRejectShipping.set(quote);
+  }
+
+  protected confirmRejectShipping(): void {
+    const quote = this.pendingRejectShipping();
+    if (!quote) return;
+    this.quotesService.rejectShippingCost(quote.id, this.rejectShippingNote()).subscribe({
+      next: () => {
+        this.pendingRejectShipping.set(null);
+        this.notification.success('Envío rechazado');
+        this.load();
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.pendingRejectShipping.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el envío');
       },
     });
   }
@@ -220,6 +317,11 @@ export class QuoteListComponent implements OnInit {
 
   protected schemeLabel(scheme: SaleScheme): string {
     return SCHEME_LABELS[scheme] ?? 'Contado';
+  }
+
+  /** Docs/plan-aprobaciones-admin.md D6: refresca el contador del nav item "Aprobaciones" tras actuar. */
+  private refreshApprovalsBadge(): void {
+    this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
   }
 
   protected statusLabel(status: QuoteStatus): string {

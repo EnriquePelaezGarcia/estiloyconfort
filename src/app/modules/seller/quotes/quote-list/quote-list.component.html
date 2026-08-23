@@ -70,7 +70,7 @@
           </span>
         </div>
 
-        <!-- Docs/plan-descuentos.md: solo el admin ve la aprobación. -->
+        <!-- Docs/plan-descuentos.md + Docs/plan-aprobaciones-admin.md: solo el admin ve la aprobación. -->
         @if (isAdmin && pendingDiscountOf(q); as pending) {
           <div class="quote-card__discount">
             <span class="material-symbols-outlined">sell</span>
@@ -83,15 +83,59 @@
               @if (pending.reason) { — {{ pending.reason }} }
               · pedido por {{ pending.requestedByName ?? 'vendedor' }}
             </span>
+            <input type="number" class="quote-card__approve-amount" min="0" step="0.01" [value]="pending.amount" #discAmt title="Monto a aprobar" />
             <button
               type="button"
               class="btn btn--primary btn--sm"
               [disabled]="approvingId() === pending.id"
-              (click)="approveDiscount(q, pending)"
+              (click)="approveDiscount(q, pending, discAmt.value)"
             >
               <span class="material-symbols-outlined">check</span> Aprobar
             </button>
             <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectDiscount(q, pending)">
+              <span class="material-symbols-outlined">close</span> Rechazar
+            </button>
+          </div>
+        }
+
+        @if (isAdmin && pendingChargeOf(q); as pendingCharge) {
+          <div class="quote-card__discount">
+            <span class="material-symbols-outlined">build</span>
+            <span class="quote-card__discount-text">
+              {{ pendingCharge.label }} ({{ pendingCharge.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+              · pedido por {{ pendingCharge.requestedByName ?? 'vendedor' }}
+            </span>
+            <input type="number" class="quote-card__approve-amount" min="0" step="0.01" [value]="pendingCharge.amount" #chargeAmt title="Monto a aprobar" />
+            <button
+              type="button"
+              class="btn btn--primary btn--sm"
+              [disabled]="approvingChargeId() === pendingCharge.id"
+              (click)="approveCharge(q, pendingCharge, chargeAmt.value)"
+            >
+              <span class="material-symbols-outlined">check</span> Aprobar
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectCharge(q, pendingCharge)">
+              <span class="material-symbols-outlined">close</span> Rechazar
+            </button>
+          </div>
+        }
+
+        @if (isAdmin && q.shippingCostStatus === 'pending') {
+          <div class="quote-card__discount">
+            <span class="material-symbols-outlined">local_shipping</span>
+            <span class="quote-card__discount-text">
+              Envío manual ({{ q.shippingCost | currency:'MXN':'symbol-narrow':'1.2-2' }})
+            </span>
+            <input type="number" class="quote-card__approve-amount" min="0" step="0.01" [value]="q.shippingCost" #shipAmt title="Monto a aprobar" />
+            <button
+              type="button"
+              class="btn btn--primary btn--sm"
+              [disabled]="approvingShippingId() === q.id"
+              (click)="approveShipping(q, shipAmt.value)"
+            >
+              <span class="material-symbols-outlined">check</span> Aprobar
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectShipping(q)">
               <span class="material-symbols-outlined">close</span> Rechazar
             </button>
           </div>
@@ -189,6 +233,60 @@
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="pendingReject.set(null)">Cancelar</button>
           <button type="button" class="btn btn--danger" (click)="confirmRejectDiscount()">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: rechazar cargo extra (solo admin) — Docs/plan-aprobaciones-admin.md ===== -->
+@if (pendingRejectCharge(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar cargo extra</h2>
+        <p class="muted">
+          Se revierte "{{ target.charge.label }}" de <strong>{{ target.quote.customerName }}</strong> y el total vuelve a bajar.
+        </p>
+        <div class="field">
+          <label for="chargeRejectNote">Motivo (opcional)</label>
+          <textarea
+            id="chargeRejectNote"
+            [value]="rejectChargeNote()"
+            (input)="rejectChargeNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingRejectCharge.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmRejectCharge()">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: rechazar envío manual (solo admin) — Docs/plan-aprobaciones-admin.md ===== -->
+@if (pendingRejectShipping(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar envío manual</h2>
+        <p class="muted">
+          La cotización de <strong>{{ target.customerName }}</strong> queda sin costo de envío asignado.
+        </p>
+        <div class="field">
+          <label for="shippingRejectNote">Motivo (opcional)</label>
+          <textarea
+            id="shippingRejectNote"
+            [value]="rejectShippingNote()"
+            (input)="rejectShippingNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingRejectShipping.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmRejectShipping()">Rechazar</button>
         </div>
       </div>
     </div>

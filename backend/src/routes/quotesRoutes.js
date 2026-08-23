@@ -27,4 +27,13 @@ router.delete('/:id', quotesController.remove);
 router.patch('/:id/discounts/:discountId/approve', authorize('admin'), quotesController.approveDiscount);
 router.patch('/:id/discounts/:discountId/reject', authorize('admin'), quotesController.rejectDiscount);
 
+// Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre una cotización ya
+// existente — vendedor (dueño) o admin, sin `authorize('admin')`.
+router.post('/:id/extra-charges', quotesController.applyExtraCharge);
+// Aprobar/rechazar cargo extra y envío manual: exclusivo del admin.
+router.patch('/:id/extra-charges/:chargeId/approve', authorize('admin'), quotesController.approveExtraCharge);
+router.patch('/:id/extra-charges/:chargeId/reject', authorize('admin'), quotesController.rejectExtraCharge);
+router.patch('/:id/shipping-cost/approve', authorize('admin'), quotesController.approveShippingCost);
+router.patch('/:id/shipping-cost/reject', authorize('admin'), quotesController.rejectShippingCost);
+
 module.exports = router;

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -22,7 +22,11 @@ import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
 import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
 import { DiscountReasonPickerComponent } from '../../../../shared/components/discount-reason-picker/discount-reason-picker.component';
+import { ExtraChargePickerComponent } from '../../../../shared/components/extra-charge-picker/extra-charge-picker.component';
 import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
+
+/** Docs/plan-aprobaciones-admin.md RN-EC1: tope de cargos extra activos por documento. */
+const MAX_EXTRA_CHARGES = 5;
 
 /**
  * Línea de la cotización. Igual que el `CartLine` del POS: el material y el
@@ -35,6 +39,8 @@ interface QuoteLine {
   quantity: number;
   /** Docs/plan-descuentos.md: se regala esta línea (precio $0). */
   gift?: boolean;
+  /** Docs/plan-aprobaciones-admin.md RN-EC2 — D5: captura discreta. */
+  extraCharges?: { label: string; amount: number }[];
 }
 
 /**
@@ -70,7 +76,10 @@ interface QuoteDraftSnapshot {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-create.component.html',
   styleUrl: './quote-create.component.scss',
-  imports: [ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent, DiscountReasonPickerComponent, MediaUrlPipe],
+  imports: [
+    ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent,
+    DiscountReasonPickerComponent, ExtraChargePickerComponent, MediaUrlPipe,
+  ],
 })
 export class QuoteCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -284,6 +293,57 @@ export class QuoteCreateComponent implements OnInit {
   );
   protected hasLinesMissingColor = computed(() => this.linesMissingColor().length > 0);
 
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.1 — autocompletar sin tabla nueva:
+   * colores ya usados por material (histórico de pedidos/cotizaciones), como
+   * sugerencia del <datalist>. Nunca restringe lo que el vendedor escribe.
+   */
+  protected materialColorsCache = signal<Record<number, string[]>>({});
+  private loadingMaterialColors = new Set<number>();
+
+  protected colorSuggestionsFor(materialId: number): string[] {
+    return this.materialColorsCache()[materialId] ?? [];
+  }
+
+  private ensureColorsLoaded(materialId: number): void {
+    if (this.loadingMaterialColors.has(materialId) || this.materialColorsCache()[materialId]) return;
+    this.loadingMaterialColors.add(materialId);
+    this.sellerService.getMaterialColors(materialId).subscribe({
+      next: ({ data }) => this.materialColorsCache.update((cache) => ({ ...cache, [materialId]: data })),
+      error: () => {},
+    });
+  }
+
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.2 — aviso NO bloqueante: dentro del
+   * mismo documento, ¿otra línea ya escribió el mismo color con distinta
+   * capitalización/espacios? Solo compara líneas con la misma `colorPolicy`
+   * (Opción A: ligera, sin fuzzy-match contra el histórico — ver §11.2).
+   */
+  protected duplicateColorIndexes = computed(() => {
+    const lines = this.lines();
+    // Agrupa por "colorPolicy|colorNormalizado"; solo avisa si dentro del
+    // grupo el texto tal cual capturado difiere (mayúsculas/espacios) — si
+    // ya coincide letra por letra no hay ambigüedad que preguntar.
+    const groups = new Map<string, { index: number; raw: string }[]>();
+    lines.forEach((l, i) => {
+      const mp = this.lineMaterialPrice(l);
+      const raw = (l.color ?? '').trim();
+      if (!mp || mp.colorPolicy === 'fixed' || !raw) return;
+      const key = `${mp.colorPolicy}|${raw.toLowerCase()}`;
+      const members = groups.get(key) ?? [];
+      members.push({ index: i, raw });
+      groups.set(key, members);
+    });
+    const flagged = new Set<number>();
+    for (const members of groups.values()) {
+      if (members.length < 2) continue;
+      const distinctRaw = new Set(members.map((m) => m.raw));
+      if (distinctRaw.size > 1) members.forEach((m) => flagged.add(m.index));
+    }
+    return flagged;
+  });
+
   /** Suma de las líneas, sin envío ni armado (precio de contado en crédito). */
   protected subtotal = computed(() =>
     this.lines().reduce((sum, l) => sum + (this.unitPrice(l) ?? 0) * l.quantity, 0),
@@ -323,8 +383,22 @@ export class QuoteCreateComponent implements OnInit {
     () => this.activeMoneyDiscount()?.amount ?? this.discountAmount() ?? 0,
   );
 
+  /** Docs/plan-aprobaciones-admin.md RN-EC — D5: captura discreta, sumada de todas las líneas. */
+  protected readonly MAX_EXTRA_CHARGES = MAX_EXTRA_CHARGES;
+  protected extraChargesCount = computed(
+    () => this.lines().reduce((sum, l) => sum + (l.extraCharges?.length ?? 0), 0),
+  );
+  protected extraChargesTotal = computed(
+    () => this.lines().reduce(
+      (sum, l) => sum + (l.extraCharges ?? []).reduce((s, ec) => s + ec.amount, 0), 0,
+    ),
+  );
+  /** Índice de la línea cuyo mini-formulario de cargo extra está abierto; null = ninguno. */
+  protected openExtraChargeLine = signal<number | null>(null);
+
   protected grandTotal = computed(
-    () => Math.max(0, this.productsTotal() + this.shippingCost() + this.assemblyCost() - this.effectiveDiscountAmount()),
+    () => Math.max(0, this.productsTotal() + this.shippingCost() + this.assemblyCost()
+      + this.extraChargesTotal() - this.effectiveDiscountAmount()),
   );
 
   constructor() {
@@ -357,6 +431,13 @@ export class QuoteCreateComponent implements OnInit {
           );
         }
       });
+
+    // §11.1: precarga sugerencias de color para cada material que aparezca en
+    // el carrito (agregar producto, cambiar material, cargar cotización para editar).
+    effect(() => {
+      const materialIds = new Set(this.lines().map((l) => l.materialId));
+      materialIds.forEach((id) => this.ensureColorsLoaded(id));
+    });
   }
 
   ngOnInit(): void {
@@ -491,6 +572,15 @@ export class QuoteCreateComponent implements OnInit {
             .filter((d) => d.type === 'product' && d.status !== 'rejected')
             .map((d) => d.itemId),
         );
+        // Docs/plan-aprobaciones-admin.md: cargos extra activos, agrupados
+        // por línea — se resenden completos en cada guardado (RN-EC4).
+        const extraChargesByItemId = new Map<number, { label: string; amount: number }[]>();
+        for (const ec of quote.extraCharges ?? []) {
+          if (ec.status === 'rejected' || ec.itemId == null) continue;
+          const list = extraChargesByItemId.get(ec.itemId) ?? [];
+          list.push({ label: ec.label, amount: ec.amount });
+          extraChargesByItemId.set(ec.itemId, list);
+        }
         this.lines.set(
           (quote.items ?? []).map((it) => ({
             product: {
@@ -522,6 +612,7 @@ export class QuoteCreateComponent implements OnInit {
             color: it.color ?? null,
             quantity: it.quantity,
             gift: giftedItemIds.has(it.id ?? -1),
+            extraCharges: extraChargesByItemId.get(it.id ?? -1) ?? [],
           })),
         );
         this.loadingQuote.set(false);
@@ -651,6 +742,32 @@ export class QuoteCreateComponent implements OnInit {
     );
   }
 
+  protected toggleExtraChargeForm(index: number): void {
+    this.openExtraChargeLine.update((current) => (current === index ? null : index));
+  }
+
+  /** Docs/plan-aprobaciones-admin.md RN-EC1: tope de 5 — el servidor es la defensa real. */
+  protected addExtraCharge(index: number, charge: { label: string; amount: number }): void {
+    if (this.extraChargesCount() >= MAX_EXTRA_CHARGES) {
+      this.notification.error(
+        `Ya hay ${MAX_EXTRA_CHARGES} cargos extra en esta cotización (el máximo). Quita alguno antes de agregar otro.`,
+      );
+      return;
+    }
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index ? { ...l, extraCharges: [...(l.extraCharges ?? []), charge] } : l)),
+    );
+    this.openExtraChargeLine.set(null);
+  }
+
+  protected removeExtraCharge(lineIndex: number, chargeIndex: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === lineIndex
+        ? { ...l, extraCharges: (l.extraCharges ?? []).filter((_, ci) => ci !== chargeIndex) }
+        : l)),
+    );
+  }
+
   protected onDiscountAmountInput(event: Event): void {
     const raw = (event.target as HTMLInputElement).value;
     const value = Number(raw);
@@ -742,6 +859,11 @@ export class QuoteCreateComponent implements OnInit {
             reason: this.discountReasonText().trim() || null,
           }
         : null,
+      // Docs/plan-aprobaciones-admin.md RN-EC4: se resend el estado COMPLETO
+      // de cargos extra en cada guardado, igual que `items[]`.
+      extraCharges: this.lines().flatMap((l, i) =>
+        (l.extraCharges ?? []).map((ec) => ({ itemIndex: i, label: ec.label, amount: ec.amount })),
+      ),
       // El backend recalcula precio, envío y armado con las tarifas vigentes:
       // aquí solo viaja QUÉ se cotiza, no CUÁNTO cuesta.
       items: this.lines().map((l) => ({

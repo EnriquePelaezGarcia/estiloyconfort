@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const adminController = require('../controllers/adminController');
+const approvalsController = require('../controllers/approvalsController');
 const pricingController = require('../controllers/pricingController');
 const materialsController = require('../controllers/materialsController');
 const inventoryController = require('../controllers/inventoryController');
@@ -53,6 +54,14 @@ router.delete('/orders/:id/assembly', adminController.removeAssembly);
 router.patch('/orders/:id/discounts/:discountId/approve', adminController.approveOrderDiscount);
 router.patch('/orders/:id/discounts/:discountId/reject', adminController.rejectOrderDiscount);
 router.get('/discounts/pending-count', adminController.getPendingDiscountsCount);
+// Docs/plan-aprobaciones-admin.md
+router.patch('/orders/:id/extra-charges/:chargeId/approve', adminController.approveOrderExtraCharge);
+router.patch('/orders/:id/extra-charges/:chargeId/reject', adminController.rejectOrderExtraCharge);
+router.patch('/orders/:id/shipping-cost/approve', adminController.approveOrderShipping);
+router.patch('/orders/:id/shipping-cost/reject', adminController.rejectOrderShipping);
+// Módulo "Aprobaciones": bandeja agregada de los 4 tipos × 2 documentos.
+router.get('/approvals', approvalsController.getApprovals);
+router.get('/approvals/pending-count', approvalsController.getApprovalsPendingCount);
 router.get('/delivery-people', adminController.getDeliveryPeople);
 router.get('/factory-order-items', adminController.getFactoryOrderItems);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);

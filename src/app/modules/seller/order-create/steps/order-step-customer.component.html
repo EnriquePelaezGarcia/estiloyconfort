@@ -87,7 +87,10 @@
         }
       </div>
       <div class="field" [class.field--error]="store.submitAttempted() && store.shippingCp().length !== 5">
-        <label for="shippingCp">Código postal de entrega *</label>
+        <div class="field__label-row">
+          <label for="shippingCp">Código postal de entrega *</label>
+          <app-field-help text="El envío se calcula solo al completar los 5 dígitos." />
+        </div>
         <input
           id="shippingCp"
           type="text"
@@ -98,7 +101,6 @@
           [value]="store.shippingCp()"
           (input)="store.onShippingCpInput($event)"
         />
-        <p class="field__hint">Ingresa el CP para calcular el costo de envío automáticamente.</p>
         @if (store.submitAttempted() && store.shippingCp().length !== 5) {
           <p class="field__error">Ingresa el código postal de entrega (5 dígitos).</p>
         }
@@ -145,14 +147,16 @@
         </div>
       }
       <div class="field">
-        <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
+        <div class="field__label-row">
+          <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
+          <app-field-help text="El repartidor podrá abrirlo con un clic." />
+        </div>
         <input
           id="googleMapsUrl"
           type="url"
           formControlName="googleMapsUrl"
           placeholder="https://maps.google.com/?q=..."
         />
-        <p class="field__hint">Pega el enlace de Google Maps; el repartidor podrá abrirlo con un clic.</p>
       </div>
       <div class="field">
         <label for="instruccionesEntrega">Instrucciones de Entrega</label>
@@ -161,14 +165,14 @@
           formControlName="instruccionesEntrega"
           placeholder="Ej. Casa azul frente al parque, tocar en la reja, dejar en portería..."
         ></textarea>
-        <p class="field__hint">Referencias de fachada y navegación para el repartidor. El horario va en el bloque de entrega, no aquí.</p>
+        <p class="field__hint">El horario va en el bloque de entrega, no aquí.</p>
       </div>
       <div class="field assembly-field">
         <label class="assembly-check">
           <input type="checkbox" formControlName="assemblyService" />
           <span>Incluye servicio de armado</span>
         </label>
-        <p class="field__hint">Subida por pisos y armado del mueble. Un solo cargo por pedido; con o sin elevador se cobra igual.</p>
+        <p class="field__hint">Un solo cargo por pedido; con o sin elevador se cobra igual.</p>
 
         @if (store.hasAssembly()) {
           <div class="field">
@@ -257,6 +261,15 @@
               </select>
               @if (store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid) {
                 <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
+              }
+              <!-- Docs/plan-aprobaciones-admin.md §11.3: aviso NO bloqueante, no impide agendar. -->
+              @if (store.slotCountInfo(); as slotInfo) {
+                <p class="field__hint" [class.field__hint--alert]="store.slotCountOverThreshold()">
+                  @if (slotInfo.count > 0) {
+                    {{ slotInfo.count }} entrega{{ slotInfo.count === 1 ? '' : 's' }} ya comprometida{{ slotInfo.count === 1 ? '' : 's' }} en este horario
+                    @if (store.slotCountOverThreshold()) { — horario saturado }
+                  }
+                </p>
               }
             </div>
           }

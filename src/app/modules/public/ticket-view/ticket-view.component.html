@@ -110,6 +110,14 @@
               <span>{{ t.shippingCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </div>
           }
+          <!-- Docs/plan-aprobaciones-admin.md RN-EC8: cada cargo extra como
+               concepto propio, para que quede claro por qué sube el precio. -->
+          @for (charge of t.extraCharges; track charge.label) {
+            <div class="totals__row">
+              <span>{{ charge.label }}</span>
+              <span>{{ charge.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+          }
           @if (t.assemblyService) {
             <div class="totals__row">
               <span>Servicio de armado@if (t.assemblyFloors) { · piso {{ t.assemblyFloors }} }</span>

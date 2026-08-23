@@ -9,6 +9,9 @@ router.use(authenticate);
 
 // El catálogo de franjas lo necesita cualquiera que capture un pedido.
 router.get('/slots', deliveryScheduleController.slots);
+// Docs/plan-aprobaciones-admin.md §11.3: mismo criterio — quien captura la
+// entrega necesita ver el contador de saturación, no solo admin/vendedor.
+router.get('/schedule/slot-count', deliveryScheduleController.slotCount);
 
 // Agenda: admin ve todo, vendedor lo suyo, repartidor sus asignaciones (D2).
 router.get('/schedule', authorize('admin', 'seller', 'delivery_person'), deliveryScheduleController.schedule);

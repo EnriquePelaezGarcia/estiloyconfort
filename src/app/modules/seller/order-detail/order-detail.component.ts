@@ -11,11 +11,14 @@ import { ManufacturingService } from '../../../core/services/manufacturing.servi
 import { NotificationService } from '../../../core/services/notification.service';
 import { DeliveryScheduleService, formatWindow } from '../../../core/services/delivery-schedule.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
+import { ApprovalsService } from '../../../core/services/approvals.service';
 import { isPickupWithinGrace } from '../../../core/utils/pickup';
 import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
+import { ExtraChargePickerComponent } from '../../../shared/components/extra-charge-picker/extra-charge-picker.component';
 import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
 import {
-  DeliveryCommitment, Order, OrderDiscount, OrderItem, OrderStatus, PaymentStatus, StockReservationReason,
+  DeliveryCommitment, Order, OrderDiscount, OrderExtraCharge, OrderItem, OrderStatus, PaymentStatus,
+  StockReservationReason,
 } from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
@@ -58,7 +61,10 @@ interface AbonoReceipt {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-detail.component.html',
   styleUrl: './order-detail.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective, DeliveryRescheduleComponent],
+  imports: [
+    CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective,
+    DeliveryRescheduleComponent, ExtraChargePickerComponent,
+  ],
 })
 export class OrderDetailComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -68,6 +74,7 @@ export class OrderDetailComponent implements OnInit {
   private notification = inject(NotificationService);
   private scheduleService = inject(DeliveryScheduleService);
   private discountsService = inject(DiscountsService);
+  private approvalsService = inject(ApprovalsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private fb = inject(FormBuilder);
@@ -84,6 +91,17 @@ export class OrderDetailComponent implements OnInit {
   protected approvingDiscountId = signal<number | null>(null);
   protected pendingRejectDiscount = signal<OrderDiscount | null>(null);
   protected rejectDiscountNote = signal('');
+
+  // ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
+  protected approvingChargeId = signal<number | null>(null);
+  protected pendingRejectCharge = signal<OrderExtraCharge | null>(null);
+  protected rejectChargeNote = signal('');
+  protected approvingShipping = signal(false);
+  protected rejectingShippingOpen = signal(false);
+  protected rejectShippingNote = signal('');
+  /** Línea a la que se le agrega un cargo extra (RN-EC6); null = formulario cerrado. */
+  protected extraChargeItemTarget = signal<OrderItem | null>(null);
+  protected applyingExtraCharge = signal(false);
 
   /** Ids de items con una asignación de fabricante en curso. */
   protected assigningManufacturer = signal<Set<number>>(new Set());
@@ -550,16 +568,21 @@ export class OrderDetailComponent implements OnInit {
     });
   }
 
-  /** Aprobar no toca el total: ya se aplicó al capturarlo (Docs/plan-descuentos.md). */
-  protected approveDiscount(discount: OrderDiscount): void {
+  /**
+   * Aprueba, opcionalmente modificando el monto (Docs/plan-aprobaciones-admin.md
+   * RN-MOD1). Sin modificar, el total ya reflejaba el monto solicitado.
+   */
+  protected approveDiscount(discount: OrderDiscount, newAmount?: string): void {
     const order = this.order();
     if (!order) return;
+    const amount = newAmount ? Number(newAmount) : undefined;
     this.approvingDiscountId.set(discount.id);
-    this.adminService.approveOrderDiscount(order.id, discount.id).subscribe({
+    this.adminService.approveOrderDiscount(order.id, discount.id, amount).subscribe({
       next: () => {
         this.approvingDiscountId.set(null);
         this.notification.success('Descuento aprobado');
         this.load(order.id);
+        this.refreshApprovalsBadge();
       },
       error: (err: { error?: { message?: string } }) => {
         this.approvingDiscountId.set(null);
@@ -582,10 +605,117 @@ export class OrderDetailComponent implements OnInit {
         this.pendingRejectDiscount.set(null);
         this.notification.success('Descuento rechazado');
         this.load(order.id);
+        this.refreshApprovalsBadge();
       },
       error: (err: { error?: { message?: string } }) => {
         this.pendingRejectDiscount.set(null);
         this.notification.error(err?.error?.message ?? 'No se pudo rechazar el descuento');
+      },
+    });
+  }
+
+  // ===== Cargos extra (Docs/plan-aprobaciones-admin.md) =====
+
+  protected approveExtraCharge(charge: OrderExtraCharge, newAmount?: string): void {
+    const order = this.order();
+    if (!order) return;
+    const amount = newAmount ? Number(newAmount) : undefined;
+    this.approvingChargeId.set(charge.id);
+    this.adminService.approveOrderExtraCharge(order.id, charge.id, amount).subscribe({
+      next: () => {
+        this.approvingChargeId.set(null);
+        this.notification.success('Cargo extra aprobado');
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.approvingChargeId.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el cargo extra');
+      },
+    });
+  }
+
+  protected askRejectCharge(charge: OrderExtraCharge): void {
+    this.rejectChargeNote.set('');
+    this.pendingRejectCharge.set(charge);
+  }
+
+  protected confirmRejectCharge(): void {
+    const order = this.order();
+    const charge = this.pendingRejectCharge();
+    if (!order || !charge) return;
+    this.adminService.rejectOrderExtraCharge(order.id, charge.id, this.rejectChargeNote()).subscribe({
+      next: () => {
+        this.pendingRejectCharge.set(null);
+        this.notification.success('Cargo extra rechazado');
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.pendingRejectCharge.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el cargo extra');
+      },
+    });
+  }
+
+  /** RN-EC6: agregar un cargo extra a este pedido ya existente. Vendedor o admin. */
+  protected openExtraChargeFor(item: OrderItem): void {
+    this.extraChargeItemTarget.set(item);
+  }
+
+  protected applyExtraCharge(charge: { label: string; amount: number }): void {
+    const order = this.order();
+    const item = this.extraChargeItemTarget();
+    if (!order || !item) return;
+    this.applyingExtraCharge.set(true);
+    this.sellerService.applyExtraCharge(order.id, { itemId: item.id ?? null, label: charge.label, amount: charge.amount }).subscribe({
+      next: () => {
+        this.applyingExtraCharge.set(false);
+        this.extraChargeItemTarget.set(null);
+        this.notification.success('Cargo extra agregado');
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.applyingExtraCharge.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo agregar el cargo extra');
+      },
+    });
+  }
+
+  // ===== Envío manual (Docs/plan-aprobaciones-admin.md RN-SM) =====
+
+  protected approveShipping(newAmount?: string): void {
+    const order = this.order();
+    if (!order) return;
+    const amount = newAmount ? Number(newAmount) : undefined;
+    this.approvingShipping.set(true);
+    this.adminService.approveOrderShipping(order.id, amount).subscribe({
+      next: () => {
+        this.approvingShipping.set(false);
+        this.notification.success('Envío aprobado');
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.approvingShipping.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el envío');
+      },
+    });
+  }
+
+  protected confirmRejectShipping(): void {
+    const order = this.order();
+    if (!order) return;
+    this.adminService.rejectOrderShipping(order.id, this.rejectShippingNote()).subscribe({
+      next: () => {
+        this.rejectingShippingOpen.set(false);
+        this.notification.success('Envío rechazado');
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.rejectingShippingOpen.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el envío');
       },
     });
   }
@@ -746,6 +876,11 @@ export class OrderDetailComponent implements OnInit {
       otro: 'Otro',
     };
     return labels[reason] ?? reason;
+  }
+
+  /** Docs/plan-aprobaciones-admin.md D6: refresca el contador del nav item "Aprobaciones" tras actuar. */
+  private refreshApprovalsBadge(): void {
+    this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
   }
 
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }

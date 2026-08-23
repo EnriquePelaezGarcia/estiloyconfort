@@ -1,0 +1,47 @@
+@use '../../../../styles/variables' as vars;
+
+:host {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.field-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 0.3rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: vars.$color-primary-light;
+  cursor: pointer;
+  transition: background vars.$transition-fast, color vars.$transition-fast;
+
+  .material-symbols-outlined { font-size: 1rem; }
+
+  &:hover, &:focus-visible { background: vars.$color-bg; color: vars.$color-primary; }
+  &:focus-visible { outline: 2px solid vars.$color-primary-light; outline-offset: 2px; }
+}
+
+// Popover inline con borde — no un modal, sería pesado para una frase corta
+// (Docs/plan-textos-ayuda.md §5.3). Misma estrategia de profundidad que el
+// resto del proyecto: solo borde, sin sombra.
+.field-help-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: 240px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  background: vars.$color-surface;
+  color: vars.$color-text;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}

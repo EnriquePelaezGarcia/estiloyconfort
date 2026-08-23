@@ -34,6 +34,9 @@ const ALLOWED_KEYS = [
   // Tope de descuento en dinero para vendedor/repartidor sin pasar por un
   // admin (Docs/plan-descuentos.md, RN-D4). El admin no tiene tope.
   'max_seller_discount',
+  // Docs/plan-aprobaciones-admin.md §11.3: umbral de aviso (NO bloqueo) de
+  // entregas "Día preciso" ya comprometidas en el mismo horario.
+  'max_deliveries_per_slot',
 ];
 
 const PricingConfig = {
@@ -68,6 +71,7 @@ const PricingConfig = {
       min_margin_alert: 20,
       fabrication_days: 15,
       max_seller_discount: 2000,
+      max_deliveries_per_slot: 3,
     };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;

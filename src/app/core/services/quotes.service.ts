@@ -40,15 +40,52 @@ export class QuotesService {
   }
 
   // ===== Descuentos (Docs/plan-descuentos.md) — exclusivo del admin =====
-  approveDiscount(quoteId: number, discountId: number): Observable<Quote> {
+  /** `amount` opcional (Docs/plan-aprobaciones-admin.md RN-MOD1): modifica el monto al aprobar. */
+  approveDiscount(quoteId: number, discountId: number, amount?: number): Observable<Quote> {
     return this.api
-      .patch<{ data: Quote }>(`/quotes/${quoteId}/discounts/${discountId}/approve`, {})
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/discounts/${discountId}/approve`, amount != null ? { amount } : {})
       .pipe(map((res) => res.data));
   }
 
   rejectDiscount(quoteId: number, discountId: number, reviewNote: string): Observable<Quote> {
     return this.api
       .patch<{ data: Quote }>(`/quotes/${quoteId}/discounts/${discountId}/reject`, { reviewNote })
+      .pipe(map((res) => res.data));
+  }
+
+  // ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
+
+  /** RN-EC6: cargo extra sobre una cotización ya existente (vendedor dueño o admin). */
+  applyExtraCharge(
+    quoteId: number,
+    payload: { itemId: number | null; label: string; amount: number },
+  ): Observable<Quote> {
+    return this.api
+      .post<{ data: Quote }>(`/quotes/${quoteId}/extra-charges`, payload)
+      .pipe(map((res) => res.data));
+  }
+
+  approveExtraCharge(quoteId: number, chargeId: number, amount?: number): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/extra-charges/${chargeId}/approve`, amount != null ? { amount } : {})
+      .pipe(map((res) => res.data));
+  }
+
+  rejectExtraCharge(quoteId: number, chargeId: number, reviewNote: string): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/extra-charges/${chargeId}/reject`, { reviewNote })
+      .pipe(map((res) => res.data));
+  }
+
+  approveShippingCost(quoteId: number, amount?: number): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/shipping-cost/approve`, amount != null ? { amount } : {})
+      .pipe(map((res) => res.data));
+  }
+
+  rejectShippingCost(quoteId: number, reviewNote: string): Observable<Quote> {
+    return this.api
+      .patch<{ data: Quote }>(`/quotes/${quoteId}/shipping-cost/reject`, { reviewNote })
       .pipe(map((res) => res.data));
   }
 

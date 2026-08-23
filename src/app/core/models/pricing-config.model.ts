@@ -40,7 +40,10 @@ export type PricingConfigKey =
   | 'fabrication_days'
   // Tope de descuento en dinero para vendedor/repartidor sin pasar por un
   // admin (Docs/plan-descuentos.md RN-D4). El admin no tiene tope.
-  | 'max_seller_discount';
+  | 'max_seller_discount'
+  // Docs/plan-aprobaciones-admin.md §11.3: umbral de aviso (NO bloqueo) de
+  // entregas "Día preciso" ya comprometidas en el mismo horario.
+  | 'max_deliveries_per_slot';
 
 /** Mapa key -> valor usado por el calculador de precios. */
 export type PricingConfigMap = Record<PricingConfigKey, number>;
@@ -62,6 +65,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   min_margin_alert: 20,
   fabrication_days: 15,
   max_seller_discount: 2000,
+  max_deliveries_per_slot: 3,
 };
 
 export interface CalculatedPrices {

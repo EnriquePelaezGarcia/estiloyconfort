@@ -3,6 +3,7 @@ const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const ShippingRate = require('./ShippingRate');
 const discountEngine = require('./discountEngine');
+const extraChargeEngine = require('./extraChargeEngine');
 const { addBusinessDays } = require('../utils/businessDays');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
@@ -41,6 +42,13 @@ function mapQuote(row) {
     shippingPostalCode: row.shipping_postal_code ?? null,
     shippingCost: Number(row.shipping_cost),
     shippingZoneLabel: row.shipping_zone_label ?? null,
+    // Docs/plan-aprobaciones-admin.md RN-SM — mismo shape que Order.
+    shippingCostStatus: row.shipping_cost_status ?? 'none',
+    shippingCostRequested: row.shipping_cost_requested != null ? Number(row.shipping_cost_requested) : null,
+    shippingCostReviewedBy: row.shipping_cost_reviewed_by ?? null,
+    shippingCostReviewedByName: row.shipping_cost_reviewed_by_name ?? null,
+    shippingCostReviewedAt: row.shipping_cost_reviewed_at ?? null,
+    shippingCostReviewNote: row.shipping_cost_review_note ?? null,
     /** Recoge en tienda (Docs/plan-recoge-en-tienda.md §5.4): sin envío ni armado. */
     pickupInStore: !!row.pickup_in_store,
     assemblyService: !!row.assembly_service,
@@ -99,9 +107,10 @@ const ITEMS_SELECT = `
 `;
 
 const BASE_SELECT = `
-  SELECT q.*, u.full_name AS seller_name
+  SELECT q.*, u.full_name AS seller_name, shr.full_name AS shipping_cost_reviewed_by_name
   FROM quotes q
   LEFT JOIN users u ON u.id = q.seller_id
+  LEFT JOIN users shr ON shr.id = q.shipping_cost_reviewed_by
 `;
 
 /**
@@ -408,7 +417,40 @@ const Quote = {
         discountEngine.assertWithinCap(normalizedDiscount.amount, requesterRole, config);
         moneyDiscountAmount = normalizedDiscount.amount;
       }
-      const totalAmount = Math.max(0, Math.round((p.totalAmount - moneyDiscountAmount) * 100) / 100);
+
+      /**
+       * Aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM1):
+       * `resolveQuotePricing` ya resolvió el costo (tarifa de catálogo o
+       * manual); un CP con envío manual se detecta porque quedó sin
+       * `shippingZoneLabel` (ninguna zona de `shipping_rates` lo cubrió).
+       */
+      const shippingIsManual = !!p.shippingPostalCode && !p.shippingZoneLabel;
+      const shippingCostStatus = shippingIsManual
+        ? (requesterRole === 'admin' ? 'approved' : 'pending')
+        : 'none';
+      const shippingCostRequested = shippingIsManual ? p.shippingCost : null;
+      const shippingCostReviewedBy = shippingIsManual && requesterRole === 'admin' ? sellerId : null;
+      const shippingCostReviewedAt = shippingIsManual && requesterRole === 'admin' ? new Date() : null;
+
+      /**
+       * Cargos extra (RN-EC2): suman al total de inmediato, igual que el
+       * descuento resta. `itemIndex` es la posición en `items[]` — el id real
+       * de la línea todavía no existe aquí.
+       */
+      if (Array.isArray(data.extraCharges) && data.extraCharges.length > extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT) {
+        const err = new Error(`Máximo ${extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT} cargos extra por cotización.`);
+        err.statusCode = 400;
+        throw err;
+      }
+      const normalizedExtraCharges = (Array.isArray(data.extraCharges) ? data.extraCharges : []).map((ec) => ({
+        ...extraChargeEngine.normalizeExtraChargeInput(ec),
+        itemIndex: Number(ec.itemIndex),
+      }));
+      const extraChargesTotal = normalizedExtraCharges.reduce((s, r) => s + r.amount, 0);
+
+      const totalAmount = Math.max(
+        0, Math.round((p.totalAmount + extraChargesTotal - moneyDiscountAmount) * 100) / 100,
+      );
 
       // 16 bytes en base64url = 22 caracteres sin guiones ni signos, seguros
       // en una URL que se pega en WhatsApp.
@@ -419,15 +461,17 @@ const Quote = {
         `INSERT INTO quotes
           (token, seller_id, customer_name, customer_phone, payment_method,
            shipping_postal_code, shipping_cost, shipping_zone_label, pickup_in_store,
+           shipping_cost_status, shipping_cost_requested, shipping_cost_reviewed_by, shipping_cost_reviewed_at,
            assembly_service, assembly_floors, assembly_cost,
            subtotal, total_amount,
            cash_total, down_payment, weekly_payment, last_payment,
            credit_weeks, layaway_deadline, wholesale_iva,
            status, expires_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           token, sellerId, data.customerName, data.customerPhone ?? null, p.paymentMethod,
           p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel, p.pickupInStore ? 1 : 0,
+          shippingCostStatus, shippingCostRequested, shippingCostReviewedBy, shippingCostReviewedAt,
           p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
           p.subtotal, totalAmount,
           p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
@@ -478,6 +522,21 @@ const Quote = {
           reason: null,
           itemId: it.insertedItemId,
           originalUnitPrice: it.normalUnitPrice,
+          status: discountStatus,
+          requestedBy: sellerId,
+          requestedByRole: requesterRole,
+          ...reviewedFields,
+        });
+      }
+
+      // Cargos extra (Docs/plan-aprobaciones-admin.md RN-EC), ligados a la
+      // línea recién insertada.
+      for (const ec of normalizedExtraCharges) {
+        const item = Number.isInteger(ec.itemIndex) ? p.resolvedItems[ec.itemIndex] : null;
+        await extraChargeEngine.insert('quote', conn, quoteId, {
+          itemId: item ? item.insertedItemId : null,
+          label: ec.label,
+          amount: ec.amount,
           status: discountStatus,
           requestedBy: sellerId,
           requestedByRole: requesterRole,
@@ -538,13 +597,42 @@ const Quote = {
         moneyDiscountAmount = normalized.amount;
         newMoneyDiscount = normalized;
       }
-      const totalAmount = Math.max(0, Math.round((p.totalAmount - moneyDiscountAmount) * 100) / 100);
+
+      // Envío manual (RN-SM1): se recalcula igual que en `create()` — la
+      // cotización siempre resuelve envío fresco en cada edición, así que el
+      // estado de aprobación también se recalcula fresco (un monto editado es,
+      // en efecto, uno nuevo).
+      const shippingIsManual = !!p.shippingPostalCode && !p.shippingZoneLabel;
+      const shippingCostStatus = shippingIsManual
+        ? (requesterRole === 'admin' ? 'approved' : 'pending')
+        : 'none';
+      const shippingCostRequested = shippingIsManual ? p.shippingCost : null;
+      const shippingCostReviewedBy = shippingIsManual && requesterRole === 'admin' ? userId : null;
+      const shippingCostReviewedAt = shippingIsManual && requesterRole === 'admin' ? new Date() : null;
+
+      // Cargos extra (RN-EC4): se regeneran frescos en cada edición, igual
+      // que el regalo — el arreglo completo siempre viaja en el payload.
+      if (Array.isArray(data.extraCharges) && data.extraCharges.length > extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT) {
+        const err = new Error(`Máximo ${extraChargeEngine.MAX_ACTIVE_PER_DOCUMENT} cargos extra por cotización.`);
+        err.statusCode = 400;
+        throw err;
+      }
+      const normalizedExtraCharges = (Array.isArray(data.extraCharges) ? data.extraCharges : []).map((ec) => ({
+        ...extraChargeEngine.normalizeExtraChargeInput(ec),
+        itemIndex: Number(ec.itemIndex),
+      }));
+      const extraChargesTotal = normalizedExtraCharges.reduce((s, r) => s + r.amount, 0);
+
+      const totalAmount = Math.max(
+        0, Math.round((p.totalAmount + extraChargesTotal - moneyDiscountAmount) * 100) / 100,
+      );
 
       await conn.execute(
         `UPDATE quotes SET
            customer_name = ?, customer_phone = ?, payment_method = ?,
            shipping_postal_code = ?, shipping_cost = ?, shipping_zone_label = ?,
            pickup_in_store = ?,
+           shipping_cost_status = ?, shipping_cost_requested = ?, shipping_cost_reviewed_by = ?, shipping_cost_reviewed_at = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
            subtotal = ?, total_amount = ?,
            cash_total = ?, down_payment = ?, weekly_payment = ?, last_payment = ?,
@@ -554,6 +642,7 @@ const Quote = {
           data.customerName, data.customerPhone ?? null, p.paymentMethod,
           p.shippingPostalCode, p.shippingCost, p.shippingZoneLabel,
           p.pickupInStore ? 1 : 0,
+          shippingCostStatus, shippingCostRequested, shippingCostReviewedBy, shippingCostReviewedAt,
           p.assemblyService ? 1 : 0, p.assemblyFloors, p.assemblyCost,
           p.subtotal, totalAmount,
           p.cashTotal, p.downPayment, p.weeklyPayment, p.lastPayment,
@@ -614,6 +703,22 @@ const Quote = {
         });
       }
 
+      // Cargos extra (RN-EC4): se regeneran frescos sobre las líneas recién
+      // recreadas, mismo criterio que el regalo.
+      await extraChargeEngine.deleteAll('quote', conn, id);
+      for (const ec of normalizedExtraCharges) {
+        const item = Number.isInteger(ec.itemIndex) ? p.resolvedItems[ec.itemIndex] : null;
+        await extraChargeEngine.insert('quote', conn, id, {
+          itemId: item ? item.insertedItemId : null,
+          label: ec.label,
+          amount: ec.amount,
+          status: giftStatus,
+          requestedBy: userId,
+          requestedByRole: requesterRole,
+          ...giftReviewedFields,
+        });
+      }
+
       await conn.commit();
       return this.findById(id);
     } catch (err) {
@@ -632,6 +737,8 @@ const Quote = {
     const [items] = await pool.execute(ITEMS_SELECT, [id]);
     quote.items = items.map(mapQuoteItem);
     quote.discounts = await discountEngine.findAll('quote', id);
+    // Docs/plan-aprobaciones-admin.md — vacío si la cotización no tiene ninguno.
+    quote.extraCharges = await extraChargeEngine.findAll('quote', id);
     return quote;
   },
 
@@ -649,6 +756,11 @@ const Quote = {
     const quote = mapQuote(row);
     const [items] = await pool.execute(ITEMS_SELECT, [row.id]);
     quote.items = items.map(mapQuoteItem);
+    // RN-EC8: el cliente ve los cargos extra aprobados/pendientes, desglosados
+    // por etiqueta; los rechazados no se muestran. El controlador filtra a la
+    // lista blanca pública (solo label/amount) — igual que con el resto del ticket.
+    quote.extraCharges = (await extraChargeEngine.findAll('quote', row.id))
+      .filter((c) => c.status !== 'rejected');
     return quote;
   },
 
@@ -696,9 +808,30 @@ const Quote = {
     );
   },
 
-  /** Aprobar no toca el total: ya se restó (o, en 'product', ya nació en $0) al capturarlo. */
-  async approveDiscount(quoteId, discountId, adminId) {
-    await discountEngine.approve('quote', quoteId, discountId, adminId);
+  /**
+   * Aprobar. Puede modificar el monto (Docs/plan-aprobaciones-admin.md
+   * RN-MOD1): para 'money' se ajusta `total_amount` por la diferencia; para
+   * 'product' solo corrige el valor de referencia (RN-MOD2), sin tocar el
+   * total (la línea ya vale $0 sin importar este número).
+   */
+  async approveDiscount(quoteId, discountId, adminId, newAmount = null) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const result = await discountEngine.approve('quote', quoteId, discountId, adminId, newAmount, conn);
+      if (result.discount_type === 'money' && result.amount !== result.oldAmount) {
+        const [[row]] = await conn.execute('SELECT total_amount FROM quotes WHERE id = ?', [quoteId]);
+        const delta = result.oldAmount - result.amount;
+        const newTotal = Math.max(0, Math.round((Number(row.total_amount) + delta) * 100) / 100);
+        await conn.execute('UPDATE quotes SET total_amount = ? WHERE id = ?', [newTotal, quoteId]);
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
     return this.findById(quoteId);
   },
 
@@ -753,6 +886,154 @@ const Quote = {
     } finally {
       conn.release();
     }
+    return this.findById(quoteId);
+  },
+
+  // ===== Cargos extra por modificación (Docs/plan-aprobaciones-admin.md RN-EC) =====
+
+  /** Cargo extra capturado sobre una cotización YA EXISTENTE (RN-EC6). */
+  async applyExtraCharge(id, { itemId, label, amount, requestedBy, requestedByRole }) {
+    const existing = await this.findById(id);
+    if (!existing) { const err = new Error('Cotización no encontrada'); err.statusCode = 404; throw err; }
+    if (existing.status === 'converted') {
+      const err = new Error('Esta cotización ya se convirtió en pedido y no se puede editar');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (itemId != null && !(existing.items ?? []).some((it) => it.id === Number(itemId))) {
+      const err = new Error('La línea indicada no pertenece a esta cotización');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const normalized = extraChargeEngine.normalizeExtraChargeInput({ label, amount });
+    const status = requestedByRole === 'admin' ? 'approved' : 'pending';
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await extraChargeEngine.assertMaxActive('quote', id, conn);
+      const newTotal = Math.round((Number(existing.totalAmount) + normalized.amount) * 100) / 100;
+      await conn.execute('UPDATE quotes SET total_amount = ? WHERE id = ?', [newTotal, id]);
+      await extraChargeEngine.insert('quote', conn, id, {
+        itemId: itemId ?? null,
+        label: normalized.label,
+        amount: normalized.amount,
+        status,
+        requestedBy,
+        requestedByRole,
+        ...(status === 'approved' ? { reviewedBy: requestedBy, reviewedAt: new Date() } : {}),
+      });
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(id);
+  },
+
+  /** Igual que `approveDiscount`: puede modificar el monto y ajusta el total por la diferencia. */
+  async approveExtraCharge(quoteId, chargeId, adminId, newAmount = null) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const result = await extraChargeEngine.approve('quote', quoteId, chargeId, adminId, newAmount, conn);
+      if (result.amount !== result.oldAmount) {
+        const [[row]] = await conn.execute('SELECT total_amount FROM quotes WHERE id = ?', [quoteId]);
+        const newTotal = Math.max(
+          0, Math.round((Number(row.total_amount) + (result.amount - result.oldAmount)) * 100) / 100,
+        );
+        await conn.execute('UPDATE quotes SET total_amount = ? WHERE id = ?', [newTotal, quoteId]);
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(quoteId);
+  },
+
+  /** Rechazar revierte: resta del total el monto de ese cargo (RN-EC3). */
+  async rejectExtraCharge(quoteId, chargeId, adminId, reviewNote) {
+    const existing = await this.findById(quoteId);
+    if (!existing) { const err = new Error('Cotización no encontrada'); err.statusCode = 404; throw err; }
+    const row = await extraChargeEngine.findOne('quote', quoteId, chargeId);
+    if (!row) { const err = new Error('Cargo extra no encontrado'); err.statusCode = 404; throw err; }
+    if (row.status !== 'pending') { const err = new Error('Este cargo extra ya fue revisado'); err.statusCode = 400; throw err; }
+
+    const amount = Number(row.amount);
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) - amount) * 100) / 100);
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute('UPDATE quotes SET total_amount = ? WHERE id = ?', [newTotal, quoteId]);
+      await extraChargeEngine.markRejected('quote', conn, chargeId, adminId, reviewNote);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.findById(quoteId);
+  },
+
+  // ===== Envío manual con aprobación (Docs/plan-aprobaciones-admin.md RN-SM) =====
+
+  /** Aprobar puede modificar el monto (RN-SM3) y ajusta el total por la diferencia. */
+  async approveShippingCost(quoteId, adminId, newAmount = null) {
+    const existing = await this.findById(quoteId);
+    if (!existing) { const err = new Error('Cotización no encontrada'); err.statusCode = 404; throw err; }
+    if (existing.shippingCostStatus !== 'pending') {
+      const err = new Error('El envío de esta cotización no tiene nada pendiente de aprobar');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const oldAmount = Number(existing.shippingCost) || 0;
+    let amount = oldAmount;
+    if (newAmount !== null && newAmount !== undefined) {
+      const normalized = Math.round((Number(newAmount) || 0) * 100) / 100;
+      if (!(normalized >= 0)) { const err = new Error('El monto no puede ser negativo.'); err.statusCode = 400; throw err; }
+      amount = normalized;
+    }
+    const delta = amount - oldAmount;
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) + delta) * 100) / 100);
+
+    await pool.execute(
+      `UPDATE quotes SET shipping_cost = ?, total_amount = ?,
+              shipping_cost_status = 'approved', shipping_cost_reviewed_by = ?, shipping_cost_reviewed_at = NOW()
+        WHERE id = ?`,
+      [amount, newTotal, adminId, quoteId],
+    );
+    return this.findById(quoteId);
+  },
+
+  /** Rechazar revierte el total y deja la cotización sin costo de envío asignado (RN-SM2). */
+  async rejectShippingCost(quoteId, adminId, reviewNote) {
+    const existing = await this.findById(quoteId);
+    if (!existing) { const err = new Error('Cotización no encontrada'); err.statusCode = 404; throw err; }
+    if (existing.shippingCostStatus !== 'pending') {
+      const err = new Error('El envío de esta cotización no tiene nada pendiente de aprobar');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const amount = Number(existing.shippingCost) || 0;
+    const newTotal = Math.max(0, Math.round((Number(existing.totalAmount) - amount) * 100) / 100);
+
+    await pool.execute(
+      `UPDATE quotes SET shipping_cost = 0, shipping_cost_requested = NULL, total_amount = ?,
+              shipping_cost_status = 'rejected', shipping_cost_reviewed_by = ?,
+              shipping_cost_reviewed_at = NOW(), shipping_cost_review_note = ?
+        WHERE id = ?`,
+      [newTotal, adminId, (reviewNote ?? '').trim() || null, quoteId],
+    );
     return this.findById(quoteId);
   },
 

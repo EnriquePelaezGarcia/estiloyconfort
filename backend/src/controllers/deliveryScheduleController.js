@@ -1,5 +1,6 @@
 const DeliverySchedule = require('../models/DeliverySchedule');
 const Order = require('../models/Order');
+const PricingConfig = require('../models/PricingConfig');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
@@ -31,6 +32,18 @@ const deliveryScheduleController = {
   slots: asyncHandler(async (req, res) => {
     const data = await DeliverySchedule.listSlots();
     res.json({ data });
+  }),
+
+  // GET /api/deliveries/schedule/slot-count?date=&slotId= — Docs/plan-aprobaciones-admin.md
+  // §11.3: aviso NO bloqueante de sobre-compromiso al capturar "Día preciso".
+  slotCount: asyncHandler(async (req, res) => {
+    const { date, slotId } = req.query;
+    if (!date || !slotId) throw ApiError.badRequest('date y slotId son obligatorios');
+    const [count, config] = await Promise.all([
+      DeliverySchedule.countForSlot(date, Number(slotId)),
+      PricingConfig.getMap(),
+    ]);
+    res.json({ data: { count, threshold: Number(config.max_deliveries_per_slot) } });
   }),
 
   /**

@@ -243,6 +243,15 @@
     .material-symbols-outlined { font-size: 1rem; }
   }
 
+  // §11.2: aviso NO bloqueante (ámbar, no rojo — a diferencia de &__warn,
+  // que sí marca algo que impide continuar). Ocupa todo el ancho para no
+  // competir por espacio con material/color en la misma fila.
+  &__color-warning {
+    flex-basis: 100%;
+    font-size: 0.75rem;
+    color: #92620a;
+  }
+
   // Docs/plan-descuentos.md
   &__gift-toggle {
     align-self: flex-start;
@@ -266,15 +275,83 @@
     }
   }
 
+  // Docs/plan-aprobaciones-admin.md D5: enlace de texto, sin borde — más
+  // discreto que la pastilla de "Gratis" a propósito.
+  &__extra-charge-toggle {
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+    text-decoration: underline;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity vars.$transition-fast, color vars.$transition-fast;
+
+    &:hover { color: vars.$color-primary; }
+  }
+
   // Docs/plan-descuentos.md: el disparador se revela al pasar el mouse por la
   // linea o al enfocarla con el teclado. En pantallas tactiles (sin hover)
   // queda siempre visible, si no el vendedor se queda sin la opcion en celular.
   &:hover &__gift-toggle,
-  &:focus-within &__gift-toggle { opacity: 1; }
+  &:focus-within &__gift-toggle,
+  &:hover &__extra-charge-toggle,
+  &:focus-within &__extra-charge-toggle { opacity: 1; }
 
   @media (hover: none) {
-    &__gift-toggle { opacity: 1; }
+    &__gift-toggle,
+    &__extra-charge-toggle { opacity: 1; }
   }
+}
+
+// Docs/plan-aprobaciones-admin.md RN-EC — D5: solo aparece con al menos un cargo.
+.cart-line__charges {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cart-line__charge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  color: vars.$color-text-secondary;
+}
+
+.cart-line__charge-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+
+  button {
+    display: inline-flex;
+    padding: 0;
+    border: none;
+    background: none;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    .material-symbols-outlined { font-size: 0.9rem; }
+    &:hover { color: vars.$color-error; }
+  }
+}
+
+.extra-charges-count {
+  margin: -0.3rem 0 0.4rem;
+  font-size: 0.74rem;
+  color: vars.$color-text-secondary;
+  text-align: right;
 }
 
 // Docs/plan-descuentos.md

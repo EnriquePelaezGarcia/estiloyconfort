@@ -194,6 +194,13 @@
     &::placeholder { color: vars.$color-text-secondary; }
   }
 
+  // Docs/plan-aprobaciones-admin.md §11.2: aviso NO bloqueante, ámbar.
+  &__color-warning {
+    flex-basis: 100%;
+    font-size: 0.75rem;
+    color: #92620a;
+  }
+
   &__fabrication {
     display: flex;
     align-items: center;

@@ -197,6 +197,24 @@ const DeliverySchedule = {
       overdueExact: rows.filter((r) => Number(r.days_until) < 0),
     };
   },
+
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.3 — contador NO bloqueante: cuántas
+   * entregas de "Día preciso" (delivery_commitment = 'exact') ya están
+   * comprometidas en esa fecha+horario. Solo entregas abiertas (una
+   * entregada o cancelada ya liberó su lugar).
+   */
+  async countForSlot(date, slotId) {
+    const [rows] = await pool.execute(
+      `SELECT COUNT(*) AS n FROM orders o
+       WHERE ${OPEN_ORDERS}
+         AND o.expected_delivery_date = ?
+         AND o.delivery_slot_id = ?
+         AND o.delivery_commitment = 'exact'`,
+      [date, slotId],
+    );
+    return Number(rows[0]?.n ?? 0);
+  },
 };
 
 module.exports = DeliverySchedule;

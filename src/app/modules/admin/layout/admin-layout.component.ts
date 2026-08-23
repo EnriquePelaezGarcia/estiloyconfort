@@ -4,6 +4,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { SellerService } from '../../../core/services/seller.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
+import { ApprovalsService } from '../../../core/services/approvals.service';
 
 interface NavItem {
   label: string;
@@ -29,6 +30,7 @@ export class AdminLayoutComponent implements OnInit {
   private sellerService = inject(SellerService);
   private scheduleService = inject(DeliveryScheduleService);
   private discountsService = inject(DiscountsService);
+  private approvalsService = inject(ApprovalsService);
 
   protected sidebarOpen = signal(false);
 
@@ -47,6 +49,14 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Precios mayoreo', icon: 'store', route: 'precios-mayoreo', wholesaleOnly: true },
     { label: 'Panel de utilidades', icon: 'insights', route: 'utilidades' },
     { label: 'Nuevo pedido', icon: 'point_of_sale', route: 'punto-venta' },
+    {
+      label: 'Aprobaciones',
+      icon: 'fact_check',
+      route: 'aprobaciones',
+      // Docs/plan-aprobaciones-admin.md D6: puramente informativo, no se
+      // "apaga" al entrar — mismo mecanismo que las badges de abajo.
+      badge: () => this.approvalsService.pendingCounts()?.total ?? 0,
+    },
     {
       label: 'Cotizaciones',
       icon: 'request_quote',
@@ -91,6 +101,7 @@ export class AdminLayoutComponent implements OnInit {
     });
     this.scheduleService.refreshCounts().subscribe({ error: () => {} });
     this.discountsService.refreshPendingCounts().subscribe({ error: () => {} });
+    this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
   }
 
   protected toggleSidebar(): void {

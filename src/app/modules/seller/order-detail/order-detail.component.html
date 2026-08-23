@@ -99,6 +99,14 @@
                 <td>
                   <span class="strong">{{ it.productName }}</span>
                   <span class="muted"> · {{ it.productSku }}</span>
+                  <!-- Docs/plan-aprobaciones-admin.md D9/RN-EC6: agregar un
+                       cargo extra a este pedido ya existente — discreto,
+                       vendedor o admin. -->
+                  @if (o.orderStatus !== 'cancelled') {
+                    <button type="button" class="line-extra-charge-toggle no-print" (click)="openExtraChargeFor(it)">
+                      + cargo extra
+                    </button>
+                  }
                 </td>
                 <td data-label="Material">
                   {{ it.materialLabel }}
@@ -166,10 +174,10 @@
         </div>
       }
 
-      <!-- Docs/plan-descuentos.md: aprobar/rechazar es exclusivo del admin. -->
-      @if (o.discounts && o.discounts.length) {
+      <!-- Docs/plan-descuentos.md + Docs/plan-aprobaciones-admin.md: aprobar/rechazar es exclusivo del admin. -->
+      @if ((o.discounts && o.discounts.length) || (o.extraCharges && o.extraCharges.length) || o.shippingCostStatus !== 'none') {
         <div class="reserved-box no-print">
-          <h3 class="info-subtitle">Descuentos</h3>
+          <h3 class="info-subtitle">Descuentos y cargos</h3>
           <ul class="reserved-list">
             @for (d of o.discounts; track d.id) {
               <li class="reserved-list__item">
@@ -195,18 +203,102 @@
                   @if (d.status === 'rejected' && d.reviewNote) {
                     <span class="muted">Motivo del rechazo: {{ d.reviewNote }}</span>
                   }
+                  <!-- Docs/plan-aprobaciones-admin.md RN-MOD3 -->
+                  @if (d.originalAmount !== null) {
+                    <span class="muted">Solicitado: {{ d.originalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }} → Aprobado: {{ d.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  }
                 </div>
                 @if (isAdmin && d.status === 'pending') {
                   <div class="reserved-list__item-actions">
+                    <!-- RN-MOD1: el admin puede modificar el monto antes de aprobar. -->
+                    <input type="number" class="approve-amount" min="0" step="0.01" [value]="d.amount" #discAmt title="Monto a aprobar" />
                     <button
                       type="button"
                       class="btn btn--primary btn--sm"
                       [disabled]="approvingDiscountId() === d.id"
-                      (click)="approveDiscount(d)"
+                      (click)="approveDiscount(d, discAmt.value)"
                     >
                       <span class="material-symbols-outlined">check</span> Aprobar
                     </button>
                     <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectDiscount(d)">
+                      <span class="material-symbols-outlined">close</span> Rechazar
+                    </button>
+                  </div>
+                }
+              </li>
+            }
+
+            <!-- Docs/plan-aprobaciones-admin.md RN-EC -->
+            @for (c of o.extraCharges; track c.id) {
+              <li class="reserved-list__item">
+                <div class="reserved-list__info">
+                  <span class="strong">
+                    🔧 {{ c.label }} ({{ c.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+                    <span class="badge" [attr.data-status]="c.status">
+                      @switch (c.status) {
+                        @case ('pending') { Pendiente }
+                        @case ('approved') { Aprobado }
+                        @case ('rejected') { Rechazado }
+                      }
+                    </span>
+                  </span>
+                  <span class="muted">pedido por {{ c.requestedByName ?? c.requestedByRole }}</span>
+                  @if (c.status === 'rejected' && c.reviewNote) {
+                    <span class="muted">Motivo del rechazo: {{ c.reviewNote }}</span>
+                  }
+                  @if (c.originalAmount !== null) {
+                    <span class="muted">Solicitado: {{ c.originalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }} → Aprobado: {{ c.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  }
+                </div>
+                @if (isAdmin && c.status === 'pending') {
+                  <div class="reserved-list__item-actions">
+                    <input type="number" class="approve-amount" min="0" step="0.01" [value]="c.amount" #chargeAmt title="Monto a aprobar" />
+                    <button
+                      type="button"
+                      class="btn btn--primary btn--sm"
+                      [disabled]="approvingChargeId() === c.id"
+                      (click)="approveExtraCharge(c, chargeAmt.value)"
+                    >
+                      <span class="material-symbols-outlined">check</span> Aprobar
+                    </button>
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="askRejectCharge(c)">
+                      <span class="material-symbols-outlined">close</span> Rechazar
+                    </button>
+                  </div>
+                }
+              </li>
+            }
+
+            <!-- Docs/plan-aprobaciones-admin.md RN-SM -->
+            @if (o.shippingCostStatus !== 'none') {
+              <li class="reserved-list__item">
+                <div class="reserved-list__info">
+                  <span class="strong">
+                    🚚 Envío manual ({{ o.shippingCost | currency:'MXN':'symbol-narrow':'1.2-2' }})
+                    <span class="badge" [attr.data-status]="o.shippingCostStatus">
+                      @switch (o.shippingCostStatus) {
+                        @case ('pending') { Pendiente }
+                        @case ('approved') { Aprobado }
+                        @case ('rejected') { Rechazado }
+                      }
+                    </span>
+                  </span>
+                  @if (o.shippingCostStatus === 'rejected' && o.shippingCostReviewNote) {
+                    <span class="muted">Motivo del rechazo: {{ o.shippingCostReviewNote }}</span>
+                  }
+                </div>
+                @if (isAdmin && o.shippingCostStatus === 'pending') {
+                  <div class="reserved-list__item-actions">
+                    <input type="number" class="approve-amount" min="0" step="0.01" [value]="o.shippingCost" #shipAmt title="Monto a aprobar" />
+                    <button
+                      type="button"
+                      class="btn btn--primary btn--sm"
+                      [disabled]="approvingShipping()"
+                      (click)="approveShipping(shipAmt.value)"
+                    >
+                      <span class="material-symbols-outlined">check</span> Aprobar
+                    </button>
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="rejectingShippingOpen.set(true)">
                       <span class="material-symbols-outlined">close</span> Rechazar
                     </button>
                   </div>
@@ -628,6 +720,75 @@
           <button type="button" class="btn btn--ghost" (click)="pendingRejectDiscount.set(null)">Cancelar</button>
           <button type="button" class="btn btn--danger" (click)="confirmRejectDiscount()">Rechazar</button>
         </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: rechazar cargo extra (solo admin) — Docs/plan-aprobaciones-admin.md ===== -->
+@if (pendingRejectCharge(); as charge) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar cargo extra</h2>
+        <p class="muted">
+          Se revierte "{{ charge.label }}" (-{{ charge.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}) y el total vuelve a bajar.
+        </p>
+        <div class="field">
+          <label for="chargeRejectNote">Motivo (opcional)</label>
+          <textarea
+            id="chargeRejectNote"
+            [value]="rejectChargeNote()"
+            (input)="rejectChargeNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="pendingRejectCharge.set(null)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmRejectCharge()">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: rechazar envío manual (solo admin) — Docs/plan-aprobaciones-admin.md ===== -->
+@if (rejectingShippingOpen()) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar envío manual</h2>
+        <p class="muted">
+          El pedido queda sin costo de envío asignado; el vendedor deberá volver a capturarlo.
+        </p>
+        <div class="field">
+          <label for="shippingRejectNote">Motivo (opcional)</label>
+          <textarea
+            id="shippingRejectNote"
+            [value]="rejectShippingNote()"
+            (input)="rejectShippingNote.set($any($event.target).value)"
+            placeholder="¿Por qué se rechaza?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="rejectingShippingOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--danger" (click)="confirmRejectShipping()">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: agregar cargo extra a este pedido (RN-EC6) — vendedor o admin ===== -->
+@if (extraChargeItemTarget(); as target) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Cargo extra — {{ target.productName }}</h2>
+        <app-extra-charge-picker
+          (added)="applyExtraCharge($event)"
+          (cancelled)="extraChargeItemTarget.set(null)"
+        />
       </div>
     </div>
   </div>

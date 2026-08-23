@@ -51,12 +51,6 @@
   input { width: 18px; height: 18px; accent-color: vars.$color-primary; }
 }
 
-.field__hint {
-  font-size: 0.8rem;
-  color: vars.$color-text-secondary;
-  line-height: 1.4;
-}
-
 /** Los campos de acceso solo aparecen si se pidió crear el login. */
 .access-box {
   padding: vars.$spacing-md;

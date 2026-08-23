@@ -100,6 +100,15 @@
           </div>
         }
 
+        <!-- Docs/plan-aprobaciones-admin.md RN-EC8: cada cargo extra como
+             concepto propio, para que quede claro por qué sube el precio. -->
+        @for (charge of q.extraCharges; track charge.label) {
+          <div class="totals__row">
+            <span>{{ charge.label }}</span>
+            <span>{{ charge.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+        }
+
         @if (q.wholesaleIva) {
           <div class="totals__row">
             <span>IVA (se suma al facturar)</span>

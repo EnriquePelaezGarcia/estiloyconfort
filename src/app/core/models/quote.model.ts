@@ -1,7 +1,10 @@
-import { DiscountReasonCategory, OrderDiscount, SaleScheme } from './order.model';
+import { DiscountReasonCategory, OrderDiscount, OrderExtraCharge, SaleScheme, ShippingCostStatus } from './order.model';
 
 /** Mismo shape que OrderDiscount (Docs/plan-descuentos.md) — nunca 'delivery_person' aquí. */
 export type QuoteDiscount = OrderDiscount;
+
+/** Mismo shape que OrderExtraCharge (Docs/plan-aprobaciones-admin.md). */
+export type QuoteExtraCharge = OrderExtraCharge;
 
 /**
  * Cotización rápida: presupuesto de solo lectura que el vendedor arma en
@@ -48,6 +51,13 @@ export interface Quote {
   shippingPostalCode?: string | null;
   shippingCost: number;
   shippingZoneLabel?: string | null;
+  /** Docs/plan-aprobaciones-admin.md RN-SM — mismo shape que Order. */
+  shippingCostStatus?: ShippingCostStatus;
+  shippingCostRequested?: number | null;
+  shippingCostReviewedBy?: number | null;
+  shippingCostReviewedByName?: string | null;
+  shippingCostReviewedAt?: string | null;
+  shippingCostReviewNote?: string | null;
   /** Recoge en tienda: se cotiza sin envío ni armado (Docs/plan-recoge-en-tienda.md). */
   pickupInStore?: boolean;
   assemblyService: boolean;
@@ -78,6 +88,8 @@ export interface Quote {
   items?: QuoteItem[];
   /** Docs/plan-descuentos.md — vacío si la cotización no tiene ninguno. */
   discounts?: QuoteDiscount[];
+  /** Docs/plan-aprobaciones-admin.md — vacío si la cotización no tiene ninguno. */
+  extraCharges?: QuoteExtraCharge[];
 }
 
 /**
@@ -108,6 +120,12 @@ export interface PublicQuote {
   expiresAt: string;
   createdAt: string;
   items: QuoteItem[];
+  /**
+   * Docs/plan-aprobaciones-admin.md RN-EC8: los cargos extra aprobados o
+   * pendientes se muestran desglosados; los rechazados no llegan aquí — es
+   * la lista blanca pública, solo `label`/`amount`, sin status ni quién lo pidió.
+   */
+  extraCharges?: Array<{ label: string; amount: number }>;
 }
 
 export interface CreateQuoteRequest {
@@ -132,6 +150,8 @@ export interface CreateQuoteRequest {
     reasonCategory: DiscountReasonCategory;
     reason?: string | null;
   } | null;
+  /** Docs/plan-aprobaciones-admin.md RN-EC2 — mismo shape que en el pedido. */
+  extraCharges?: Array<{ itemIndex: number; label: string; amount: number }>;
   items: Array<{
     productId: number;
     materialId: number;

@@ -48,6 +48,11 @@ export interface PublicTicket {
   assemblyService: boolean;
   assemblyFloors: number;
   assemblyCost: number;
+  /**
+   * Docs/plan-aprobaciones-admin.md RN-EC8: los cargos extra aprobados o
+   * pendientes, desglosados por etiqueta; los rechazados no llegan aquí.
+   */
+  extraCharges: { label: string; amount: number }[];
 
   totalAmount: number;
   paymentAmount: number;

@@ -162,6 +162,7 @@
   // Docs/plan-descuentos.md
   &__item-actions {
     display: flex;
+    align-items: center;
     gap: 0.4rem;
     flex-shrink: 0;
   }
@@ -172,6 +173,32 @@
   &[data-status='pending']  { background: rgba(#b8960c, 0.16); color: #b8960c; }
   &[data-status='approved'] { background: rgba(vars.$color-success, 0.14); color: vars.$color-success; }
   &[data-status='rejected'] { background: rgba(#b00020, 0.1); color: #b00020; }
+}
+
+// Docs/plan-aprobaciones-admin.md RN-MOD1: monto editable al aprobar.
+.approve-amount {
+  width: 6.5rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+// D9/RN-EC6: enlace discreto junto al nombre del producto.
+.line-extra-charge-toggle {
+  margin-left: 0.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover { color: vars.$color-primary; }
 }
 
 .credit-box {

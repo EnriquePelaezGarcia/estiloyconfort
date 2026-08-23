@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -20,6 +20,8 @@ import {
   DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, OrderDiscount, OrderItem,
   OrderStatus, SaleScheme, StockReservationReason,
 } from '../../../core/models/order.model';
+/** Docs/plan-aprobaciones-admin.md RN-EC1: tope de cargos extra activos por documento. */
+const MAX_EXTRA_CHARGES = 5;
 import { ShippingQuote } from '../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 
@@ -47,6 +49,12 @@ export interface CartLine {
   } | null;
   /** Docs/plan-descuentos.md: se regala esta línea (precio $0, sigue descontando stock). */
   gift?: boolean;
+  /**
+   * Cargos extra por modificación al mueble, ligados a ESTA línea (Docs/
+   * plan-aprobaciones-admin.md RN-EC2) — ej. "Cambiar focos a LED: $1,200".
+   * D5: captura discreta, solo se ve si el vendedor la busca.
+   */
+  extraCharges?: { label: string; amount: number }[];
 }
 
 /**
@@ -347,6 +355,21 @@ export class OrderDraftStore {
   private effectiveDiscountAmount = computed(
     () => this.activeMoneyDiscount()?.amount ?? this.discountAmount() ?? 0,
   );
+
+  /**
+   * Cargos extra por modificación al mueble (Docs/plan-aprobaciones-admin.md
+   * RN-EC), sumados de todas las líneas. D5: captura discreta — nada de esto
+   * se ve en el carrito hasta que ya hay al menos uno.
+   */
+  readonly MAX_EXTRA_CHARGES = MAX_EXTRA_CHARGES;
+  readonly extraChargesCount = computed(
+    () => this.lines().reduce((sum, l) => sum + (l.extraCharges?.length ?? 0), 0),
+  );
+  readonly extraChargesTotal = computed(
+    () => this.lines().reduce(
+      (sum, l) => sum + (l.extraCharges ?? []).reduce((s, ec) => s + ec.amount, 0), 0,
+    ),
+  );
   /**
    * Total de los productos ya con el tratamiento del esquema: en Crédito
    * Tienda lleva el interés (es lo que el backend guarda como total_amount);
@@ -357,11 +380,13 @@ export class OrderDraftStore {
     return this.isCredit() && credit ? credit.creditPrice : this.total();
   });
   readonly grandTotal = computed(
-    () => Math.max(0, this.productsTotal() + this.shippingCost() + this.assemblyCost() - this.effectiveDiscountAmount()),
+    () => Math.max(0, this.productsTotal() + this.shippingCost() + this.assemblyCost()
+      + this.extraChargesTotal() - this.effectiveDiscountAmount()),
   );
   /** Lo mismo que grandTotal pero al precio de contado: referencia del crédito. */
   readonly cashGrandTotal = computed(
-    () => Math.max(0, this.total() + this.shippingCost() + this.assemblyCost() - this.effectiveDiscountAmount()),
+    () => Math.max(0, this.total() + this.shippingCost() + this.assemblyCost()
+      + this.extraChargesTotal() - this.effectiveDiscountAmount()),
   );
 
   readonly form = this.fb.group({
@@ -406,6 +431,20 @@ export class OrderDraftStore {
   });
   private slotChoiceSig = toSignal(this.form.controls.deliverySlotChoice.valueChanges, {
     initialValue: this.form.controls.deliverySlotChoice.value,
+  });
+  private expectedDeliveryDateSig = toSignal(this.form.controls.expectedDeliveryDate.valueChanges, {
+    initialValue: this.form.controls.expectedDeliveryDate.value,
+  });
+
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.3 — aviso NO bloqueante: cuántas
+   * entregas "Día preciso" ya hay comprometidas en la fecha+horario elegidos.
+   * null = no aplica (no es 'exact', o falta fecha/horario del catálogo).
+   */
+  readonly slotCountInfo = signal<{ count: number; threshold: number } | null>(null);
+  readonly slotCountOverThreshold = computed(() => {
+    const info = this.slotCountInfo();
+    return !!info && info.count >= info.threshold;
   });
 
   // ===== Recoge en tienda (Docs/plan-recoge-en-tienda.md §6.2) =====
@@ -484,6 +523,55 @@ export class OrderDraftStore {
     this.lines().filter((l) => this.unitPrice(l) === null),
   );
   readonly hasUnquotedLines = computed(() => this.unquotedLines().length > 0);
+
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.1 — autocompletar sin tabla nueva:
+   * colores ya usados por material (histórico de pedidos/cotizaciones), como
+   * sugerencia del <datalist>. Nunca restringe lo que el vendedor escribe.
+   */
+  readonly materialColorsCache = signal<Record<number, string[]>>({});
+  private loadingMaterialColors = new Set<number>();
+
+  colorSuggestionsFor(materialId: number): string[] {
+    return this.materialColorsCache()[materialId] ?? [];
+  }
+
+  private ensureColorsLoaded(materialId: number): void {
+    if (this.loadingMaterialColors.has(materialId) || this.materialColorsCache()[materialId]) return;
+    this.loadingMaterialColors.add(materialId);
+    this.sellerService.getMaterialColors(materialId).subscribe({
+      next: ({ data }) => this.materialColorsCache.update((cache) => ({ ...cache, [materialId]: data })),
+      error: () => {},
+    });
+  }
+
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.2 — aviso NO bloqueante: dentro del
+   * mismo pedido, ¿otra línea ya escribió el mismo color con distinta
+   * capitalización/espacios? Solo compara líneas con la misma `colorPolicy`
+   * y solo avisa si el texto capturado difiere (Opción A: ligera, sin
+   * fuzzy-match contra el histórico — ver §11.2).
+   */
+  readonly duplicateColorIndexes = computed(() => {
+    const lines = this.lines();
+    const groups = new Map<string, { index: number; raw: string }[]>();
+    lines.forEach((l, i) => {
+      const mp = this.lineMaterialPrice(l);
+      const raw = (l.color ?? '').trim();
+      if (!mp || mp.colorPolicy === 'fixed' || !raw) return;
+      const key = `${mp.colorPolicy}|${raw.toLowerCase()}`;
+      const members = groups.get(key) ?? [];
+      members.push({ index: i, raw });
+      groups.set(key, members);
+    });
+    const flagged = new Set<number>();
+    for (const members of groups.values()) {
+      if (members.length < 2) continue;
+      const distinctRaw = new Set(members.map((m) => m.raw));
+      if (distinctRaw.size > 1) members.forEach((m) => flagged.add(m.index));
+    }
+    return flagged;
+  });
 
   readonly total = computed(() =>
     this.lines().reduce((sum, l) => sum + (this.unitPrice(l) ?? 0) * l.quantity, 0),
@@ -698,6 +786,30 @@ export class OrderDraftStore {
     this.form.controls.pickupInStore.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe((pickup) => this.applyPickupMode(!!pickup));
+
+    // §11.1: precarga sugerencias de color para cada material que aparezca en
+    // el carrito (agregar producto, cambiar material, cargar cotización/pedido para editar).
+    effect(() => {
+      const materialIds = new Set(this.lines().map((l) => l.materialId));
+      materialIds.forEach((id) => this.ensureColorsLoaded(id));
+    });
+
+    // §11.3: contador de saturación del horario — solo aplica a "Día preciso"
+    // con fecha y una franja del catálogo elegidas (no 'custom', que no tiene id).
+    effect(() => {
+      const isExact = this.isExactDelivery();
+      const date = this.expectedDeliveryDateSig();
+      const choice = this.slotChoiceSig();
+      const slotId = choice && choice !== 'custom' ? Number(choice) : NaN;
+      if (!isExact || !date || Number.isNaN(slotId)) {
+        this.slotCountInfo.set(null);
+        return;
+      }
+      this.deliveryScheduleService.getSlotCount(date, slotId).subscribe({
+        next: (info) => this.slotCountInfo.set(info),
+        error: () => this.slotCountInfo.set(null),
+      });
+    });
   }
 
   /**
@@ -876,6 +988,16 @@ export class OrderDraftStore {
             .filter((d) => d.type === 'product' && d.status !== 'rejected')
             .map((d) => d.itemId),
         );
+        // Docs/plan-aprobaciones-admin.md: cargos extra activos (no
+        // rechazados) de este pedido, agrupados por línea — se resenden
+        // completos en cada edición (RN-EC4, mismo criterio que el regalo).
+        const extraChargesByItemId = new Map<number, { label: string; amount: number }[]>();
+        for (const ec of data.extraCharges ?? []) {
+          if (ec.status === 'rejected' || ec.itemId == null) continue;
+          const list = extraChargesByItemId.get(ec.itemId) ?? [];
+          list.push({ label: ec.label, amount: ec.amount });
+          extraChargesByItemId.set(ec.itemId, list);
+        }
         // M4/M7: cada línea trae su propio material_id + material_label + color
         // ya congelados — se reconstruye un InventoryItem de una sola fila para
         // que la línea siga funcionando con el precio que ya tenía.
@@ -917,6 +1039,7 @@ export class OrderDraftStore {
                 }
               : null,
             gift: giftedItemIds.has(it.id ?? -1),
+            extraCharges: extraChargesByItemId.get(it.id ?? -1) ?? [],
           })),
         );
       },
@@ -964,6 +1087,17 @@ export class OrderDraftStore {
         const giftedItemIds = new Set(
           activeQuoteDiscounts.filter((d) => d.type === 'product').map((d) => d.itemId),
         );
+        // Docs/plan-aprobaciones-admin.md: cargos extra activos de la
+        // cotización, igual que el regalo — el backend los copia tal cual al
+        // crear el pedido (herencia D4 de plan-descuentos.md).
+        const activeQuoteCharges = (quote.extraCharges ?? []).filter((c) => c.status !== 'rejected');
+        const extraChargesByItemId = new Map<number, { label: string; amount: number }[]>();
+        for (const ec of activeQuoteCharges) {
+          if (ec.itemId == null) continue;
+          const list = extraChargesByItemId.get(ec.itemId) ?? [];
+          list.push({ label: ec.label, amount: ec.amount });
+          extraChargesByItemId.set(ec.itemId, list);
+        }
         this.lines.set(
           (quote.items ?? []).map((it) => ({
             product: {
@@ -1000,6 +1134,7 @@ export class OrderDraftStore {
             color: it.color ?? null,
             quantity: it.quantity,
             gift: giftedItemIds.has(it.id ?? -1),
+            extraCharges: extraChargesByItemId.get(it.id ?? -1) ?? [],
           })),
         );
       },
@@ -1175,6 +1310,32 @@ export class OrderDraftStore {
   toggleGift(index: number): void {
     this.lines.update((lines) =>
       lines.map((l, i) => (i === index ? { ...l, gift: !l.gift } : l)),
+    );
+  }
+
+  /**
+   * Docs/plan-aprobaciones-admin.md RN-EC1: agrega un cargo extra a esta
+   * línea. Devuelve false (y avisa) si ya se llegó al tope de 5 — el
+   * servidor es la defensa real, esto solo evita el viaje redondo.
+   */
+  addExtraCharge(lineIndex: number, charge: { label: string; amount: number }): boolean {
+    if (this.extraChargesCount() >= MAX_EXTRA_CHARGES) {
+      this.notification.error(
+        `Ya hay ${MAX_EXTRA_CHARGES} cargos extra en este pedido (el máximo). Quita alguno antes de agregar otro.`,
+      );
+      return false;
+    }
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === lineIndex ? { ...l, extraCharges: [...(l.extraCharges ?? []), charge] } : l)),
+    );
+    return true;
+  }
+
+  removeExtraCharge(lineIndex: number, chargeIndex: number): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === lineIndex
+        ? { ...l, extraCharges: (l.extraCharges ?? []).filter((_, ci) => ci !== chargeIndex) }
+        : l)),
     );
   }
 
@@ -1383,6 +1544,12 @@ export class OrderDraftStore {
             reason: this.discountReasonText().trim() || null,
           }
         : null,
+      // Docs/plan-aprobaciones-admin.md RN-EC4: se resend el estado COMPLETO
+      // de cargos extra en cada guardado (igual que `items[]`) — el backend
+      // reemplaza todos los del pedido con este arreglo.
+      extraCharges: this.lines().flatMap((l, i) =>
+        (l.extraCharges ?? []).map((ec) => ({ itemIndex: i, label: ec.label, amount: ec.amount })),
+      ),
       // M4: cada línea manda su propio material_id + color. requiresFabrication
       // NO se manda: el backend lo DERIVA del stock (producto,material) al
       // crear la línea (M15.4) — capturarlo a mano ya no tiene sentido.

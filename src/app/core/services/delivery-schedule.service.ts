@@ -77,6 +77,20 @@ export class DeliveryScheduleService {
       .get<{ data: DeliveryChangeLog[] }>(`/deliveries/orders/${orderId}/history`)
       .pipe(map((res) => res.data));
   }
+
+  /**
+   * Docs/plan-aprobaciones-admin.md §11.3 — contador NO bloqueante de
+   * entregas "Día preciso" ya comprometidas en esa fecha+horario, con el
+   * umbral configurado en Admin → Reglas de precios.
+   */
+  getSlotCount(date: string, slotId: number): Observable<{ count: number; threshold: number }> {
+    return this.api
+      .get<{ data: { count: number; threshold: number } }>('/deliveries/schedule/slot-count', {
+        date,
+        slotId: String(slotId),
+      })
+      .pipe(map((res) => res.data));
+  }
 }
 
 /**
