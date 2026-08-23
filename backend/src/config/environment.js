@@ -29,17 +29,25 @@ const env = {
     .map((origin) => origin.trim())
     .filter(Boolean),
 
-  // Correo transaccional: hoy solo la recuperación de contraseña.
+  // Correo transaccional: la recuperación de contraseña y el formulario de
+  // Contacto.
   //
-  // Sin SMTP_HOST o sin SMTP_PASS el mailer entra en modo consola: escribe el
-  // enlace en el log en vez de enviarlo, y el backend arranca igual. Permite
-  // desarrollar en local sin cuenta de correo y evita que una llave faltante
-  // en staging tire toda la API. Ver utils/mailer.js.
+  // Se envía por la API HTTP de Resend (puerto 443), NO por SMTP. Hetzner
+  // filtra los puertos SMTP salientes en el VPS: el 465 no se rechaza, se
+  // queda colgado hasta agotar el timeout, así que el síntoma es un 504 de
+  // nginx sin una sola línea de error en el log (comprobado el 23-ago-2026 —
+  // 465 filtrado, 443 abierto). Ver utils/mailer.js.
+  //
+  // Sin la llave el mailer entra en modo consola: escribe el enlace en el log
+  // en vez de enviarlo, y el backend arranca igual. Permite desarrollar en
+  // local sin cuenta de correo y evita que una llave faltante en staging tire
+  // toda la API.
+  //
+  // `RESEND_API_KEY` es el nombre bueno; se acepta `SMTP_PASS` como alterno
+  // porque es donde vive hoy la llave en los .env de los tres ambientes y no
+  // hay por qué editarlos a mano en el mismo despliegue de este cambio.
   mail: {
-    host: process.env.SMTP_HOST || '',
-    port: parseInt(process.env.SMTP_PORT, 10) || 465,
-    user: process.env.SMTP_USER || '',
-    password: process.env.SMTP_PASS || '',
+    apiKey: process.env.RESEND_API_KEY || process.env.SMTP_PASS || '',
     from:
       process.env.MAIL_FROM ||
       'Estilo y Confort <no-responder@send.estiloyconfortm.com>',
@@ -68,9 +76,8 @@ const env = {
 // ese debe ser el dominio principal, no el alias con www.
 env.clientOrigin = env.clientOrigins[0];
 
-// El envío real necesita servidor y contraseña. Con uno solo de los dos el
-// transporte fallaría en cada correo, así que se prefiere el modo consola.
-env.mail.enabled = Boolean(env.mail.host && env.mail.password);
+// El envío real solo necesita la llave de Resend: el endpoint es fijo.
+env.mail.enabled = Boolean(env.mail.apiKey);
 
 env.isProduction = env.nodeEnv === 'production';
 

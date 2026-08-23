@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const nodemailer = require('nodemailer');
 const env = require('../config/environment');
 const { RESET_TOKEN_TTL_MINUTES } = require('./passwordUtils');
 
@@ -24,7 +23,6 @@ try {
     filename: 'estilo-y-confort.png',
     content: fs.readFileSync(LOGO_PATH),
     cid: LOGO_CID,
-    contentDisposition: 'inline',
   };
 } catch {
   // Sin el archivo el correo se manda igual, solo que sin logo. No debe
@@ -34,26 +32,40 @@ try {
 /**
  * Envío de correo transaccional (Docs/plan-modulo-contrasenas.md §5).
  *
- * Modo consola: si falta configuración SMTP, en vez de fallar se escribe el
- * correo en el log. Así el módulo de contraseñas es usable en local sin cuenta
- * de correo, y una llave faltante en staging no tira la API entera.
+ * Se manda por la API HTTP de Resend, no por SMTP: ver el porqué en
+ * config/environment.js (Hetzner filtra los puertos SMTP salientes).
+ *
+ * Modo consola: si falta la llave, en vez de fallar se escribe el correo en el
+ * log. Así el módulo de contraseñas es usable en local sin cuenta de correo, y
+ * una llave faltante en staging no tira la API entera.
  */
 
-let transporter = null;
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+
+// Corto y explícito. Sin él, una API caída dejaría la petición del usuario
+// colgada hasta que nginx la corte con un 504 opaco — exactamente el síntoma
+// que causó el bloqueo de puertos y que costó trabajo diagnosticar.
+const RESEND_TIMEOUT_MS = 15000;
+
 let warnedAboutConsoleMode = false;
 
-function getTransporter() {
-  if (!env.mail.enabled) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: env.mail.host,
-      port: env.mail.port,
-      // 465 es SMTP sobre TLS directo; 587 negocia STARTTLS después de conectar.
-      secure: env.mail.port === 465,
-      auth: { user: env.mail.user, pass: env.mail.password },
-    });
-  }
-  return transporter;
+/**
+ * Traduce un adjunto al formato de la API de Resend.
+ *
+ * `cid` → `content_id` es lo que mantiene vivo el logo embebido: el HTML lo
+ * referencia como `src="cid:..."` y así no depende de una imagen remota, que
+ * la mayoría de los clientes de correo bloquean por defecto.
+ */
+function toResendAttachment(attachment) {
+  const { filename, content, cid, contentType } = attachment;
+  return {
+    filename,
+    content: Buffer.isBuffer(content)
+      ? content.toString('base64')
+      : Buffer.from(String(content)).toString('base64'),
+    ...(cid ? { content_id: cid } : {}),
+    ...(contentType ? { content_type: contentType } : {}),
+  };
 }
 
 /** Escapa lo que venga del usuario antes de meterlo en el HTML del correo. */
@@ -72,13 +84,11 @@ function escapeHtml(value) {
  * contraseña, la respuesta al cliente NO cambia (§4.2 regla 6).
  */
 async function sendMail({ to, subject, text, html, attachments, replyTo }) {
-  const activeTransporter = getTransporter();
-
-  if (!activeTransporter) {
+  if (!env.mail.enabled) {
     if (!warnedAboutConsoleMode) {
       console.warn(
-        '⚠️  SMTP no configurado (SMTP_HOST / SMTP_PASS). Los correos se escriben ' +
-          'en consola en vez de enviarse.',
+        '⚠️  Correo no configurado (falta RESEND_API_KEY / SMTP_PASS). Los correos ' +
+          'se escriben en consola en vez de enviarse.',
       );
       warnedAboutConsoleMode = true;
     }
@@ -90,15 +100,42 @@ async function sendMail({ to, subject, text, html, attachments, replyTo }) {
     return { delivered: false, consoleMode: true };
   }
 
-  await activeTransporter.sendMail({
+  const payload = {
     from: env.mail.from,
-    to,
+    to: Array.isArray(to) ? to : [to],
     subject,
-    text,
-    html,
-    attachments,
-    replyTo,
-  });
+    ...(text ? { text } : {}),
+    ...(html ? { html } : {}),
+    ...(replyTo ? { reply_to: replyTo } : {}),
+    ...(attachments && attachments.length
+      ? { attachments: attachments.map(toResendAttachment) }
+      : {}),
+  };
+
+  let response;
+  try {
+    response = await fetch(RESEND_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.mail.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // Red caída, DNS, o el timeout de arriba. Se distingue del rechazo de
+    // Resend porque la causa y el arreglo son distintos.
+    throw new Error(`No se pudo contactar a Resend: ${err.message}`);
+  }
+
+  if (!response.ok) {
+    // El cuerpo trae el motivo ("domain is not verified", "invalid api key").
+    // Sin él, un 4xx no le dice nada a quien lee el log.
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Resend respondió ${response.status}: ${detail.slice(0, 300)}`);
+  }
+
   return { delivered: true, consoleMode: false };
 }
 

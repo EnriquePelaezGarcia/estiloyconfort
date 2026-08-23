@@ -765,22 +765,30 @@ backend-prod`). Útil para probar, inservible para los usuarios reales.
 Agrega a `.env.staging` y `.env.production`:
 
 ```
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_USER=resend
-SMTP_PASS=re_...                     # API key de Resend
+RESEND_API_KEY=re_...                # API key de Resend
 MAIL_FROM="Estilo y Confort <no-responder@send.estiloyconfortm.com>"
+CONTACT_EMAIL=muebleria@estiloyconfortm.com
 ```
+
+**No configures SMTP.** El correo sale por la API HTTP de Resend (puerto 443).
+Hetzner filtra los puertos SMTP salientes del VPS: comprobado el 23-ago-2026,
+el 465 no se rechaza sino que se queda **colgado** hasta agotar el timeout, así
+que el síntoma es un `504 Gateway Time-out` de nginx sin una sola línea de error
+en el log del backend. Si algún día abres ticket a Hetzner y te desbloquean los
+puertos, aun así no hace falta volver a SMTP.
 
 Antes hay que dar de alta el subdominio `send.estiloyconfortm.com` en
 [resend.com](https://resend.com) y capturar en Cloudflare los tres registros DNS
 que entrega. Se usa un subdominio y no el dominio raíz para que, si algún día se
 activa Cloudflare Email Routing, su SPF no choque con el de Resend.
 
-Después de tocar el `.env`, reinicia el contenedor:
+Después de tocar el `.env`, **recrea** el contenedor — `docker compose restart`
+NO sirve aquí: reinicia el proceso dentro del contenedor que ya existe, y las
+variables de un `env_file` se inyectan cuando el contenedor **se crea**, no
+cuando arranca. Reiniciar te deja exactamente igual, en modo consola:
 
 ```bash
-docker compose restart backend-prod
+docker compose up -d --force-recreate backend-prod
 ```
 
 **Recordatorio de operación:** el administrador no puede ver la contraseña de
