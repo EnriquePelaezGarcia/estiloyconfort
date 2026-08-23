@@ -44,14 +44,16 @@
             >
               Gratis
             </button>
-            <!-- Docs/plan-aprobaciones-admin.md D5: enlace de texto discreto,
-                 nunca un botón — solo se busca cuando hace falta. -->
+            <!-- Docs/plan-aprobaciones-admin.md D5: pastilla discreta a
+                 juego con "Gratis" — solo se busca cuando hace falta. -->
             <button
               type="button"
               class="summary-line__extra-charge-toggle"
+              title="Agregar un cargo extra a esta línea"
               (click)="toggleExtraChargeForm(i)"
             >
-              + cargo extra
+              <span class="material-symbols-outlined">add</span>
+              Cargo extra
             </button>
           }
         </span>

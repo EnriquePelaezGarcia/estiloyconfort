@@ -111,23 +111,36 @@
     }
   }
 
-  // Docs/plan-aprobaciones-admin.md D5: enlace de texto, discreto a propósito
-  // — a diferencia del regalo (una pastilla), este ni siquiera tiene borde.
+  // Docs/plan-aprobaciones-admin.md D5: pastilla a juego con la de "Gratis"
+  // (mismo tamaño y chrome), en línea punteada para que se lea como "agregar"
+  // y no como un estado ya aplicado.
   &__extra-charge-toggle {
-    margin-left: 0.5rem;
-    padding: 0;
-    border: none;
-    background: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    margin-left: 0.4rem;
+    padding: 1px 8px 1px 6px;
+    border: 1px dashed vars.$color-border;
+    border-radius: vars.$radius-full;
+    background: vars.$color-bg;
     font: inherit;
     font-size: 0.72rem;
     font-weight: 600;
     color: vars.$color-text-secondary;
-    text-decoration: underline;
     cursor: pointer;
     opacity: 0;
-    transition: opacity vars.$transition-fast, color vars.$transition-fast;
+    transition: opacity vars.$transition-fast, color vars.$transition-fast,
+      border-color vars.$transition-fast, background-color vars.$transition-fast;
 
-    &:hover { color: vars.$color-primary; }
+    .material-symbols-outlined { font-size: 0.9rem; }
+
+    &:hover {
+      color: vars.$color-primary;
+      border-color: vars.$color-primary;
+      background: rgba(vars.$color-primary, 0.08);
+    }
+
+    &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
   }
 
   // Docs/plan-descuentos.md: el disparador se revela al pasar el mouse por la
