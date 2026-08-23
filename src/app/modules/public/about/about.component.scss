@@ -1,0 +1,263 @@
+// Paleta y tipografía calcadas de la home (home.component.scss) para que
+// Nosotros se sienta parte de la misma tienda, no de otra sección aparte.
+.section-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 400;
+  font-style: italic;
+  color: #1e1521;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.label-overline {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #5c4480;
+  margin-bottom: 0.6rem;
+}
+
+%page-inner {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 4rem;
+
+  @media (max-width: 767px) {
+    padding: 0 1.5rem;
+  }
+}
+
+// ===== ENCABEZADO =====
+.header {
+  @extend %page-inner;
+  text-align: center;
+  padding-top: 4.5rem;
+  padding-bottom: 3.5rem;
+  background-color: #fcf9f8;
+
+  @media (max-width: 767px) {
+    padding-top: 3rem;
+    padding-bottom: 2.5rem;
+  }
+}
+
+.header__title {
+  @extend .section-title;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  margin: 0 0 1rem;
+}
+
+.header__subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #625d5a;
+  max-width: 36rem;
+  margin: 0 auto;
+}
+
+// ===== HISTORIA =====
+.story {
+  @extend %page-inner;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 3rem;
+  align-items: start;
+  padding: 4.5rem 0;
+  background-color: #fcf9f8;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    padding: 3rem 0;
+    gap: 2rem;
+  }
+}
+
+.story__text {
+  p {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.85;
+    color: #625d5a;
+    margin: 1.25rem 0 0;
+  }
+}
+
+.story__quote {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.25rem, 2.2vw, 1.5rem);
+  line-height: 1.5;
+  color: #5c4480;
+  border-left: 3px solid #ece5e2;
+  padding: 0.25rem 0 0.25rem 1.5rem;
+  margin: 0.5rem 0 0;
+}
+
+// ===== VALORES =====
+.values {
+  padding: 4.5rem 0;
+  background-color: #ffffff;
+}
+
+.values__header {
+  @extend %page-inner;
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.values__grid {
+  @extend %page-inner;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.75rem;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.value-card {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  background-color: #fcf9f8;
+}
+
+.value-card__icon {
+  font-size: 2rem;
+  color: #3d2b5e;
+}
+
+.value-card__title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.125rem;
+  font-weight: 400;
+  color: #1e1521;
+  margin: 0.875rem 0 0.5rem;
+}
+
+.value-card__text {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: #625d5a;
+  margin: 0;
+}
+
+// ===== POR QUÉ ELEGIRNOS =====
+.reasons {
+  padding: 4.5rem 0;
+  background-color: #fcf9f8;
+}
+
+.reasons__inner {
+  @extend %page-inner;
+  max-width: 46rem;
+  text-align: center;
+}
+
+.reasons__list {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  text-align: left;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #3f3247;
+
+    .material-symbols-outlined {
+      color: #3d2b5e;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+  }
+}
+
+// ===== CTA =====
+.cta {
+  padding: 4.5rem 1.5rem;
+  background-color: #f6efec;
+  text-align: center;
+}
+
+.cta__inner {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+
+.cta__title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 400;
+  color: #1e1521;
+  margin: 0 0 1rem;
+}
+
+.cta__text {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #625d5a;
+  margin: 0 0 2rem;
+}
+
+.cta__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.cta__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #3d2b5e;
+  color: #fcf9f8;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1rem 2rem;
+  border-radius: 2px;
+  text-decoration: none;
+  transition: background-color 300ms ease;
+
+  &:hover {
+    background-color: #1e1521;
+  }
+}
+
+.cta__link {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #3d2b5e;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(61, 43, 94, 0.35);
+  padding-bottom: 2px;
+
+  &:hover {
+    color: #1e1521;
+    border-color: #1e1521;
+  }
+}

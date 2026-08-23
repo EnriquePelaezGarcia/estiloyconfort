@@ -1,0 +1,83 @@
+<!-- ===== ENCABEZADO ===== -->
+<section class="header">
+  <span class="label-overline">Quiénes somos</span>
+  <h1 class="header__title">Nosotros</h1>
+  <p class="header__subtitle">
+    Muebles que se sienten tan bien como se ven, hechos en Puebla con manos
+    que se toman su tiempo.
+  </p>
+</section>
+
+<!-- ===== HISTORIA ===== -->
+<section class="story">
+  <div class="story__text">
+    <span class="label-overline">Nuestra historia</span>
+    <h2 class="section-title">Muebles con raíces en Puebla</h2>
+    <p>
+      Estilo y Confort nació en Puebla con una idea sencilla: los muebles de
+      tu casa deberían durar tanto como los recuerdos que se hacen en ellos.
+      Empezamos atendiendo a cada cliente en persona, pieza por pieza, y esa
+      forma de trabajar no ha cambiado — solo ha crecido.
+    </p>
+    <p>
+      Hoy seguimos haciendo lo mismo: elegimos materiales que aguantan el uso
+      diario, cuidamos cada acabado y acompañamos a cada familia desde que
+      elige su mueble hasta que lo recibe en casa.
+    </p>
+  </div>
+  <blockquote class="story__quote">
+    “Un mueble bien hecho no se nota en el primer vistazo, se nota diez años
+    después.”
+  </blockquote>
+</section>
+
+<!-- ===== VALORES ===== -->
+<section class="values">
+  <div class="values__header">
+    <span class="label-overline">Lo que nos mueve</span>
+    <h2 class="section-title">Nuestros valores</h2>
+  </div>
+
+  <div class="values__grid">
+    @for (value of values; track value.title) {
+      <article class="value-card">
+        <span class="material-symbols-outlined value-card__icon">{{ value.icon }}</span>
+        <h3 class="value-card__title">{{ value.title }}</h3>
+        <p class="value-card__text">{{ value.text }}</p>
+      </article>
+    }
+  </div>
+</section>
+
+<!-- ===== POR QUÉ ELEGIRNOS ===== -->
+<section class="reasons">
+  <div class="reasons__inner">
+    <span class="label-overline">Por qué elegirnos</span>
+    <h2 class="section-title">Comprar con nosotros es fácil</h2>
+    <ul class="reasons__list">
+      @for (reason of reasons; track reason) {
+        <li>
+          <span class="material-symbols-outlined">check_circle</span>
+          {{ reason }}
+        </li>
+      }
+    </ul>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section class="cta">
+  <div class="cta__inner">
+    <h2 class="cta__title">¿Tienes dudas antes de comprar?</h2>
+    <p class="cta__text">
+      Escríbenos y con gusto te ayudamos a elegir el mueble ideal para tu
+      espacio.
+    </p>
+    <div class="cta__actions">
+      <a [href]="whatsappUrl" target="_blank" rel="noopener" class="cta__btn">
+        Escribir por WhatsApp
+      </a>
+      <a routerLink="/catalogo" class="cta__link">Ver catálogo</a>
+    </div>
+  </div>
+</section>

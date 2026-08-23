@@ -1,0 +1,171 @@
+<!-- ===== ENCABEZADO ===== -->
+<section class="header">
+  <span class="label-overline">Contacto</span>
+  <h1 class="header__title">Hablemos</h1>
+  <p class="header__subtitle">
+    ¿Dudas sobre un mueble, tu pedido o una entrega? Escríbenos por el canal
+    que prefieras.
+  </p>
+</section>
+
+<!-- ===== INFO + FORMULARIO ===== -->
+<section class="content">
+  <div class="content__grid">
+
+    <!-- Datos de contacto -->
+    <div class="info">
+      <a [href]="whatsappUrl" target="_blank" rel="noopener" class="info-card info-card--wa">
+        <span class="material-symbols-outlined info-card__icon">chat</span>
+        <div>
+          <h3 class="info-card__title">WhatsApp</h3>
+          <p class="info-card__text">Respuesta más rápida, lunes a sábado.</p>
+        </div>
+      </a>
+
+      <a [href]="phoneHref" class="info-card">
+        <span class="material-symbols-outlined info-card__icon">call</span>
+        <div>
+          <h3 class="info-card__title">Teléfono</h3>
+          <p class="info-card__text">{{ phoneDisplay }}</p>
+        </div>
+      </a>
+
+      <a [href]="'mailto:' + contactEmail" class="info-card">
+        <span class="material-symbols-outlined info-card__icon">mail</span>
+        <div>
+          <h3 class="info-card__title">Correo</h3>
+          <p class="info-card__text">{{ contactEmail }}</p>
+        </div>
+      </a>
+
+      <div class="info-card">
+        <span class="material-symbols-outlined info-card__icon">location_on</span>
+        <div>
+          <h3 class="info-card__title">Ubicación</h3>
+          <p class="info-card__text">{{ storeAddress }}</p>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <span class="material-symbols-outlined info-card__icon">schedule</span>
+        <div>
+          <h3 class="info-card__title">Horario</h3>
+          <p class="info-card__text">Lunes a sábado, 10:00 – 19:00 hrs</p>
+        </div>
+      </div>
+
+      @if (facebookUrl) {
+        <a [href]="facebookUrl" target="_blank" rel="noopener" class="info-card">
+          <span class="material-symbols-outlined info-card__icon">public</span>
+          <div>
+            <h3 class="info-card__title">Facebook</h3>
+            <p class="info-card__text">Síguenos para ver piezas nuevas.</p>
+          </div>
+        </a>
+      }
+    </div>
+
+    <!-- Formulario -->
+    <div class="form-panel">
+      @if (sent()) {
+        <div class="form-success" role="status">
+          <span class="material-symbols-outlined">mark_email_read</span>
+          <h3>¡Mensaje enviado!</h3>
+          <p>Gracias por escribirnos, te responderemos pronto.</p>
+        </div>
+      } @else {
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="field">
+            <label class="field__label" for="name">Nombre</label>
+            <input
+              id="name"
+              class="field__input"
+              [class.is-invalid]="form.get('name')?.invalid && form.get('name')?.touched"
+              type="text"
+              formControlName="name"
+              autocomplete="name"
+              placeholder="Tu nombre"
+            />
+            @if (form.get('name')?.invalid && form.get('name')?.touched) {
+              <p class="field__error">Escribe tu nombre</p>
+            }
+          </div>
+
+          <div class="field">
+            <label class="field__label" for="email">Correo</label>
+            <input
+              id="email"
+              class="field__input"
+              [class.is-invalid]="form.get('email')?.invalid && form.get('email')?.touched"
+              type="email"
+              formControlName="email"
+              autocomplete="email"
+              placeholder="tu@correo.com"
+            />
+            @if (form.get('email')?.invalid && form.get('email')?.touched) {
+              <p class="field__error">Ingresa un correo válido</p>
+            }
+          </div>
+
+          <div class="field">
+            <label class="field__label" for="phone">Teléfono (opcional)</label>
+            <input
+              id="phone"
+              class="field__input"
+              type="tel"
+              formControlName="phone"
+              autocomplete="tel"
+              placeholder="10 dígitos"
+            />
+          </div>
+
+          <div class="field">
+            <label class="field__label" for="message">Mensaje</label>
+            <textarea
+              id="message"
+              class="field__input field__input--textarea"
+              [class.is-invalid]="form.get('message')?.invalid && form.get('message')?.touched"
+              formControlName="message"
+              rows="5"
+              placeholder="Cuéntanos en qué te podemos ayudar"
+            ></textarea>
+            @if (form.get('message')?.invalid && form.get('message')?.touched) {
+              @if (form.get('message')?.hasError('required')) {
+                <p class="field__error">Escribe tu mensaje</p>
+              } @else if (form.get('message')?.hasError('minlength')) {
+                <p class="field__error">Cuéntanos un poco más (mínimo 10 caracteres)</p>
+              }
+            }
+          </div>
+
+          @if (errorMessage()) {
+            <div class="form-error" role="alert">
+              <span class="material-symbols-outlined">error_outline</span>
+              <span>{{ errorMessage() }}</span>
+            </div>
+          }
+
+          <button type="submit" class="field__submit" [disabled]="sending() || form.invalid">
+            @if (sending()) {
+              <span class="spinner"></span>
+            } @else {
+              Enviar mensaje
+            }
+          </button>
+        </form>
+      }
+    </div>
+
+  </div>
+</section>
+
+<!-- ===== MAPA ===== -->
+<section class="map">
+  <iframe
+    [src]="mapUrl"
+    class="map__frame"
+    title="Ubicación de Estilo y Confort"
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+  ></iframe>
+</section>
