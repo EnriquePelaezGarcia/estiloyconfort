@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pruebas de Vendedor y Reparto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper:      #F1F2F4;
+    --card:       #FFFFFF;
+    --ink:        #16181C;
+    --ink-soft:   #4E545E;
+    --ink-faint:  #858C98;
+    --rule:       #D9DCE2;
+    --rule-soft:  #E7E9ED;
+    --ledger:     #2A4A9C;
+    --ledger-bg:  #E7ECF8;
+    --ok:         #17734B;
+    --ok-bg:      #E1F0E8;
+    --warn:       #8A5A06;
+    --warn-bg:    #F8EDD9;
+    --bad:        #A62B27;
+    --bad-bg:     #F8E4E3;
+    --skip:       #5A5F6B;
+    --skip-bg:    #E6E8EC;
+    --shadow:     0 1px 2px rgba(22,24,28,.05), 0 6px 18px rgba(22,24,28,.05);
+
+    --f-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --f-body:    'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    --f-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #131519;
+      --card:      #1B1E24;
+      --ink:       #EDEFF3;
+      --ink-soft:  #AEB5C0;
+      --ink-faint: #7C838F;
+      --rule:      #2E333B;
+      --rule-soft: #262A31;
+      --ledger:    #8FADEE;
+      --ledger-bg: #1E2740;
+      --ok:        #6FCA9C;
+      --ok-bg:     #163024;
+      --warn:      #E2B564;
+      --warn-bg:   #33280F;
+      --bad:       #EF8D88;
+      --bad-bg:    #351D1C;
+      --skip:      #9BA2AE;
+      --skip-bg:   #24272D;
+      --shadow:    0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #131519;
+    --card:      #1B1E24;
+    --ink:       #EDEFF3;
+    --ink-soft:  #AEB5C0;
+    --ink-faint: #7C838F;
+    --rule:      #2E333B;
+    --rule-soft: #262A31;
+    --ledger:    #8FADEE;
+    --ledger-bg: #1E2740;
+    --ok:        #6FCA9C;
+    --ok-bg:     #163024;
+    --warn:      #E2B564;
+    --warn-bg:   #33280F;
+    --bad:       #EF8D88;
+    --bad-bg:    #351D1C;
+    --skip:      #9BA2AE;
+    --skip-bg:   #24272D;
+    --shadow:    0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 0 1.15rem 5rem;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    padding: 2.6rem 0 1.5rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ledger);
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(1.9rem, 6vw, 2.7rem);
+    line-height: 1.05;
+    letter-spacing: -.022em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 34rem;
+    color: var(--ink-soft);
+    font-size: 1.02rem;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem .5rem;
+    margin-top: .2rem;
+  }
+  .chip {
+    font-family: var(--f-mono);
+    font-size: .72rem;
+    font-weight: 500;
+    padding: .22rem .5rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    color: var(--ink-soft);
+    background: var(--card);
+  }
+
+  /* ---------- sticky tally ---------- */
+
+  .tally {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    padding: .5rem 0;
+    margin-bottom: .2rem;
+  }
+  .tally-inner {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 0 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    flex-wrap: wrap;
+  }
+  .count {
+    font-family: var(--f-mono);
+    font-size: .75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: .2rem .45rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .count[data-k="ok"]   { color: var(--ok);   background: var(--ok-bg); }
+  .count[data-k="warn"] { color: var(--warn); background: var(--warn-bg); }
+  .count[data-k="bad"]  { color: var(--bad);  background: var(--bad-bg); }
+  .count[data-k="skip"] { color: var(--skip); background: var(--skip-bg); }
+  .count[data-k="left"] { color: var(--ink-faint); background: transparent; border: 1px dashed var(--rule); }
+  .tally-spacer { flex: 1 1 auto; }
+
+  .btn {
+    font-family: var(--f-body);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--card);
+    background: var(--ledger);
+    border: 1px solid var(--ledger);
+    border-radius: 4px;
+    padding: .3rem .7rem;
+    cursor: pointer;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn-ghost {
+    color: var(--ink-soft);
+    background: transparent;
+    border-color: var(--rule);
+  }
+
+  /* ---------- prep block ---------- */
+
+  details.prep {
+    margin: 1.6rem 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+  }
+  details.prep > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: .85rem 1rem;
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  details.prep > summary::-webkit-details-marker { display: none; }
+  details.prep > summary::before {
+    content: "+";
+    font-family: var(--f-mono);
+    color: var(--ledger);
+    font-size: 1rem;
+    line-height: 1;
+  }
+  details.prep[open] > summary::before { content: "–"; }
+  .prep-body {
+    padding: 0 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 1.1rem;
+  }
+  .prep-body h3 {
+    font-family: var(--f-display);
+    font-size: .82rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 .45rem;
+  }
+  .prep-body p, .prep-body ul { margin: 0; }
+  .prep-body ul { padding-left: 1.1rem; }
+  .prep-body li + li { margin-top: .2rem; }
+
+  .env {
+    display: grid;
+    gap: .55rem;
+  }
+  .env-row {
+    display: flex;
+    gap: .7rem;
+    align-items: baseline;
+    padding: .6rem .75rem;
+    border-radius: 5px;
+    border: 1px solid var(--rule-soft);
+  }
+  .env-row.yes { background: var(--ok-bg); border-color: transparent; }
+  .env-row.no  { background: var(--bad-bg); border-color: transparent; }
+  .env-tag {
+    font-family: var(--f-mono);
+    font-size: .72rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .env-row.yes .env-tag { color: var(--ok); }
+  .env-row.no  .env-tag { color: var(--bad); }
+  .env-row div:last-child { font-size: .9rem; }
+  .env-row code { font-size: .88rem; }
+
+  code, .mono { font-family: var(--f-mono); }
+  .prep-body code, .test code {
+    background: var(--rule-soft);
+    padding: .06em .3em;
+    border-radius: 3px;
+    font-size: .87em;
+  }
+
+  table.gloss {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .9rem;
+  }
+  table.gloss td {
+    padding: .4rem .55rem .4rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  table.gloss td:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+    padding-right: .9rem;
+  }
+
+  pre.report {
+    font-family: var(--f-mono);
+    font-size: .78rem;
+    line-height: 1.6;
+    background: var(--rule-soft);
+    border-radius: 5px;
+    padding: .8rem .9rem;
+    overflow-x: auto;
+    margin: 0;
+  }
+
+  /* ---------- sessions & sections ---------- */
+
+  .session {
+    margin-top: 2.6rem;
+    padding-top: 1.1rem;
+    border-top: 2px solid var(--ink);
+  }
+  .session-head {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    flex-wrap: wrap;
+  }
+  .session-head h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(1.3rem, 4.4vw, 1.7rem);
+    letter-spacing: -.015em;
+    margin: 0;
+  }
+  .session-where {
+    font-family: var(--f-mono);
+    font-size: .74rem;
+    color: var(--ledger);
+    background: var(--ledger-bg);
+    padding: .2rem .45rem;
+    border-radius: 3px;
+  }
+  .session > p.note {
+    color: var(--ink-soft);
+    font-size: .95rem;
+    margin: .55rem 0 0;
+    max-width: 36rem;
+  }
+
+  h3.section {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: .82rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 2rem 0 .8rem;
+    padding-bottom: .35rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* ---------- test card ---------- */
+
+  .test {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule);
+    border-radius: 5px;
+    padding: .9rem 1rem 1rem;
+    margin-bottom: .75rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+  }
+  .test[data-mark="ok"]   { border-left-color: var(--ok); }
+  .test[data-mark="warn"] { border-left-color: var(--warn); }
+  .test[data-mark="bad"]  { border-left-color: var(--bad); }
+  .test[data-mark="skip"] { border-left-color: var(--skip); }
+
+  .test-head {
+    display: flex;
+    align-items: baseline;
+    gap: .55rem;
+    flex-wrap: wrap;
+  }
+  .tid {
+    font-family: var(--f-mono);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--ledger);
+    background: var(--ledger-bg);
+    padding: .12rem .4rem;
+    border-radius: 3px;
+    letter-spacing: .02em;
+  }
+  .tname {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 1.04rem;
+    letter-spacing: -.008em;
+    margin: 0;
+  }
+  .star {
+    font-family: var(--f-mono);
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--warn);
+    background: var(--warn-bg);
+    padding: .14rem .4rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .line { font-size: .95rem; margin: 0; }
+  .line b.lbl {
+    font-family: var(--f-mono);
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: .1rem;
+  }
+  .line.esperado { color: var(--ink); }
+  .line.esperado b.lbl { color: var(--ledger); }
+  .line ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+
+  .marks {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: wrap;
+    padding-top: .15rem;
+  }
+  .mark {
+    font-family: var(--f-body);
+    font-size: .8rem;
+    font-weight: 500;
+    padding: .32rem .6rem;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--ink-soft);
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    line-height: 1.2;
+  }
+  .mark:hover { border-color: var(--ink-faint); }
+  .mark:focus-visible { outline: 2px solid var(--ledger); outline-offset: 2px; }
+  .mark[aria-pressed="true"][data-k="ok"]   { background: var(--ok-bg);   color: var(--ok);   border-color: var(--ok); }
+  .mark[aria-pressed="true"][data-k="warn"] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  .mark[aria-pressed="true"][data-k="bad"]  { background: var(--bad-bg);  color: var(--bad);  border-color: var(--bad); }
+  .mark[aria-pressed="true"][data-k="skip"] { background: var(--skip-bg); color: var(--skip); border-color: var(--skip); }
+
+  .note-field {
+    width: 100%;
+    font-family: var(--f-body);
+    font-size: .9rem;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--rule-soft);
+    border-radius: 4px;
+    padding: .45rem .55rem;
+    resize: vertical;
+    min-height: 2.4rem;
+  }
+  .note-field::placeholder { color: var(--ink-faint); }
+  .note-field:focus { outline: 2px solid var(--ledger); outline-offset: 1px; border-color: transparent; }
+
+  /* ---------- closing ---------- */
+
+  .closing {
+    margin-top: 2.6rem;
+    padding: 1.2rem 1.1rem;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: .8rem;
+  }
+  .closing h2 {
+    font-family: var(--f-display);
+    font-size: 1.15rem;
+    margin: 0;
+  }
+  .closing p { margin: 0; font-size: .95rem; color: var(--ink-soft); }
+  .closing .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+  #summary-out {
+    width: 100%;
+    min-height: 12rem;
+    font-family: var(--f-mono);
+    font-size: .76rem;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--rule-soft);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: .7rem;
+    display: none;
+  }
+
+  footer.colofon {
+    margin-top: 2.2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-size: .82rem;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 480px) {
+    .test { padding: .8rem .85rem .9rem; }
+    .mark { flex: 1 1 auto; justify-content: center; }
+  }
+</style>
+
+<div class="tally">
+  <div class="tally-inner">
+    <span class="count" data-k="ok">✅ <span id="c-ok">0</span></span>
+    <span class="count" data-k="warn">⚠️ <span id="c-warn">0</span></span>
+    <span class="count" data-k="bad">❌ <span id="c-bad">0</span></span>
+    <span class="count" data-k="skip">⛔ <span id="c-skip">0</span></span>
+    <span class="count" data-k="left">faltan <span id="c-left">43</span></span>
+    <span class="tally-spacer"></span>
+    <button class="btn" id="btn-top-summary" type="button">Resumen</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Mueblería Estilo y Confort · Pruebas de aceptación</span>
+    <h1>Pruebas de Vendedor y Reparto</h1>
+    <p class="standfirst">
+      43 pruebas de los dos flujos que se usan todos los días: levantar la venta y entregar
+      el mueble. Marca cada una conforme la haces; tus marcas se guardan en este teléfono.
+    </p>
+    <div class="meta">
+      <span class="chip">2 sesiones · ~1 h 30 c/u</span>
+      <span class="chip">Sesión 1: computadora</span>
+      <span class="chip">Sesión 2: celular</span>
+      <span class="chip">v1.0 · 23 ago 2026</span>
+    </div>
+  </header>
+
+  <details class="prep" open>
+    <summary>Antes de empezar</summary>
+    <div class="prep-body">
+
+      <div>
+        <h3>Dónde pruebas</h3>
+        <div class="env">
+          <div class="env-row yes">
+            <span class="env-tag">AQUÍ SÍ</span>
+            <div><code>dev.estiloyconfortm.com</code> — copia de prueba. Puedes vender, cobrar y cancelar sin consecuencias.</div>
+          </div>
+          <div class="env-row no">
+            <span class="env-tag">AQUÍ NO</span>
+            <div><code>estiloyconfortm.com</code> — el sistema real, con clientes reales.</div>
+          </div>
+        </div>
+        <p style="margin-top:.55rem;font-size:.9rem;color:var(--ink-soft)">
+          Al empezar cada sesión, revisa la barra de direcciones y confirma que dice <b>dev.</b>
+        </p>
+      </div>
+
+      <div>
+        <h3>Datos que vas a usar siempre</h3>
+        <p style="font-size:.92rem;color:var(--ink-soft);margin-bottom:.4rem">
+          Para poder borrar todo después de un jalón, no inventes datos nuevos:
+        </p>
+        <ul>
+          <li>Clientes: <code>PRUEBA Ana Uno</code>, <code>PRUEBA Beto Dos</code>, <code>PRUEBA Caro Tres</code></li>
+          <li>Teléfono: <code>2221112233</code></li>
+          <li>Dirección: <code>Calle Prueba 100, Col. Centro, Puebla</code> · CP <code>72000</code></li>
+        </ul>
+      </div>
+
+      <div>
+        <h3>Qué significa cada marca</h3>
+        <ul>
+          <li><b>✅ Pasó</b> — tal como dice el resultado esperado.</li>
+          <li><b>⚠️ Raro</b> — funciona, pero el texto confunde, se ve mal, tarda, o tuviste que adivinar.</li>
+          <li><b>❌ Falló</b> — error, dato equivocado, no pudiste terminar.</li>
+          <li><b>⛔ No pude</b> — faltó un permiso o un dato para probarla.</li>
+        </ul>
+        <p style="margin-top:.5rem;font-size:.92rem">
+          <b>Regla de oro:</b> si algo te confunde aunque «funcione», también es un hallazgo.
+          Con un cliente enfrente no hay tiempo de adivinar.
+        </p>
+      </div>
+
+      <div>
+        <h3>Cómo reportar</h3>
+        <p style="font-size:.92rem;color:var(--ink-soft);margin-bottom:.5rem">
+          Un reporte por cada cosa rara, aunque sean cinco en la misma pantalla:
+        </p>
+<pre class="report">Prueba:       C-17
+Rol:          Vendedor
+Dispositivo:  Computadora / Chrome
+Qué hice:     Llené un pedido y piqué Guardar dos veces rápido.
+Qué esperaba: Un solo pedido.
+Qué pasó:     Se crearon dos: PED-000123 y PED-000124.
+¿Se repite?   Sí, 3 de 3 veces.
+Captura:      foto_C17.png</pre>
+        <p style="margin-top:.55rem;font-size:.92rem">
+          Lo que lo hace útil: <b>una captura siempre</b>, el <b>número de pedido o cotización</b>,
+          y decir <b>si se repite</b> (inténtalo 2 o 3 veces más). Si algo falla y le encuentras la
+          vuelta, reporta <b>el fallo</b>, no la vuelta.
+        </p>
+      </div>
+
+      <div>
+        <h3>Palabras que vas a ver</h3>
+        <table class="gloss">
+          <tr><td>Cotización</td><td>Presupuesto. <b>No</b> descuenta inventario. Vence a los 15 días hábiles.</td></tr>
+          <tr><td>Pedido</td><td>La venta real. En cuanto se guarda, <b>sí</b> descuenta inventario.</td></tr>
+          <tr><td>Se fabrica</td><td>No hay pieza en almacén; se manda hacer. El sistema deja vender: es a propósito.</td></tr>
+          <tr><td>Recoge en tienda</td><td>El cliente se lo lleva hoy. Sin envío, sin dirección, sin agenda.</td></tr>
+          <tr><td>Crédito de tienda</td><td>35% de enganche, 12 pagos semanales, 22% de interés.</td></tr>
+          <tr><td>Apartado</td><td>Separa el mueble con mínimo $500 y tiene 3 meses para liquidar a precio de contado.</td></tr>
+          <tr><td>6 MSI</td><td>Seis meses sin intereses con tarjeta. Cuesta <b>más</b> que contado.</td></tr>
+        </table>
+      </div>
+
+      <p style="font-size:.9rem;color:var(--ink-soft)">
+        Las pruebas marcadas <span class="star">no saltar</span> son las que no se pueden omitir.
+        Los números son los mismos del plan completo, por eso saltan: así basta decir
+        «falló la C-17» para que se entienda.
+      </p>
+
+    </div>
+  </details>
+
+  <div id="content"></div>
+
+  <div class="closing">
+    <h2>Al terminar cada sesión</h2>
+    <p>
+      Manda el resumen, un reporte por cada ❌ y ⚠️ con su captura, y una frase de cierre:
+      <i>¿confiarías en el sistema para vender mañana?</i>
+    </p>
+    <div class="actions">
+      <button class="btn" id="btn-summary" type="button">Armar resumen</button>
+      <button class="btn btn-ghost" id="btn-copy" type="button">Copiar</button>
+      <button class="btn btn-ghost" id="btn-reset" type="button">Borrar mis marcas</button>
+    </div>
+    <textarea id="summary-out" readonly></textarea>
+  </div>
+
+  <footer class="colofon">
+    <span>Recorte del plan completo de 176 pruebas · bloques C, D, E, F e I</span>
+    <span class="mono">v1.0</span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  const S1 = [
+    { s: "A · Levantar una venta", intro: "Entra como <b>vendedor</b> y ve a <b>Nuevo pedido</b>." },
+    { id: "C-01", n: "Venta simple de contado",
+      p: "Cliente <code>PRUEBA Ana Uno</code>, teléfono <code>2221112233</code>, 1 producto en stock, pago <b>contado</b>, entrega a domicilio con CP <code>72000</code>. Guarda.",
+      e: "Se crea el pedido, aparece un número de pedido, y el total = producto + envío. <b>Saca la cuenta con calculadora.</b>" },
+    { id: "C-02", n: "Campos obligatorios",
+      p: "Intenta guardar sin nombre. Luego sin teléfono. Luego sin producto.",
+      e: "En los tres casos te dice exactamente qué falta y <b>no</b> guarda. Lo que ya escribiste no se borra." },
+    { id: "C-04", n: "Varias líneas y cantidades",
+      p: "Agrega 4 productos distintos con cantidades 1, 2, 3 y 10. Luego quita el de en medio.",
+      e: "El subtotal cuadra con la suma a mano de (precio × cantidad). Al quitar la línea desaparece <b>solo</b> esa, y el total baja exactamente ese monto." },
+    { id: "C-05", n: "Cantidades imposibles",
+      p: "Pon cantidad <code>0</code>, luego <code>-1</code>, luego <code>1.5</code>, luego <code>999999</code>.",
+      e: "Rechaza cero, negativos y decimales con mensaje. <b>Lo que no puede pasar es que el total salga en $0, en negativo o en notación rara.</b>" },
+    { id: "C-07", n: "Material y color",
+      p: "Con un mismo producto, cámbialo entre MDF y Melamina.",
+      e: "El precio <b>cambia</b> (Melamina es la más cara). Si un material no existe para ese mueble, debe decirlo, <b>no</b> mostrar $0." },
+    { id: "C-08", n: "Vender algo que no hay en almacén", star: true,
+      p: "Elige un producto con inventario en 0 o en 1 y pide 5 piezas.",
+      e: "El sistema <b>sí te deja vender</b> y marca esas piezas como «se fabrica». Eso es correcto. Lo que se prueba es que <b>lo avise con claridad</b>: tú, con el cliente enfrente, tienes que darte cuenta de que ese mueble no sale hoy." },
+    { id: "C-09", n: "Envío y armado",
+      p: "Captura CP <code>72000</code>, luego <code>72227</code>, luego <code>99999</code> (inexistente). Después activa <b>armado</b> y prueba piso 0, 1 y 3.",
+      e: "El envío aparece y se suma al total; con un CP fuera de zona te deja capturarlo a mano o lo dice con un mensaje — <b>nunca</b> se queda cargando ni suma $0 en silencio. El armado sube conforme al piso. Verifica una cuenta con calculadora." },
+    { id: "C-11", n: "Recoge en tienda", star: true,
+      p: "Marca «Recoge en tienda» con productos <b>que sí estén en stock</b>.",
+      e: "Desaparecen dirección, código postal, envío y agenda. El pedido nace ya <b>entregado</b>, con fecha de hoy." },
+    { id: "C-13", n: "Recoge en tienda: los límites", star: true,
+      p: "(a) Intenta marcar «Recoge en tienda» con un producto sin stock. (b) Con recoge en tienda activo, intenta elegir <b>Crédito de tienda</b> y luego <b>Apartado</b>.",
+      e: "(a) <b>No lo permite</b> y explica por qué: no se puede llevar hoy algo que aún no existe. (b) Crédito y apartado están bloqueados o no aparecen; solo contado, MSI y mayoreo." },
+    { id: "C-16", n: "Salir sin guardar", star: true,
+      p: "Llena medio pedido y, sin guardar, vete a otra pantalla o cierra la pestaña.",
+      e: "Te advierte que vas a perder lo capturado y te deja cancelar la salida." },
+    { id: "C-17", n: "Doble clic en Guardar", star: true,
+      p: "Llena un pedido y presiona <b>Guardar dos veces muy rápido</b>.",
+      e: "Se crea <b>un solo</b> pedido. Ve a la lista de pedidos y confirma que no hay gemelos. <b>Si hay dos, es Crítico</b>: se descontó inventario doble." },
+
+    { s: "B · Después de vender" },
+    { id: "C-15", n: "Editar un pedido",
+      p: "Abre un pedido ya creado, quita un producto, agrega otro y guarda.",
+      e: "El total se recalcula y el pedido queda con lo que dejaste, sin líneas fantasma." },
+    { id: "C-21", n: "Asignar repartidor",
+      p: "En el pedido, elige un repartidor. <b>Deja este pedido listo: lo vas a usar en la Sesión 2.</b>",
+      e: "Se guarda la asignación." },
+    { id: "C-22", n: "Lista de pedidos",
+      p: "Entra a <b>Todos los pedidos</b>. Filtra por estado y busca por nombre de cliente.",
+      e: "Tu pedido recién creado aparece; la lista va de más nuevo a más viejo; los filtros funcionan y se pueden limpiar." },
+    { id: "C-23", n: "Resumen del día",
+      p: "Entra a <b>Resumen</b> y compáralo con lo que acabas de vender.",
+      e: "Cuadran. Si dice «3 pedidos hoy», que sean 3." },
+
+    { s: "C · Cotizaciones" },
+    { id: "D-02", n: "La cotización NO toca el inventario", star: true,
+      p: "Anota el stock de un producto (lo ves en el catálogo). Cotiza 5 piezas de ese producto. Vuelve a revisar el stock.",
+      e: "El stock <b>no cambió</b>. Solo el pedido descuenta." },
+    { id: "D-03", n: "El link que le mandas al cliente", star: true,
+      p: "Copia el link para compartir y ábrelo en una ventana de <b>incógnito</b>, como si fueras el cliente. Después mándatelo por WhatsApp y ábrelo en el celular.",
+      e: "Se ve el presupuesto con productos, envío, armado y total. <b>No</b> se ve el costo, ni el fabricante, ni botones de administración. En el celular se lee cómodo, sin zoom y sin cortes." },
+    { id: "D-08", n: "Convertir cotización en pedido", star: true,
+      p: "Desde una cotización, levanta el pedido.",
+      e: "El pedido nace con <b>los mismos productos, precios y totales</b> — compáralos línea por línea. La cotización queda marcada como <i>convertida</i> y el inventario <b>ahora sí</b> se descuenta." },
+    { id: "D-09", n: "No convertir dos veces",
+      p: "Intenta convertir esa misma cotización otra vez.",
+      e: "No lo permite o avisa que ya fue convertida. <b>No</b> debe crear un segundo pedido." },
+    { id: "D-12", n: "Cotización sin teléfono",
+      p: "Crea una cotización dejando el teléfono vacío.",
+      e: "Se permite (es opcional), pero el botón de WhatsApp o te pide el número o se comporta con sensatez." },
+
+    { s: "D · Descuentos", intro: "La regla: tú <b>pides</b>, el administrador <b>aprueba</b>. El descuento se resta del total desde que lo capturas, aunque siga pendiente." },
+    { id: "E-01", n: "Descuento en dinero",
+      p: "En un pedido, aplica <code>$500</code> con motivo «mueble de exhibición».",
+      e: "El total baja $500 de inmediato y queda marcado como <b>pendiente de aprobación</b>." },
+    { id: "E-02", n: "Tu tope son $2,000", star: true,
+      p: "Intenta <code>$2,500</code>. Luego exactamente <code>$2,000</code>. Luego <code>$2,001</code>.",
+      e: "$2,500 y $2,001 se rechazan con un mensaje que diga cuál es el máximo; $2,000 pasa." },
+    { id: "E-04", n: "Motivo obligatorio",
+      p: "Aplica un descuento con motivo «Otro» y <b>deja el texto vacío</b>.",
+      e: "Te exige escribir el motivo." },
+    { id: "E-05", n: "Regalar un producto",
+      p: "Marca un producto del pedido como <b>regalo</b>.",
+      e: "Esa línea queda en $0 y el total baja ese monto. <b>La pieza sigue saliendo del almacén</b> aunque no se cobre." },
+
+    { s: "E · Formas de pago y cobranza" },
+    { id: "F-01", n: "Crédito de tienda: las cuentas", star: true,
+      p: "Crea un pedido de crédito por un total conocido (por ejemplo, $10,000 de contado). Anota enganche, pago semanal y número de pagos.",
+      e: "Con calculadora:<ul><li>total a crédito ≈ contado × 1.22</li><li>enganche ≈ 35% del total a crédito</li><li>pagos semanales: <b>12</b></li><li>enganche + (12 × pago semanal) ≈ el total a crédito. Si la diferencia pasa de $12, anótalo.</li></ul>" },
+    { id: "F-02", n: "Apartado: mínimo $500", star: true,
+      p: "Crea un pedido de <b>apartado</b> con abono inicial de <code>$100</code>. Luego con <code>$500</code>.",
+      e: "$100 se rechaza indicando el mínimo; $500 se acepta. Revisa que muestre la fecha límite a <b>3 meses</b> y que el precio congelado sea el de <b>contado</b>." },
+    { id: "F-04", n: "6 MSI cuesta más que contado", star: true,
+      p: "Cotiza el mismo producto en contado y en 6 MSI.",
+      e: "6 MSI sale <b>más caro</b>. Si sale igual o más barato, es un hallazgo." },
+    { id: "F-05", n: "Pago parcial y liquidación",
+      p: "En un pedido de $10,000 registra $3,000. Después registra los $7,000 restantes.",
+      e: "Primero queda en <b>pago parcial</b> con saldo de $7,000; después en <b>pagado</b> con saldo $0." },
+    { id: "F-07", n: "Pagar de más", star: true,
+      p: "En ese pedido ya pagado, intenta registrar otros $5,000. Prueba también montos de <code>0</code>, <code>-500</code> y <code>abc</code>.",
+      e: "Lo impide o lo advierte claro. <b>Nunca</b> debe quedar un saldo negativo sin explicación, ni aceptar cero, negativos o letras." },
+    { id: "F-11", n: "Crédito y Apartado cuadra con el pedido", star: true,
+      p: "Entra a <b>Crédito y Apartado</b>, registra un abono desde ahí, y luego abre el pedido original.",
+      e: "El saldo baja en la lista, y el mismo pago aparece en el pedido con la misma fecha y monto. <b>Los dos lugares deben contar la misma historia.</b>" }
+  ];
+
+  const S2 = [
+    { id: "I-01", n: "Entregas de hoy",
+      p: "Entra y mira la lista. Luego abre una entrega.",
+      e: "Ves tus entregas del día con dirección, cliente, teléfono y cuánto hay que cobrar, <b>sin hacer zoom</b>. Al abrir una: productos, instrucciones, si incluye armado y el saldo por cobrar." },
+    { id: "I-03", n: "Llamar y ubicar",
+      p: "Pica el teléfono del cliente. Luego pica el link de Google Maps.",
+      e: "El teléfono abre la app de llamadas con el número puesto; el mapa abre en la dirección correcta. Si el teléfono no es un link, márcalo ⚠️: en la calle es incómodo." },
+    { id: "I-05", n: "Marcar «en camino»",
+      p: "Cambia el estado de la entrega a en curso.",
+      e: "Cambia en tu pantalla y se queda así al refrescar." },
+    { id: "I-06", n: "No se puede completar sin evidencia", star: true,
+      p: "Intenta marcar la entrega como <b>completada sin foto y sin firma</b>.",
+      e: "<b>No lo permite</b> y dice que faltan foto y firma." },
+    { id: "I-07", n: "Foto y firma", star: true,
+      p: "Toma la foto del mueble con la cámara del celular. Luego firma con el dedo.",
+      e: "La foto se sube, se ve la miniatura y se puede repetir si salió mal (anota cuánto tarda). El trazo de la firma sigue al dedo sin retraso, se puede borrar y repetir." },
+    { id: "I-09", n: "Completar la entrega", star: true,
+      p: "Con foto y firma listas, marca completada.",
+      e: "El pedido pasa a <b>entregado</b>." },
+    { id: "I-10", n: "Cobrar en la puerta", star: true,
+      p: "En una entrega con saldo, registra el cobro en efectivo del total.",
+      e: "El saldo queda en $0. Ese pago debe aparecer también en el pedido cuando lo abras como vendedora." },
+    { id: "I-11", n: "Cobro parcial en la puerta",
+      p: "En otra entrega, cobra menos de lo que se debe (por ejemplo $1,000 de $3,000).",
+      e: "Queda como pago parcial con saldo de $2,000. <b>No</b> como pagado." },
+    { id: "I-12", n: "Entrega fallida",
+      p: "Marca una entrega como fallida (no había nadie).",
+      e: "Te deja anotar el motivo y el pedido <b>no</b> queda como entregado." },
+    { id: "I-13", n: "Pedir descuento desde la calle",
+      p: "En una entrega, pide <code>$300</code> porque el mueble llegó rayado.",
+      e: "Se registra como pendiente y el total baja. El repartidor solo puede pedir descuento <b>en dinero</b>: <b>no</b> debe poder regalar un producto completo. El tope de $2,000 también le aplica." },
+    { id: "I-15", n: "Solo ve lo suyo", star: true,
+      p: "Revisa si aparecen entregas asignadas a <b>otro</b> repartidor.",
+      e: "No. Solo las suyas y su historial." },
+    { id: "I-16", n: "Sin señal", star: true,
+      p: "Pon el celular en <b>modo avión</b> e intenta completar una entrega o registrar un cobro. Luego vuelve a activar el internet y revisa.",
+      e: "Avisa que no hay conexión con un mensaje entendible. <b>No</b> debe decir que se guardó si no se guardó. <b>Anota exactamente qué pasó</b> y si el dato se perdió o se guardó al reintentar: esto pasa todos los días en la calle." },
+    { id: "I-14", n: "Mis ganancias",
+      p: "Entra a <b>Mis ganancias</b>.",
+      e: "Muestra las comisiones por entrega. Cuenta a mano cuántas entregas completaste hoy y confirma que cuadra." }
+  ];
+
+  const MARKS = [
+    { k: "ok",   glyph: "✅", label: "Pasó" },
+    { k: "warn", glyph: "⚠️", label: "Raro" },
+    { k: "bad",  glyph: "❌", label: "Falló" },
+    { k: "skip", glyph: "⛔", label: "No pude" }
+  ];
+
+  const KEY = "eyc-pruebas-vendedor-reparto-v1";
+  let state = {};
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) state = JSON.parse(raw) || {};
+  } catch (e) { state = {}; }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* modo privado */ }
+  }
+
+  const all = [];
+
+  function renderSession(host, title, where, note, items) {
+    const sec = document.createElement("section");
+    sec.className = "session";
+    const head = document.createElement("div");
+    head.className = "session-head";
+    head.innerHTML = '<h2>' + title + '</h2><span class="session-where">' + where + '</span>';
+    sec.appendChild(head);
+    if (note) {
+      const p = document.createElement("p");
+      p.className = "note";
+      p.innerHTML = note;
+      sec.appendChild(p);
+    }
+    items.forEach(function (it) {
+      if (it.s) {
+        const h = document.createElement("h3");
+        h.className = "section";
+        h.textContent = it.s;
+        sec.appendChild(h);
+        if (it.intro) {
+          const p = document.createElement("p");
+          p.className = "note";
+          p.style.marginBottom = ".8rem";
+          p.innerHTML = it.intro;
+          sec.appendChild(p);
+        }
+        return;
+      }
+      sec.appendChild(card(it));
+      all.push(it.id);
+    });
+    host.appendChild(sec);
+  }
+
+  function card(it) {
+    const el = document.createElement("article");
+    el.className = "test";
+    el.id = it.id;
+    const st = state[it.id] || {};
+    if (st.mark) el.dataset.mark = st.mark;
+
+    const head = document.createElement("div");
+    head.className = "test-head";
+    head.innerHTML =
+      '<span class="tid">' + it.id + '</span>' +
+      '<h4 class="tname">' + it.n + '</h4>' +
+      (it.star ? '<span class="star">no saltar</span>' : '');
+    el.appendChild(head);
+
+    const pasos = document.createElement("p");
+    pasos.className = "line";
+    pasos.innerHTML = '<b class="lbl">Pasos</b>' + it.p;
+    el.appendChild(pasos);
+
+    const esp = document.createElement("p");
+    esp.className = "line esperado";
+    esp.innerHTML = '<b class="lbl">Resultado esperado</b>' + it.e;
+    el.appendChild(esp);
+
+    const marks = document.createElement("div");
+    marks.className = "marks";
+    MARKS.forEach(function (m) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "mark";
+      b.dataset.k = m.k;
+      b.setAttribute("aria-pressed", st.mark === m.k ? "true" : "false");
+      b.setAttribute("aria-label", it.id + " — " + m.label);
+      b.innerHTML = '<span aria-hidden="true">' + m.glyph + '</span>' + m.label;
+      b.addEventListener("click", function () {
+        const cur = (state[it.id] || {}).mark;
+        const next = cur === m.k ? null : m.k;
+        state[it.id] = Object.assign({}, state[it.id], { mark: next });
+        marks.querySelectorAll(".mark").forEach(function (o) {
+          o.setAttribute("aria-pressed", o.dataset.k === next ? "true" : "false");
+        });
+        if (next) el.dataset.mark = next; else delete el.dataset.mark;
+        save();
+        tally();
+      });
+      marks.appendChild(b);
+    });
+    el.appendChild(marks);
+
+    const note = document.createElement("textarea");
+    note.className = "note-field";
+    note.rows = 1;
+    note.placeholder = "Nota, número de pedido, qué pasó…";
+    note.value = st.note || "";
+    note.setAttribute("aria-label", "Nota para " + it.id);
+    note.addEventListener("input", function () {
+      state[it.id] = Object.assign({}, state[it.id], { note: note.value });
+      save();
+    });
+    el.appendChild(note);
+
+    return el;
+  }
+
+  const content = document.getElementById("content");
+  renderSession(content, "Sesión 1 — Vendedor", "en computadora", null, S1);
+  renderSession(content, "Sesión 2 — Reparto", "obligatorio en celular", "Esto simula la calle: una mano ocupada, sol en la pantalla, mala señal. Entra como <b>repartidor</b> en el celular, con el pedido que dejaste asignado en <b>C-21</b>.", S2);
+
+  function tally() {
+    const c = { ok: 0, warn: 0, bad: 0, skip: 0 };
+    all.forEach(function (id) {
+      const m = (state[id] || {}).mark;
+      if (m && c[m] !== undefined) c[m]++;
+    });
+    document.getElementById("c-ok").textContent = c.ok;
+    document.getElementById("c-warn").textContent = c.warn;
+    document.getElementById("c-bad").textContent = c.bad;
+    document.getElementById("c-skip").textContent = c.skip;
+    document.getElementById("c-left").textContent = all.length - (c.ok + c.warn + c.bad + c.skip);
+  }
+  tally();
+
+  const GLYPH = { ok: "OK", warn: "RARO", bad: "FALLO", skip: "NO PUDE" };
+  const out = document.getElementById("summary-out");
+
+  function buildSummary() {
+    const lines = [];
+    lines.push("PRUEBAS VENDEDOR Y REPARTO — " + new Date().toLocaleDateString("es-MX"));
+    lines.push("");
+    const c = { ok: 0, warn: 0, bad: 0, skip: 0, left: 0 };
+    all.forEach(function (id) {
+      const m = (state[id] || {}).mark;
+      if (m && c[m] !== undefined) c[m]++; else c.left++;
+    });
+    lines.push("Paso: " + c.ok + "  Raro: " + c.warn + "  Fallo: " + c.bad +
+               "  No pude: " + c.skip + "  Faltan: " + c.left);
+    lines.push("");
+    ["bad", "warn", "skip"].forEach(function (k) {
+      const rows = all.filter(function (id) { return (state[id] || {}).mark === k; });
+      if (!rows.length) return;
+      lines.push(GLYPH[k] + ":");
+      rows.forEach(function (id) {
+        const n = ((state[id] || {}).note || "").trim();
+        lines.push("  " + id + (n ? " — " + n : ""));
+      });
+      lines.push("");
+    });
+    const okNotes = all.filter(function (id) {
+      const s = state[id] || {};
+      return s.mark === "ok" && (s.note || "").trim();
+    });
+    if (okNotes.length) {
+      lines.push("NOTAS EN PRUEBAS QUE PASARON:");
+      okNotes.forEach(function (id) { lines.push("  " + id + " — " + state[id].note.trim()); });
+      lines.push("");
+    }
+    if (c.left) {
+      lines.push("SIN PROBAR: " + all.filter(function (id) { return !(state[id] || {}).mark; }).join(", "));
+    }
+    return lines.join("\n");
+  }
+
+  function showSummary() {
+    out.value = buildSummary();
+    out.style.display = "block";
+    out.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  document.getElementById("btn-summary").addEventListener("click", showSummary);
+  document.getElementById("btn-top-summary").addEventListener("click", showSummary);
+
+  document.getElementById("btn-copy").addEventListener("click", function () {
+    const btn = this;
+    if (out.style.display !== "block") showSummary();
+    out.select();
+    const done = function (ok) {
+      btn.textContent = ok ? "Copiado" : "Selecciónalo y copia";
+      setTimeout(function () { btn.textContent = "Copiar"; }, 2200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(out.value).then(function () { done(true); },
+                                                     function () { done(false); });
+    } else {
+      done(false);
+    }
+  });
+
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    if (!confirm("¿Borrar todas tus marcas y notas de este teléfono?")) return;
+    state = {};
+    save();
+    document.querySelectorAll(".test").forEach(function (el) {
+      delete el.dataset.mark;
+      el.querySelectorAll(".mark").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+      const t = el.querySelector(".note-field");
+      if (t) t.value = "";
+    });
+    out.style.display = "none";
+    tally();
+  });
+})();
+</script>
+</body>
+</html>

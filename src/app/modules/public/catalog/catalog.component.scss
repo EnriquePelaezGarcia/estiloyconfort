@@ -14,31 +14,26 @@
   min-height: 60vh;
   background: v.$color-bg;
 
-  &__header {
-    background: v.$color-primary;
-    padding: v.$spacing-2xl 0;
+  // Mismo tratamiento que la frase de la home (.tagline__text): itálica,
+  // Playfair Display y morado claro. Aquí sí se ve en móvil, solo que a
+  // menor tamaño gracias al clamp().
+  &__tagline {
     text-align: center;
-    color: #fff;
+    padding: v.$spacing-2xl v.$spacing-lg v.$spacing-xl;
 
-    // En móvil el bloque morado se comía la primera pantalla completa y los
-    // productos quedaban fuera de vista; ahí se oculta y el catálogo arranca
-    // directo en los filtros.
     @media (max-width: v.$bp-tablet) {
       display: none;
     }
   }
 
-  &__title {
+  &__tagline-text {
     font-family: v.$font-brand;
-    font-size: clamp(1.75rem, 3vw, 2.5rem);
-    margin: 0 0 v.$spacing-xs;
-  }
-
-  &__subtitle {
-    font-family: v.$font-body;
-    font-size: 1rem;
+    font-style: italic;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-weight: 400;
+    line-height: 1.35;
+    color: v.$color-primary-light;
     margin: 0;
-    opacity: 0.85;
   }
 
   &__layout {
@@ -137,6 +132,14 @@
         background: v.$color-surface;
         color: v.$color-text;
       }
+
+      // Mientras se está buscando, el selector de categorías estorba: se
+      // oculta del todo.
+      &--hidden { display: none; }
+
+      // Con una categoría elegida y sin búsqueda activa, el selector pasa a
+      // ser el único control de la fila: ocupa todo el ancho en vez del 46%.
+      &--full { flex: 1 1 100%; }
     }
   }
 
@@ -157,6 +160,10 @@
     @media (max-width: v.$bp-tablet) {
       min-width: 0; // sin esto no cabe junto al selector de categorías
       border-width: 1px;
+
+      // Con una categoría elegida y sin texto de búsqueda, el buscador se
+      // oculta y le deja toda la fila al selector de categorías.
+      &--hidden { display: none; }
     }
 
     &:focus-within { border-color: v.$color-primary; }

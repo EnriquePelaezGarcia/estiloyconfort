@@ -1,10 +1,7 @@
 <div class="catalog">
   <!-- Header -->
-  <section class="catalog__header">
-    <div class="container">
-      <h1 class="catalog__title">Catálogo</h1>
-      <p class="catalog__subtitle">Muebles de calidad para cada espacio</p>
-    </div>
+  <section class="catalog__tagline">
+    <p class="catalog__tagline-text">Nuestro catálogo</p>
   </section>
 
   <div class="container catalog__layout">
@@ -55,13 +52,16 @@
     <main class="catalog__main">
       <!-- Barra de filtros: en móvil la sidebar se oculta y esta fila lleva
            categorías (izquierda) y búsqueda (derecha). El orden queda solo en
-           escritorio. -->
+           escritorio. En teléfono, apenas una de las dos está en uso, la otra
+           se oculta y la activa ocupa todo el ancho de la fila. -->
       <div class="catalog__toolbar">
         <select
           class="catalog__categories"
           aria-label="Categorías"
           [value]="filters().category || ''"
           (change)="onCategoryChange($any($event.target).value)"
+          [class.catalog__categories--hidden]="isSearchActive"
+          [class.catalog__categories--full]="isCategoryFilterActive && !isSearchActive"
         >
           <option value="">Todas las categorías</option>
           @for (cat of categories(); track cat.id) {
@@ -69,7 +69,10 @@
           }
         </select>
 
-        <div class="catalog__search">
+        <div
+          class="catalog__search"
+          [class.catalog__search--hidden]="isCategoryFilterActive && !isSearchActive"
+        >
           <span class="material-symbols-outlined">search</span>
           <input
             type="search"

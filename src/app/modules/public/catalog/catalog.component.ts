@@ -66,6 +66,19 @@ export class CatalogComponent implements OnInit {
   searchValue = '';
   private searchSubject = new Subject<string>();
 
+  /**
+   * En móvil la barra de categorías y la de búsqueda comparten fila y no
+   * caben cómodas a la vez; apenas una está en uso, la plantilla oculta la
+   * otra y deja que esta ocupe todo el ancho.
+   */
+  get isSearchActive(): boolean {
+    return !!this.searchValue.trim();
+  }
+
+  get isCategoryFilterActive(): boolean {
+    return !!this.filters().category;
+  }
+
   ngOnInit(): void {
     this.productService.getCategories().subscribe(cats => this.categories.set(cats));
 
