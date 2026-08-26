@@ -159,17 +159,40 @@
   </div>
 </section>
 
-<!-- ===== MAPA ===== -->
+<!-- ===== MAPA + FACHADA ===== -->
 <section class="map">
-  <div class="map__caption">
-    <span>Encuéntranos en Google Maps</span>
-    <app-reviews-badge />
+  <div class="map__grid">
+    <div class="map__col">
+      <div class="map__caption">
+        <span>Encuéntranos en Google Maps</span>
+        <app-reviews-badge />
+      </div>
+      <iframe
+        [src]="mapUrl"
+        class="map__frame"
+        title="Ubicación de Estilo y Confort"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+      ></iframe>
+      <a
+        [href]="mapsPlaceUrl"
+        target="_blank"
+        rel="noopener"
+        class="map__cta"
+      >
+        <span class="material-symbols-outlined">storefront</span>
+        Ver fachada, fotos y reseñas en Google Maps
+      </a>
+    </div>
+
+    <div class="map__col map__photo-wrap">
+      <img
+        ngSrc="/contacto/fachada.jpeg"
+        fill
+        sizes="(max-width: 900px) 100vw, 50vw"
+        alt="Fachada de Mueblería Estilo y Confort"
+        class="map__photo"
+      />
+    </div>
   </div>
-  <iframe
-    [src]="mapUrl"
-    class="map__frame"
-    title="Ubicación de Estilo y Confort"
-    loading="lazy"
-    referrerpolicy="no-referrer-when-downgrade"
-  ></iframe>
 </section>

@@ -13,13 +13,17 @@
   padding: 4rem 2.5rem 2.5rem;
 }
 
+// Versión negativa del logo: el footer es morado oscuro. Igual que en el
+// navbar, se dimensiona por alto y el ancho lo pone la proporción del lockup.
 .footer__logo {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: white;
   display: block;
-  margin-bottom: 0.75rem;
+  height: 3.5rem;
+  width: auto;
+  margin-bottom: 1rem;
+
+  @media (max-width: 767px) {
+    height: 3rem;
+  }
 }
 
 .footer__tagline {

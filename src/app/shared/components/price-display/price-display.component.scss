@@ -43,6 +43,31 @@
     }
   }
 
+  // En la tarjeta el precio copia la tipografía del carrusel de la home
+  // (.mini-card__price): Inter 15px semibold, cifras de ancho fijo y el mismo
+  // tono oscuro del nombre. A 15px ocupa menos que los 20px anteriores, así que
+  // la tarjeta no crece.
+  &--card &__amount {
+    font-family: v.$font-body;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  &--card &__amount--main {
+    font-size: 0.9375rem;
+    color: v.$color-text;
+  }
+
+  &--card &__was {
+    font-family: v.$font-body;
+    font-size: 0.875rem;
+    font-weight: 400;
+    margin-left: 0.5rem;
+    color: v.$color-text-tertiary;
+  }
+
   // "Antes" de una oferta: acompaña al precio de contado, nunca lo sustituye.
   &__was {
     margin-left: 0.4em;

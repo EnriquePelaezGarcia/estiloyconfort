@@ -106,6 +106,10 @@
 .featured {
   padding: 0 0 4.5rem;
   background-color: #fcf9f8;
+
+  @media (max-width: 767px) {
+    padding-bottom: 2rem;
+  }
 }
 
 .product-carousel-wrapper {
@@ -121,6 +125,32 @@
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   padding: 0 4rem 0.5rem;
+  // Con scroll-snap-type mandatory el navegador ancla la primera tarjeta
+  // contra el borde de la caja de padding, no la del contenido: al cargar
+  // desplaza el carrusel justo lo que mide el padding izquierdo y se lo come,
+  // dejando la tarjeta pegada al filo. scroll-padding mete el punto de
+  // anclaje hacia adentro para que el margen se respete.
+  scroll-padding-inline: 4rem;
+
+  // Desvanecido en los bordes para que la tarjeta que asoma no se corte a filo.
+  // El ancho del degradado es el mismo del padding: en reposo cae justo sobre
+  // el margen vacío, así que no toca ni la primera ni la última tarjeta y solo
+  // se nota mientras se desliza, que es cuando hay algo que cortar.
+  --fade: 4rem;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade),
+    #000 calc(100% - var(--fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade),
+    #000 calc(100% - var(--fade)),
+    transparent 100%
+  );
 
   &::-webkit-scrollbar {
     display: none;
@@ -129,6 +159,8 @@
   @media (max-width: 767px) {
     gap: 1rem;
     padding: 0 1.5rem 0.5rem;
+    scroll-padding-inline: 1.5rem;
+    --fade: 1.5rem;
   }
 }
 
@@ -191,10 +223,15 @@
   padding: 0.25rem 0.625rem;
 }
 
+// Playfair es didone: a 15px sus trazos finos se desvanecen. Se queda para los
+// títulos de sección (32px+) y el nombre del producto pasa a Manrope, la misma
+// familia que ya usa la tarjeta del catálogo.
 .mini-card__name {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1rem;
-  font-weight: 400;
+  font-family: 'Manrope', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
   color: #1e1521;
   margin: 0 0 0.375rem;
 }
@@ -202,11 +239,17 @@
 .mini-card__price {
   font-family: 'Inter', sans-serif;
   font-size: 0.9375rem;
+  font-weight: 600;
+  // Cifras de ancho fijo: los precios quedan alineados entre tarjetas.
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   color: #1e1521;
   margin: 0;
 
   s {
     margin-left: 0.5rem;
+    font-weight: 400;
+    font-size: 0.875rem;
     color: #9b9694;
   }
 }
@@ -409,6 +452,10 @@
 .reviews {
   padding: 4.5rem 0;
   background-color: #ffffff;
+
+  @media (max-width: 767px) {
+    padding-top: 2rem;
+  }
 }
 
 .reviews__header {

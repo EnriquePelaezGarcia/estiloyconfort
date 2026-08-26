@@ -1,4 +1,4 @@
-<nav class="app-navbar">
+<nav class="app-navbar" [class.app-navbar--collapsed]="collapsed()">
   <!-- Fila 1: redes. Los íconos se pintan siempre para que la distribución no
        cambie según la configuración; si falta la URL en `environment`, el
        enlace nace sin href y por lo tanto no navega ni entra al tab order. -->

@@ -263,10 +263,40 @@
   }
 }
 
-// ===== MAPA =====
+// ===== MAPA + FACHADA =====
 .map {
   width: 100%;
   background-color: #ece5e2;
+}
+
+.map__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.map__col {
+  display: flex;
+  flex-direction: column;
+}
+
+// Columna derecha: la foto de la fachada. En escritorio estira su altura a
+// la del mapa (grid la iguala solo); en móvil no hay con qué igualarla, así
+// que se le da una altura propia.
+.map__photo-wrap {
+  position: relative;
+  min-height: 240px;
+
+  @media (max-width: 900px) {
+    height: clamp(240px, 55vh, 420px);
+  }
+}
+
+.map__photo {
+  object-fit: cover;
 }
 
 .map__caption {
@@ -288,4 +318,29 @@
   height: clamp(280px, 40vh, 440px);
   border: 0;
   display: block;
+}
+
+.map__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e1521;
+  background-color: #fcf9f8;
+  border-top: 1px solid #ece6e3;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+
+  .material-symbols-outlined {
+    font-size: 1.15rem;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background-color: #f3ede9;
+  }
 }

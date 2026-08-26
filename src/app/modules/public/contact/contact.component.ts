@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
+import { NgOptimizedImage } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ContactService } from '../../../core/services/contact.service';
 import { ContactRequest } from '../../../core/models/contact.model';
@@ -7,6 +8,12 @@ import { environment } from '../../../../environments/environment';
 import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 
 const STORE_ADDRESS = 'C. 106 Ote., Bosques Santa Anita, 72227 Heroica Puebla de Zaragoza, Pue.';
+// Código oficial de "Compartir > Insertar un mapa" de Google Maps para la
+// ficha real del negocio (no requiere API key). A diferencia de armar la URL
+// a mano por dirección o coordenadas, este iframe trae el pin con el nombre
+// "Mueblería Estilo y Confort" en una etiqueta, igual que al buscarlo en Maps.
+const STORE_MAP_EMBED_URL =
+  'https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d3770.7210094930897!2d-98.1411427!3d19.0760002!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x85cfc19a6bfd2d85%3A0x94ab75e54c96d6ab!2sMuebler%C3%ADa%20Estilo%20y%20Confort!5e0!3m2!1ses-419!2smx!4v1787732737267!5m2!1ses-419!2smx';
 
 /**
  * Página "Contacto": datos de la tienda (dirección, teléfono, correo,
@@ -18,7 +25,7 @@ const STORE_ADDRESS = 'C. 106 Ote., Bosques Santa Anita, 72227 Heroica Puebla de
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './contact.component.html',
   styleUrl: './contact.component.scss',
-  imports: [ReactiveFormsModule, ReviewsBadgeComponent],
+  imports: [ReactiveFormsModule, ReviewsBadgeComponent, NgOptimizedImage],
 })
 export class ContactComponent {
   private fb = inject(FormBuilder);
@@ -33,12 +40,11 @@ export class ContactComponent {
   protected readonly phoneHref = 'tel:+522221902631';
   protected readonly contactEmail = 'muebleria@estiloyconfortm.com';
   protected readonly facebookUrl = environment.social.facebook;
+  // Ficha completa del negocio en Google Maps: ahí se ven la fachada, más
+  // fotos y las reseñas, cosas que el iframe embebido no muestra.
+  protected readonly mapsPlaceUrl = 'https://maps.app.goo.gl/3VLKLazkPUczBKgi9';
 
-  // Embed público de Google Maps por dirección: no necesita API key porque no
-  // es la API de JavaScript, es el iframe de resultados de búsqueda.
-  protected readonly mapUrl = this.sanitizer.bypassSecurityTrustResourceUrl(
-    `https://www.google.com/maps?q=${encodeURIComponent(STORE_ADDRESS)}&output=embed`,
-  );
+  protected readonly mapUrl = this.sanitizer.bypassSecurityTrustResourceUrl(STORE_MAP_EMBED_URL);
 
   protected readonly sent = signal(false);
   protected readonly sending = signal(false);

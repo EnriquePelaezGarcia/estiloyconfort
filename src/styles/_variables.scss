@@ -1,4 +1,11 @@
 // ===== COLORES DE MARCA =====
+// Gama oficial del manual (DIMAA Studio, 2025). El morado es el del logotipo;
+// los dos grises son los de la luna. La paleta $color-primary de abajo es la
+// de la interfaz y no coincide exactamente con estos.
+$color-brand-purple: #4b3554;
+$color-brand-warm-gray: #b1aba5;
+$color-brand-gray: #c4c0bc;
+
 $color-primary: #3d2b5e;
 $color-primary-light: #5c4480;
 $color-primary-dark: #2a1d42;
@@ -17,7 +24,10 @@ $color-error: #b00020;
 $color-success: #2e7d32;
 
 // ===== TIPOGRAFÍA =====
-$font-brand: 'Playfair Display', Georgia, 'Times New Roman', serif;
+// El manual de marca (DIMAA Studio, 2025) fija Sangu para el logotipo, pero es
+// comercial y no está en Google Fonts. Cormorant Garamond es el sustituto web
+// más cercano: mismo contraste alto y el mismo aire caligráfico y delicado.
+$font-brand: 'Cormorant Garamond', 'Playfair Display', Georgia, 'Times New Roman', serif;
 $font-headline: 'Manrope', 'Helvetica Neue', Arial, sans-serif;
 $font-body: 'Inter', 'Helvetica Neue', Arial, sans-serif;
 
