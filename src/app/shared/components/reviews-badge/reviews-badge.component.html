@@ -1,0 +1,15 @@
+@if (loading()) {
+  <span class="reviews-badge reviews-badge--skeleton" aria-hidden="true"></span>
+} @else if (rating(); as rating) {
+  @if (reviews()?.url; as url) {
+    <a [href]="url" target="_blank" rel="noopener" class="reviews-badge">
+      <span class="material-symbols-outlined reviews-badge__star">star</span>
+      {{ label() }}
+    </a>
+  } @else {
+    <span class="reviews-badge">
+      <span class="material-symbols-outlined reviews-badge__star">star</span>
+      {{ label() }}
+    </span>
+  }
+}

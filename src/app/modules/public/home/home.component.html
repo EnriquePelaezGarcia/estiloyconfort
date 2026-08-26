@@ -5,6 +5,13 @@
   <img class="hero__bg" [src]="heroImage" alt="Sala amueblada por Estilo y Confort" />
 </section>
 
+<!-- ===== INSIGNIA DE RESEÑAS ===== -->
+<!-- El promedio agregado (5.0/182), no la reja de reseñas con texto — ese va
+     más abajo. Se repite en footer, detalle de producto y contacto. -->
+<div class="reviews-band">
+  <app-reviews-badge />
+</div>
+
 <!-- ===== FRASE + IR A LA TIENDA ===== -->
 <section class="tagline">
   <p class="tagline__text">
@@ -47,15 +54,102 @@
           </a>
         }
       </div>
+
+      <!-- Flechas sobre las fotos, en los laterales, para que se note que se
+           puede ver más productos con clic o deslizando. -->
+      <div class="carousel-arrow carousel-arrow--prev">
+        <button class="carousel-btn" (click)="scrollLeft()" aria-label="Anterior">
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+      </div>
+      <div class="carousel-arrow carousel-arrow--next">
+        <button class="carousel-btn" (click)="scrollRight()" aria-label="Siguiente">
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  </section>
+}
+
+<!-- ===== RESEÑAS ===== -->
+<!-- Solo se pinta si Google devolvió reseñas: sin la llave configurada, o si
+     la consulta falla, el backend responde vacío y esta sección desaparece
+     en vez de dejar un bloque a medias. -->
+@if (hasReviews()) {
+  <section class="reviews">
+    <div class="reviews__header">
+      <span class="label-overline">Lo que dicen nuestros clientes</span>
+      @if (reviews()?.rating) {
+        <p class="reviews__score">
+          {{ reviews()?.rating }} / 5 en Google
+          <span class="reviews__count">({{ reviews()?.total }} calificaciones)</span>
+        </p>
+      }
     </div>
 
-    <div class="featured__controls">
-      <button class="carousel-btn" (click)="scrollLeft()" aria-label="Anterior">
-        <span class="material-symbols-outlined">arrow_back</span>
-      </button>
-      <button class="carousel-btn" (click)="scrollRight()" aria-label="Siguiente">
-        <span class="material-symbols-outlined">arrow_forward</span>
-      </button>
+    <div class="reviews__grid">
+      @for (review of reviews()?.reviews; track review.text) {
+        <article class="review" appScrollReveal>
+          <div class="review__stars" [attr.aria-label]="review.rating + ' de 5 estrellas'">
+            @for (filled of stars(review.rating); track $index) {
+              <span class="material-symbols-outlined" [class.is-filled]="filled">star</span>
+            }
+          </div>
+          <p class="review__text">{{ review.text }}</p>
+          <p class="review__author">
+            {{ review.author }}
+            @if (review.when) {
+              <span class="review__when">· {{ review.when }}</span>
+            }
+          </p>
+          <!-- Toda la tarjeta lleva a la reseña en Google Maps, no solo el
+               nombre — de paso cumple lo que piden los términos de Google:
+               enlazar al perfil del autor cuando se muestra su reseña. -->
+          @if (review.profileUrl; as profileUrl) {
+            <a
+              class="review__overlay-link"
+              [href]="profileUrl"
+              target="_blank"
+              rel="noopener"
+              [attr.aria-label]="'Ver la reseña de ' + review.author + ' en Google Maps'"
+            ></a>
+          }
+        </article>
+      }
+    </div>
+
+    <div class="reviews__links">
+      @if (reviews()?.url) {
+        <a [href]="reviews()?.url" target="_blank" rel="noopener" class="reviews__link">
+          <svg class="reviews__link-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <defs>
+              <clipPath id="gmaps-icon-square">
+                <rect x="5" y="7" width="34" height="34" rx="5"/>
+              </clipPath>
+            </defs>
+            <!-- Mapa: mismo split diagonal verde/amarillo/azul del ícono de
+                 Google Maps, recortado a un cuadrado con esquinas redondeadas. -->
+            <g clip-path="url(#gmaps-icon-square)">
+              <path fill="#34A853" d="M5 7 L39 7 L5 41 Z"/>
+              <path fill="#4285F4" d="M39 7 L39 41 L5 41 Z"/>
+              <path fill="#FBBC05" d="M37 5 L41 9 L7 43 L3 39 Z"/>
+            </g>
+            <!-- Pin: se dibuja fuera del recorte para que sobresalga del
+                 cuadrado, como en el ícono original. -->
+            <g transform="translate(21.5,-3) scale(1.3)">
+              <path fill="#EA4335" d="M12 0C7.31 0 3.5 3.81 3.5 8.5c0 6.38 8.5 15.5 8.5 15.5s8.5-9.12 8.5-15.5C20.5 3.81 16.69 0 12 0z"/>
+              <circle cx="12" cy="8.3" r="3.3" fill="#7a1710"/>
+            </g>
+          </svg>
+          Ver opiniones en Google
+        </a>
+      }
+      <a [href]="facebookReviewsUrl" target="_blank" rel="noopener" class="reviews__link">
+        <svg class="reviews__link-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#1877F2" d="M24 4C12.95 4 4 12.95 4 24c0 9.98 7.31 18.25 16.87 19.77V29.85h-5.08V24h5.08v-4.45c0-5.02 2.99-7.79 7.56-7.79 2.19 0 4.48.39 4.48.39v4.92h-2.52c-2.49 0-3.26 1.54-3.26 3.13V24h5.55l-.89 5.85h-4.66v13.92C36.69 42.25 44 33.98 44 24c0-11.05-8.95-20-20-20z"/>
+        </svg>
+        Ver opiniones en Facebook
+      </a>
     </div>
   </section>
 }
@@ -123,62 +217,6 @@
     }
   </div>
 </section>
-
-<!-- ===== RESEÑAS ===== -->
-<!-- Solo se pinta si Google devolvió reseñas: sin la llave configurada, o si
-     la consulta falla, el backend responde vacío y esta sección desaparece
-     en vez de dejar un bloque a medias. -->
-@if (hasReviews()) {
-  <section class="reviews">
-    <div class="reviews__header">
-      <span class="label-overline">Lo que dicen nuestros clientes</span>
-      @if (reviews()?.rating) {
-        <p class="reviews__score">
-          {{ reviews()?.rating }} / 5 en Google
-          <span class="reviews__count">({{ reviews()?.total }} calificaciones)</span>
-        </p>
-      }
-    </div>
-
-    <div class="reviews__grid">
-      @for (review of reviews()?.reviews; track review.text) {
-        <article class="review">
-          <div class="review__stars" [attr.aria-label]="review.rating + ' de 5 estrellas'">
-            @for (filled of stars(review.rating); track $index) {
-              <span class="material-symbols-outlined" [class.is-filled]="filled">star</span>
-            }
-          </div>
-          <p class="review__text">{{ review.text }}</p>
-          <p class="review__author">
-            <!-- Los términos de Google piden enlazar al perfil del autor
-                 cuando se muestra su reseña. -->
-            @if (review.profileUrl) {
-              <a [href]="review.profileUrl" target="_blank" rel="noopener">{{ review.author }}</a>
-            } @else {
-              {{ review.author }}
-            }
-            @if (review.when) {
-              <span class="review__when">· {{ review.when }}</span>
-            }
-          </p>
-        </article>
-      }
-    </div>
-
-    <div class="reviews__links">
-      @if (reviews()?.url) {
-        <a [href]="reviews()?.url" target="_blank" rel="noopener" class="reviews__link">
-          Ver todas en Google
-        </a>
-      }
-      @if (facebookUrl) {
-        <a [href]="facebookUrl" target="_blank" rel="noopener" class="reviews__link">
-          Ver opiniones en Facebook
-        </a>
-      }
-    </div>
-  </section>
-}
 
 <!-- ===== COMPRA POR WHATSAPP ===== -->
 <section class="wa-cta">

@@ -16,13 +16,21 @@ import { CartVariantSelection } from '../../../core/models/cart.model';
 import { PriceDisplayComponent } from '../../../shared/components/price-display/price-display.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { mediaUrl } from '../../../core/utils/media-url';
+import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 
 @Component({
   selector: 'app-product-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './product-detail.component.html',
   styleUrl: './product-detail.component.scss',
-  imports: [RouterLink, CurrencyPipe, TitleCasePipe, PriceDisplayComponent, MediaUrlPipe],
+  imports: [
+    RouterLink,
+    CurrencyPipe,
+    TitleCasePipe,
+    PriceDisplayComponent,
+    MediaUrlPipe,
+    ReviewsBadgeComponent,
+  ],
 })
 export class ProductDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);

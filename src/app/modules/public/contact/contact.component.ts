@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ContactService } from '../../../core/services/contact.service';
 import { ContactRequest } from '../../../core/models/contact.model';
 import { environment } from '../../../../environments/environment';
+import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 
 const STORE_ADDRESS = 'C. 106 Ote., Bosques Santa Anita, 72227 Heroica Puebla de Zaragoza, Pue.';
 
@@ -17,7 +18,7 @@ const STORE_ADDRESS = 'C. 106 Ote., Bosques Santa Anita, 72227 Heroica Puebla de
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './contact.component.html',
   styleUrl: './contact.component.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ReviewsBadgeComponent],
 })
 export class ContactComponent {
   private fb = inject(FormBuilder);

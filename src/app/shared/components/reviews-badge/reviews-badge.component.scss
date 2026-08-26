@@ -1,0 +1,31 @@
+.reviews-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  line-height: 1.5rem;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.reviews-badge__star {
+  font-size: 1.1rem;
+  color: #b8960c;
+  font-variation-settings: 'FILL' 1;
+}
+
+.reviews-badge--skeleton {
+  display: inline-block;
+  width: 11rem;
+  max-width: 100%;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  background: currentColor;
+  opacity: 0.12;
+}

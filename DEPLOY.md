@@ -856,9 +856,19 @@ Referencia de lo que devuelve bien (medido en local el 24-ago-2026):
   se cae nunca por esto.
 - **Google entrega máximo 5 reseñas y elige cuáles**, según su propio criterio de
   relevancia, no por calificación. Al 24-ago-2026 el promedio es 5.0 con 182
-  calificaciones, pero una de las 5 que devuelve es de 3 estrellas. No hay forma
-  de pedirle otras por la API. Queda pendiente decidir la ubicación definitiva
-  del bloque en la portada.
+  calificaciones, pero una de las 5 que devuelve era de 3 estrellas. No hay
+  forma de pedirle otras por la API, así que el frontend descarta (26-ago-2026)
+  las que lleguen con menos de 4★ antes de pintar la reja
+  (`home.component.ts`, método `dropLowRated`) — el promedio 5.0/182 que se
+  muestra aparte no se toca, sigue siendo el real.
+- **Ubicación definitiva (26-ago-2026):** la reja de reseñas con texto subió a
+  justo después de Destacados en la home. El promedio agregado se repite,
+  vía el componente compartido `app-reviews-badge`
+  (`shared/components/reviews-badge`), en cuatro puntos: franja bajo el hero
+  de la home, footer, junto al precio en el detalle de producto, y junto al
+  mapa en Contacto. Cada instancia consulta el endpoint por su cuenta (el
+  caché de 6 h en el backend evita pagarle a Google más de una vez); si Google
+  no está configurado o falla, cada insignia simplemente no se pinta.
 
 ### Ver qué está pasando
 

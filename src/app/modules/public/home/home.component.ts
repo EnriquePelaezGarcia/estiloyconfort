@@ -17,13 +17,15 @@ import { Product, hasOffer } from '../../../core/models/product.model';
 import { GoogleReviews } from '../../../core/models/review.model';
 import { environment } from '../../../../environments/environment';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
+import { ScrollRevealDirective } from '../../../shared/directives/scroll-reveal.directive';
 
 @Component({
   selector: 'app-home',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
-  imports: [RouterLink, CurrencyPipe, MediaUrlPipe],
+  imports: [RouterLink, CurrencyPipe, MediaUrlPipe, ReviewsBadgeComponent, ScrollRevealDirective],
 })
 export class HomeComponent implements OnInit {
   private productService = inject(ProductService);
@@ -36,7 +38,13 @@ export class HomeComponent implements OnInit {
   protected readonly whatsappUrl = `https://wa.me/${environment.whatsappNumber}?text=${encodeURIComponent(
     'Hola, me gustaría más información sobre sus muebles.',
   )}`;
-  protected readonly facebookUrl = environment.social.facebook;
+  /**
+   * Enlace específico a la pestaña de reseñas del Facebook (no el perfil
+   * general que usan navbar y contacto): así el clic lleva directo a las
+   * opiniones en vez de al muro.
+   */
+  protected readonly facebookReviewsUrl =
+    'https://www.facebook.com/profile.php?id=61564752107831&sk=reviews';
 
   /**
    * Colecciones de la portada. Vienen del backend para que la home refleje las
@@ -93,9 +101,19 @@ export class HomeComponent implements OnInit {
     // Si Google no está configurado o falla, el backend responde una lista
     // vacía y el bloque de reseñas simplemente no se pinta.
     this.reviewService.getGoogleReviews().subscribe({
-      next: (data) => this.reviews.set(data),
+      next: (data) => this.reviews.set(this.dropLowRated(data)),
       error: () => this.reviews.set(null),
     });
+  }
+
+  /**
+   * Google entrega máximo 5 reseñas con texto y las elige por relevancia, no
+   * por calificación — al 26-ago-2026 una de las 5 es de 3★ aunque el
+   * promedio del negocio es 5.0/182. Se descartan las de menos de 4★ para que
+   * la reja no contradiga el promedio; éste no se toca, sigue siendo el real.
+   */
+  private dropLowRated(data: GoogleReviews): GoogleReviews {
+    return { ...data, reviews: data.reviews.filter((r) => r.rating === null || r.rating >= 4) };
   }
 
   /** Estrellas llenas/vacías de una reseña, para el @for del template. */

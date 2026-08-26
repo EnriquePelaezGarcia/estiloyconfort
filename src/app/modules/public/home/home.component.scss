@@ -55,6 +55,15 @@
   object-position: center 30%;
 }
 
+// ===== INSIGNIA DE RESEÑAS =====
+.reviews-band {
+  display: flex;
+  justify-content: center;
+  padding: 0.85rem 1.5rem;
+  background-color: #fcf9f8;
+  border-bottom: 1px solid #ece6e3;
+}
+
 // ===== FRASE + IR A LA TIENDA =====
 .tagline {
   text-align: center;
@@ -100,6 +109,7 @@
 }
 
 .product-carousel-wrapper {
+  position: relative;
   width: 100%;
   overflow: hidden;
 }
@@ -201,26 +211,36 @@
   }
 }
 
-.featured__controls {
-  @extend %page-inner;
+// Carril invisible pegado a cada lateral, del alto de la foto (se descuenta
+// el nombre y el precio de abajo) para centrar el botón sobre la imagen y no
+// sobre toda la tarjeta. No capta clics fuera del botón.
+.carousel-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 4rem;
   display: flex;
-  justify-content: flex-end;
-  gap: 0.625rem;
-  margin-top: 1.5rem;
+  align-items: center;
+  z-index: 2;
+  pointer-events: none;
+
+  &--prev { left: 0.75rem; }
+  &--next { right: 0.75rem; }
 }
 
 .carousel-btn {
+  pointer-events: auto;
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1.5px solid rgba(61, 43, 94, 0.2);
-  background: transparent;
+  border: none;
+  background-color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 12px rgba(30, 21, 33, 0.2);
   color: #3d2b5e;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 250ms ease, border-color 250ms ease, color 250ms ease;
+  transition: background-color 250ms ease, color 250ms ease;
 
   .material-symbols-outlined {
     font-size: 1.125rem;
@@ -228,8 +248,12 @@
 
   &:hover {
     background-color: #3d2b5e;
-    border-color: #3d2b5e;
     color: #ffffff;
+  }
+
+  @media (max-width: 767px) {
+    width: 38px;
+    height: 38px;
   }
 }
 
@@ -391,6 +415,12 @@
   @extend %page-inner;
   text-align: center;
   margin-bottom: 2.5rem;
+
+  // Más grande que el overline genérico (Esenciales, Comprar por): esta es
+  // la única sección donde el overline hace de título, no de etiqueta chica.
+  .label-overline {
+    font-size: 0.9375rem;
+  }
 }
 
 .reviews__score {
@@ -419,7 +449,32 @@
 }
 
 .review {
+  position: relative;
   text-align: center;
+  padding: 2rem 1.75rem;
+  border: 1px solid #ece6e3;
+  border-radius: 8px;
+
+  // Reemplaza al hover como forma de llamar la atención: no depende del
+  // cursor, así que funciona igual en escritorio que en móvil. Arranca
+  // apagada y se "enciende" (opacidad, posición y borde) la primera vez que
+  // entra en pantalla — ver [appScrollReveal].
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 600ms ease, transform 600ms ease, border-color 600ms ease,
+    box-shadow 600ms ease;
+
+  &.reveal-visible {
+    opacity: 1;
+    transform: translateY(0);
+    border-color: #cdbfe0;
+    box-shadow: 0 8px 24px rgba(92, 68, 128, 0.1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition-property: opacity, border-color, box-shadow;
+    transform: none;
+  }
 }
 
 .review__stars {
@@ -469,6 +524,14 @@
   color: #9b9694;
 }
 
+// Enlace invisible que cubre toda la tarjeta (patrón "stretched link"): así
+// el clic funciona en cualquier parte de la reseña, no solo sobre el nombre.
+.review__overlay-link {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
 .reviews__links {
   @extend %page-inner;
   display: flex;
@@ -479,6 +542,9 @@
 }
 
 .reviews__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
   color: #3d2b5e;
@@ -490,6 +556,12 @@
     color: #1e1521;
     border-color: #1e1521;
   }
+}
+
+.reviews__link-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
 }
 
 // ===== COMPRA POR WHATSAPP =====

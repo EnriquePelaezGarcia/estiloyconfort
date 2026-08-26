@@ -124,6 +124,7 @@
         @if (!selectedMaterial() && materialOptions().length > 1) {
           <p class="detail__badge detail__badge--order">Elige un material para ver el precio</p>
         }
+        <app-reviews-badge />
 
         <!-- Variantes -->
         @for (group of variantTypes(); track group.type) {
