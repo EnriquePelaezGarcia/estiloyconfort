@@ -21,6 +21,16 @@
 </nav>
 
 <div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="search"
+      placeholder="Buscar por cliente o número de pedido…"
+      aria-label="Buscar por cliente o número de pedido"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+  </div>
   <select class="filter-select" (change)="onFilterChange($event)">
     @for (opt of statusOptions; track opt.value) {
       <option [value]="opt.value">{{ opt.label }}</option>
@@ -33,7 +43,11 @@
 } @else if (visibleOrders().length === 0) {
   <div class="state">
     <span class="material-symbols-outlined" style="font-size:2.5rem">receipt_long</span>
-    <p>No hay pedidos en esta vista.</p>
+    @if (search().trim()) {
+      <p>Ningún pedido coincide con “{{ search().trim() }}” en esta vista.</p>
+    } @else {
+      <p>No hay pedidos en esta vista.</p>
+    }
   </div>
 } @else {
   <div class="table-wrap">

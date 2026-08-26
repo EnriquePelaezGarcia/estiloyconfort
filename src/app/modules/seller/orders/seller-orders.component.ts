@@ -26,6 +26,7 @@ export class SellerOrdersComponent implements OnInit {
   protected orders = signal<Order[]>([]);
   protected loading = signal(true);
   protected statusFilter = signal('');
+  protected search = signal('');
   protected deliveryPeople = signal<DeliveryPerson[]>([]);
 
   /** Pedido seleccionado para asignar repartidor. */
@@ -37,18 +38,29 @@ export class SellerOrdersComponent implements OnInit {
 
   private readonly activeStatuses: OrderStatus[] = ['pending', 'fabricating', 'ready', 'in_delivery'];
 
+  /** Pedidos que coinciden con la búsqueda por cliente o número de pedido. */
+  protected matchingOrders = computed(() => {
+    const term = this.search().trim().toLowerCase();
+    if (!term) return this.orders();
+    return this.orders().filter(
+      (o) =>
+        o.customerName.toLowerCase().includes(term) ||
+        o.orderNumber.toLowerCase().includes(term),
+    );
+  });
+
   protected visibleOrders = computed(() => {
     const isActive = this.tab() === 'activos';
-    return this.orders().filter((o) =>
+    return this.matchingOrders().filter((o) =>
       isActive ? this.activeStatuses.includes(o.orderStatus) : !this.activeStatuses.includes(o.orderStatus),
     );
   });
 
   protected activosCount = computed(
-    () => this.orders().filter((o) => this.activeStatuses.includes(o.orderStatus)).length,
+    () => this.matchingOrders().filter((o) => this.activeStatuses.includes(o.orderStatus)).length,
   );
   protected historialCount = computed(
-    () => this.orders().filter((o) => !this.activeStatuses.includes(o.orderStatus)).length,
+    () => this.matchingOrders().filter((o) => !this.activeStatuses.includes(o.orderStatus)).length,
   );
 
   protected readonly statusOptions: { value: string; label: string }[] = [

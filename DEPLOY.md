@@ -796,6 +796,70 @@ nadie —son hash bcrypt, es irreversible—. Lo que puede es generar una tempor
 desde *Usuarios → botón de llave*, que se muestra **una sola vez** y obliga al
 colaborador a cambiarla al entrar.
 
+### Reseñas de Google: pasos de una sola vez
+
+El bloque de reseñas de la portada consume `GET /api/reviews/google`, que habla
+con la Places API (New) desde el **backend**. Necesita dos cosas que `deploy.sh`
+no hace solo.
+
+> ⚠️ La llave **nunca** va en `src/environments/*.ts`. Ahí terminaría dentro del
+> bundle del navegador, y una key de Places sin restricciones que quede pública
+> la puede gastar cualquiera con la factura a nombre de la mueblería. Por eso el
+> único que habla con Google es el backend.
+
+**1. Desplegar el código.** Comprobado el 24-ago-2026: en producción el endpoint
+responde `404 Ruta no encontrada`, porque el backend publicado ahí es anterior al
+módulo de reseñas. En ese ambiente **no basta con poner la variable**: primero
+tiene que avanzar `main` y correr `./scripts/deploy.sh production`.
+
+**2. Configurar la llave.** Agrega a `.env.staging` y `.env.production`:
+
+```
+GOOGLE_PLACES_API_KEY=AIza...       # obligatoria
+GOOGLE_PLACE_ID=                    # opcional pero recomendada (ver abajo)
+GOOGLE_PLACE_QUERY="Mueblería Estilo y Confort, Puebla, México"
+```
+
+Sin `GOOGLE_PLACES_API_KEY` el endpoint responde `{rating:null,total:0,reviews:[]}`
+y la sección **no se pinta**: es el comportamiento buscado, no un error. Así se ve
+hoy preproducción, que sí tiene el código pero no la variable.
+
+Si omites `GOOGLE_PLACE_ID`, el backend resuelve el lugar por nombre con
+`GOOGLE_PLACE_QUERY` y lo cachea en memoria — o sea una consulta extra de cobro
+por cada arranque del contenedor. La ficha del negocio es
+`0x85cfc19a6bfd2d85:0x94ab75e54c96d6ab`; conviene fijar el ID y ahorrarse esa
+llamada. En la consola de Google Cloud, restringe la llave a la Places API.
+
+Igual que con el correo, después de tocar el `.env` hay que **recrear** el
+contenedor, no reiniciarlo:
+
+```bash
+docker compose up -d --force-recreate backend-prod
+```
+
+**Comprobar que quedó.** Debe traer el promedio y el total, no ceros:
+
+```bash
+curl -s https://api.estiloyconfortm.com/api/reviews/google
+curl -s https://api-dev.estiloyconfortm.com/api/reviews/google
+```
+
+Referencia de lo que devuelve bien (medido en local el 24-ago-2026):
+`rating: 5`, `total: 182`, 5 reseñas con texto.
+
+**Dos cosas que conviene saber antes de mirar el resultado:**
+
+- **El caché es de 6 horas y vive en la memoria del proceso.** No se comparte
+  entre contenedores y se pierde al recrear, así que la primera petición después
+  de un despliegue siempre paga la consulta a Google. Si Google falla, el
+  controlador sirve el caché vencido y, si no hay, responde vacío: la portada no
+  se cae nunca por esto.
+- **Google entrega máximo 5 reseñas y elige cuáles**, según su propio criterio de
+  relevancia, no por calificación. Al 24-ago-2026 el promedio es 5.0 con 182
+  calificaciones, pero una de las 5 que devuelve es de 3 estrellas. No hay forma
+  de pedirle otras por la API. Queda pendiente decidir la ubicación definitiva
+  del bloque en la portada.
+
 ### Ver qué está pasando
 
 ```bash
@@ -976,6 +1040,12 @@ docker compose up -d                 # encender todo
 
 # Esquema del módulo de contraseñas (una sola vez por ambiente, repetible)
 docker compose exec backend-prod npm run db:schema:passwords
+
+# Tras cambiar un .env hay que RECREAR, no reiniciar
+docker compose up -d --force-recreate backend-prod
+
+# Comprobar las reseñas de Google (debe traer rating y total, no ceros)
+curl -s https://api.estiloyconfortm.com/api/reviews/google
 ```
 
 ---
