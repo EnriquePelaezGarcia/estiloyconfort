@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { QuillEditorComponent } from 'ngx-quill';
 import { from } from 'rxjs';
 import { concatMap, toArray } from 'rxjs/operators';
 import { ProductService } from '../../../core/services/product.service';
@@ -92,7 +93,7 @@ type PriceMode = 'margin' | 'price';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './catalog.component.html',
   styleUrl: './catalog.component.scss',
-  imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective, MediaUrlPipe],
+  imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective, MediaUrlPipe, QuillEditorComponent],
 })
 export class CatalogComponent implements OnInit {
   private productService = inject(ProductService);
@@ -303,6 +304,8 @@ export class CatalogComponent implements OnInit {
     name: ['', [Validators.required, Validators.minLength(3)]],
     categoryId: [null as number | null],
     description: [''],
+    /** HTML del editor (ngx-quill) — panel "Detalles" de la ficha pública. */
+    detailsContent: [''],
     color: [''],
     length: [null as number | null, [Validators.min(0)]],
     width: [null as number | null, [Validators.min(0)]],
@@ -463,6 +466,7 @@ export class CatalogComponent implements OnInit {
       name: '',
       categoryId: null,
       description: '',
+      detailsContent: '',
       color: '',
       length: null,
       width: null,
@@ -512,6 +516,7 @@ export class CatalogComponent implements OnInit {
           name: full.name,
           categoryId: full.category_id,
           description: full.description ?? '',
+          detailsContent: full.details_content ?? '',
           color: full.color ?? '',
           length: full.dimensions_length,
           width: full.dimensions_width,
@@ -587,12 +592,17 @@ export class CatalogComponent implements OnInit {
     }
 
     const raw = this.form.getRawValue();
+    // Quill deja "<p><br></p>" (o vacío) cuando el editor está en blanco; sin
+    // esta normalización el campo "vacío" se guardaría como HTML fantasma y
+    // la ficha pública pintaría el panel de detalles sin nada adentro.
+    const detailsHtml = raw.detailsContent?.trim();
     const payload: ProductPayload = {
       name: raw.name!.trim(),
       slug: slugify(raw.name!),
       sku: this.generatedSku() || null,
       category_id: raw.categoryId ?? null,
       description: raw.description?.trim() || null,
+      details_content: !detailsHtml || detailsHtml === '<p><br></p>' ? null : detailsHtml,
       color: raw.color?.trim() || null,
       dimensions_length: raw.length ?? null,
       dimensions_width: raw.width ?? null,

@@ -30,6 +30,13 @@ export interface Product {
   category_name: string | null;
   category_slug: string | null;
   description: string | null;
+  /**
+   * Contenido del panel "Detalles" de la ficha pública (HTML del editor
+   * ngx-quill del admin): negritas, encabezados, listas — a diferencia de
+   * `description`, que es texto plano y no se muestra ahí. Se sanea al
+   * pintarlo con [innerHTML].
+   */
+  details_content: string | null;
   /** Color/acabado por defecto del catálogo. El material YA NO define un solo color: ver materialPrices[].colorPolicy (M6). */
   color: string | null;
   dimensions_length: number | null;
@@ -159,6 +166,7 @@ export interface ProductPayload {
   sku: string | null;
   category_id: number | null;
   description: string | null;
+  details_content: string | null;
   color: string | null;
   dimensions_length: number | null;
   dimensions_width: number | null;

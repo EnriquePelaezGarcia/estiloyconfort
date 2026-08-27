@@ -24,6 +24,19 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+// El navbar (sticky) cambia de alto real al colapsar/expandir según el
+// scroll (ver navbar.component.scss). Ese cambio de alto desplaza todo el
+// contenido de abajo en el documento; sin esto, el "scroll anchoring" del
+// navegador detecta ese desplazamiento y ajusta `scrollY` para compensarlo,
+// lo cual genera un evento de scroll adicional que cruza el umbral del
+// navbar en sentido contrario y revierte el colapso — un ciclo que se ve
+// como que la página "salta" al subir y bajar. Se desactiva a nivel de
+// documento porque el nodo que el navegador ancla suele ser el contenido
+// bajo el navbar, no el navbar mismo.
+html {
+  overflow-anchor: none;
+}
+
 a {
   color: inherit;
   text-decoration: none;

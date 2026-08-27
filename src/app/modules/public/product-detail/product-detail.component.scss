@@ -178,20 +178,57 @@
     flex-wrap: wrap;
   }
 
-  &__specs,
-  &__desc {
-    border-top: 1px solid v.$color-border;
-    padding-top: v.$spacing-md;
+  // Los tres paneles plegables (Detalles / Política de envíos / Aceptación
+  // de política) van pegados, sin el hueco que tenían los bloques de arriba.
+  &__accordion {
+    margin-top: v.$spacing-sm;
   }
 
-  &__specs-title {
-    font-family: v.$font-headline;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+  &__accordion-empty {
     color: v.$color-text-secondary;
+    font-size: 0.85rem;
+    margin: 0;
+  }
+}
+
+// Texto capturado con el editor del admin (ngx-quill): details_content del
+// producto y el body de los paneles fijos (site_content). Angular sanea el
+// HTML al enlazarlo con [innerHTML]; aquí solo se le da tipografía acorde
+// al resto de la ficha.
+.rich-content {
+  font-family: v.$font-body;
+  font-size: 0.9rem;
+  color: v.$color-text;
+  line-height: 1.6;
+
+  > :first-child { margin-top: 0; }
+  > :last-child { margin-bottom: 0; }
+
+  p { margin: 0 0 v.$spacing-sm; }
+
+  h1, h2, h3, h4 {
+    font-family: v.$font-headline;
+    color: v.$color-text;
+    line-height: 1.3;
+    margin: v.$spacing-md 0 v.$spacing-xs;
+  }
+
+  h1 { font-size: 1.15rem; }
+  h2 { font-size: 1.05rem; }
+  h3, h4 { font-size: 0.95rem; }
+
+  strong { font-weight: 700; }
+
+  ul, ol {
     margin: 0 0 v.$spacing-sm;
+    padding-left: 1.25rem;
+  }
+
+  li { margin-bottom: calc(v.$spacing-xs / 2); }
+
+  a {
+    color: v.$color-primary;
+    text-decoration: underline;
   }
 }
 
@@ -325,6 +362,9 @@
   display: flex;
   flex-direction: column;
   gap: v.$spacing-xs;
+  // En el panel "Detalles" va debajo del texto libre del admin (si lo hay);
+  // sin el hueco parecería parte del mismo párrafo.
+  &:not(:first-child) { margin-top: v.$spacing-sm; }
 
   &__row {
     display: flex;

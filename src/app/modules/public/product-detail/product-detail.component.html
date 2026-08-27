@@ -179,49 +179,65 @@
           </a>
         </div>
 
-        <!-- Especificaciones técnicas -->
-        @if (product()!.color || product()!.dimensions_length) {
-          <div class="detail__specs">
-            <h3 class="detail__specs-title">Especificaciones</h3>
-            <dl class="specs-list">
-              @if (product()!.color) {
-                <div class="specs-list__row">
-                  <dt>Color / Acabado</dt>
-                  <dd>{{ product()!.color }}</dd>
-                </div>
-              }
-              @if (product()!.dimensions_length) {
-                <div class="specs-list__row">
-                  <dt>Dimensiones</dt>
-                  <dd>
-                    {{ product()!.dimensions_length }} ×
-                    {{ product()!.dimensions_width }} ×
-                    {{ product()!.dimensions_height }} cm
-                  </dd>
-                </div>
-              }
-              @if (product()!.weight_volumetric) {
-                <div class="specs-list__row">
-                  <dt>Peso</dt>
-                  <dd>{{ product()!.weight_volumetric }} kg</dd>
-                </div>
-              }
-              @if (product()!.sku) {
-                <div class="specs-list__row">
-                  <dt>SKU</dt>
-                  <dd>{{ product()!.sku }}</dd>
-                </div>
-              }
-            </dl>
-          </div>
-        }
+        <!-- Paneles plegables: Detalles es propio de este producto (texto del
+             admin + especificaciones); los otros dos son iguales para
+             cualquier producto (site_content). -->
+        <div class="detail__accordion">
+          <app-accordion-item title="Detalles" icon="list_alt" [startOpen]="true">
+            @if (product()!.details_content) {
+              <div class="rich-content" [innerHTML]="product()!.details_content"></div>
+            }
 
-        @if (product()!.description) {
-          <div class="detail__desc">
-            <h3 class="detail__specs-title">Descripción</h3>
-            <p>{{ product()!.description }}</p>
-          </div>
-        }
+            @if (product()!.color || product()!.dimensions_length || product()!.weight_volumetric || product()!.sku) {
+              <dl class="specs-list">
+                @if (product()!.color) {
+                  <div class="specs-list__row">
+                    <dt>Color / Acabado</dt>
+                    <dd>{{ product()!.color }}</dd>
+                  </div>
+                }
+                @if (product()!.dimensions_length) {
+                  <div class="specs-list__row">
+                    <dt>Dimensiones</dt>
+                    <dd>
+                      {{ product()!.dimensions_length }} ×
+                      {{ product()!.dimensions_width }} ×
+                      {{ product()!.dimensions_height }} cm
+                    </dd>
+                  </div>
+                }
+                @if (product()!.weight_volumetric) {
+                  <div class="specs-list__row">
+                    <dt>Peso</dt>
+                    <dd>{{ product()!.weight_volumetric }} kg</dd>
+                  </div>
+                }
+                @if (product()!.sku) {
+                  <div class="specs-list__row">
+                    <dt>SKU</dt>
+                    <dd>{{ product()!.sku }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+
+            @if (!product()!.details_content && !product()!.color && !product()!.dimensions_length) {
+              <p class="detail__accordion-empty">Este producto todavía no tiene detalles capturados.</p>
+            }
+          </app-accordion-item>
+
+          @if (shippingPolicy(); as policy) {
+            <app-accordion-item [title]="policy.title" icon="local_shipping">
+              <div class="rich-content" [innerHTML]="policy.body"></div>
+            </app-accordion-item>
+          }
+
+          @if (policyAcceptance(); as policy) {
+            <app-accordion-item [title]="policy.title" icon="policy">
+              <div class="rich-content" [innerHTML]="policy.body"></div>
+            </app-accordion-item>
+          }
+        </div>
       </section>
     </div>
   </div>

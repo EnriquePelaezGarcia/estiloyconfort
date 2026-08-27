@@ -21,6 +21,17 @@
   border-bottom: 1px solid rgba(98, 93, 90, 0.1);
   transition: box-shadow 200ms ease;
 
+  // Al colapsar, `.app-navbar__social` y `.app-navbar__main` cambian de
+  // alto real (max-height/padding), no solo de aspecto. Como este <nav> es
+  // sticky y siempre está visible arriba del viewport, el navegador lo toma
+  // como "anchor node" de scroll anchoring: al encogerse, ajusta
+  // `window.scrollY` solo para compensar — eso dispara un scroll sintético
+  // que cruza el umbral de `onWindowScroll` en sentido contrario y revierte
+  // el colapso, que vuelve a cambiar el alto... un ciclo que se ve como que
+  // la barra "salta" al subir y bajar. `overflow-anchor: none` saca a este
+  // elemento de esa selección y corta el ciclo.
+  overflow-anchor: none;
+
   &:has(+ *) {
     &.scrolled { box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); }
   }

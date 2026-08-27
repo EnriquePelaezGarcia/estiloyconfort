@@ -1,5 +1,24 @@
 @use '../../../../styles/variables' as vars;
 
+// El toolbar de Quill no hereda la tipografía del sitio por defecto; se
+// alinea con el resto de los campos del modal (.field input/select/textarea
+// en styles/_business.scss) para que no desentone.
+:host ::ng-deep {
+  .ql-toolbar {
+    border-color: vars.$color-border;
+    border-radius: vars.$radius-md vars.$radius-md 0 0;
+  }
+
+  .ql-container {
+    border-color: vars.$color-border;
+    border-radius: 0 0 vars.$radius-md vars.$radius-md;
+    font-family: vars.$font-body;
+    font-size: 0.9rem;
+  }
+
+  .ql-editor { min-height: inherit; }
+}
+
 // ===== Status toggle (activo / inactivo) =====
 .status {
   display: inline-flex;

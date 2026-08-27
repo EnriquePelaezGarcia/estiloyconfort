@@ -195,7 +195,7 @@ const Product = {
    * *Admin → Inventario*.
    */
   async create(data, materialIds = []) {
-    const fields = ['name','slug','sku','category_id','manufacturer_id','description', 'color',
+    const fields = ['name','slug','sku','category_id','manufacturer_id','description', 'details_content', 'color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','margin_percentage','price_list','wholesale_min_qty',
       'stock_alert_level','is_featured'];
@@ -228,7 +228,7 @@ const Product = {
    * que reenviar la lista de materiales cada vez).
    */
   async update(id, data, materialIds = null) {
-    const allowed = ['name','slug','sku','category_id','manufacturer_id','description', 'color',
+    const allowed = ['name','slug','sku','category_id','manufacturer_id','description', 'details_content', 'color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','margin_percentage','price_list','wholesale_min_qty',
       'stock_alert_level','is_featured','is_active'];

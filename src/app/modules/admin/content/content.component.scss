@@ -1,0 +1,30 @@
+@use '../../../../styles/variables' as vars;
+
+.content-block__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: vars.$spacing-md;
+  margin-top: vars.$spacing-sm;
+
+  .field__hint { margin-top: 0; }
+}
+
+// El toolbar de Quill no hereda la tipografía del sitio por defecto; se
+// alinea con el resto de los campos del admin (.field input/select/textarea
+// en styles/_business.scss) para que no desentone.
+:host ::ng-deep {
+  .ql-toolbar {
+    border-color: vars.$color-border;
+    border-radius: vars.$radius-md vars.$radius-md 0 0;
+  }
+
+  .ql-container {
+    border-color: vars.$color-border;
+    border-radius: 0 0 vars.$radius-md vars.$radius-md;
+    font-family: vars.$font-body;
+    font-size: 0.9rem;
+  }
+
+  .ql-editor { min-height: inherit; }
+}

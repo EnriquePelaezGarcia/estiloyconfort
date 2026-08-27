@@ -1,10 +1,25 @@
 import { Routes } from '@angular/router';
+import { provideQuillConfig } from 'ngx-quill/config';
 import { unsavedChangesGuard } from '../../core/guards/unsaved-changes.guard';
+
+// Toolbar única para los editores de texto enriquecido del admin (detalles
+// de producto, contenido fijo del sitio): negrita/cursiva, encabezados y
+// listas alcanzan para lo que hoy se captura ahí. Se registra a nivel de
+// estas rutas (no en app.config) para que el bundle del sitio público —
+// zero Quill — no cargue un editor que nunca usa.
+const QUILL_TOOLBAR = [
+  ['bold', 'italic'],
+  [{ header: [2, 3, false] }],
+  [{ list: 'ordered' }, { list: 'bullet' }],
+  ['link'],
+  ['clean'],
+];
 
 // Fase 3: Panel de Administrador
 export const adminRoutes: Routes = [
   {
     path: '',
+    providers: [provideQuillConfig({ modules: { toolbar: QUILL_TOOLBAR } })],
     loadComponent: () =>
       import('./layout/admin-layout.component').then((m) => m.AdminLayoutComponent),
     children: [
@@ -32,6 +47,12 @@ export const adminRoutes: Routes = [
         loadComponent: () =>
           import('./categories/categories.component').then((m) => m.CategoriesComponent),
         title: 'Categorías - Panel Admin',
+      },
+      {
+        path: 'contenido',
+        loadComponent: () =>
+          import('./content/content.component').then((m) => m.ContentComponent),
+        title: 'Contenido - Panel Admin',
       },
       {
         path: 'inventario',

@@ -11,12 +11,15 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { CurrencyPipe, TitleCasePipe } from '@angular/common';
 import { ProductService } from '../../../core/services/product.service';
 import { CartService } from '../../../core/services/cart.service';
+import { SiteContentService } from '../../../core/services/site-content.service';
 import { MaterialPrices, Product, ProductVariant } from '../../../core/models/product.model';
+import { SiteContent } from '../../../core/models/site-content.model';
 import { CartVariantSelection } from '../../../core/models/cart.model';
 import { PriceDisplayComponent } from '../../../shared/components/price-display/price-display.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { mediaUrl } from '../../../core/utils/media-url';
 import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
+import { AccordionItemComponent } from '../../../shared/components/accordion-item/accordion-item.component';
 
 @Component({
   selector: 'app-product-detail',
@@ -30,6 +33,7 @@ import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/
     PriceDisplayComponent,
     MediaUrlPipe,
     ReviewsBadgeComponent,
+    AccordionItemComponent,
   ],
 })
 export class ProductDetailComponent implements OnInit {
@@ -37,10 +41,20 @@ export class ProductDetailComponent implements OnInit {
   private router = inject(Router);
   private productService = inject(ProductService);
   private cartService = inject(CartService);
+  private siteContentService = inject(SiteContentService);
 
   product = signal<Product | null>(null);
   loading = signal(true);
   error = signal(false);
+
+  /**
+   * Los dos paneles fijos de la ficha (política de envíos, aceptación de
+   * política): mismo contenido para cualquier producto, así que se piden UNA
+   * sola vez en ngOnInit, no por cada producto que se visite.
+   */
+  private siteContent = signal<SiteContent[]>([]);
+  shippingPolicy = computed(() => this.findContent('shipping_policy'));
+  policyAcceptance = computed(() => this.findContent('policy_acceptance'));
 
   activeImageIndex = signal(0);
   selectedVariants = signal<CartVariantSelection>({});
@@ -138,7 +152,17 @@ export class ProductDetailComponent implements OnInit {
     return p != null ? p + this.variantPriceModifier() : null;
   });
 
+  private findContent(key: string): SiteContent | null {
+    return this.siteContent().find((c) => c.content_key === key) ?? null;
+  }
+
   ngOnInit(): void {
+    this.siteContentService.getAll().subscribe({
+      next: (data) => this.siteContent.set(data),
+      // Sin bloquear la ficha: si falla, esos dos paneles simplemente no aparecen.
+      error: () => {},
+    });
+
     this.route.paramMap.subscribe(params => {
       const slug = params.get('slug')!;
       this.loading.set(true);

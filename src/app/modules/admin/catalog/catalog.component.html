@@ -151,6 +151,20 @@
         </div>
 
         <div class="field">
+          <label>Detalles (ficha pública)</label>
+          <p class="field__hint">
+            Se muestra en el panel "Detalles" de la ficha del producto, junto
+            con las especificaciones de abajo. Admite negritas, encabezados y
+            listas.
+          </p>
+          <quill-editor
+            formControlName="detailsContent"
+            [styles]="{ minHeight: '180px' }"
+            placeholder="Elegancia, organización y funcionalidad en un mueble diseñado para..."
+          />
+        </div>
+
+        <div class="field">
           <label for="color">Color / Acabado por defecto</label>
           <input
             id="color"

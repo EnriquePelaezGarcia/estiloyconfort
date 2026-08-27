@@ -1,0 +1,22 @@
+<div class="accordion-item" [class.accordion-item--open]="open()">
+  <button
+    type="button"
+    class="accordion-item__header"
+    (click)="toggle()"
+    [attr.aria-expanded]="open()"
+  >
+    <span class="accordion-item__label">
+      @if (icon()) {
+        <span class="material-symbols-outlined accordion-item__label-icon">{{ icon() }}</span>
+      }
+      {{ title() }}
+    </span>
+    <span class="material-symbols-outlined accordion-item__toggle">{{ open() ? 'remove' : 'add' }}</span>
+  </button>
+
+  @if (open()) {
+    <div class="accordion-item__body">
+      <ng-content />
+    </div>
+  }
+</div>

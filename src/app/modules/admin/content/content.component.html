@@ -1,0 +1,75 @@
+<div class="page-head">
+  <div>
+    <span class="page-head__overline">Sitio público</span>
+    <h1 class="page-head__title">Contenido</h1>
+    <p class="page-head__sub">
+      Estos bloques se muestran igual en la ficha de cualquier producto, debajo
+      de "Agregar al carrito". Los detalles propios de cada producto se
+      capturan en Catálogo, al editarlo.
+    </p>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><span class="spinner"></span> Cargando contenido…</div>
+} @else {
+  <form [formGroup]="form">
+    <div class="panel">
+      <h2 class="panel__title">Política Especial de Cobertura de Envíos</h2>
+      <div class="field">
+        <quill-editor
+          formControlName="shipping_policy"
+          [styles]="{ minHeight: '220px' }"
+          placeholder="Escribe la política de envíos..."
+        />
+      </div>
+      <div class="content-block__footer">
+        @if (shippingUpdatedAt(); as date) {
+          <p class="field__hint">Última actualización: {{ date | date: 'medium' }}</p>
+        }
+        <button
+          type="button"
+          class="btn btn--primary"
+          [disabled]="savingKey() === 'shipping_policy'"
+          (click)="save('shipping_policy')"
+        >
+          @if (savingKey() === 'shipping_policy') {
+            <span class="spinner spinner--sm"></span>
+          } @else {
+            <span class="material-symbols-outlined">save</span>
+          }
+          Guardar
+        </button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel__title">Aceptación de Política</h2>
+      <div class="field">
+        <quill-editor
+          formControlName="policy_acceptance"
+          [styles]="{ minHeight: '160px' }"
+          placeholder="Escribe el texto de aceptación..."
+        />
+      </div>
+      <div class="content-block__footer">
+        @if (policyUpdatedAt(); as date) {
+          <p class="field__hint">Última actualización: {{ date | date: 'medium' }}</p>
+        }
+        <button
+          type="button"
+          class="btn btn--primary"
+          [disabled]="savingKey() === 'policy_acceptance'"
+          (click)="save('policy_acceptance')"
+        >
+          @if (savingKey() === 'policy_acceptance') {
+            <span class="spinner spinner--sm"></span>
+          } @else {
+            <span class="material-symbols-outlined">save</span>
+          }
+          Guardar
+        </button>
+      </div>
+    </div>
+  </form>
+}

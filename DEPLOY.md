@@ -826,9 +826,18 @@ hoy preproducción, que sí tiene el código pero no la variable.
 
 Si omites `GOOGLE_PLACE_ID`, el backend resuelve el lugar por nombre con
 `GOOGLE_PLACE_QUERY` y lo cachea en memoria — o sea una consulta extra de cobro
-por cada arranque del contenedor. La ficha del negocio es
-`0x85cfc19a6bfd2d85:0x94ab75e54c96d6ab`; conviene fijar el ID y ahorrarse esa
-llamada. En la consola de Google Cloud, restringe la llave a la Places API.
+por cada arranque del contenedor. **Hoy lo correcto es omitirlo.**
+
+> ⚠️ El valor `0x85cfc19a6bfd2d85:0x94ab75e54c96d6ab` que aparece en la URL de
+> Google Maps **no es un Place ID**: es el CID hexadecimal. Ponerlo en
+> `GOOGLE_PLACE_ID` hace que Places details responda
+> `400 INVALID_ARGUMENT — The provided Place ID ... is not valid` y el endpoint
+> devuelva ceros. Comprobado en preproducción el 26-ago-2026. Los Place ID de la
+> Places API (New) empiezan con `ChIJ`. Mientras no se tenga ese valor, deja
+> `GOOGLE_PLACE_ID` vacío y que `resolvePlaceId` lo busque por texto; el default
+> de `GOOGLE_PLACE_QUERY` ya está en `backend/src/config/environment.js`.
+
+En la consola de Google Cloud, restringe la llave a la Places API.
 
 Igual que con el correo, después de tocar el `.env` hay que **recrear** el
 contenedor, no reiniciarlo:

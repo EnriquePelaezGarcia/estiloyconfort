@@ -20,6 +20,7 @@ const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
 const discountsRoutes = require('./discountsRoutes');
 const reviewsRoutes = require('./reviewsRoutes');
 const contactRoutes = require('./contactRoutes');
+const siteContentRoutes = require('./siteContentRoutes');
 const blockIfMustChangePassword = require('../middleware/mustChangePassword');
 
 const router = Router();
@@ -60,5 +61,7 @@ router.use('/discounts', discountsRoutes);
 router.use('/reviews', reviewsRoutes);
 // Formulario de contacto de la página /contacto — público, sin autenticar.
 router.use('/contact', contactRoutes);
+// Bloques de contenido fijo (política de envíos, aceptación) — público en GET.
+router.use('/site-content', siteContentRoutes);
 
 module.exports = router;
