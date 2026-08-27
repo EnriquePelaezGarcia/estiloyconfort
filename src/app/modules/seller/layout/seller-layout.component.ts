@@ -5,6 +5,7 @@ import {
 } from '../../../shared/components/business-layout/business-layout.component';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
+import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
 
 @Component({
   selector: 'app-seller-layout',
@@ -16,6 +17,7 @@ import { DiscountsService } from '../../../core/services/discounts.service';
 export class SellerLayoutComponent implements OnInit {
   private scheduleService = inject(DeliveryScheduleService);
   private discountsService = inject(DiscountsService);
+  private quoteRequestsService = inject(QuoteRequestsService);
 
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Resumen', icon: 'dashboard', route: 'resumen' },
@@ -24,8 +26,11 @@ export class SellerLayoutComponent implements OnInit {
       label: 'Cotizaciones',
       icon: 'request_quote',
       route: 'cotizaciones',
-      // Docs/plan-descuentos.md: descuentos MÍOS que el admin rechazó y no he visto.
-      badge: () => this.discountsService.myRejectedCount() ?? 0,
+      // Descuentos MÍOS rechazados sin ver (Docs/plan-descuentos.md) +
+      // precotizaciones del carrito pendientes (Docs/plan-precotizacion-carrito.md).
+      badge: () =>
+        (this.discountsService.myRejectedCount() ?? 0) +
+        (this.quoteRequestsService.pendingCount() ?? 0),
     },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     {
@@ -44,5 +49,6 @@ export class SellerLayoutComponent implements OnInit {
   ngOnInit(): void {
     this.scheduleService.refreshCounts().subscribe({ error: () => {} });
     this.discountsService.refreshMyRejectedCount().subscribe({ error: () => {} });
+    this.quoteRequestsService.refreshPendingCount().subscribe({ error: () => {} });
   }
 }

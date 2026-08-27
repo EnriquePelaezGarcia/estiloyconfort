@@ -5,6 +5,13 @@ const authorize = require('../middleware/roleValidator');
 
 const router = Router();
 
+// ─── RUTA PÚBLICA ────────────────────────────────────────────────────────────
+// ORDEN CRÍTICO: va ANTES del router.use(authenticate). El carrito público
+// (/carrito) la usa para mostrar el envío estimado por CP antes de finalizar
+// el pedido (Docs/plan-precotizacion-carrito.md).
+router.get('/public-quote', shippingController.publicQuote);
+
+// ─── RUTAS INTERNAS ──────────────────────────────────────────────────────────
 // Cotización de envíos: disponible para vendedor y admin.
 router.use(authenticate, authorize('seller', 'admin'));
 

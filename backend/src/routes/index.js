@@ -12,6 +12,7 @@ const manufacturerRoutes = require('./manufacturerRoutes');
 const manufacturingRoutes = require('./manufacturingRoutes');
 const shippingRoutes = require('./shippingRoutes');
 const quotesRoutes = require('./quotesRoutes');
+const quoteRequestsRoutes = require('./quoteRequestsRoutes');
 const expensesRoutes = require('./expensesRoutes');
 const payablesRoutes = require('./payablesRoutes');
 const inventoryReservationsRoutes = require('./inventoryReservationsRoutes');
@@ -47,6 +48,9 @@ router.use('/manufacturer', manufacturerRoutes);
 router.use('/manufacturing', manufacturingRoutes);
 router.use('/shipping', shippingRoutes);
 router.use('/quotes', quotesRoutes);
+// Precotizaciones desde el carrito público (Docs/plan-precotizacion-carrito.md).
+// Tiene rutas públicas (crear, ver resumen) e internas (listar, convertir).
+router.use('/quote-requests', quoteRequestsRoutes);
 // Ticket de venta público (/ticket/:token) que el vendedor manda por WhatsApp.
 router.use('/tickets', ticketsRoutes);
 router.use('/expenses', expensesRoutes);

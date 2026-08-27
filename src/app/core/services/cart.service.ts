@@ -40,6 +40,15 @@ export class CartService {
     const priceCash = materialPrice?.price_cash ?? 0;
     const price6msi = materialPrice?.price_6msi ?? 0;
 
+    // La ficha del producto (GET /products/:slug) NO trae `primary_image` plano
+    // —solo el arreglo `images`—, así que sin este fallback el carrito quedaba
+    // sin miniatura al agregar desde ahí. El listado sí lo trae.
+    const primaryImage =
+      product.primary_image ??
+      product.images?.find((img) => img.is_primary)?.image_url ??
+      product.images?.[0]?.image_url ??
+      null;
+
     this._cart.update(cart => {
       const existing = cart.items.find((i) => this.sameLine(i, product.id, materialId, variantSelections));
       const items = existing
@@ -52,7 +61,7 @@ export class CartService {
               productId: product.id,
               name: product.name,
               slug: product.slug,
-              primaryImage: product.primary_image,
+              primaryImage,
               materialId,
               priceCash,
               price6msi,
@@ -109,7 +118,12 @@ export class CartService {
     localStorage.removeItem(CART_KEY);
   }
 
-  buildWhatsAppMessage(whatsappNumber: string): string {
+  /**
+   * URL de WhatsApp con el resumen del pedido. `precotizacionUrl` (opcional)
+   * agrega el link que el asesor abre para crear la cotización formal sin
+   * volver a capturar los productos (Docs/plan-precotizacion-carrito.md).
+   */
+  buildWhatsAppUrl(whatsappNumber: string, precotizacionUrl?: string): string {
     const items = this._cart().items;
     if (!items.length) return `https://wa.me/${whatsappNumber}`;
     const lines = items.map(i => {
@@ -123,8 +137,29 @@ export class CartService {
       return `▸ ${i.name} (${materialLabel}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
     });
     const total = this.total().toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
-    const text = `Hola, me interesa hacer un pedido:\n\n${lines.join('\n')}\n\n*Total estimado: ${total}*\n\n¿Pueden confirmar disponibilidad?`;
+    let text = `Hola, me interesa hacer un pedido:\n\n${lines.join('\n')}\n\n*Total estimado: ${total}*\n\n¿Pueden confirmar disponibilidad?`;
+    if (precotizacionUrl) {
+      text += `\n\nCotización lista para el asesor: ${precotizacionUrl}`;
+    }
     return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
+  }
+
+  /**
+   * Payload para POST /api/quote-requests: solo QUÉ eligió el cliente, no
+   * cuánto cuesta — el backend resuelve precios y envío.
+   */
+  buildRequestItems(): {
+    productId: number;
+    materialId: number;
+    variantSelections: CartVariantSelection;
+    quantity: number;
+  }[] {
+    return this._cart().items.map((i) => ({
+      productId: i.productId,
+      materialId: i.materialId,
+      variantSelections: i.variantSelections ?? {},
+      quantity: i.quantity,
+    }));
   }
 
   private persist(): void {

@@ -5,6 +5,7 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../../core/services/seller.service';
 import { QuotesService } from '../../../../core/services/quotes.service';
+import { QuoteRequestsService } from '../../../../core/services/quote-requests.service';
 import { ShippingService } from '../../../../core/services/shipping.service';
 import { PricingService } from '../../../../core/services/pricing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -52,6 +53,7 @@ interface QuoteDraftSnapshot {
   form: ReturnType<QuoteCreateComponent['form']['getRawValue']>;
   lines: QuoteLine[];
   editingId: number | null;
+  fromRequestToken: string | null;
   shippingCp: string;
   shippingQuote: ShippingQuote | null;
   manualShippingCost: number | null;
@@ -84,6 +86,7 @@ interface QuoteDraftSnapshot {
 export class QuoteCreateComponent implements OnInit {
   private sellerService = inject(SellerService);
   private quotesService = inject(QuotesService);
+  private quoteRequestsService = inject(QuoteRequestsService);
   private shippingService = inject(ShippingService);
   private notification = inject(NotificationService);
   private auth = inject(AuthService);
@@ -107,6 +110,13 @@ export class QuoteCreateComponent implements OnInit {
   /** Id de la cotización en edición; null = se está creando una nueva. */
   protected editingId = signal<number | null>(null);
   protected isEditing = computed(() => this.editingId() !== null);
+
+  /**
+   * Token de la precotización de origen (?fromRequest=). Viaja en el payload
+   * al crear para que el backend cierre su ciclo (status 'converted').
+   * Docs/plan-precotizacion-carrito.md.
+   */
+  protected fromRequestToken = signal<string | null>(null);
 
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
@@ -469,8 +479,75 @@ export class QuoteCreateComponent implements OnInit {
     // capturado desde entonces).
     if (this.restoreFromHandoff()) return;
 
+    // Precarga desde una precotización del carrito (Docs/plan-precotizacion-carrito.md):
+    // los productos, material y cantidad ya vienen; el vendedor solo captura
+    // nombre y teléfono del cliente.
+    const requestToken = this.route.snapshot.queryParamMap.get('fromRequest');
+    if (requestToken) {
+      this.loadFromRequest(requestToken);
+      return;
+    }
+
     const idParam = this.route.snapshot.paramMap.get('id');
     if (idParam) this.loadForEdit(Number(idParam));
+  }
+
+  /**
+   * Reconstruye el carrito del builder a partir de una precotización. Usa los
+   * `InventoryItem` REALES que devuelve el backend (todos sus materiales y
+   * precios vigentes), así que el vendedor conserva total libertad para
+   * cambiar material o condición de venta — a diferencia de `loadForEdit`,
+   * que congela el precio.
+   */
+  private loadFromRequest(token: string): void {
+    this.loadingQuote.set(true);
+    this.quoteRequestsService.getDetail(token).subscribe({
+      next: (detail) => {
+        this.fromRequestToken.set(token);
+        const byId = new Map((detail.inventory ?? []).map((p) => [p.id, p]));
+        const lines: QuoteLine[] = [];
+        for (const it of detail.items) {
+          const product = it.productId != null ? byId.get(it.productId) : undefined;
+          if (!product) continue;
+          const mp =
+            product.materialPrices.find((m) => m.materialId === it.materialId && m.isQuoted) ??
+            product.materialPrices.find((m) => m.isQuoted);
+          if (!mp) continue;
+          const color =
+            mp.materialId === it.materialId && it.color ? it.color : this.initialColorFor(mp);
+          lines.push({
+            product,
+            materialId: mp.materialId,
+            color,
+            quantity: Math.max(1, Math.trunc(it.quantity) || 1),
+          });
+        }
+        this.lines.set(lines);
+
+        if (detail.shippingPostalCode) {
+          const cp = String(detail.shippingPostalCode).replace(/\D/g, '').slice(0, 5);
+          this.shippingCp.set(cp);
+          if (cp.length === 5) {
+            this.shippingService.quoteByPostalCode(cp).subscribe({
+              next: (q) => this.shippingQuote.set(q),
+              error: () => this.shippingQuote.set(null),
+            });
+          }
+        }
+
+        this.loadingQuote.set(false);
+        if (lines.length < detail.items.length) {
+          this.notification.info(
+            'Algunos productos del carrito ya no están disponibles y no se agregaron.',
+          );
+        }
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.loadingQuote.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo cargar la precotización');
+        this.goToList();
+      },
+    });
   }
 
   // ===== Ida y vuelta a la ficha pública del producto =====
@@ -505,6 +582,7 @@ export class QuoteCreateComponent implements OnInit {
     this.form.patchValue(snap.form);
     this.lines.set(snap.lines);
     this.editingId.set(snap.editingId);
+    this.fromRequestToken.set(snap.fromRequestToken);
     this.shippingCp.set(snap.shippingCp);
     this.shippingQuote.set(snap.shippingQuote);
     this.manualShippingCost.set(snap.manualShippingCost);
@@ -521,6 +599,7 @@ export class QuoteCreateComponent implements OnInit {
       form: this.form.getRawValue(),
       lines: this.lines(),
       editingId: this.editingId(),
+      fromRequestToken: this.fromRequestToken(),
       shippingCp: this.shippingCp(),
       shippingQuote: this.shippingQuote(),
       manualShippingCost: this.manualShippingCost(),
@@ -843,6 +922,8 @@ export class QuoteCreateComponent implements OnInit {
     const payload: CreateQuoteRequest = {
       customerName: raw.customerName!.trim(),
       customerPhone: raw.customerPhone!.replace(/\D/g, ''),
+      // Precotización de origen: el backend la marca 'converted' al crear.
+      quoteRequestToken: this.fromRequestToken(),
       paymentMethod: raw.paymentMethod!,
       // RN-P2: en pickup no hay CP que cotizar ni armado que sumar.
       pickupInStore: this.isPickup(),

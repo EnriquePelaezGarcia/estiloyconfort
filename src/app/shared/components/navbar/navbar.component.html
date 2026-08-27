@@ -98,8 +98,15 @@
         </div>
       }
 
-      <a routerLink="/carrito" class="icon-btn" aria-label="Carrito">
+      <a
+        routerLink="/carrito"
+        class="icon-btn cart-link"
+        [attr.aria-label]="cart.itemCount() > 0 ? 'Carrito, ' + cart.itemCount() + ' producto(s)' : 'Carrito'"
+      >
         <span class="material-symbols-outlined">shopping_cart</span>
+        @if (cart.itemCount() > 0) {
+          <span class="cart-link__badge" aria-hidden="true">{{ cart.itemCount() }}</span>
+        }
       </a>
     </div>
   </div>

@@ -1,0 +1,167 @@
+@use '../../../../styles/variables' as v;
+
+// Página autónoma: el asesor la abre desde WhatsApp, con o sin sesión.
+.qr-page {
+  min-height: 100vh;
+  padding: v.$spacing-lg v.$spacing-md;
+  background: v.$color-bg;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.qr-sheet {
+  width: 100%;
+  max-width: 560px;
+  padding: v.$spacing-lg;
+  border: 1px solid v.$color-border;
+  border-radius: v.$radius-lg;
+  background: v.$color-surface;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+
+  &__head {
+    padding-bottom: v.$spacing-md;
+    margin-bottom: v.$spacing-md;
+    border-bottom: 2px solid v.$color-primary;
+
+    h1 {
+      font-family: v.$font-headline;
+      font-size: 1.25rem;
+      margin: v.$spacing-xs 0 0;
+      color: v.$color-text;
+    }
+  }
+
+  &__eyebrow {
+    font-family: v.$font-body;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: v.$color-primary;
+  }
+
+  &__meta {
+    margin: v.$spacing-xs 0 0;
+    font-family: v.$font-body;
+    font-size: 0.75rem;
+    color: v.$color-text-secondary;
+  }
+}
+
+.qr-state {
+  text-align: center;
+  font-family: v.$font-body;
+  color: v.$color-text-secondary;
+
+  h1 { font-family: v.$font-headline; color: v.$color-text; font-size: 1.15rem; }
+}
+
+.qr-banner {
+  background: v.$color-bg;
+  border-radius: v.$radius-md;
+  padding: v.$spacing-sm v.$spacing-md;
+  font-family: v.$font-body;
+  font-size: 0.8rem;
+  color: v.$color-text-secondary;
+  margin-bottom: v.$spacing-md;
+
+  &--done { color: v.$color-secondary; }
+}
+
+.qr-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: v.$spacing-xs;
+}
+
+.qr-item {
+  display: grid;
+  grid-template-columns: 48px 1fr auto auto;
+  gap: v.$spacing-sm;
+  align-items: center;
+  padding: v.$spacing-sm 0;
+  border-bottom: 1px solid v.$color-border;
+
+  &__thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: v.$radius-md;
+    overflow: hidden;
+    background: v.$color-bg;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    img { width: 100%; height: 100%; object-fit: cover; }
+    .material-symbols-outlined { font-size: 1.5rem; color: v.$color-border; }
+  }
+
+  &__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  &__name { font-family: v.$font-headline; font-size: 0.9rem; font-weight: 600; color: v.$color-text; }
+  &__detail { font-family: v.$font-body; font-size: 0.72rem; color: v.$color-text-secondary; }
+  &__qty { font-family: v.$font-body; font-size: 0.8rem; color: v.$color-text-secondary; }
+  &__price { font-family: v.$font-headline; font-size: 0.85rem; font-weight: 700; color: v.$color-primary; white-space: nowrap; }
+}
+
+.qr-summary {
+  margin-top: v.$spacing-md;
+  display: flex;
+  flex-direction: column;
+  gap: v.$spacing-xs;
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    font-family: v.$font-body;
+    font-size: 0.8rem;
+    color: v.$color-text;
+  }
+}
+
+.qr-note {
+  margin: v.$spacing-md 0 0;
+  font-family: v.$font-body;
+  font-size: 0.72rem;
+  color: v.$color-text-secondary;
+  line-height: 1.5;
+}
+
+.qr-actions {
+  margin-top: v.$spacing-lg;
+  display: flex;
+  gap: v.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.qr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: v.$spacing-sm v.$spacing-lg;
+  border-radius: v.$radius-md;
+  border: none;
+  font-family: v.$font-headline;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background v.$transition-fast, color v.$transition-fast;
+
+  &--primary {
+    background: v.$color-primary;
+    color: #fff;
+    &:hover { background: v.$color-primary-dark; }
+  }
+
+  &--ghost {
+    background: none;
+    color: v.$color-text-secondary;
+    &:hover { color: v.$color-error; }
+    &:disabled { opacity: 0.5; cursor: default; }
+  }
+}

@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
+import { CartService } from '../../../core/services/cart.service';
 import { ProductService } from '../../../core/services/product.service';
 import { Category } from '../../../core/models/category.model';
 import { environment } from '../../../../environments/environment';
@@ -27,6 +28,7 @@ import { environment } from '../../../../environments/environment';
 })
 export class NavbarComponent {
   protected auth = inject(AuthService);
+  protected cart = inject(CartService);
   private productService = inject(ProductService);
   private router = inject(Router);
 

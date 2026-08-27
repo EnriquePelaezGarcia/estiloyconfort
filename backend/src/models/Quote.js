@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const ShippingRate = require('./ShippingRate');
+const QuoteRequest = require('./QuoteRequest');
 const discountEngine = require('./discountEngine');
 const extraChargeEngine = require('./extraChargeEngine');
 const { addBusinessDays } = require('../utils/businessDays');
@@ -542,6 +543,13 @@ const Quote = {
           requestedByRole: requesterRole,
           ...reviewedFields,
         });
+      }
+
+      // Precotización de origen (Docs/plan-precotizacion-carrito.md): si esta
+      // cotización nació de una solicitud del carrito, se cierra su ciclo en la
+      // MISMA transacción — o queda toda la creación sin efecto.
+      if (data.quoteRequestToken) {
+        await QuoteRequest.markConverted(data.quoteRequestToken, quoteId, sellerId, conn);
       }
 
       await conn.commit();

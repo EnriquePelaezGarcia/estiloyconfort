@@ -22,6 +22,17 @@ export const routes: Routes = [
     title: 'Cotización - Mueblería Estilo y Confort',
   },
   {
+    // Precotización armada por el cliente en el carrito. El asesor abre este
+    // link desde WhatsApp; la pantalla muestra el botón "Crear cotización"
+    // cuando hay sesión de vendedor/admin (Docs/plan-precotizacion-carrito.md).
+    path: 'precotizacion/:token',
+    loadComponent: () =>
+      import('./modules/public/quote-request-review/quote-request-review.component').then(
+        (m) => m.QuoteRequestReviewComponent,
+      ),
+    title: 'Precotización - Mueblería Estilo y Confort',
+  },
+  {
     // Ticket de venta que el vendedor manda por WhatsApp. Sin guard, igual que
     // la cotización: el cliente no tiene cuenta y el token es la credencial.
     // A diferencia de la cotización, este link no vence.

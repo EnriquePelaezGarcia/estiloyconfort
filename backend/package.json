@@ -16,7 +16,8 @@
     "db:rename-melamina": "node src/database/rename_melamina_color.js",
     "content:push": "node src/database/push_content_to_env.js",
     "db:schema:fase4": "node src/database/run-schema.js schema_fase4.sql",
-    "db:schema:passwords": "node src/database/run-schema.js schema_password_reset.sql"
+    "db:schema:passwords": "node src/database/run-schema.js schema_password_reset.sql",
+    "db:schema:quote-requests": "node src/database/run-schema.js schema_quote_requests.sql"
   },
   "keywords": [
     "express",

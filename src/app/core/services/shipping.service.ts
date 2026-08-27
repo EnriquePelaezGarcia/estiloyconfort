@@ -21,4 +21,19 @@ export class ShippingService {
       .get<{ data: ShippingQuote | null }>('/shipping/quote', { cp })
       .pipe(map((res) => res.data));
   }
+
+  /**
+   * Versión PÚBLICA (carrito, sin sesión): solo precio y etiqueta de zona.
+   * null = fuera de cobertura ("un asesor te confirma").
+   */
+  publicQuoteByPostalCode(
+    cp: string,
+  ): Observable<{ price: number; label: string; isFree: boolean } | null> {
+    return this.api
+      .get<{ data: { price: number; label: string; isFree: boolean } | null }>(
+        '/shipping/public-quote',
+        { cp },
+      )
+      .pipe(map((res) => res.data));
+  }
 }

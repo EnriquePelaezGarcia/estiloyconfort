@@ -132,6 +132,12 @@ export interface CreateQuoteRequest {
   customerName: string;
   /** Obligatorio: 10 dígitos MX. */
   customerPhone: string;
+  /**
+   * Precotización de origen (Docs/plan-precotizacion-carrito.md): si la
+   * cotización nace de una solicitud del carrito, el backend cierra su ciclo
+   * (status 'converted') en la misma transacción.
+   */
+  quoteRequestToken?: string | null;
   paymentMethod: SaleScheme;
   shippingPostalCode?: string | null;
   /**

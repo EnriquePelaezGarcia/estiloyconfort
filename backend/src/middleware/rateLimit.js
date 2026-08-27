@@ -84,9 +84,26 @@ const contactIpLimiter = rateLimit({
   },
 });
 
+/**
+ * Precotizaciones desde el carrito público (POST /api/quote-requests). Cada
+ * llamada crea filas en BD sin sesión, así que se limita por IP para que nadie
+ * la use para inflar la tabla. Un cliente real genera una o dos por visita; 10
+ * cada 15 minutos deja margen de sobra sin ser útil para un bot.
+ */
+const quoteRequestIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    message: 'Demasiadas solicitudes. Espera unos minutos e intenta de nuevo.',
+  },
+});
+
 module.exports = {
   authLimiter,
   forgotPasswordIpLimiter,
   forgotPasswordEmailLimiter,
   contactIpLimiter,
+  quoteRequestIpLimiter,
 };

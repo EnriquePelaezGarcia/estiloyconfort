@@ -5,6 +5,7 @@ import { SellerService } from '../../../core/services/seller.service';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
 import { ApprovalsService } from '../../../core/services/approvals.service';
+import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
 
 interface NavItem {
   label: string;
@@ -31,6 +32,7 @@ export class AdminLayoutComponent implements OnInit {
   private scheduleService = inject(DeliveryScheduleService);
   private discountsService = inject(DiscountsService);
   private approvalsService = inject(ApprovalsService);
+  private quoteRequestsService = inject(QuoteRequestsService);
 
   protected sidebarOpen = signal(false);
 
@@ -62,8 +64,11 @@ export class AdminLayoutComponent implements OnInit {
       label: 'Cotizaciones',
       icon: 'request_quote',
       route: 'cotizaciones',
-      // Docs/plan-descuentos.md: descuentos de cotización pendientes de revisar.
-      badge: () => this.discountsService.pendingCounts()?.quotes ?? 0,
+      // Descuentos de cotización pendientes (Docs/plan-descuentos.md) +
+      // precotizaciones del carrito pendientes (Docs/plan-precotizacion-carrito.md).
+      badge: () =>
+        (this.discountsService.pendingCounts()?.quotes ?? 0) +
+        (this.quoteRequestsService.pendingCount() ?? 0),
     },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
@@ -103,6 +108,7 @@ export class AdminLayoutComponent implements OnInit {
     this.scheduleService.refreshCounts().subscribe({ error: () => {} });
     this.discountsService.refreshPendingCounts().subscribe({ error: () => {} });
     this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
+    this.quoteRequestsService.refreshPendingCount().subscribe({ error: () => {} });
   }
 
   protected toggleSidebar(): void {

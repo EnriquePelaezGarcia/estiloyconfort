@@ -7,7 +7,16 @@ import { AuthService } from './auth.service';
 // `/quotes/public` es el link que abre el CLIENTE, sin cuenta: si su
 // navegador conserva un token viejo, un 401 no debe arrastrarlo a un
 // refresh/logout en una pantalla que jamás tuvo sesión.
-const AUTH_FREE_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/quotes/public'];
+const AUTH_FREE_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/quotes/public',
+  // Precotización del carrito: la crea y la lee un cliente SIN cuenta
+  // (Docs/plan-precotizacion-carrito.md). El envío estimado del carrito, igual.
+  '/quote-requests/public',
+  '/shipping/public-quote',
+];
 
 let isRefreshing = false;
 const refreshedToken$ = new BehaviorSubject<string | null>(null);

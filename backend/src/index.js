@@ -7,6 +7,7 @@ const { testConnection } = require('./config/database');
 const apiRoutes = require('./routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { scheduleQuoteCleanup } = require('./jobs/cleanupExpiredQuotes');
+const { scheduleQuoteRequestCleanup } = require('./jobs/cleanupExpiredQuoteRequests');
 const { scheduleFixedExpenses } = require('./jobs/generateFixedExpenses');
 const { scheduleDeliveryReminders } = require('./jobs/deliveryReminders');
 
@@ -57,6 +58,7 @@ async function start() {
     await testConnection();
     // Requieren la BD viva: se programan después de validar la conexión.
     scheduleQuoteCleanup();
+    scheduleQuoteRequestCleanup();
     scheduleFixedExpenses();
     scheduleDeliveryReminders();
     app.listen(env.port, () => {

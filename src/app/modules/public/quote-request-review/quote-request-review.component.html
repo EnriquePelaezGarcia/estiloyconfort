@@ -1,0 +1,104 @@
+<div class="qr-page">
+  <div class="qr-sheet">
+    @if (loading()) {
+      <p class="qr-state">Cargando…</p>
+    } @else if (notFound()) {
+      <div class="qr-state">
+        <h1>Precotización no disponible</h1>
+        <p>Este link ya venció o no existe. Escríbenos por WhatsApp y con gusto te ayudamos.</p>
+      </div>
+    } @else if (request(); as req) {
+      <header class="qr-sheet__head">
+        <span class="qr-sheet__eyebrow">Precotización del cliente</span>
+        <h1>Pedido armado desde el carrito</h1>
+        <p class="qr-sheet__meta">
+          Recibida {{ req.createdAt | date:'d MMM y, HH:mm' }} · vence {{ req.expiresAt | date:'d MMM y' }}
+        </p>
+      </header>
+
+      @if (req.status === 'converted') {
+        <div class="qr-banner qr-banner--done">
+          Esta precotización ya se convirtió en cotización.
+        </div>
+      } @else if (req.status === 'dismissed') {
+        <div class="qr-banner">
+          Esta precotización fue descartada.
+        </div>
+      }
+
+      <ul class="qr-items">
+        @for (item of req.items; track $index) {
+          <li class="qr-item">
+            <div class="qr-item__thumb">
+              @if (item.imageUrl) {
+                <img [src]="item.imageUrl | mediaUrl" [alt]="item.productName" loading="lazy" />
+              } @else {
+                <span class="material-symbols-outlined">chair</span>
+              }
+            </div>
+            <div class="qr-item__main">
+              <span class="qr-item__name">{{ item.productName }}</span>
+              <span class="qr-item__detail">
+                {{ item.materialLabel || 'Material por confirmar' }}
+                @if (item.color) { · {{ item.color }} }
+                @if (variantText(item)) { · {{ variantText(item) }} }
+              </span>
+            </div>
+            <span class="qr-item__qty">x{{ item.quantity }}</span>
+            <span class="qr-item__price">
+              @if (item.unitPriceCash != null) {
+                {{ item.unitPriceCash * item.quantity | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              } @else {
+                —
+              }
+            </span>
+          </li>
+        }
+      </ul>
+
+      <div class="qr-summary">
+        <div class="qr-summary__row">
+          <span>Subtotal estimado</span>
+          <span>{{ req.estimatedSubtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+        @if (req.shippingPostalCode) {
+          <div class="qr-summary__row">
+            <span>Envío a CP {{ req.shippingPostalCode }}</span>
+            <span>
+              @if (req.estimatedShippingCost != null) {
+                {{ req.estimatedShippingCost | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                @if (req.estimatedShippingLabel) { · {{ req.estimatedShippingLabel }} }
+              } @else {
+                Fuera de cobertura — confirmar a mano
+              }
+            </span>
+          </div>
+        }
+      </div>
+
+      <p class="qr-note">
+        Los precios son un estimado de lo que vio el cliente. Al crear la
+        cotización se recalcula todo con las tarifas vigentes.
+      </p>
+
+      @if (req.status === 'pending') {
+        @if (isStaff()) {
+          <div class="qr-actions">
+            <button type="button" class="qr-btn qr-btn--primary" (click)="createQuote()">
+              Crear cotización
+            </button>
+            <button type="button" class="qr-btn qr-btn--ghost" [disabled]="working()" (click)="dismiss()">
+              Descartar
+            </button>
+          </div>
+        } @else {
+          <div class="qr-actions">
+            <a class="qr-btn qr-btn--primary" routerLink="/auth/login" [queryParams]="loginQueryParams">
+              Inicia sesión como asesor para crear la cotización
+            </a>
+          </div>
+        }
+      }
+    }
+  </div>
+</div>

@@ -9,6 +9,82 @@
   .search { max-width: 280px; }
 }
 
+// ===== Precotizaciones del carrito (Docs/plan-precotizacion-carrito.md) =====
+.requests {
+  margin-bottom: vars.$spacing-xl;
+  padding: vars.$spacing-lg;
+  border: 1px solid vars.$color-primary;
+  border-radius: vars.$radius-lg;
+  background: rgba(139, 69, 19, 0.04);
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-xs;
+    margin: 0;
+    font-family: vars.$font-headline;
+    font-size: 1rem;
+    color: vars.$color-text;
+  }
+
+  &__sub {
+    margin: vars.$spacing-xs 0 vars.$spacing-md;
+    font-family: vars.$font-body;
+    font-size: 0.8rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$spacing-sm;
+  }
+}
+
+.request-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  flex-wrap: wrap;
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__meta {
+    font-family: vars.$font-body;
+    font-size: 0.72rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__names {
+    font-family: vars.$font-headline;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: vars.$color-text;
+  }
+
+  &__total {
+    font-family: vars.$font-body;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__actions {
+    display: flex;
+    gap: vars.$spacing-xs;
+    flex-shrink: 0;
+  }
+}
+
 .tabs {
   display: flex;
   gap: 0.25rem;

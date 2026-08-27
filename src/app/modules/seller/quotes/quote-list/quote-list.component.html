@@ -10,6 +10,55 @@
   </button>
 </header>
 
+@if (requests().length) {
+  <section class="requests">
+    <h2 class="requests__title">
+      <span class="material-symbols-outlined">shopping_cart_checkout</span>
+      Precotizaciones del carrito ({{ requests().length }})
+    </h2>
+    <p class="requests__sub">
+      Pedidos que armaron los clientes en la tienda en línea. Revísalos y crea la cotización sin volver a capturar los productos.
+    </p>
+    <div class="requests__list">
+      @for (r of requests(); track r.token) {
+        <article class="request-card">
+          <div class="request-card__info">
+            <span class="request-card__meta">
+              {{ r.createdAt | date:'d MMM y, HH:mm' }} · {{ r.itemCount ?? r.items.length }} producto(s)
+              @if (r.shippingPostalCode) { · CP {{ r.shippingPostalCode }} }
+            </span>
+            <span class="request-card__names">
+              @for (it of r.items.slice(0, 4); track $index) {
+                {{ it.productName }}{{ $last || $index === 3 ? '' : ', ' }}
+              }
+              @if (r.items.length > 4) { …+{{ r.items.length - 4 }} }
+            </span>
+            <span class="request-card__total">
+              Estimado {{ r.estimatedSubtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}
+              @if (r.estimatedShippingCost != null) { + envío {{ r.estimatedShippingCost | currency:'MXN':'symbol-narrow':'1.0-0' }} }
+            </span>
+          </div>
+          <div class="request-card__actions">
+            <button type="button" class="btn btn--primary btn--sm" (click)="reviewRequest(r.token)">
+              <span class="material-symbols-outlined">visibility</span>
+              Revisar
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              [disabled]="dismissingToken() === r.token"
+              (click)="dismissRequest(r.token)"
+            >
+              <span class="material-symbols-outlined">delete</span>
+              Descartar
+            </button>
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+}
+
 <div class="toolbar">
   <div class="tabs">
     <button type="button" class="tab" [class.tab--active]="activeTab() === 'all'" (click)="setTab('all')">

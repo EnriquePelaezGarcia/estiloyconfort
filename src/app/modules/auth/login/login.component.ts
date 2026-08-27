@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LoginRequest } from '../../../core/models/auth.model';
@@ -15,8 +15,20 @@ import { LoginRequest } from '../../../core/models/auth.model';
 export class LoginComponent {
   protected authService = inject(AuthService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private fb = inject(FormBuilder);
   private notification = inject(NotificationService);
+
+  /**
+   * Ruta interna a la que volver tras iniciar sesión (?redirect=). La usa el
+   * link de una precotización cuando el asesor aún no tiene sesión
+   * (Docs/plan-precotizacion-carrito.md). Solo se acepta una ruta absoluta de
+   * la propia app — nunca una URL externa.
+   */
+  private get redirectTo(): string | null {
+    const raw = this.route.snapshot.queryParamMap.get('redirect');
+    return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+  }
 
   protected showPassword = signal(false);
   protected errorMessage = signal('');
@@ -43,7 +55,7 @@ export class LoginComponent {
           return;
         }
         this.notification.success(`Bienvenido, ${res.user.fullName}`);
-        this.router.navigate([this.authService.dashboardRoute()]);
+        this.router.navigateByUrl(this.redirectTo ?? this.authService.dashboardRoute());
       },
       error: (err: { error?: { message?: string } }) => {
         this.errorMessage.set(

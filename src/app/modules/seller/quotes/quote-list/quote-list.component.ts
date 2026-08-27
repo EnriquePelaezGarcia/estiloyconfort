@@ -2,9 +2,11 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { QuotesService } from '../../../../core/services/quotes.service';
+import { QuoteRequestsService } from '../../../../core/services/quote-requests.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { ApprovalsService } from '../../../../core/services/approvals.service';
 import { Quote, QuoteDiscount, QuoteExtraCharge, QuoteStatus } from '../../../../core/models/quote.model';
+import { QuoteRequestDetail } from '../../../../core/models/quote-request.model';
 import { SaleScheme } from '../../../../core/models/order.model';
 
 type FilterTab = 'all' | QuoteStatus;
@@ -31,12 +33,16 @@ const SCHEME_LABELS: Record<SaleScheme, string> = {
 })
 export class QuoteListComponent implements OnInit {
   private quotesService = inject(QuotesService);
+  private quoteRequestsService = inject(QuoteRequestsService);
   private notification = inject(NotificationService);
   private approvalsService = inject(ApprovalsService);
   private router = inject(Router);
 
   protected loading = signal(true);
   protected quotes = signal<Quote[]>([]);
+  /** Precotizaciones del carrito pendientes de convertir (Docs/plan-precotizacion-carrito.md). */
+  protected requests = signal<QuoteRequestDetail[]>([]);
+  protected dismissingToken = signal<string | null>(null);
   protected activeTab = signal<FilterTab>('all');
   protected searchQuery = signal('');
   /** Id de la cotización cuyo link se acaba de copiar (feedback temporal). */
@@ -80,6 +86,7 @@ export class QuoteListComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadRequests();
   }
 
   protected load(): void {
@@ -92,6 +99,34 @@ export class QuoteListComponent implements OnInit {
       error: () => {
         this.notification.error('No se pudieron cargar las cotizaciones');
         this.loading.set(false);
+      },
+    });
+  }
+
+  protected loadRequests(): void {
+    this.quoteRequestsService.listPending().subscribe({
+      next: (data) => this.requests.set(data),
+      error: () => {},
+    });
+  }
+
+  /** Abre la pantalla de revisión de la precotización (misma que el link de WhatsApp). */
+  protected reviewRequest(token: string): void {
+    this.router.navigate(['/precotizacion', token]);
+  }
+
+  protected dismissRequest(token: string): void {
+    if (this.dismissingToken()) return;
+    this.dismissingToken.set(token);
+    this.quoteRequestsService.dismiss(token).subscribe({
+      next: () => {
+        this.dismissingToken.set(null);
+        this.notification.success('Precotización descartada');
+        this.requests.update((list) => list.filter((r) => r.token !== token));
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.dismissingToken.set(null);
+        this.notification.error(err?.error?.message ?? 'No se pudo descartar');
       },
     });
   }
