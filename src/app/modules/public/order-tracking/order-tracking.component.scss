@@ -1,0 +1,111 @@
+@use '../../../../styles/variables' as vars;
+
+// Página suelta que el cliente abre desde el link de WhatsApp del vendedor —
+// casi siempre en el celular. Pinta su propio fondo; no hereda el shell del
+// sitio ni el del panel. Mismo lenguaje visual que el ticket público.
+
+$ink: #1e1521;
+$porcelain: #fcf9f8;
+$text-secondary: #625d5a;
+$lavender: #c9b8e8;
+$hairline: rgba(61, 43, 94, 0.12);
+
+.track-page {
+  min-height: 100vh;
+  padding: vars.$spacing-lg vars.$spacing-md vars.$spacing-2xl;
+  background: $porcelain;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  overflow: hidden;
+  border: 1px solid $hairline;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 40px rgba(30, 21, 33, 0.06);
+}
+
+.crest {
+  padding: vars.$spacing-xl vars.$spacing-lg vars.$spacing-lg;
+  background: $ink;
+  color: #fff;
+  text-align: center;
+}
+.crest__home { display: inline-block; }
+.crest__logo { width: 168px; height: auto; }
+.crest__overline {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: $lavender;
+}
+
+.ornament { display: block; margin: 0.6rem 0 0.2rem; color: $lavender; font-size: 0.9rem; }
+
+.sheet__body { padding: vars.$spacing-lg; }
+
+.intro {
+  margin-bottom: vars.$spacing-lg;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: $text-secondary;
+}
+
+.track-form .field { margin-bottom: vars.$spacing-md; }
+
+.track-form input {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  font-family: vars.$font-body;
+  font-size: 0.95rem;
+  color: vars.$color-text;
+  background: #fff;
+
+  &:focus { outline: none; border-color: $lavender; }
+  &--error { border-color: vars.$color-error; }
+}
+
+#orderNumber { text-transform: uppercase; letter-spacing: 0.04em; }
+#phoneLast4 { letter-spacing: 0.3em; }
+
+.lookup-error {
+  margin-bottom: vars.$spacing-md;
+  padding: 0.7rem 0.85rem;
+  border-radius: 6px;
+  background: #fdecec;
+  border: 1px solid #f2c9c9;
+  color: #8a1c1c;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.result-head { margin-bottom: vars.$spacing-lg; }
+.result-head__folio {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8c8480;
+}
+.result-head__hi {
+  margin-top: 0.2rem;
+  font-family: vars.$font-headline;
+  font-size: 1.4rem;
+  color: $ink;
+}
+
+app-order-timeline { display: block; margin-bottom: vars.$spacing-lg; }
+
+.foot-link {
+  margin-top: vars.$spacing-lg;
+  text-align: center;
+  font-size: 0.85rem;
+
+  a { color: $text-secondary; text-decoration: underline; }
+}

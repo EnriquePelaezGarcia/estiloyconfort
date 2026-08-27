@@ -1,0 +1,93 @@
+<div class="track-page">
+  <article class="sheet">
+    <header class="crest">
+      <a routerLink="/" class="crest__home" aria-label="Ir al inicio">
+        <img
+          class="crest__logo"
+          src="/branding/logo-negativo.png"
+          alt="Mueblería Estilo y Confort"
+          width="1516"
+          height="444"
+        />
+      </a>
+      <span class="ornament">✦</span>
+      <p class="crest__overline">Rastrea tu pedido</p>
+    </header>
+
+    <div class="sheet__body">
+      @if (state() === 'found' && result(); as r) {
+        <div class="result-head">
+          <p class="result-head__folio">Pedido {{ r.orderNumber }}</p>
+          @if (r.customerFirstName) {
+            <p class="result-head__hi">Hola, {{ r.customerFirstName }}</p>
+          }
+        </div>
+
+        <app-order-timeline [tracking]="r" />
+
+        <button type="button" class="btn btn--ghost btn--block" (click)="searchAnother()">
+          Rastrear otro pedido
+        </button>
+      } @else {
+        <p class="intro">
+          Escribe el número de tu pedido y los <strong>últimos 4 dígitos</strong> del
+          teléfono con el que compraste.
+        </p>
+
+        <form class="track-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="field">
+            <label for="orderNumber">Número de pedido</label>
+            <input
+              id="orderNumber"
+              type="text"
+              formControlName="orderNumber"
+              placeholder="EC-20260826-0007"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              (input)="onOrderNumberInput()"
+              [class.field__input--error]="fieldInvalid('orderNumber')"
+            />
+            @if (fieldInvalid('orderNumber')) {
+              <p class="field__error">Revisa el formato: EC-AAAAMMDD-NNNN</p>
+            }
+          </div>
+
+          <div class="field">
+            <label for="phoneLast4">Últimos 4 dígitos del teléfono</label>
+            <input
+              id="phoneLast4"
+              type="text"
+              inputmode="numeric"
+              maxlength="4"
+              formControlName="phoneLast4"
+              placeholder="1234"
+              autocomplete="off"
+              [class.field__input--error]="fieldInvalid('phoneLast4')"
+            />
+            @if (fieldInvalid('phoneLast4')) {
+              <p class="field__error">Escribe exactamente 4 números.</p>
+            }
+          </div>
+
+          @if (state() === 'notFound') {
+            <p class="lookup-error">
+              No encontramos un pedido con esos datos. Revisa el número y el teléfono,
+              o escríbenos por WhatsApp.
+            </p>
+          }
+
+          <button type="submit" class="btn btn--primary btn--block" [disabled]="state() === 'loading'">
+            @if (state() === 'loading') {
+              <span class="spinner spinner--sm"></span> Buscando…
+            } @else {
+              Rastrear pedido
+            }
+          </button>
+        </form>
+      }
+
+      <p class="foot-link"><a routerLink="/">Volver al sitio</a></p>
+    </div>
+  </article>
+</div>

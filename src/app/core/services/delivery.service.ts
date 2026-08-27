@@ -33,6 +33,18 @@ export class DeliveryService {
     );
   }
 
+  /**
+   * "No se pudo entregar" (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 1):
+   * marca la entrega 'failed', anexa el motivo a las notas y el pedido vuelve
+   * a 'ready' para reprogramarse.
+   */
+  markFailed(id: number, reason: string): Observable<{ data: DeliveryAssignment; message: string }> {
+    return this.api.patch<{ data: DeliveryAssignment; message: string }>(
+      `/delivery/assignments/${id}/failed`,
+      { reason },
+    );
+  }
+
   saveProof(
     id: number,
     proof: { signatureImageUrl?: string; photoUrl?: string; notes?: string },

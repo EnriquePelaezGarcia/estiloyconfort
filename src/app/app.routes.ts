@@ -42,6 +42,17 @@ export const routes: Routes = [
     title: 'Tu comprobante - Mueblería Estilo y Confort',
   },
   {
+    // Rastreador público (Docs/plan-rastreo-pedido-cliente.md). Sin guard: el
+    // cliente escribe número de pedido + últimos 4 del teléfono. Lee ?pedido=
+    // para prellenar el número desde el link de WhatsApp del vendedor.
+    path: 'rastrear-pedido',
+    loadComponent: () =>
+      import('./modules/public/order-tracking/order-tracking.component').then(
+        (m) => m.OrderTrackingComponent,
+      ),
+    title: 'Rastrea tu pedido - Mueblería Estilo y Confort',
+  },
+  {
     path: 'auth',
     loadChildren: () => import('./modules/auth/auth.routes').then((m) => m.authRoutes),
   },

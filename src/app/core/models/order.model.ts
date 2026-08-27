@@ -3,6 +3,12 @@ import { ManufacturerOption } from './manufacturing.model';
 export type OrderStatus =
   | 'pending'
   | 'fabricating'
+  /**
+   * "En bodega" (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 2): el mueble
+   * está físicamente en la tienda, pero el pago (enganche/liquidación) todavía
+   * frena la entrega. Entre 'fabricating' y 'ready'.
+   */
+  | 'in_warehouse'
   | 'ready'
   | 'in_delivery'
   | 'delivered'
@@ -253,6 +259,14 @@ export interface Order {
   paymentStatus: PaymentStatus;
   paymentAmount: number;
   orderStatus: OrderStatus;
+  /**
+   * ¿El pedido llegó alguna vez a 'delivered' en su historial? Lo calcula el
+   * backend consultando `order_status_history` (Plan
+   * Docs/plan-rastreo-pedido-cliente.md, C-2). Un pedido `cancelled` con
+   * `hadDelivery` es una DEVOLUCIÓN — se etiqueta "Devuelto", no "Cancelado".
+   * `undefined` en respuestas que no lo incluyen (se trata como false).
+   */
+  hadDelivery?: boolean;
   orderDate: string;
   expectedDeliveryDate?: string | null;
   /** Ver DeliveryCommitment. Los pedidos anteriores a la migración son 'tentative'. */

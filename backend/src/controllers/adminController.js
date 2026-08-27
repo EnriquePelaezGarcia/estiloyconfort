@@ -88,7 +88,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   const [[orderStats]] = await pool.query(
     `SELECT
         COUNT(*) AS totalOrders,
-        SUM(order_status IN ('pending','fabricating','ready','in_delivery')) AS openOrders,
+        SUM(order_status IN ('pending','fabricating','in_warehouse','ready','in_delivery')) AS openOrders,
         COALESCE(SUM(CASE WHEN MONTH(order_date) = MONTH(CURDATE()) AND YEAR(order_date) = YEAR(CURDATE()) THEN total_amount ELSE 0 END), 0) AS monthRevenue
      FROM orders`,
   );

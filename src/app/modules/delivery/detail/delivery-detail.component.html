@@ -249,6 +249,11 @@
           @if (!canComplete()) {
             <p class="hint">Se requiere foto y firma para completar la entrega.</p>
           }
+
+          <!-- Plan rastreo (Hueco 1): intento fallido → el pedido vuelve a "Listo". -->
+          <button type="button" class="btn btn--danger btn--block" (click)="openFailModal()">
+            <span class="material-symbols-outlined">report</span> No se pudo entregar
+          </button>
         }
       </div>
     </div>
@@ -372,6 +377,56 @@
           <button type="button" class="btn btn--ghost" (click)="discountModalOpen.set(false)">Cancelar</button>
           <button type="button" class="btn btn--success" [disabled]="savingDiscount()" (click)="submitDiscount()">
             @if (savingDiscount()) { <span class="spinner spinner--sm"></span> } @else { Aplicar descuento }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Plan rastreo (Hueco 1): "No se pudo entregar" -->
+@if (failModalOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>No se pudo entregar</h2>
+        <button type="button" class="icon-btn" (click)="failModalOpen.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="field__hint">
+          El pedido volverá a estado "Listo" para reprogramar la entrega. El motivo queda anotado.
+        </p>
+        <div class="field">
+          <label for="failReason">Motivo</label>
+          <select
+            id="failReason"
+            [value]="failReason()"
+            (change)="failReason.set($any($event.target).value)"
+          >
+            <option value="" disabled>Selecciona un motivo</option>
+            @for (r of failReasons; track r) {
+              <option [value]="r">{{ r }}</option>
+            }
+          </select>
+        </div>
+        @if (failReason() === 'Otro') {
+          <div class="field">
+            <label for="failReasonOther">Especifica</label>
+            <input
+              id="failReasonOther"
+              type="text"
+              maxlength="200"
+              [value]="failReasonOther()"
+              (input)="failReasonOther.set($any($event.target).value)"
+            />
+          </div>
+        }
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="failModalOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--danger" [disabled]="savingFail()" (click)="submitFail()">
+            @if (savingFail()) { <span class="spinner spinner--sm"></span> } @else { Registrar intento fallido }
           </button>
         </div>
       </div>

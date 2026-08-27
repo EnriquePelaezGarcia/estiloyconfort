@@ -5,16 +5,11 @@ import { TicketsService } from '../../../core/services/tickets.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { PublicTicket } from '../../../core/models/ticket.model';
 import { DeliveryType, OrderStatus, SaleScheme } from '../../../core/models/order.model';
+import {
+  ORDER_STATUS_PUBLIC_LABELS,
+  TENTATIVE_DELIVERY_NOTICE,
+} from '../../../core/models/order-public-labels';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
-
-/**
- * Fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6): nos deslindamos de
- * la fecha exacta y dejamos claro qué pasa si el mueble llega antes o hay
- * ajuste — mismo texto en los dos tickets (térmico y WhatsApp).
- */
-const TENTATIVE_DELIVERY_NOTICE =
-  'Fecha estimada, sujeta a cambios. Si tu mueble llega antes, te lo entregamos antes; ' +
-  'en cuanto esté en tienda te contactamos para coordinar la entrega.';
 
 /**
  * Cómo se le nombra al cliente cada condición de venta. No se reusan los
@@ -27,16 +22,6 @@ const SCHEME_LABELS: Record<SaleScheme, string> = {
   store_credit: 'Crédito en tienda',
   layaway: 'Apartado',
   wholesale: 'Mayoreo',
-};
-
-/** Estado del pedido en lenguaje de cliente, no de almacén. */
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: 'En preparación',
-  fabricating: 'En fabricación',
-  ready: 'Listo para entrega',
-  in_delivery: 'En camino',
-  delivered: 'Entregado',
-  cancelled: 'Cancelado',
 };
 
 const DELIVERY_LABELS: Record<DeliveryType, string> = {
@@ -135,7 +120,7 @@ export class TicketViewComponent implements OnInit {
   protected readonly tentativeDeliveryNotice = TENTATIVE_DELIVERY_NOTICE;
 
   protected schemeLabel(s: SaleScheme): string { return SCHEME_LABELS[s] ?? 'Contado'; }
-  protected statusLabel(s: OrderStatus): string { return STATUS_LABELS[s] ?? ''; }
+  protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_PUBLIC_LABELS[s] ?? ''; }
   protected deliveryLabel(d: DeliveryType): string { return DELIVERY_LABELS[d] ?? ''; }
 
   ngOnInit(): void {

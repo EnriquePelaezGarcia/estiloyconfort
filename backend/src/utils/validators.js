@@ -16,6 +16,17 @@ function isNonEmptyString(value) {
 }
 
 /**
+ * Teléfono del cliente en un pedido/cotización: 10 dígitos tras quitar
+ * separadores. Mismo criterio que ya exige el front (`core/utils/phone.ts`
+ * PHONE_PATTERN) y el que usa `quotesController`. El rastreador público
+ * verifica al cliente con los últimos 4 dígitos, así que sin teléfono no hay
+ * forma de rastrear el pedido — por eso pasa a ser obligatorio en el backend.
+ */
+function isValidCustomerPhone(value) {
+  return /^\d{10}$/.test(String(value ?? '').replace(/\D/g, ''));
+}
+
+/**
  * Devuelve un arreglo de mensajes de error para los campos de registro.
  */
 function validateRegister(body) {
@@ -110,6 +121,7 @@ module.exports = {
   isValidEmail,
   isValidPassword,
   isNonEmptyString,
+  isValidCustomerPhone,
   validateRegister,
   validateAdminCreateUser,
   validateLogin,

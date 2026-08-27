@@ -502,6 +502,54 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     });
   }
 
+  // ===== "No se pudo entregar" (Plan rastreo, Hueco 1) =====
+  protected readonly failReasons = [
+    'Cliente ausente',
+    'Dirección incorrecta',
+    'Cliente rechazó el pedido',
+    'Sin acceso al domicilio',
+    'Mueble dañado en tránsito',
+    'Otro',
+  ];
+  protected failModalOpen = signal(false);
+  protected failReason = signal<string>('');
+  protected failReasonOther = signal<string>('');
+  protected savingFail = signal(false);
+
+  protected openFailModal(): void {
+    this.failReason.set('');
+    this.failReasonOther.set('');
+    this.failModalOpen.set(true);
+  }
+
+  protected submitFail(): void {
+    const a = this.assignment();
+    if (!a) return;
+    const selected = this.failReason();
+    if (!selected) {
+      this.notification.error('Selecciona el motivo');
+      return;
+    }
+    const reason = selected === 'Otro' ? this.failReasonOther().trim() : selected;
+    if (!reason) {
+      this.notification.error('Escribe el motivo');
+      return;
+    }
+    this.savingFail.set(true);
+    this.deliveryService.markFailed(a.id, reason).subscribe({
+      next: () => {
+        this.savingFail.set(false);
+        this.failModalOpen.set(false);
+        this.notification.success('Se registró el intento. El pedido volvió a "Listo" para reprogramarse.');
+        this.goBack();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingFail.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo registrar el intento');
+      },
+    });
+  }
+
   /** Docs/plan-descuentos.md: pide un descuento en dinero (ej. mueble dañado en el trayecto). */
   protected openDiscountModal(): void {
     this.discountAmount.set(null);

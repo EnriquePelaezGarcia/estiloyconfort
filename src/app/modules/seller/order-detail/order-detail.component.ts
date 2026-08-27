@@ -22,12 +22,12 @@ import {
 } from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
-  ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   PAYMENT_INSTRUMENT_LABELS,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_TONE,
   SALE_SCHEME_LABELS,
+  orderStatusLabel,
 } from '../../../core/models/order-labels';
 import {
   DeliveryType,
@@ -204,7 +204,7 @@ export class OrderDetailComponent implements OnInit {
     if (!o) return false;
     if (this.pickupGrace()) return true;
     if (o.orderStatus === 'pending') return true;
-    if (o.orderStatus === 'fabricating' || o.orderStatus === 'ready') {
+    if (o.orderStatus === 'fabricating' || o.orderStatus === 'in_warehouse' || o.orderStatus === 'ready') {
       return (o.items ?? []).some((it) => !it.requiresFabrication);
     }
     return false;
@@ -261,7 +261,8 @@ export class OrderDetailComponent implements OnInit {
     const o = this.order();
     if (!o) return false;
     return this.hasFabricationItems()
-      && o.orderStatus !== 'ready' && o.orderStatus !== 'in_delivery' && o.orderStatus !== 'delivered';
+      && o.orderStatus !== 'in_warehouse' && o.orderStatus !== 'ready'
+      && o.orderStatus !== 'in_delivery' && o.orderStatus !== 'delivered';
   });
 
   protected readonly tentativeDeliveryNotice = TENTATIVE_DELIVERY_NOTICE;
@@ -883,7 +884,8 @@ export class OrderDetailComponent implements OnInit {
     this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
   }
 
-  protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }
+  /** Etiqueta con la regla derivada "Devuelto" (C-2): cancelled + hubo entrega. */
+  protected statusLabel(o: Order): string { return orderStatusLabel(o); }
   protected statusTone(s: OrderStatus): string { return ORDER_STATUS_TONE[s]; }
   protected payLabel(s: PaymentStatus): string { return PAYMENT_STATUS_LABELS[s]; }
   protected payTone(s: PaymentStatus): string { return PAYMENT_STATUS_TONE[s]; }

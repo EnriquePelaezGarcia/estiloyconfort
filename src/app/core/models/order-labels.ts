@@ -11,6 +11,7 @@ import {
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'Pendiente',
   fabricating: 'En fabricación',
+  in_warehouse: 'En bodega',
   ready: 'Listo',
   in_delivery: 'En reparto',
   delivered: 'Entregado',
@@ -21,11 +22,32 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const ORDER_STATUS_TONE: Record<OrderStatus, string> = {
   pending: 'badge--gray',
   fabricating: 'badge--amber',
-  ready: 'badge--blue',
+  // 'in_warehouse' (mueble en bodega, pago pendiente) y 'ready' (listo para
+  // programar) son pasos contiguos: tonos distintos para no confundirlos.
+  in_warehouse: 'badge--blue',
+  ready: 'badge--teal',
   in_delivery: 'badge--purple',
   delivered: 'badge--green',
   cancelled: 'badge--red',
 };
+
+/**
+ * Etiqueta de estatus para el PANEL, con la regla derivada "Devuelto"
+ * (Plan Docs/plan-rastreo-pedido-cliente.md, C-2): un pedido `cancelled` que
+ * antes llegó a `delivered` es una devolución, no una cancelación normal.
+ * Mismo tono que `cancelled` (`ORDER_STATUS_TONE.cancelled`).
+ *
+ * Acepta el pedido completo o `(status, { hadDelivery })`.
+ */
+export function orderStatusLabel(
+  input: { orderStatus: OrderStatus; hadDelivery?: boolean } | OrderStatus,
+  opts?: { hadDelivery?: boolean },
+): string {
+  const status = typeof input === 'string' ? input : input.orderStatus;
+  const hadDelivery = typeof input === 'string' ? !!opts?.hadDelivery : !!input.hadDelivery;
+  if (status === 'cancelled' && hadDelivery) return 'Devuelto';
+  return ORDER_STATUS_LABELS[status];
+}
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   pending: 'Pendiente',

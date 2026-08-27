@@ -49,6 +49,24 @@ const deliveryController = {
     res.json({ data: updated, message: 'Estado actualizado' });
   }),
 
+  // PATCH /api/delivery/assignments/:id/failed — "No se pudo entregar"
+  // (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 1). Marca la entrega
+  // 'failed', anexa el motivo a las notas y regresa el pedido a 'ready'.
+  markFailed: asyncHandler(async (req, res) => {
+    const reason = String(req.body.reason ?? '').trim();
+    if (!reason) throw ApiError.badRequest('Indica el motivo por el que no se pudo entregar');
+
+    const delivery = await Delivery.findById(req.params.id);
+    if (!delivery) throw ApiError.notFound('Entrega no encontrada');
+    if (delivery.deliveryPersonId !== req.user.id) throw ApiError.forbidden('Entrega no asignada a ti');
+    if (delivery.deliveryStatus === 'completed') {
+      throw ApiError.badRequest('Esta entrega ya está marcada como completada');
+    }
+
+    const updated = await Delivery.markFailed(req.params.id, reason);
+    res.json({ data: updated, message: 'Se registró el intento de entrega' });
+  }),
+
   // POST /api/delivery/assignments/:id/proof — guarda firma/foto (base64)
   saveProof: asyncHandler(async (req, res) => {
     const delivery = await Delivery.findById(req.params.id);

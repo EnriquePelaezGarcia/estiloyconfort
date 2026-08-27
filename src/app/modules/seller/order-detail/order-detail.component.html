@@ -16,7 +16,7 @@
       <p class="page-head__overline">Pedido {{ o.orderNumber }}</p>
       <h1 class="page-head__title">{{ o.customerName }}</h1>
       <p class="page-head__sub">
-        <span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o.orderStatus) }}</span>
+        <span class="badge" [class]="statusTone(o.orderStatus)">{{ statusLabel(o) }}</span>
         <span class="badge" [class]="payTone(o.paymentStatus)">{{ payLabel(o.paymentStatus) }}</span>
         @if (o.pickupInStore) {
           <span class="badge badge--pickup">
@@ -43,7 +43,7 @@
         <button type="button" class="btn btn--ghost" (click)="onEditClick()">
           <span class="material-symbols-outlined">edit</span> Editar pedido
         </button>
-      } @else if (o.orderStatus === 'fabricating' || o.orderStatus === 'ready') {
+      } @else if (o.orderStatus === 'fabricating' || o.orderStatus === 'in_warehouse' || o.orderStatus === 'ready') {
         <span class="muted">Mueble en fabricación sobre pedido — no admite cambios</span>
       }
       @if (canRemoveAssembly()) {

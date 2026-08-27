@@ -38,7 +38,8 @@ function bucketFor(daysUntil) {
 /** Mismo criterio que Order.hasPendingFabrication: piezas por fabricar y el pedido aún no llegó a listo/en entrega/entregado. */
 function hasPendingFabrication(fabricationItemsCount, orderStatus) {
   return Number(fabricationItemsCount) > 0
-    && orderStatus !== 'ready' && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
+    && orderStatus !== 'in_warehouse' && orderStatus !== 'ready'
+    && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
 }
 
 function mapRow(row) {

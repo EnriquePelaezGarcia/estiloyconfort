@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const Order = require('./Order');
 
 const LAYAWAY_MIN_DEPOSIT = 500;
 
@@ -107,6 +108,45 @@ const Payment = {
         'UPDATE orders SET payment_amount = ?, payment_status = ? WHERE id = ?',
         [paidNum, status, data.orderId],
       );
+
+      // Auto-avance de estatus (Plan Docs/plan-rastreo-pedido-cliente.md,
+      // Hueco 2/5), en la MISMA transacción:
+      //   - pedido 100% stock en 'pending' + primer abono (apartado/crédito) →
+      //     'in_warehouse' (el mueble ya está físicamente).
+      //   - 'in_warehouse' + el pago ya no frena la entrega → 'ready'.
+      // Los pedidos con fabricación los avanza `Order.markItemReady`.
+      const [[fabAgg]] = await conn.execute(
+        `SELECT COUNT(*) AS total, COALESCE(SUM(requires_fabrication = 1), 0) AS fab
+           FROM order_items WHERE order_id = ?`,
+        [data.orderId],
+      );
+      const is100Stock = Number(fabAgg.total) > 0 && Number(fabAgg.fab) === 0;
+      const [[cur]] = await conn.execute(
+        'SELECT order_status, payment_method, total_amount, down_payment FROM orders WHERE id = ?',
+        [data.orderId],
+      );
+      const clears = Order.paymentClearsForDelivery({
+        paymentMethod: cur.payment_method,
+        paymentAmount: paidNum,
+        downPayment: cur.down_payment,
+        totalAmount: cur.total_amount,
+      });
+      // Stepwise: cada transición es su propio UPDATE, para que la Parte B
+      // (triggers de historial) registre 'in_warehouse' y 'ready' por separado.
+      let curStatus = cur.order_status;
+      if (curStatus === 'pending' && is100Stock && (paidNum > 0 || clears)) {
+        await conn.execute(
+          "UPDATE orders SET order_status = 'in_warehouse' WHERE id = ? AND order_status = 'pending'",
+          [data.orderId],
+        );
+        curStatus = 'in_warehouse';
+      }
+      if (curStatus === 'in_warehouse' && clears) {
+        await conn.execute(
+          "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'in_warehouse'",
+          [data.orderId],
+        );
+      }
 
       await conn.commit();
       return { paid: paidNum, total, status, amount: amountTotal };

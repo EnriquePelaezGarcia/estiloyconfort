@@ -6,10 +6,10 @@ import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { DeliveryPerson, Order, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
 import {
-  ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_TONE,
+  orderStatusLabel,
 } from '../../../core/models/order-labels';
 
 @Component({
@@ -36,7 +36,9 @@ export class SellerOrdersComponent implements OnInit {
   /** Pestaña activa: pedidos en curso vs. finalizados. */
   protected tab = signal<'activos' | 'historial'>('activos');
 
-  private readonly activeStatuses: OrderStatus[] = ['pending', 'fabricating', 'ready', 'in_delivery'];
+  private readonly activeStatuses: OrderStatus[] = [
+    'pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery',
+  ];
 
   /** Pedidos que coinciden con la búsqueda por cliente o número de pedido. */
   protected matchingOrders = computed(() => {
@@ -67,6 +69,7 @@ export class SellerOrdersComponent implements OnInit {
     { value: '', label: 'Todos los estados' },
     { value: 'pending', label: 'Pendiente' },
     { value: 'fabricating', label: 'En fabricación' },
+    { value: 'in_warehouse', label: 'En bodega' },
     { value: 'ready', label: 'Listo' },
     { value: 'in_delivery', label: 'En reparto' },
     { value: 'delivered', label: 'Entregado' },
@@ -127,7 +130,8 @@ export class SellerOrdersComponent implements OnInit {
     });
   }
 
-  protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_LABELS[s]; }
+  /** Etiqueta con la regla derivada "Devuelto" (C-2). */
+  protected statusLabel(o: Order): string { return orderStatusLabel(o); }
   protected statusTone(s: OrderStatus): string { return ORDER_STATUS_TONE[s]; }
   protected payLabel(s: PaymentStatus): string { return PAYMENT_STATUS_LABELS[s]; }
   protected payTone(s: PaymentStatus): string { return PAYMENT_STATUS_TONE[s]; }

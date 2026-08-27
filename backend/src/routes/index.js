@@ -17,6 +17,7 @@ const expensesRoutes = require('./expensesRoutes');
 const payablesRoutes = require('./payablesRoutes');
 const inventoryReservationsRoutes = require('./inventoryReservationsRoutes');
 const ticketsRoutes = require('./ticketsRoutes');
+const trackingRoutes = require('./trackingRoutes');
 const deliveryScheduleRoutes = require('./deliveryScheduleRoutes');
 const discountsRoutes = require('./discountsRoutes');
 const reviewsRoutes = require('./reviewsRoutes');
@@ -53,6 +54,8 @@ router.use('/quotes', quotesRoutes);
 router.use('/quote-requests', quoteRequestsRoutes);
 // Ticket de venta público (/ticket/:token) que el vendedor manda por WhatsApp.
 router.use('/tickets', ticketsRoutes);
+// Rastreador público de pedidos (/rastrear-pedido) — sin sesión, rate-limited.
+router.use('/tracking', trackingRoutes);
 router.use('/expenses', expensesRoutes);
 router.use('/payables', payablesRoutes);
 // Reservas de inventario (Docs/plan-reserva-de-piezas.md) — compartido admin/vendedor (D2/D7).

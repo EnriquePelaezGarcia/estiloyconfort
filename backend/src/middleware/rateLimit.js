@@ -100,10 +100,27 @@ const quoteRequestIpLimiter = rateLimit({
   },
 });
 
+/**
+ * Rastreador público de pedidos (POST /api/tracking/lookup). Sin sesión: el
+ * cliente se identifica con el número de pedido + los últimos 4 dígitos de su
+ * teléfono. El límite por IP + la respuesta 404 genérica frenan a un bot que
+ * enumere folios. Un cliente real consulta su pedido unas cuantas veces.
+ */
+const trackingIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    message: 'Demasiadas consultas. Espera unos minutos e intenta de nuevo.',
+  },
+});
+
 module.exports = {
   authLimiter,
   forgotPasswordIpLimiter,
   forgotPasswordEmailLimiter,
   contactIpLimiter,
   quoteRequestIpLimiter,
+  trackingIpLimiter,
 };

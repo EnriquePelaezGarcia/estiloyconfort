@@ -272,6 +272,7 @@
   &--red { background: rgba(vars.$color-error, 0.1); color: vars.$color-error; }
   &--amber { background: rgba(vars.$color-gold, 0.16); color: vars.$color-gold; }
   &--blue { background: rgba(#1565c0, 0.14); color: #1565c0; }
+  &--teal { background: rgba(#00796b, 0.14); color: #00796b; }
   &--purple { background: rgba(vars.$color-primary, 0.14); color: vars.$color-primary; }
 
   // Recoge en tienda (Docs/plan-recoge-en-tienda.md): lleva icono, así que

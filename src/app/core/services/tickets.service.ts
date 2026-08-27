@@ -55,11 +55,16 @@ export class TicketsService {
       ? `\nSaldo pendiente: ${money(info.balance)}`
       : '\nPedido liquidado. ¡Gracias!';
 
+    const origin =
+      typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    const trackUrl = `${origin}/rastrear-pedido?pedido=${encodeURIComponent(info.orderNumber)}`;
+
     const text = encodeURIComponent(
       `Hola ${info.customerName}, gracias por tu compra en Mueblería Estilo y Confort.\n\n` +
       `Pedido: ${info.orderNumber}\n` +
       `Total: ${money(info.totalAmount)}${saldo}\n\n` +
-      `Consulta tu comprobante aquí:\n${ticketUrl}`,
+      `Consulta tu comprobante aquí:\n${ticketUrl}\n\n` +
+      `Rastrea tu pedido:\n${trackUrl}`,
     );
 
     const phone = (info.customerPhone ?? '').replace(/\D/g, '');

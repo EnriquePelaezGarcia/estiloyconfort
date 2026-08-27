@@ -9,7 +9,7 @@ const extraChargeEngine = require('./extraChargeEngine');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
 
-const ORDER_STATUSES = ['pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled'];
+const ORDER_STATUSES = ['pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery', 'delivered', 'cancelled'];
 
 const LAYAWAY_MIN_DEPOSIT = 500;
 const LAYAWAY_MONTHS = 3;
@@ -139,7 +139,8 @@ const DELIVERY_COMMITMENTS = ['tentative', 'exact'];
  */
 function hasPendingFabrication(items, orderStatus) {
   return (items ?? []).some((it) => it.requiresFabrication)
-    && orderStatus !== 'ready' && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
+    && orderStatus !== 'in_warehouse' && orderStatus !== 'ready'
+    && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
 }
 
 /** Campos que forman el bloque de entrega; son interdependientes (§3.2). */
@@ -594,6 +595,36 @@ const Order = {
   ORDER_STATUSES,
 
   /**
+   * ¿El pago cubierto hasta ahora permite ya programar la entrega?
+   * (Plan Docs/plan-rastreo-pedido-cliente.md, Parte A — Hueco 2.)
+   *
+   * Extrae el criterio que vivía inline en `markItemReady` (`canAdvance`).
+   * Se usa en 3 lugares: `markItemReady`, `Payment.create` y el guard de
+   * `assignDeliveryPerson`.
+   *
+   *   - cash / msi / wholesale → SIEMPRE true (se cobra contra entrega).
+   *   - store_credit → pagado >= enganche (`down_payment`).
+   *   - layaway → pagado >= total (liquidado).
+   *
+   * El +1e-6 absorbe el error de redondeo de DECIMAL ↔ Number.
+   *
+   * @param {{paymentMethod:string, paymentAmount:number|string,
+   *   downPayment?:number|string|null, totalAmount:number|string}} order
+   * @returns {boolean}
+   */
+  paymentClearsForDelivery(order) {
+    const paid = Number(order?.paymentAmount) || 0;
+    if (order?.paymentMethod === 'store_credit') {
+      return paid + 1e-6 >= (Number(order.downPayment) || 0);
+    }
+    if (order?.paymentMethod === 'layaway') {
+      return paid + 1e-6 >= (Number(order.totalAmount) || 0);
+    }
+    // cash / msi / wholesale (y cualquier otro): se cobra contra entrega.
+    return true;
+  },
+
+  /**
    * Genera un número de pedido tipo EC-20260620-0007.
    *
    * Docs/plan-venta-multiesquema.md §6.1: recibe `conn` porque se llama
@@ -706,6 +737,17 @@ const Order = {
     order.discounts = await discountEngine.findAll('order', id);
     // Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno.
     order.extraCharges = await extraChargeEngine.findAll('order', id);
+    // "Devuelto" (Plan Docs/plan-rastreo-pedido-cliente.md, C-2): un pedido
+    // 'cancelled' que antes llegó a 'delivered' es una devolución. Sólo se
+    // consulta el historial en ese caso — para el resto el dato es trivial.
+    if (order.orderStatus === 'delivered') {
+      order.hadDelivery = true;
+    } else if (order.orderStatus === 'cancelled') {
+      const OrderStatusHistory = require('./OrderStatusHistory');
+      order.hadDelivery = await OrderStatusHistory.hadDelivery(id);
+    } else {
+      order.hadDelivery = false;
+    }
     // Docs/plan-venta-multiesquema.md §7.1: solo un SELECT extra, y solo si
     // el pedido pertenece a un grupo — la inmensa mayoría no lo hace.
     if (order.saleGroupId) {
@@ -1012,6 +1054,14 @@ const Order = {
             data, conn, resolvedItems.some((it) => it.requiresFabrication),
           );
 
+      // Pedido 100% stock (ninguna pieza a fabricar) que además no es pickup:
+      // el mueble ya está físicamente en la tienda. Si el esquema no frena la
+      // entrega (contado/MSI/mayoreo) avanza solo hasta 'ready' justo después
+      // del INSERT (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 2/5). Para
+      // apartado/crédito nace 'pending' y lo avanza `Payment.create`.
+      const stockOnlyOrder = !pickupInStore
+        && resolvedItems.every((it) => !it.requiresFabrication);
+
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
@@ -1049,6 +1099,22 @@ const Order = {
         ],
       );
       const orderId = result.insertId;
+
+      // 100% stock contado/MSI/mayoreo: pending → in_warehouse → ready, en
+      // pasos separados para que la Parte B registre cada transición en el
+      // historial. Apartado/crédito no entran aquí (el pago frena la entrega).
+      if (stockOnlyOrder && this.paymentClearsForDelivery({
+        paymentMethod, paymentAmount: 0, downPayment: downPayment ?? 0, totalAmount,
+      })) {
+        await conn.execute(
+          "UPDATE orders SET order_status = 'in_warehouse' WHERE id = ? AND order_status = 'pending'",
+          [orderId],
+        );
+        await conn.execute(
+          "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'in_warehouse'",
+          [orderId],
+        );
+      }
 
       for (const it of resolvedItems) {
         const [itemResult] = await conn.execute(
@@ -2309,6 +2375,16 @@ const Order = {
       err.statusCode = 400;
       throw err;
     }
+    // Guard duro (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 2): sólo un
+    // pedido 'ready' —mueble en bodega Y pago mínimo cubierto— puede salir a
+    // reparto. 'in_warehouse' significa que falta el enganche/liquidación.
+    if (order.orderStatus !== 'ready') {
+      const err = new Error(
+        'El pedido debe estar "Listo para entrega" (mueble en bodega y pago mínimo cubierto) antes de asignar repartidor.',
+      );
+      err.statusCode = 400;
+      throw err;
+    }
     // Si el pedido tiene muebles sobre pedido, no se puede asignar repartidor
     // hasta que el fabricante los marque listos (order_status pasa a 'ready').
     if (hasPendingFabrication(order.items, order.orderStatus)) {
@@ -2411,21 +2487,28 @@ const Order = {
         orderId,
       ],
     );
-    const [[{ pending }]] = await pool.execute(
-      'SELECT SUM(is_ready = FALSE) AS pending FROM order_items WHERE order_id = ?', [orderId],
+    // Plan Docs/plan-rastreo-pedido-cliente.md (Hueco 2): "todo listo" se
+    // decide SÓLO sobre las piezas a fabricar (`requires_fabrication = 1`) —
+    // las de stock nunca se marcan `is_ready` por el portal del fabricante,
+    // así que incluirlas atoraba los pedidos mixtos hasta que el admin los
+    // empujaba con el dropdown.
+    const [[{ fabTotal, fabPending }]] = await pool.execute(
+      `SELECT COUNT(*) AS fabTotal, COALESCE(SUM(is_ready = FALSE), 0) AS fabPending
+         FROM order_items WHERE order_id = ? AND requires_fabrication = 1`,
+      [orderId],
     );
-    if (Number(pending) === 0) {
+    if (Number(fabTotal) > 0 && Number(fabPending) === 0) {
+      // 1) fabricating → in_warehouse: el mueble ya está físicamente. NO se
+      //    revisa el pago aquí — eso lo separa el paso siguiente.
+      await pool.execute(
+        "UPDATE orders SET order_status = 'in_warehouse' WHERE id = ? AND order_status = 'fabricating'",
+        [orderId],
+      );
+      // 2) in_warehouse → ready: sólo si el pago ya no frena la entrega.
       const order = await this.findById(orderId);
-      let canAdvance = true;
-      if (order?.paymentMethod === 'store_credit') {
-        const down = Number(order.downPayment) || 0;
-        canAdvance = Number(order.paymentAmount) + 1e-6 >= down;
-      } else if (order?.paymentMethod === 'layaway') {
-        canAdvance = Number(order.paymentAmount) + 1e-6 >= Number(order.totalAmount);
-      }
-      if (canAdvance) {
+      if (order?.orderStatus === 'in_warehouse' && this.paymentClearsForDelivery(order)) {
         await pool.execute(
-          "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'fabricating'",
+          "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'in_warehouse'",
           [orderId],
         );
       }

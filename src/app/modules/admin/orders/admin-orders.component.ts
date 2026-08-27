@@ -38,7 +38,9 @@ export class AdminOrdersComponent implements OnInit {
   /** Pestaña activa: pedidos en curso vs. finalizados. */
   protected tab = signal<'activos' | 'historial'>('activos');
 
-  private readonly activeStatuses: OrderStatus[] = ['pending', 'fabricating', 'ready', 'in_delivery'];
+  private readonly activeStatuses: OrderStatus[] = [
+    'pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery',
+  ];
 
   /** Pedidos que coinciden con la búsqueda por cliente o número de pedido. */
   protected matchingOrders = computed(() => {
@@ -71,7 +73,7 @@ export class AdminOrdersComponent implements OnInit {
   protected selectedDeliveryPerson = signal<number | null>(null);
 
   protected readonly allStatuses: OrderStatus[] = [
-    'pending', 'fabricating', 'ready', 'in_delivery', 'delivered', 'cancelled',
+    'pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery', 'delivered', 'cancelled',
   ];
 
   protected readonly statusOptions = [

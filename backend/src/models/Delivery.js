@@ -203,6 +203,50 @@ const Delivery = {
     };
   },
 
+  /**
+   * "No se pudo entregar" (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 1).
+   * El repartidor reporta un intento fallido: la entrega queda 'failed', el
+   * motivo se anexa a `deliveries.notes` y el pedido VUELVE a 'ready' — el
+   * mueble sigue en bodega con el pago cubierto, sólo falló el intento.
+   *
+   * No se agrega columna: `deliveries` es 1:1 con el pedido y al reasignar se
+   * sobrescribe la fila. La señal "hubo un intento" queda en
+   * `order_status_history` como el rebote in_delivery→ready (Parte B); el
+   * número de rebotes = número de intentos.
+   *
+   * @param {number} id  id de la entrega (assignment)
+   * @param {string} reason  motivo (lista corta del front); se guarda tal cual
+   */
+  async markFailed(id, reason) {
+    const [[d]] = await pool.execute('SELECT order_id, notes FROM deliveries WHERE id = ?', [id]);
+    if (!d) return null;
+
+    const trimmed = String(reason ?? '').trim().slice(0, 200);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const note = `[${stamp}] No se pudo entregar${trimmed ? `: ${trimmed}` : ''}`;
+    const notes = d.notes ? `${d.notes}\n${note}` : note;
+
+    await pool.execute(
+      "UPDATE deliveries SET delivery_status = 'failed', notes = ? WHERE id = ?",
+      [notes, id],
+    );
+
+    // El pedido rebota a 'ready'.
+    const Order = require('./Order');
+    await Order.updateStatus(d.order_id, 'ready');
+
+    // Si por algún camino ya se había generado comisión de armado para esta
+    // entrega, se revierte (sólo si sigue pendiente de pago).
+    const DeliveryCommission = require('./DeliveryCommission');
+    try {
+      await DeliveryCommission.revertForDelivery(id);
+    } catch (err) {
+      console.error(`⚠️  No se pudo revertir la comisión de la entrega ${id}:`, err.message);
+    }
+
+    return this.findById(id);
+  },
+
   async saveProof(id, { signatureImageUrl, photoUrl, notes }) {
     const sets = [];
     const params = [];

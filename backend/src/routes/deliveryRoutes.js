@@ -11,6 +11,7 @@ router.get('/assignments', deliveryController.assignments);
 router.get('/earnings', deliveryController.earnings);
 router.get('/assignments/:id', deliveryController.getOne);
 router.patch('/assignments/:id/status', deliveryController.updateStatus);
+router.patch('/assignments/:id/failed', deliveryController.markFailed);
 router.post('/assignments/:id/proof', deliveryController.saveProof);
 router.patch('/assignments/:id/payment', deliveryController.registerPayment);
 router.post('/assignments/:id/discount', deliveryController.requestDiscount);
