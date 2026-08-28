@@ -233,8 +233,16 @@
   .signature-wrap--fullscreen {
     top: 0;
     left: 100%;
+    // `vh`/`vw` en iOS Safari miden el viewport GRANDE (con las barras del
+    // navegador retraídas), así que el borde girado quedaba por debajo de la
+    // barra inferior y tapaba el botón "Listo". En pantalla completa no se
+    // puede hacer scroll para retraer esa barra, así que se usa `svh`/`svw`
+    // (viewport con la barra desplegada): siempre cabe. `vh`/`vw` queda de
+    // fallback para navegadores viejos.
     width: 100vh;
+    width: 100svh;
     height: 100vw;
+    height: 100svw;
     transform-origin: 0 0;
     transform: rotate(90deg);
   }
@@ -264,6 +272,13 @@
   &__actions {
     display: flex;
     gap: vars.$spacing-sm;
+  }
+
+  // Girada 90°, el extremo derecho de la barra cae en el borde visual
+  // inferior del teléfono: se separa del indicador de inicio (safe area)
+  // para que "Listo" no quede a ras.
+  @media (max-width: vars.$bp-tablet) and (orientation: portrait) {
+    padding-right: calc(#{vars.$spacing-md} + env(safe-area-inset-bottom, 0px));
   }
 }
 

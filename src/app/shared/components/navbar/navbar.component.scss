@@ -164,6 +164,12 @@
 .app-navbar__links-row {
   border-top: 1px solid rgba(98, 93, 90, 0.1);
   padding: 0.75rem 1rem;
+
+  // En teléfonos la fila se aprieta al máximo para que los 5 enlaces
+  // ("Home"… "Rastrea tu pedido") quepan en una sola línea horizontal.
+  @media (max-width: 767px) {
+    padding: 0.625rem 0.5rem;
+  }
 }
 
 .app-navbar__links {
@@ -176,13 +182,25 @@
   padding: 0;
   gap: 2.25rem;
 
+  // Una sola línea: sin envolver y con tipografía/gap escalados al ancho
+  // de la pantalla para que los 5 enlaces entren aunque sea a 320px.
   @media (max-width: 767px) {
-    gap: 1.25rem;
+    flex-wrap: nowrap;
+    gap: clamp(0.4rem, 2vw, 1.25rem);
   }
 
   a {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 1rem;
+    font-size: 1.125rem;
+
+    @media (max-width: 767px) {
+      font-size: clamp(0.82rem, 3.4vw, 1.15rem);
+    }
+
+    // Teléfonos muy angostos (~320px): baja el piso para no romper la línea.
+    @media (max-width: 340px) {
+      font-size: 0.76rem;
+    }
     color: #625d5a;
     text-decoration: none;
     // Sin esto "Rastrea tu pedido" parte en dos líneas y su texto queda por

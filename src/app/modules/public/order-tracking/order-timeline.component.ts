@@ -420,8 +420,14 @@ export class OrderTimelineComponent {
    */
   protected readonly connectors = computed<ConnectorState[]>(() => {
     const s = this.steps();
+    // Cuando el último nodo es el actual (p. ej. "En bodega" sin pasos
+    // posteriores todavía), no hay ningún tramo que salga de "current" para
+    // animar, y la barra se ve detenida. En ese caso animamos el tramo que
+    // ENTRA al nodo actual para seguir comunicando "en progreso".
+    const lastIsCurrent = s.length > 1 && s[s.length - 1].state === 'current';
     return s.slice(0, -1).map((step, i) => {
       const next = s[i + 1];
+      if (lastIsCurrent && i === s.length - 2) return 'active';
       if (next.state === 'done' || next.state === 'current') return 'done';
       if (step.state === 'current') return 'active';
       return 'future';

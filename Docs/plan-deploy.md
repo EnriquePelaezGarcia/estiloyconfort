@@ -11,7 +11,7 @@
 > | Aislamiento de BD | Dos bases en un MySQL | **Dos MySQL en redes separadas** |
 > | Dominio | `estiloyconfort.com` | **`estiloyconfortm.com`** |
 > | Subdominio de pruebas | `dev.` / `api-dev.` | `dev.` / `api-dev.` *(sin cambio)* |
-> | VPS | Hetzner CX22 | **Hetzner CPX21** (la línea CX no existe fuera de Europa) |
+> | VPS | Hetzner CX22 | **Hetzner CX23 en Helsinki** (la línea CX solo existe en Alemania y Finlandia; se eligió Europa por precio — ver DEPLOY.md §2) |
 >
 > **Lo que este documento acertó y sigue vigente:** el diagnóstico de los
 > bloqueantes de la sección 2. Todos fueron corregidos, incluidos `helmet` y
