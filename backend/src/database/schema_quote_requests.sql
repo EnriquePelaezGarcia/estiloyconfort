@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS quote_requests (
   token                    VARCHAR(32)   NOT NULL UNIQUE,
   -- Opcional: el cliente puede cotizar su envío escribiendo su CP en el carrito.
   shipping_postal_code     VARCHAR(10)   NULL,
+  -- Contacto OPCIONAL que el cliente escribe en el carrito (v1.1). Se guarda
+  -- tal cual (solo .trim()): aquí NO se valida nada — el teléfono puede venir
+  -- con cualquier formato o basura. La cotización formal sí exige nombre y 10
+  -- dígitos; estos campos solo PRELLENAN el builder para el vendedor.
+  customer_name            VARCHAR(150)  NULL,
+  customer_phone           VARCHAR(20)   NULL,
   -- Snapshot INFORMATIVO de lo que el cliente vio en el carrito. La cotización
   -- formal recalcula todo con las tarifas y precios vigentes; esto solo sirve
   -- para que el vendedor sepa qué número se le mostró al cliente.
@@ -77,3 +83,31 @@ CREATE TABLE IF NOT EXISTS quote_request_items (
   CONSTRAINT fk_qri_request FOREIGN KEY (quote_request_id) REFERENCES quote_requests(id) ON DELETE CASCADE,
   INDEX idx_qri_request (quote_request_id)
 );
+
+-- ─── v1.1: CONTACTO OPCIONAL EN AMBIENTES QUE YA TENÍAN LA TABLA ────────────
+-- El CREATE de arriba es `IF NOT EXISTS`: donde la tabla ya se creó con la v1
+-- (sin `customer_name` / `customer_phone`) NO agregaría nada, y el backend
+-- fallaría al insertar. Estos bloques agregan la columna solo si falta, así
+-- que el archivo sigue siendo idempotente y se puede correr en los tres
+-- ambientes sin saber en cuál quedó cada uno.
+SET @sql := IF(
+  (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'quote_requests'
+      AND COLUMN_NAME  = 'customer_name') = 0,
+  'ALTER TABLE quote_requests ADD COLUMN customer_name VARCHAR(150) NULL AFTER shipping_postal_code',
+  'DO 0');
+PREPARE add_customer_name FROM @sql;
+EXECUTE add_customer_name;
+DEALLOCATE PREPARE add_customer_name;
+
+SET @sql := IF(
+  (SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'quote_requests'
+      AND COLUMN_NAME  = 'customer_phone') = 0,
+  'ALTER TABLE quote_requests ADD COLUMN customer_phone VARCHAR(20) NULL AFTER customer_name',
+  'DO 0');
+PREPARE add_customer_phone FROM @sql;
+EXECUTE add_customer_phone;
+DEALLOCATE PREPARE add_customer_phone;

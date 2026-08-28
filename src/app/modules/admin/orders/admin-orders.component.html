@@ -57,9 +57,11 @@
       </thead>
       <tbody>
         @for (o of visibleOrders(); track o.id) {
-          <tr>
+          <tr class="orders-row" [class.orders-row--selected]="selectedId() === o.id" (click)="selectRow(o.id)">
             <td data-label="Pedido" class="strong">
-              {{ o.orderNumber }}
+              <button type="button" class="order-link" (click)="$event.stopPropagation(); viewDetail(o.id)">
+                {{ o.orderNumber }}
+              </button>
               @if (o.assemblyService) { <span class="badge badge--purple">Armado</span> }
             </td>
             <td data-label="Cliente">{{ o.customerName }}</td>
@@ -78,19 +80,11 @@
               <button
                 type="button"
                 class="icon-btn"
-                (click)="viewDetail(o.id)"
-                aria-label="Ver detalle"
-                title="Ver detalle"
-              >
-                <span class="material-symbols-outlined">visibility</span>
-              </button>
-              <button
-                type="button"
-                class="icon-btn"
-                (click)="openAssign(o)"
+                [class.icon-btn--assigned]="!!o.deliveryPersonId"
+                (click)="$event.stopPropagation(); openAssign(o)"
                 [disabled]="o.orderStatus === 'cancelled'"
-                aria-label="Asignar repartidor"
-                title="Asignar repartidor"
+                [attr.aria-label]="o.deliveryPersonId ? 'Repartidor asignado: ' + o.deliveryPersonName : 'Asignar repartidor'"
+                [title]="o.deliveryPersonId ? 'Repartidor asignado: ' + o.deliveryPersonName : 'Asignar repartidor'"
               >
                 <span class="material-symbols-outlined">assignment_ind</span>
               </button>

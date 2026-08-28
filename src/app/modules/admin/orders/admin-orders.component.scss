@@ -1,5 +1,51 @@
 @use '../../../../styles/variables' as vars;
 
+// Selección de fila tipo hoja de cálculo: morado claro que no cansa la vista.
+// OJO: no usar la clase `row` — Bootstrap (cargado global) la pinta como grid.
+.table tbody tr.orders-row {
+  cursor: pointer;
+
+  &.orders-row--selected > td {
+    background: rgba(vars.$color-primary, 0.09);
+  }
+
+  // El resaltado de selección debe ganarle al hover para no perder la referencia.
+  &.orders-row--selected:hover > td {
+    background: rgba(vars.$color-primary, 0.12);
+  }
+}
+
+// Número de pedido clicable: abre el detalle. Botón sin cromo, se lee como
+// texto hasta que se apunta con el mouse.
+.order-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: vars.$color-text;
+  cursor: pointer;
+
+  &:hover { color: vars.$color-primary; text-decoration: underline; }
+  &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
+}
+
+// Icono de repartidor: verde y con fondo permanente cuando ya hay repartidor
+// asignado, para que se distinga sin necesidad de pasar el mouse encima.
+.icon-btn--assigned {
+  color: vars.$color-success;
+  background: rgba(vars.$color-success, 0.16);
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  }
+
+  &:hover {
+    background: rgba(vars.$color-success, 0.26);
+    color: vars.$color-success;
+  }
+}
+
 .status-select {
   padding: 0.35rem 0.5rem;
   border: 1px solid vars.$color-border;

@@ -19,7 +19,7 @@ ALTER TABLE orders
 -- Costo del armado = assembly_base + (pisos × assembly_per_floor).
 -- El 100% del cobro corresponde al repartidor encargado de la entrega.
 INSERT INTO pricing_config (config_key, config_value, label, description, unit, order_display) VALUES
-  ('assembly_base',      150.0000, 'Armado: tarifa base',     'Costo del servicio de armado en planta baja (piso 0). Incluye el armado sin importar el número de muebles del pedido.', '$', 8),
+  ('assembly_base',      100.0000, 'Armado: tarifa base',     'Costo del servicio de armado en planta baja (piso 0). Incluye el armado sin importar el número de muebles del pedido.', '$', 8),
   ('assembly_per_floor',  50.0000, 'Armado: costo por piso',  'Costo adicional por cada piso que haya que subir el mueble. Se cobra igual con o sin elevador.', '$', 9)
 ON DUPLICATE KEY UPDATE
   label = VALUES(label),

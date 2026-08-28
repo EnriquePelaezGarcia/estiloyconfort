@@ -15,7 +15,7 @@ export interface ApprovalItem {
   /** Id del pedido o cotización dueño. */
   documentId: number;
   type: ApprovalType;
-  /** "EC-20260620-0007" para pedido, "COT-42" para cotización. */
+  /** "EC-2026-0007" para pedido, "COT-42" para cotización. */
   documentLabel: string;
   customerName: string;
   amount: number;

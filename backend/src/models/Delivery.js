@@ -82,7 +82,11 @@ const Delivery = {
     if (!row) return null;
     const delivery = mapDelivery(row);
     const [items] = await pool.execute(
-      'SELECT id, product_name, product_sku, quantity, variant_selections, material_label, color FROM order_items WHERE order_id = ?',
+      `SELECT oi.id, oi.product_name, oi.product_sku, oi.quantity, oi.variant_selections,
+              oi.material_label, oi.color,
+              (SELECT image_url FROM product_images
+                 WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
+       FROM order_items oi WHERE oi.order_id = ?`,
       [delivery.orderId],
     );
     delivery.items = items.map((it) => ({
@@ -93,6 +97,10 @@ const Delivery = {
       // M4: material y color son por línea, ya no del pedido completo.
       materialLabel: it.material_label,
       color: it.color,
+      // Foto principal VIGENTE del producto (tabla product_images) — para que
+      // el repartidor vea qué mueble lleva. Ruta relativa: el front la resuelve
+      // con el pipe `mediaUrl`.
+      imageUrl: it.primary_image ?? null,
     }));
     // Docs/plan-descuentos.md: para mostrar el descuento que el propio
     // repartidor pidió (o el que ya traía el pedido) y su estado.
@@ -216,8 +224,9 @@ const Delivery = {
    *
    * @param {number} id  id de la entrega (assignment)
    * @param {string} reason  motivo (lista corta del front); se guarda tal cual
+   * @param {string} [photoUrl]  foto de evidencia del intento fallido (data URL)
    */
-  async markFailed(id, reason) {
+  async markFailed(id, reason, photoUrl) {
     const [[d]] = await pool.execute('SELECT order_id, notes FROM deliveries WHERE id = ?', [id]);
     if (!d) return null;
 
@@ -226,10 +235,13 @@ const Delivery = {
     const note = `[${stamp}] No se pudo entregar${trimmed ? `: ${trimmed}` : ''}`;
     const notes = d.notes ? `${d.notes}\n${note}` : note;
 
-    await pool.execute(
-      "UPDATE deliveries SET delivery_status = 'failed', notes = ? WHERE id = ?",
-      [notes, id],
-    );
+    // La foto de evidencia se guarda en la misma columna `photo_url` que la
+    // foto de entrega: la fila es 1:1 con el pedido y sólo hay una a la vez.
+    const sets = ["delivery_status = 'failed'", 'notes = ?'];
+    const params = [notes];
+    if (photoUrl) { sets.push('photo_url = ?'); params.push(photoUrl); }
+    params.push(id);
+    await pool.execute(`UPDATE deliveries SET ${sets.join(', ')} WHERE id = ?`, params);
 
     // El pedido rebota a 'ready'.
     const Order = require('./Order');

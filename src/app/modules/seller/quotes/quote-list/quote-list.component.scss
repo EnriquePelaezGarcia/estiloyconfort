@@ -9,79 +9,37 @@
   .search { max-width: 280px; }
 }
 
-// ===== Precotizaciones del carrito (Docs/plan-precotizacion-carrito.md) =====
-.requests {
-  margin-bottom: vars.$spacing-xl;
-  padding: vars.$spacing-lg;
-  border: 1px solid vars.$color-primary;
-  border-radius: vars.$radius-lg;
-  background: rgba(139, 69, 19, 0.04);
-
-  &__title {
-    display: flex;
-    align-items: center;
-    gap: vars.$spacing-xs;
-    margin: 0;
-    font-family: vars.$font-headline;
-    font-size: 1rem;
-    color: vars.$color-text;
-  }
-
-  &__sub {
-    margin: vars.$spacing-xs 0 vars.$spacing-md;
-    font-family: vars.$font-body;
-    font-size: 0.8rem;
-    color: vars.$color-text-secondary;
-  }
-
-  &__list {
-    display: flex;
-    flex-direction: column;
-    gap: vars.$spacing-sm;
-  }
-}
-
-.request-card {
+// Aviso que lleva a la bandeja de solicitudes de cotización. Solo el
+// contador: las tarjetas viven en su propia pantalla
+// (Docs/plan-precotizacion-carrito.md D10).
+.quote-requests-bridge {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: vars.$spacing-md;
-  padding: vars.$spacing-md;
-  background: vars.$color-surface;
-  border: 1px solid vars.$color-border;
+  gap: vars.$spacing-xs;
+  width: 100%;
+  margin-bottom: vars.$spacing-lg;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border: 1px solid vars.$color-primary;
   border-radius: vars.$radius-md;
-  flex-wrap: wrap;
+  background: rgba(139, 69, 19, 0.06);
+  cursor: pointer;
+  text-align: left;
+  font-family: vars.$font-body;
+  font-size: 0.85rem;
+  color: vars.$color-text;
 
-  &__info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+  &:hover { background: rgba(139, 69, 19, 0.1); }
+
+  .material-symbols-outlined {
+    font-size: 1.2rem;
+    color: vars.$color-primary;
   }
 
-  &__meta {
-    font-family: vars.$font-body;
-    font-size: 0.72rem;
-    color: vars.$color-text-secondary;
-  }
+  &__text { flex: 1; min-width: 0; }
 
-  &__names {
-    font-family: vars.$font-headline;
-    font-size: 0.88rem;
+  &__cta {
     font-weight: 600;
-    color: vars.$color-text;
-  }
-
-  &__total {
-    font-family: vars.$font-body;
-    font-size: 0.75rem;
-    color: vars.$color-text-secondary;
-  }
-
-  &__actions {
-    display: flex;
-    gap: vars.$spacing-xs;
-    flex-shrink: 0;
+    color: vars.$color-primary;
   }
 }
 
@@ -151,6 +109,24 @@
 
   &__who { display: flex; flex-direction: column; min-width: 0; }
 
+  // Folio clicable: abre la cotización para editar/confirmar. Botón sin cromo,
+  // se lee como una etiqueta hasta que el vendedor lo apunta con el mouse.
+  &__folio {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    &:hover { color: vars.$color-primary; text-decoration: underline; }
+    &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
+  }
+
   &__name {
     font-weight: 600;
     font-size: 0.95rem;
@@ -164,6 +140,19 @@
   &__meta {
     font-size: 0.75rem;
     color: vars.$color-text-secondary;
+  }
+
+  // Rastro de la precotización que la originó (D8).
+  &__origin {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: vars.$color-primary;
+
+    .material-symbols-outlined { font-size: 0.95rem; }
   }
 
   &__body {

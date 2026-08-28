@@ -24,6 +24,9 @@ const quoteRequestsController = {
     res.status(201).json({
       data: {
         token: request.token,
+        // Referencia corta que el cliente cita en el chat; ya viene formateada
+        // desde el modelo — el frontend nunca la arma.
+        folio: request.folio,
         shareUrl: shareUrlFor(request.token),
         estimatedShippingCost: request.estimatedShippingCost,
         estimatedShippingLabel: request.estimatedShippingLabel,
@@ -39,6 +42,12 @@ const quoteRequestsController = {
     res.json({
       data: {
         status: request.status,
+        folio: request.folio,
+        // D7: el contacto es del propio cliente y el token es imposible de
+        // adivinar, así que la pantalla de revisión lo muestra (con botón de
+        // WhatsApp) para que el asesor conteste sin perseguir el chat.
+        customerName: request.customerName,
+        customerPhone: request.customerPhone,
         shippingPostalCode: request.shippingPostalCode,
         estimatedSubtotal: request.estimatedSubtotal,
         estimatedShippingCost: request.estimatedShippingCost,

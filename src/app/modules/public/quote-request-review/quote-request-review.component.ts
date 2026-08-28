@@ -70,6 +70,17 @@ export class QuoteRequestReviewComponent implements OnInit {
     });
   }
 
+  /**
+   * Link directo para contestarle al cliente (D7). El teléfono viene tal cual
+   * lo escribió — puede traer espacios, guiones o basura —, así que se limpia
+   * aquí y se antepone la lada de México, igual que en el resto del panel.
+   * Devuelve null si no quedan dígitos suficientes para marcar.
+   */
+  protected whatsappUrl(phone: string | null): string | null {
+    const digits = (phone ?? '').replace(/\D/g, '');
+    return digits.length >= 10 ? `https://wa.me/52${digits.slice(-10)}` : null;
+  }
+
   protected variantText(item: QuoteRequestItem): string {
     return Object.entries(item.variantSelections ?? {})
       .map(([k, v]) => `${k}: ${v}`)

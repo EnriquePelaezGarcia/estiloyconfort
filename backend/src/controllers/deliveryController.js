@@ -55,6 +55,9 @@ const deliveryController = {
   markFailed: asyncHandler(async (req, res) => {
     const reason = String(req.body.reason ?? '').trim();
     if (!reason) throw ApiError.badRequest('Indica el motivo por el que no se pudo entregar');
+    const photoUrl = typeof req.body.photoUrl === 'string' && req.body.photoUrl.startsWith('data:image/')
+      ? req.body.photoUrl
+      : undefined;
 
     const delivery = await Delivery.findById(req.params.id);
     if (!delivery) throw ApiError.notFound('Entrega no encontrada');
@@ -63,7 +66,7 @@ const deliveryController = {
       throw ApiError.badRequest('Esta entrega ya está marcada como completada');
     }
 
-    const updated = await Delivery.markFailed(req.params.id, reason);
+    const updated = await Delivery.markFailed(req.params.id, reason, photoUrl);
     res.json({ data: updated, message: 'Se registró el intento de entrega' });
   }),
 

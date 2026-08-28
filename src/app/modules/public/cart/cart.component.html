@@ -100,6 +100,36 @@
             }
           </div>
 
+          <!-- Contacto opcional: sin validación a propósito (D2). Solo sirve
+               para que el asesor no tenga que pedirlo por chat. -->
+          <div class="cart-summary__contact">
+            <p class="cart-summary__contact-label">
+              Para que el asesor te atienda más rápido <span>(opcional)</span>
+            </p>
+            <input
+              id="cart-name"
+              class="cart-summary__contact-input"
+              type="text"
+              maxlength="150"
+              placeholder="Tu nombre"
+              autocomplete="name"
+              aria-label="Tu nombre"
+              [value]="customerName()"
+              (input)="onNameInput($event)"
+            />
+            <input
+              id="cart-phone"
+              class="cart-summary__contact-input"
+              type="tel"
+              maxlength="20"
+              placeholder="WhatsApp"
+              autocomplete="tel"
+              aria-label="Tu WhatsApp"
+              [value]="customerPhone()"
+              (input)="onPhoneInput($event)"
+            />
+          </div>
+
           <div class="cart-summary__rows">
             <div class="cart-summary__row">
               <span>Subtotal (sin IVA)</span>

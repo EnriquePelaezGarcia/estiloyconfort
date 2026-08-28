@@ -8,6 +8,7 @@ const extraChargeEngine = require('./extraChargeEngine');
 const { addBusinessDays } = require('../utils/businessDays');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
+const { formatFolio, formatQuoteFolio } = require('../utils/folio');
 
 /** Vigencia comercial de una cotización, en días hábiles. */
 const QUOTE_BUSINESS_DAYS = 15;
@@ -35,6 +36,8 @@ const LAYAWAY_MIN_DEPOSIT = 500;
 function mapQuote(row) {
   return {
     id: row.id,
+    /** Folio legible derivado del id (`COT-0011`), pura presentación. */
+    quoteNumber: formatQuoteFolio(row.id),
     token: row.token,
     sellerId: row.seller_id,
     sellerName: row.seller_name ?? null,
@@ -68,6 +71,13 @@ function mapQuote(row) {
     wholesaleIva: Number(row.wholesale_iva) || 0,
     status: row.status,
     orderId: row.order_id ?? null,
+    /**
+     * Rastro de origen (D8): "nació de la precotización PRE-0013". Se DERIVA del
+     * JOIN con quote_requests — `quotes` no guarda ninguna columna nueva. Como
+     * consecuencia el rastro desaparece cuando el cron borra la precotización
+     * a los 7 días; para entonces la cotización ya se sostiene sola.
+     */
+    webOrderFolio: row.web_order_folio_id != null ? formatFolio(row.web_order_folio_id) : null,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
     // Solo lo trae el listado (subconsulta): evita cargar todas las líneas
@@ -108,10 +118,12 @@ const ITEMS_SELECT = `
 `;
 
 const BASE_SELECT = `
-  SELECT q.*, u.full_name AS seller_name, shr.full_name AS shipping_cost_reviewed_by_name
+  SELECT q.*, u.full_name AS seller_name, shr.full_name AS shipping_cost_reviewed_by_name,
+         qr.id AS web_order_folio_id
   FROM quotes q
   LEFT JOIN users u ON u.id = q.seller_id
   LEFT JOIN users shr ON shr.id = q.shipping_cost_reviewed_by
+  LEFT JOIN quote_requests qr ON qr.quote_id = q.id
 `;
 
 /**
@@ -780,10 +792,11 @@ const Quote = {
     const isAdmin = role === 'admin';
     // El listado no necesita las líneas completas, solo cuántas son.
     const LIST_SELECT = `
-      SELECT q.*, u.full_name AS seller_name,
+      SELECT q.*, u.full_name AS seller_name, qr.id AS web_order_folio_id,
              (SELECT COUNT(*) FROM quote_items qi WHERE qi.quote_id = q.id) AS item_count
       FROM quotes q
       LEFT JOIN users u ON u.id = q.seller_id
+      LEFT JOIN quote_requests qr ON qr.quote_id = q.id
     `;
     const [rows] = isAdmin
       ? await pool.execute(

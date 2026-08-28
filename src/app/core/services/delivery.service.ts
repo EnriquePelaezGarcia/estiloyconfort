@@ -38,10 +38,14 @@ export class DeliveryService {
    * marca la entrega 'failed', anexa el motivo a las notas y el pedido vuelve
    * a 'ready' para reprogramarse.
    */
-  markFailed(id: number, reason: string): Observable<{ data: DeliveryAssignment; message: string }> {
+  markFailed(
+    id: number,
+    reason: string,
+    photoUrl?: string,
+  ): Observable<{ data: DeliveryAssignment; message: string }> {
     return this.api.patch<{ data: DeliveryAssignment; message: string }>(
       `/delivery/assignments/${id}/failed`,
-      { reason },
+      { reason, photoUrl },
     );
   }
 

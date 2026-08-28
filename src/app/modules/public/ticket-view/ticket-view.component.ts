@@ -10,6 +10,7 @@ import {
   TENTATIVE_DELIVERY_NOTICE,
 } from '../../../core/models/order-public-labels';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 /**
  * Cómo se le nombra al cliente cada condición de venta. No se reusan los
@@ -42,7 +43,7 @@ const DELIVERY_LABELS: Record<DeliveryType, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ticket-view.component.html',
   styleUrl: './ticket-view.component.scss',
-  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent],
+  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent, MediaUrlPipe],
 })
 export class TicketViewComponent implements OnInit {
   private route = inject(ActivatedRoute);

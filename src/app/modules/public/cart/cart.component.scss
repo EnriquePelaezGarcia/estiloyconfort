@@ -275,6 +275,39 @@
     strong { font-weight: 700; }
   }
 
+  // Contacto opcional (Docs/plan-precotizacion-carrito.md D2).
+  &__contact {
+    display: flex;
+    flex-direction: column;
+    gap: v.$spacing-xs;
+    padding-bottom: v.$spacing-md;
+    border-bottom: 1px solid v.$color-border;
+  }
+
+  &__contact-label {
+    margin: 0;
+    font-family: v.$font-body;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: v.$color-text;
+
+    span { font-weight: 400; color: v.$color-text-secondary; }
+  }
+
+  &__contact-input {
+    width: 100%;
+    padding: v.$spacing-sm;
+    border: 1.5px solid v.$color-border;
+    border-radius: v.$radius-md;
+    font-family: v.$font-body;
+    font-size: 0.9rem;
+
+    &:focus {
+      outline: none;
+      border-color: v.$color-primary;
+    }
+  }
+
   &__note {
     display: flex;
     gap: v.$spacing-xs;

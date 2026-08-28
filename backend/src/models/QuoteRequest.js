@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { pool } = require('../config/database');
 const ShippingRate = require('./ShippingRate');
+const { formatFolio } = require('../utils/folio');
 
 /** Vigencia del link de una precotización, en días naturales. */
 const REQUEST_TTL_DAYS = 7;
@@ -21,6 +22,10 @@ function mapRequest(row) {
   return {
     id: row.id,
     token: row.token,
+    /** Referencia legible para el chat ("EC-0142"). Siempre la arma el backend. */
+    folio: formatFolio(row.id),
+    customerName: row.customer_name ?? null,
+    customerPhone: row.customer_phone ?? null,
     shippingPostalCode: row.shipping_postal_code ?? null,
     estimatedSubtotal: Number(row.estimated_subtotal),
     estimatedShippingCost: row.estimated_shipping_cost != null ? Number(row.estimated_shipping_cost) : null,
@@ -82,6 +87,18 @@ function deriveColor(colorPolicy, fixedColor, variantSelections) {
   return match ? String(match[1]).trim() || null : null;
 }
 
+/**
+ * Contacto opcional del carrito (D2): NO se valida ni se normaliza — el
+ * cliente puede escribir cualquier cosa, y el vendedor lo corrige en el
+ * builder (que sí exige nombre y 10 dígitos). Solo se recorta al ancho de la
+ * columna para que MySQL en modo estricto no rechace el INSERT.
+ */
+function trimOrNull(value, maxLength) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, maxLength);
+  return trimmed || null;
+}
+
 const QuoteRequest = {
   REQUEST_TTL_DAYS,
 
@@ -91,8 +108,12 @@ const QuoteRequest = {
    * solicitud — el cliente no puede quedar bloqueado porque un producto se
    * dio de baja mientras tenía el carrito abierto.
    *
-   * @param {object} data { items: [{ productId, materialId, variantSelections, quantity }], shippingPostalCode? }
-   * @returns {Promise<{ token, request, items }>}
+   * Si viene `replaceToken` y apunta a una precotización todavía pendiente y
+   * vigente, REESCRIBE esa en vez de crear otra (ver D6 más abajo).
+   *
+   * @param {object} data { items: [{ productId, materialId, variantSelections, quantity }],
+   *                        shippingPostalCode?, customerName?, customerPhone?, replaceToken? }
+   * @returns {Promise<object>} la precotización recién guardada (con folio e items)
    */
   async create(data) {
     const rawItems = Array.isArray(data.items) ? data.items.slice(0, MAX_ITEMS) : [];
@@ -165,20 +186,66 @@ const QuoteRequest = {
 
     estimatedSubtotal = Math.round(estimatedSubtotal * 100) / 100;
 
-    const token = crypto.randomBytes(16).toString('base64url');
+    const customerName = trimOrNull(data.customerName, 150);
+    const customerPhone = trimOrNull(data.customerPhone, 20);
     const expiresAt = new Date(Date.now() + REQUEST_TTL_DAYS * 86_400_000);
+
+    // D6 — anti folio duplicado. El carrito recuerda en localStorage el token
+    // de su última precotización y lo manda como `replaceToken`. Si esa sigue
+    // PENDIENTE y VIGENTE se reescribe en su lugar, conservando id, token y
+    // folio: el cliente que ajusta el carrito y vuelve a enviar no le llena la
+    // bandeja al vendedor, y el link que ya compartió apunta al contenido
+    // nuevo. Convertida, descartada, vencida o inexistente -> se crea una nueva.
+    let replaceId = null;
+    let token = null;
+    const replaceToken = typeof data.replaceToken === 'string' ? data.replaceToken.trim() : '';
+    if (replaceToken) {
+      const [[row]] = await pool.execute(
+        `SELECT id, token FROM quote_requests
+          WHERE token = ? AND status = 'pending' AND expires_at > NOW()`,
+        [replaceToken],
+      );
+      if (row) {
+        replaceId = row.id;
+        token = row.token;
+      }
+    }
+    if (!token) token = crypto.randomBytes(16).toString('base64url');
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
-      const [result] = await conn.execute(
-        `INSERT INTO quote_requests
-           (token, shipping_postal_code, estimated_subtotal, estimated_shipping_cost,
-            estimated_shipping_label, status, expires_at)
-         VALUES (?,?,?,?,?, 'pending', ?)`,
-        [token, shippingPostalCode, estimatedSubtotal, estimatedShippingCost, estimatedShippingLabel, expiresAt],
-      );
-      const requestId = result.insertId;
+      let requestId = replaceId;
+      if (replaceId) {
+        await conn.execute(
+          `UPDATE quote_requests
+              SET customer_name = ?, customer_phone = ?, shipping_postal_code = ?,
+                  estimated_subtotal = ?, estimated_shipping_cost = ?,
+                  estimated_shipping_label = ?, expires_at = ?
+            WHERE id = ?`,
+          [
+            customerName, customerPhone, shippingPostalCode, estimatedSubtotal,
+            estimatedShippingCost, estimatedShippingLabel, expiresAt, replaceId,
+          ],
+        );
+        // Las líneas se reemplazan enteras: el carrito de hoy es la verdad.
+        await conn.execute(
+          'DELETE FROM quote_request_items WHERE quote_request_id = ?',
+          [replaceId],
+        );
+      } else {
+        const [result] = await conn.execute(
+          `INSERT INTO quote_requests
+             (token, customer_name, customer_phone, shipping_postal_code, estimated_subtotal,
+              estimated_shipping_cost, estimated_shipping_label, status, expires_at)
+           VALUES (?,?,?,?,?,?,?, 'pending', ?)`,
+          [
+            token, customerName, customerPhone, shippingPostalCode, estimatedSubtotal,
+            estimatedShippingCost, estimatedShippingLabel, expiresAt,
+          ],
+        );
+        requestId = result.insertId;
+      }
       for (const r of resolved) {
         await conn.execute(
           `INSERT INTO quote_request_items

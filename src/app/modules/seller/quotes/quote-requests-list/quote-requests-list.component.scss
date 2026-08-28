@@ -1,0 +1,79 @@
+@use '../../../../../styles/variables' as vars;
+
+// `.page-head`, `.toolbar`, `.search`, `.btn`, `.state`, `.spinner` y `.empty`
+// son globales (styles/_business.scss).
+
+.toolbar {
+  .search { max-width: 320px; }
+}
+
+.request-list {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.request-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  flex-wrap: wrap;
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  // Folio + nombre: lo primero que el vendedor cruza con el chat.
+  &__who {
+    font-family: vars.$font-body;
+    font-size: 0.8rem;
+    color: vars.$color-text;
+  }
+
+  &__folio {
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: vars.$color-primary;
+  }
+
+  &__meta {
+    font-family: vars.$font-body;
+    font-size: 0.72rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__names {
+    font-family: vars.$font-headline;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: vars.$color-text;
+  }
+
+  &__total {
+    font-family: vars.$font-body;
+    font-size: 0.75rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__actions {
+    display: flex;
+    gap: vars.$spacing-xs;
+    flex-shrink: 0;
+  }
+}
+
+// Botón compacto: las tarjetas llevan 3-4 acciones en una fila.
+.btn--sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+
+  .material-symbols-outlined { font-size: 1.05rem; }
+}

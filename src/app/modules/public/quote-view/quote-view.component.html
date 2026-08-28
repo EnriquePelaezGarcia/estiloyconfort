@@ -15,7 +15,7 @@
       <header class="quote-sheet__head">
         <div class="brand">
           <span class="brand__name">Mueblería Estilo y Confort</span>
-          <span class="brand__tag">Cotización</span>
+          <span class="brand__tag">Cotización {{ q.quoteNumber }}</span>
         </div>
         <div class="quote-sheet__for">
           <span class="quote-sheet__label">Para</span>
@@ -33,7 +33,7 @@
             @if (it.imageUrl; as img) {
               <img
                 class="item__thumb item__thumb--zoomable"
-                [src]="img"
+                [src]="img | mediaUrl"
                 [alt]="it.productName"
                 loading="lazy"
                 (click)="zoomedImage.set(img)"
@@ -197,6 +197,6 @@
   }
 
   @if (zoomedImage(); as img) {
-    <app-image-lightbox [src]="img" [alt]="'Foto del producto'" (closed)="zoomedImage.set(null)" />
+    <app-image-lightbox [src]="(img | mediaUrl) ?? ''" [alt]="'Foto del producto'" (closed)="zoomedImage.set(null)" />
   }
 </div>

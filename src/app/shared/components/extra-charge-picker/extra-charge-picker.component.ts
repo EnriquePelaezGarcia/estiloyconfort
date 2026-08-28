@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 
 /**
  * Mini-formulario para capturar un cargo extra por modificación al mueble
@@ -20,7 +20,14 @@ export class ExtraChargePickerComponent {
   readonly added = output<{ label: string; amount: number }>();
   readonly cancelled = output<void>();
 
-  protected readonly suggestions = ['Focos LED', 'Cajones extra', 'Cambio de espejo', 'Paquete cumpleañero'];
+  /**
+   * Chips de sugerencia rápida. Quien usa el componente decide cuáles ofrecer;
+   * pásale `[]` para ocultarlas por completo (así lo hace el builder de
+   * cotizaciones).
+   */
+  readonly suggestions = input<string[]>([
+    'Focos LED', 'Cajones extra', 'Cambio de espejo', 'Paquete cumpleañero',
+  ]);
   protected readonly label = signal('');
   protected readonly amount = signal<number | null>(null);
 

@@ -41,7 +41,7 @@
               id="orderNumber"
               type="text"
               formControlName="orderNumber"
-              placeholder="EC-20260826-0007"
+              placeholder="EC-2026-0007"
               autocomplete="off"
               autocapitalize="characters"
               spellcheck="false"
@@ -49,7 +49,7 @@
               [class.field__input--error]="fieldInvalid('orderNumber')"
             />
             @if (fieldInvalid('orderNumber')) {
-              <p class="field__error">Revisa el formato: EC-AAAAMMDD-NNNN</p>
+              <p class="field__error">Revisa el formato: EC-AAAA-NNNN</p>
             }
           </div>
 

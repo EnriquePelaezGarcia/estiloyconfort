@@ -1,7 +1,13 @@
 <header class="page-head">
   <div>
     <p class="page-head__overline">Cotizaciones</p>
-    <h1 class="page-head__title">{{ isEditing() ? 'Editar cotización' : 'Nueva cotización' }}</h1>
+    <h1 class="page-head__title">
+      @if (isEditing()) {
+        Editar cotización@if (loadedQuoteNumber(); as folio) { {{ folio }} }
+      } @else {
+        Nueva cotización
+      }
+    </h1>
     <p class="page-head__sub">
       @if (isEditing()) {
         Ajusta el presupuesto mientras el cliente decide. El link que ya compartiste no cambia.
@@ -18,7 +24,7 @@
   <!-- ===== Modo compartir: la cotización ya existe ===== -->
   <div class="panel share">
     <span class="material-symbols-outlined share__icon">check_circle</span>
-    <h2 class="share__title">Cotización lista para {{ quote.customerName }}</h2>
+    <h2 class="share__title">Cotización {{ quote.quoteNumber }} lista para {{ quote.customerName }}</h2>
     <p class="share__total">{{ quote.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
     <p class="share__hint">
       El cliente solo podrá verla, no editarla. Cuando confirme por WhatsApp,
@@ -347,23 +353,26 @@
                   </span>
                 }
                 @if (unitPrice(l) !== null || l.gift) {
-                  <!-- La etiqueta no cambia: lo que dice si el regalo está
-                       aplicado es el color (dorado) de la pastilla.
-                       `aria-pressed` lo anuncia para quien no ve ese color. -->
-                  <button
-                    type="button"
-                    class="cart-line__gift-toggle"
-                    [class.cart-line__gift-toggle--active]="l.gift"
-                    [attr.aria-pressed]="!!l.gift"
-                    [title]="l.gift ? 'Quitar el regalo de esta línea' : 'Regalar esta línea (precio $0)'"
-                    (click)="toggleGift(i)"
-                  >
-                    Gratis
-                  </button>
-                  <!-- Docs/plan-aprobaciones-admin.md D5: enlace de texto discreto. -->
-                  <button type="button" class="cart-line__extra-charge-toggle" (click)="toggleExtraChargeForm(i)">
-                    + cargo extra
-                  </button>
+                  <div class="cart-line__actions">
+                    <!-- La etiqueta no cambia: lo que dice si el regalo está
+                         aplicado es el color (dorado) de la pastilla.
+                         `aria-pressed` lo anuncia para quien no ve ese color. -->
+                    <button
+                      type="button"
+                      class="cart-line__gift-toggle"
+                      [class.cart-line__gift-toggle--active]="l.gift"
+                      [attr.aria-pressed]="!!l.gift"
+                      [title]="l.gift ? 'Quitar el regalo de esta línea' : 'Regalar esta línea (precio $0)'"
+                      (click)="toggleGift(i)"
+                    >
+                      Gratis
+                    </button>
+                    <!-- Docs/plan-aprobaciones-admin.md D5: enlace de texto discreto,
+                         a la derecha de "Gratis". -->
+                    <button type="button" class="cart-line__extra-charge-toggle" (click)="toggleExtraChargeForm(i)">
+                      + cargo extra
+                    </button>
+                  </div>
                 }
                 @if (l.extraCharges?.length) {
                   <ul class="cart-line__charges">
@@ -382,6 +391,7 @@
                 }
                 @if (openExtraChargeLine() === i) {
                   <app-extra-charge-picker
+                    [suggestions]="noExtraChargeSuggestions"
                     (added)="addExtraCharge(i, $event)"
                     (cancelled)="openExtraChargeLine.set(null)"
                   />
@@ -544,13 +554,16 @@
                 <span class="shipping-row__price">{{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
               </div>
             }
-            @if (extraChargesTotal() > 0) {
+            <!-- Docs/plan-aprobaciones-admin.md RN-EC8: cada cargo extra como
+                 concepto propio, con su descripción y precio, igual que lo verá
+                 el cliente en el link de la cotización. -->
+            @for (ec of allExtraCharges(); track $index) {
               <div class="shipping-row">
                 <span class="shipping-row__label">
                   <span class="material-symbols-outlined">build</span>
-                  Cargos extra ({{ extraChargesCount() }})
+                  {{ ec.label }}
                 </span>
-                <span class="shipping-row__price">{{ extraChargesTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                <span class="shipping-row__price">{{ ec.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
               </div>
             }
             @if (activeMoneyDiscount(); as active) {
@@ -660,17 +673,52 @@
           }
         }
 
-        <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
-          @if (saving()) {
-            <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
-          } @else if (isEditing()) {
-            <span class="material-symbols-outlined">save</span>
-            Guardar cambios
-          } @else {
-            <span class="material-symbols-outlined">request_quote</span>
-            Crear y compartir
+        @if (isConverted()) {
+          <!-- Ya se levantó el pedido: la cotización quedó como documento
+               histórico, el backend rechaza cualquier edición. -->
+          <div class="quote-converted">
+            <span class="material-symbols-outlined">check_circle</span>
+            <p>Esta cotización ya se convirtió en pedido.</p>
+            <button type="button" class="btn btn--primary btn--block btn--lg" (click)="goToOrder()">
+              <span class="material-symbols-outlined">receipt_long</span>
+              Ver pedido
+            </button>
+          </div>
+        } @else {
+          <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
+            @if (saving()) {
+              <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
+            } @else if (isEditing()) {
+              <span class="material-symbols-outlined">save</span>
+              Guardar cambios
+            } @else {
+              <span class="material-symbols-outlined">request_quote</span>
+              Crear y compartir
+            }
+          </button>
+
+          @if (isEditing() && loadedQuoteStatus() === 'open') {
+            <button
+              type="button"
+              class="btn btn--success btn--block btn--lg"
+              [disabled]="saving()"
+              (click)="confirmAndCreateOrder()"
+            >
+              <span class="material-symbols-outlined">point_of_sale</span>
+              Confirmar y crear pedido
+            </button>
+          } @else if (isEditing() && loadedQuoteStatus() === 'confirmed') {
+            <button
+              type="button"
+              class="btn btn--success btn--block btn--lg"
+              [disabled]="saving()"
+              (click)="confirmAndCreateOrder()"
+            >
+              <span class="material-symbols-outlined">point_of_sale</span>
+              Crear pedido
+            </button>
           }
-        </button>
+        }
       </div>
     </div>
 

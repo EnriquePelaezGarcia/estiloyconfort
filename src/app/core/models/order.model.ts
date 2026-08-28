@@ -519,6 +519,8 @@ export interface DeliveryAssignment {
     quantity: number;
     materialLabel?: string | null;
     color?: string | null;
+    /** Foto principal vigente del producto (ruta relativa, resolver con `mediaUrl`). */
+    imageUrl?: string | null;
   }>;
   /** Docs/plan-descuentos.md — el que el repartidor pidió, o el que ya traía el pedido. */
   discounts?: OrderDiscount[];

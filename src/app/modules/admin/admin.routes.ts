@@ -112,6 +112,14 @@ export const adminRoutes: Routes = [
         title: 'Venta - Panel Admin',
       },
       {
+        path: 'solicitudes-cotizacion',
+        loadComponent: () =>
+          import('../seller/quotes/quote-requests-list/quote-requests-list.component').then(
+            (m) => m.QuoteRequestsListComponent,
+          ),
+        title: 'Solicitudes de cotización - Panel Admin',
+      },
+      {
         path: 'cotizaciones',
         loadComponent: () =>
           import('../seller/quotes/quote-list/quote-list.component').then(

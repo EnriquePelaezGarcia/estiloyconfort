@@ -97,16 +97,34 @@
             @for (it of o.items; track it.id) {
               <tr>
                 <td>
-                  <span class="strong">{{ it.productName }}</span>
-                  <span class="muted"> · {{ it.productSku }}</span>
-                  <!-- Docs/plan-aprobaciones-admin.md D9/RN-EC6: agregar un
-                       cargo extra a este pedido ya existente — discreto,
-                       vendedor o admin. -->
-                  @if (o.orderStatus !== 'cancelled') {
-                    <button type="button" class="line-extra-charge-toggle no-print" (click)="openExtraChargeFor(it)">
-                      + cargo extra
-                    </button>
-                  }
+                  <div class="prod-cell">
+                    @if (it.imageUrl; as img) {
+                      <button
+                        type="button"
+                        class="prod-cell__thumb-btn no-print"
+                        title="Ver foto del producto"
+                        (click)="zoomedImage.set(img)"
+                      >
+                        <img class="prod-cell__thumb" [src]="img | mediaUrl" [alt]="it.productName" width="48" height="48" loading="lazy" />
+                      </button>
+                    } @else {
+                      <span class="prod-cell__thumb prod-cell__thumb--empty no-print">
+                        <span class="material-symbols-outlined">chair</span>
+                      </span>
+                    }
+                    <div class="prod-cell__info">
+                      <span class="strong">{{ it.productName }}</span>
+                      <span class="muted"> · {{ it.productSku }}</span>
+                      <!-- Docs/plan-aprobaciones-admin.md D9/RN-EC6: agregar un
+                           cargo extra a este pedido ya existente — discreto,
+                           vendedor o admin. -->
+                      @if (o.orderStatus !== 'cancelled') {
+                        <button type="button" class="line-extra-charge-toggle no-print" (click)="openExtraChargeFor(it)">
+                          + cargo extra
+                        </button>
+                      }
+                    </div>
+                  </div>
                 </td>
                 <td data-label="Material">
                   {{ it.materialLabel }}
@@ -851,5 +869,15 @@
     [hasPendingFabrication]="hasPendingFabrication()"
     (closed)="closeReschedule()"
     (saved)="onRescheduled()"
+  />
+}
+
+<!-- ===== Foto del producto a tamaño completo (clic en la miniatura) ===== -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox
+    class="no-print"
+    [src]="(img | mediaUrl) ?? ''"
+    [alt]="'Foto del producto'"
+    (closed)="zoomedImage.set(null)"
   />
 }

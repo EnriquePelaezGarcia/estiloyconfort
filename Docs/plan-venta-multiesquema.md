@@ -327,6 +327,14 @@ totales" y pasa a ser un consecutivo del día, que es lo que el formato
 > Este arreglo **es independiente de la venta partida y conviene hacerlo ya**,
 > se apruebe o no el resto del plan.
 
+> **Actualización (ago-2026): el folio pasó a consecutivo POR AÑO.** El formato
+> es `EC-<año>-<NNNN>` (p. ej. `EC-2026-0001`) y el consecutivo se reinicia el
+> 1 de enero, no cada día. `order_sequences` se rellavéo por año
+> (`seq_year SMALLINT` en vez de `seq_date DATE`). Ver
+> [Order.js#generateOrderNumber](../backend/src/models/Order.js),
+> `schema_order_sequences.sql` y `backfill_order_number_yearly.js` (renumera
+> los pedidos ya emitidos).
+
 ### 6.2 Tope de descuento por pedido — hueco de control
 
 `assertWithinCap` ([discountEngine.js:77](../backend/src/models/discountEngine.js#L77))

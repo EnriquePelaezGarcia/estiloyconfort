@@ -31,7 +31,7 @@ El plan tiene **dos partes que se implementan en orden**:
 ## Objetivo
 
 Página pública **`/rastrear-pedido`** (sin sesión, enlazada desde el navbar). El
-cliente escribe **número de pedido** (`EC-20260826-0007`) + **últimos 4 dígitos
+cliente escribe **número de pedido** (`EC-2026-0007`) + **últimos 4 dígitos
 del teléfono** con el que compró, y ve una **línea de tiempo vertical** tipo app
 de paquetería: cada etapa con su fecha/hora, la etapa actual resaltada, la fecha
 estimada de entrega con aviso "sujeta a cambios", y la lista de productos (sin
@@ -39,7 +39,7 @@ precios).
 
 ```
 ┌─────────────────────────────────────────┐
-│  Pedido EC-20260826-0007                 │
+│  Pedido EC-2026-0007                     │
 │  Hola, Juan                              │
 │                                          │
 │  ● Pedido recibido    26 ago, 2:14 pm    │
@@ -63,8 +63,8 @@ precios).
 Tablas relevantes en `backend/src/database/schema_fase4.sql`:
 
 **`orders`** (cabecera). Campos que importan aquí:
-- `order_number` VARCHAR(20) UNIQUE — formato `EC-YYYYMMDD-NNNN`, consecutivo del
-  día (generado en `Order.generateOrderNumber` con la tabla `order_sequences`).
+- `order_number` VARCHAR(20) UNIQUE — formato `EC-YYYY-NNNN`, consecutivo del
+  año (generado en `Order.generateOrderNumber` con la tabla `order_sequences`).
 - `customer_name`, `customer_email` (nullable), `customer_phone` VARCHAR(20)
   **(nullable)**.
 - `order_status` ENUM(`'pending','fabricating','ready','in_delivery','delivered','cancelled'`)
@@ -453,10 +453,14 @@ lea cada pedido y aplique `Order.paymentClearsForDelivery`:
 
 ## Por qué "número + últimos 4 del teléfono"
 
-El número **ya trae la fecha** (`EC-`**`20260826`**`-0007`) y es un consecutivo
-corto del día. Un bot que enumera `EC-20260826-0001..9999` ya conoce la fecha:
-pedirla no agrega barrera. Los últimos 4 del teléfono sí son un dato que el
-atacante no tiene. Se combina con **rate-limit por IP**.
+El número es corto y adivinable — `EC-<año>-<NNNN>` (p. ej. `EC-2026-0007`), un
+consecutivo del año. Un bot que enumera `EC-2026-0001..9999` no necesita saber
+nada más. Los últimos 4 del teléfono sí son un dato que el atacante no tiene.
+Se combina con **rate-limit por IP**.
+
+> Nota (ago-2026): el folio pasó de consecutivo del día (`EC-20260826-0007`) a
+> consecutivo del año (`EC-2026-0007`). El regex de validación es ahora
+> `/^EC-\d{4}-\d{4}$/`.
 
 ## 1. BD — `backend/src/database/schema_order_status_history.sql` (nuevo)
 
@@ -499,7 +503,7 @@ adelante.
 ### `controllers/trackingController.js` (nuevo) — `POST /api/tracking/lookup`
 Body `{ orderNumber, phoneLast4 }`:
 1. Normaliza `orderNumber` (`String(x).trim().toUpperCase()`), valida
-   `/^EC-\d{8}-\d{4}$/`.
+   `/^EC-\d{4}-\d{4}$/`.
 2. Valida `phoneLast4` = `/^\d{4}$/`.
 3. `SELECT` del pedido por `order_number`. Compara los últimos 4 dígitos de
    `customer_phone` (quitar todo lo no-dígito) con `phoneLast4`.
@@ -511,7 +515,7 @@ Body `{ orderNumber, phoneLast4 }`:
 
 ```jsonc
 {
-  "orderNumber": "EC-20260826-0007",
+  "orderNumber": "EC-2026-0007",
   "orderDate": "2026-08-26T20:14:00.000Z",
   "customerFirstName": "Juan",              // primer token de customer_name
   "orderStatus": "in_warehouse",
@@ -575,7 +579,7 @@ El componente lee `?pedido=EC-…` del `ActivatedRoute` para prellenar el númer
 
 ### Componente — `src/app/modules/public/order-tracking/` (nuevo)
 `order-tracking.component.{ts,html,scss}`. Standalone, `OnPush`, signals.
-Formulario reactivo: `orderNumber` (required, `Validators.pattern(/^EC-\d{8}-\d{4}$/i)`),
+Formulario reactivo: `orderNumber` (required, `Validators.pattern(/^EC-\d{4}-\d{4}$/i)`),
 `phoneLast4` (required, `Validators.pattern(/^\d{4}$/)`).
 Estados con signals: `idle` / `loading` / `found(OrderTracking)` / `notFound`.
 

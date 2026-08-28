@@ -5,7 +5,7 @@ import { OrderTrackingService } from '../../../core/services/order-tracking.serv
 import { OrderTracking } from '../../../core/models/order-tracking.model';
 import { OrderTimelineComponent } from './order-timeline.component';
 
-const ORDER_NUMBER_PATTERN = /^EC-\d{8}-\d{4}$/i;
+const ORDER_NUMBER_PATTERN = /^EC-\d{4}-\d{4}$/i;
 const LAST4_PATTERN = /^\d{4}$/;
 
 type ViewState = 'idle' | 'loading' | 'found' | 'notFound';

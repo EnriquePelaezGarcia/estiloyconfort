@@ -11,10 +11,31 @@
       <header class="qr-sheet__head">
         <span class="qr-sheet__eyebrow">Precotización del cliente</span>
         <h1>Pedido armado desde el carrito</h1>
+        <p class="qr-sheet__ref">Folio {{ req.folio }}</p>
         <p class="qr-sheet__meta">
           Recibida {{ req.createdAt | date:'d MMM y, HH:mm' }} · vence {{ req.expiresAt | date:'d MMM y' }}
         </p>
       </header>
+
+      <!-- Contacto que el cliente dejó en el carrito (opcional, sin validar). -->
+      @if (req.customerName || req.customerPhone) {
+        <div class="qr-customer">
+          <span class="material-symbols-outlined">person</span>
+          <div class="qr-customer__data">
+            @if (req.customerName) {
+              <span class="qr-customer__name">{{ req.customerName }}</span>
+            }
+            @if (req.customerPhone) {
+              <span class="qr-customer__phone">{{ req.customerPhone }}</span>
+            }
+          </div>
+          @if (whatsappUrl(req.customerPhone); as wa) {
+            <a class="qr-customer__wa" [href]="wa" target="_blank" rel="noopener">
+              Escribir por WhatsApp
+            </a>
+          }
+        </div>
+      }
 
       @if (req.status === 'converted') {
         <div class="qr-banner qr-banner--done">

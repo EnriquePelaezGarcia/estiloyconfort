@@ -51,7 +51,29 @@ export class AdminLayoutComponent implements OnInit {
     { label: 'Lista de precios', icon: 'sell', route: 'lista-precios' },
     { label: 'Precios mayoreo', icon: 'store', route: 'precios-mayoreo', wholesaleOnly: true },
     { label: 'Panel de utilidades', icon: 'insights', route: 'utilidades' },
+    {
+      // Bandeja aparte de "Cotizaciones" (Docs/plan-precotizacion-carrito.md D10):
+      // es trabajo entrante y efímero, no documentos emitidos.
+      label: 'Solicitudes de cotización',
+      icon: 'move_to_inbox',
+      route: 'solicitudes-cotizacion',
+      badge: () => this.quoteRequestsService.pendingCount() ?? 0,
+    },
+    {
+      label: 'Cotizaciones',
+      icon: 'request_quote',
+      route: 'cotizaciones',
+      // Descuentos de cotización pendientes (Docs/plan-descuentos.md).
+      badge: () => this.discountsService.pendingCounts()?.quotes ?? 0,
+    },
     { label: 'Nuevo pedido', icon: 'point_of_sale', route: 'punto-venta' },
+    {
+      label: 'Todos los pedidos',
+      icon: 'local_shipping',
+      route: 'pedidos',
+      // Docs/plan-descuentos.md: descuentos de pedido pendientes de revisar.
+      badge: () => this.discountsService.pendingCounts()?.orders ?? 0,
+    },
     {
       label: 'Aprobaciones',
       icon: 'fact_check',
@@ -59,16 +81,6 @@ export class AdminLayoutComponent implements OnInit {
       // Docs/plan-aprobaciones-admin.md D6: puramente informativo, no se
       // "apaga" al entrar — mismo mecanismo que las badges de abajo.
       badge: () => this.approvalsService.pendingCounts()?.total ?? 0,
-    },
-    {
-      label: 'Cotizaciones',
-      icon: 'request_quote',
-      route: 'cotizaciones',
-      // Descuentos de cotización pendientes (Docs/plan-descuentos.md) +
-      // precotizaciones del carrito pendientes (Docs/plan-precotizacion-carrito.md).
-      badge: () =>
-        (this.discountsService.pendingCounts()?.quotes ?? 0) +
-        (this.quoteRequestsService.pendingCount() ?? 0),
     },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Finanzas', icon: 'payments', route: 'finanzas' },
@@ -81,13 +93,6 @@ export class AdminLayoutComponent implements OnInit {
       route: 'agenda-entregas',
       // Exactas vencidas + hoy + mañana (Docs/plan-fecha-hora-entrega.md §6.4).
       badge: () => this.scheduleService.counts()?.badge ?? 0,
-    },
-    {
-      label: 'Todos los pedidos',
-      icon: 'local_shipping',
-      route: 'pedidos',
-      // Docs/plan-descuentos.md: descuentos de pedido pendientes de revisar.
-      badge: () => this.discountsService.pendingCounts()?.orders ?? 0,
     },
     { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },

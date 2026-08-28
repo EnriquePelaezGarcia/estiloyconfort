@@ -14,7 +14,7 @@ const ApiError = require('../utils/ApiError');
  * dinero, saldo, dirección, notas internas, fabricante, ids ni vendedor.
  */
 
-const ORDER_NUMBER_RE = /^EC-\d{8}-\d{4}$/;
+const ORDER_NUMBER_RE = /^EC-\d{4}-\d{4}$/;
 const LAST4_RE = /^\d{4}$/;
 
 // Una sola respuesta para "no existe" / "teléfono no coincide" / "sin teléfono":

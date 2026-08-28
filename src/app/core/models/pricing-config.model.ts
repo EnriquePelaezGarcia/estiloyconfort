@@ -56,7 +56,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigMap = {
   credit_interest: 22,
   credit_initial_pct: 35,
   credit_weeks: 12,
-  assembly_base: 150,
+  assembly_base: 100,
   assembly_per_floor: 50,
   wholesale_factor_default: 1.334,
   wholesale_enabled: 0,

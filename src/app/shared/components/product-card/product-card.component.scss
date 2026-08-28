@@ -103,31 +103,13 @@
     text-transform: uppercase;
     pointer-events: none;
 
-    &--stock {
-      left: v.$spacing-sm;
-      background: v.$color-success;
-      color: #fff;
-    }
-
-    &--order {
-      left: v.$spacing-sm;
-      background: v.$color-gold;
-      color: #fff;
-    }
-
-    &--featured {
-      background: v.$color-primary;
-      color: #fff;
-    }
-
     &--offer {
       background: v.$color-error;
       color: #fff;
     }
   }
 
-  // Columna de badges de la esquina derecha; los de la izquierda siguen
-  // posicionados uno a uno porque nunca coinciden entre sí.
+  // Badges de la esquina superior derecha.
   &__badges {
     position: absolute;
     top: v.$spacing-sm;

@@ -41,6 +41,8 @@ export interface QuoteItem {
 
 export interface Quote {
   id: number;
+  /** Folio legible derivado del id (`COT-0011`); lo arma el backend. */
+  quoteNumber: string;
   token: string;
   /** URL pública lista para compartir; la calcula el backend. */
   shareUrl: string;
@@ -80,6 +82,12 @@ export interface Quote {
   wholesaleIva?: number;
   status: QuoteStatus;
   orderId?: number | null;
+  /**
+   * Folio de la precotización del carrito que la originó ("PRE-0013"), o null
+   * si el vendedor la capturó a mano. Lo deriva el backend con un JOIN, así
+   * que desaparece cuando el cron borra la precotización a los 7 días.
+   */
+  webOrderFolio?: string | null;
   expiresAt: string;
   createdAt: string;
   /** Solo en el listado: cuántas líneas tiene, sin traerlas todas. */
@@ -97,6 +105,8 @@ export interface Quote {
  * internos del vendedor más allá de su nombre.
  */
 export interface PublicQuote {
+  /** Folio legible (`COT-0011`) para que el cliente lo cite en el chat. */
+  quoteNumber: string;
   customerName: string;
   sellerName?: string | null;
   paymentMethod: SaleScheme;

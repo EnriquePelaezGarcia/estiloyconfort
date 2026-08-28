@@ -45,8 +45,8 @@ async function ensureUsers() {
 
 async function generateOrderNumber(offset) {
   const [[{ n }]] = await pool.execute('SELECT COUNT(*) AS n FROM orders');
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  return `EC-${date}-${String(Number(n) + 1 + offset).padStart(4, '0')}`;
+  const year = new Date().getFullYear();
+  return `EC-${year}-${String(Number(n) + 1 + offset).padStart(4, '0')}`;
 }
 
 async function seed() {

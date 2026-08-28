@@ -68,6 +68,13 @@ export class AdminOrdersComponent implements OnInit {
     () => this.matchingOrders().filter((o) => !this.activeStatuses.includes(o.orderStatus)).length,
   );
 
+  /** Fila resaltada al hacer clic (lectura tipo hoja de cálculo). */
+  protected selectedId = signal<number | null>(null);
+
+  protected selectRow(id: number): void {
+    this.selectedId.update((current) => (current === id ? null : id));
+  }
+
   /** Pedido seleccionado para asignar repartidor. */
   protected assigning = signal<Order | null>(null);
   protected selectedDeliveryPerson = signal<number | null>(null);

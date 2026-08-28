@@ -4,6 +4,21 @@
   display: block;
 }
 
+// Selección de fila tipo hoja de cálculo: morado claro que no cansa la vista.
+// OJO: no usar la clase `row` — Bootstrap (cargado global) la pinta como grid.
+.table tbody tr.orders-row {
+  cursor: pointer;
+
+  &.orders-row--selected > td {
+    background: rgba(vars.$color-primary, 0.09);
+  }
+
+  // El resaltado de selección debe ganarle al hover para no perder la referencia.
+  &.orders-row--selected:hover > td {
+    background: rgba(vars.$color-primary, 0.12);
+  }
+}
+
 .tabbar {
   display: flex;
   flex-wrap: wrap;
@@ -43,6 +58,18 @@
     font-size: 0.72rem;
     text-align: center;
   }
+}
+
+// Número de pedido clicable: abre el detalle. Enlace sin cromo, se lee como
+// texto hasta que se apunta con el mouse.
+.order-link {
+  font: inherit;
+  font-weight: 600;
+  color: vars.$color-text;
+  cursor: pointer;
+
+  &:hover { color: vars.$color-primary; text-decoration: underline; }
+  &:focus-visible { outline: 2px solid vars.$color-primary; outline-offset: 2px; }
 }
 
 // Icono de repartidor: verde y con fondo permanente cuando ya hay repartidor

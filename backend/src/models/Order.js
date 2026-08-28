@@ -625,32 +625,33 @@ const Order = {
   },
 
   /**
-   * Genera un número de pedido tipo EC-20260620-0007.
+   * Genera un número de pedido tipo EC-2026-0007: prefijo + año + consecutivo
+   * del AÑO con relleno a 4 dígitos. El consecutivo se reinicia el 1 de enero.
    *
    * Docs/plan-venta-multiesquema.md §6.1: recibe `conn` porque se llama
    * DENTRO de la transacción de create() — usar `pool` (conexión aparte)
    * hacía que el COUNT(*) no viera el insert todavía pendiente, así que dos
    * pedidos seguidos en la misma transacción (createSplit) salían con el
    * mismo folio. También corrige la carrera entre transacciones concurrentes:
-   * `INSERT ... ON DUPLICATE KEY UPDATE` toma el lock de la fila del día, así
+   * `INSERT ... ON DUPLICATE KEY UPDATE` toma el lock de la fila del año, así
    * que dos vendedores guardando a la vez serializan en vez de colisionar.
    *
-   * Cambia la semántica del folio: deja de ser "pedidos totales en la BD" y
-   * pasa a ser un consecutivo del día, que es lo que el formato ya sugería.
+   * El año se toma con `getFullYear()` (hora local) a propósito: en un huso
+   * negativo como el de México, `toISOString()` adelantaría el cambio de año
+   * unas horas — un pedido del 31-dic 20:00 saldría con el folio del año que
+   * entra.
    */
   async generateOrderNumber(conn = pool) {
-    const now = new Date();
-    const dateOnly = now.toISOString().slice(0, 10);
-    const date = dateOnly.replace(/-/g, '');
+    const year = new Date().getFullYear();
     await conn.execute(
-      'INSERT INTO order_sequences (seq_date, last_seq) VALUES (?, 1) '
+      'INSERT INTO order_sequences (seq_year, last_seq) VALUES (?, 1) '
       + 'ON DUPLICATE KEY UPDATE last_seq = last_seq + 1',
-      [dateOnly],
+      [year],
     );
     const [[{ last_seq: lastSeq }]] = await conn.execute(
-      'SELECT last_seq FROM order_sequences WHERE seq_date = ?', [dateOnly],
+      'SELECT last_seq FROM order_sequences WHERE seq_year = ?', [year],
     );
-    return `EC-${date}-${String(lastSeq).padStart(4, '0')}`;
+    return `EC-${year}-${String(lastSeq).padStart(4, '0')}`;
   },
 
   async findAll({ status, sellerId, deliveryPersonId, page = 1, limit = 20 } = {}) {

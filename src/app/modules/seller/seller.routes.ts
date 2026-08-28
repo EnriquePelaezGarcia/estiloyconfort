@@ -23,6 +23,14 @@ export const sellerRoutes: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
+        path: 'solicitudes-cotizacion',
+        loadComponent: () =>
+          import('./quotes/quote-requests-list/quote-requests-list.component').then(
+            (m) => m.QuoteRequestsListComponent,
+          ),
+        title: 'Solicitudes de cotización - Vendedor',
+      },
+      {
         path: 'cotizaciones',
         loadComponent: () =>
           import('./quotes/quote-list/quote-list.component').then((m) => m.QuoteListComponent),

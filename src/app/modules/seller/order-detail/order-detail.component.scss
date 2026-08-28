@@ -415,6 +415,42 @@ $ticket-font: 'Courier New', monospace;
   .icon-btn--danger { margin-bottom: 4px; }
 }
 
+// ===== Miniatura de la foto del producto en la tabla de líneas =====
+.prod-cell {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+
+  &__info { min-width: 0; }
+
+  &__thumb-btn {
+    flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+    line-height: 0;
+  }
+
+  &__thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: vars.$radius-sm;
+    object-fit: cover;
+    border: 1px solid vars.$color-border;
+    background: vars.$color-bg;
+
+    &--empty {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: vars.$color-text-secondary;
+
+      .material-symbols-outlined { font-size: 1.4rem; }
+    }
+  }
+}
+
 @media print {
   // Rollo continuo de 80mm sin márgenes: el driver térmico no tiene "hoja",
   // así que cualquier margen de página desplaza el contenido y lo recorta.

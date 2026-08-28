@@ -66,7 +66,7 @@
               @if (it.imageUrl; as img) {
                 <img
                   class="line__thumb line__thumb--zoomable"
-                  [src]="img"
+                  [src]="img | mediaUrl"
                   [alt]="it.productName"
                   width="56"
                   height="56"
@@ -267,6 +267,6 @@
   </div>
 
   @if (zoomedImage(); as img) {
-    <app-image-lightbox class="no-print" [src]="img" [alt]="'Foto del producto'" (closed)="zoomedImage.set(null)" />
+    <app-image-lightbox class="no-print" [src]="(img | mediaUrl) ?? ''" [alt]="'Foto del producto'" (closed)="zoomedImage.set(null)" />
   }
 }

@@ -59,9 +59,9 @@
       </thead>
       <tbody>
         @for (o of visibleOrders(); track o.id) {
-          <tr>
+          <tr class="orders-row" [class.orders-row--selected]="selectedId() === o.id" (click)="selectRow(o.id)">
             <td data-label="Pedido" class="strong">
-              {{ o.orderNumber }}
+              <a class="order-link" [routerLink]="[o.id]" (click)="$event.stopPropagation()">{{ o.orderNumber }}</a>
               @if (o.assemblyService) { <span class="badge badge--purple">Armado</span> }
             </td>
             <td data-label="Cliente">{{ o.customerName }}</td>
@@ -71,14 +71,11 @@
             <td data-label="Total" class="num">{{ o.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
             <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
             <td class="actions">
-              <a class="icon-btn" [routerLink]="[o.id]" aria-label="Ver detalle" title="Ver detalle">
-                <span class="material-symbols-outlined">visibility</span>
-              </a>
               <button
                 type="button"
                 class="icon-btn"
                 [class.icon-btn--assigned]="!!o.deliveryPersonId"
-                (click)="openAssign(o)"
+                (click)="$event.stopPropagation(); openAssign(o)"
                 [disabled]="o.orderStatus === 'cancelled'"
                 [attr.aria-label]="o.deliveryPersonId ? 'Repartidor asignado: ' + o.deliveryPersonName : 'Asignar repartidor'"
                 [title]="o.deliveryPersonId ? 'Repartidor asignado: ' + o.deliveryPersonName : 'Asignar repartidor'"

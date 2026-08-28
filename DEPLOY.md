@@ -879,6 +879,35 @@ Referencia de lo que devuelve bien (medido en local el 24-ago-2026):
   caché de 6 h en el backend evita pagarle a Google más de una vez); si Google
   no está configurado o falla, cada insignia simplemente no se pinta.
 
+### Folio de pedido por año: paso de una sola vez
+
+Desde ago-2026 el número de pedido pasó de consecutivo del día
+(`EC-20260828-0002`) a **consecutivo del año** (`EC-2026-0001`). El cambio toca
+la tabla `order_sequences` (se re-llavéo por año) y **renumera los pedidos ya
+emitidos**, así que `deploy.sh` no lo hace solo. Va una vez por ambiente, en el
+mismo despliegue que trae el código nuevo — **después** de `deploy.sh`, no
+antes: el backend nuevo necesita la columna `seq_year` que crea este script.
+
+```bash
+cd /opt/estiloyconfort/app/deploy
+
+# 1. Respaldo primero (el script reescribe order_number de todos los pedidos)
+./scripts/backup.sh staging          # o production
+
+# 2. Ver el plan sin escribir nada
+docker compose exec backend-staging node src/database/backfill_order_number_yearly.js --dry-run
+
+# 3. Aplicar
+docker compose exec backend-staging npm run db:migrate:order-number-yearly
+```
+
+Repetir con `backend-prod` para producción. El script es **idempotente**: si los
+folios ya están en formato nuevo, solo re-sincroniza `order_sequences`.
+
+> El rastreador público (`/rastrear-pedido`) valida el formato con
+> `/^EC-\d{4}-\d{4}$/`: **corte limpio**, los números viejos dejan de servir. Si
+> ya diste números de pedido viejos a algún cliente real, avísale del cambio.
+
 ### Ver qué está pasando
 
 ```bash
@@ -1059,6 +1088,9 @@ docker compose up -d                 # encender todo
 
 # Esquema del módulo de contraseñas (una sola vez por ambiente, repetible)
 docker compose exec backend-prod npm run db:schema:passwords
+
+# Renumerar folios de pedido a EC-<año>-<NNNN> (una sola vez por ambiente, después de deploy.sh)
+docker compose exec backend-prod npm run db:migrate:order-number-yearly
 
 # Tras cambiar un .env hay que RECREAR, no reiniciar
 docker compose up -d --force-recreate backend-prod

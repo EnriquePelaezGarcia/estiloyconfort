@@ -36,6 +36,80 @@
   }
 }
 
+// Renglón de producto de la entrega: miniatura + nombre + material + color en una línea.
+.prod-row {
+  justify-content: flex-start;
+  align-items: center;
+  gap: vars.$spacing-sm;
+
+  &__thumb {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+    object-fit: cover;
+    background: vars.$color-bg;
+  }
+
+  &__thumb--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__name { font-weight: 600; }
+
+  // Referencia para cotejar contra la etiqueta de la caja en bodega — dato
+  // secundario, no compite con nombre/material/color.
+  &__sku {
+    font-size: 0.72rem;
+    color: vars.$color-text-secondary;
+    letter-spacing: 0.02em;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.4rem;
+    font-size: 0.8rem;
+    color: vars.$color-text-secondary;
+
+    span + span::before {
+      content: '·';
+      margin-right: 0.4rem;
+    }
+  }
+}
+
+// Teléfono como acceso directo a WhatsApp (informa "ya vamos en camino").
+.phone-wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: #128c7e;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+
+  .material-symbols-outlined { font-size: 1.05rem; }
+}
+
+.req { color: vars.$color-error; }
+
 .photo-input {
   display: flex;
   flex-direction: column;

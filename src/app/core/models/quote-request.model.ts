@@ -19,11 +19,22 @@ export interface CreateQuoteRequestPayload {
     quantity: number;
   }>;
   shippingPostalCode?: string | null;
+  /** Contacto OPCIONAL (v1.1): se manda tal cual, el backend no lo valida. */
+  customerName?: string | null;
+  customerPhone?: string | null;
+  /**
+   * Token de la última precotización de este navegador. Si sigue pendiente y
+   * vigente, el backend la reescribe en vez de crear otra — así el cliente que
+   * ajusta el carrito y reenvía conserva su mismo folio.
+   */
+  replaceToken?: string | null;
 }
 
 /** Respuesta de POST /api/quote-requests. */
 export interface QuoteRequestCreated {
   token: string;
+  /** Referencia legible ("PRE-0013") ya formateada por el backend. */
+  folio: string;
   shareUrl: string;
   estimatedShippingCost: number | null;
   estimatedShippingLabel: string | null;
@@ -49,6 +60,9 @@ export interface QuoteRequestItem {
 /** Vista pública: pantalla de revisión abierta desde el link, sin sesión. */
 export interface PublicQuoteRequest {
   status: QuoteRequestStatus;
+  folio: string;
+  customerName: string | null;
+  customerPhone: string | null;
   shippingPostalCode: string | null;
   estimatedSubtotal: number;
   estimatedShippingCost: number | null;
@@ -65,8 +79,11 @@ export interface PublicQuoteRequest {
 export interface QuoteRequestDetail {
   id: number;
   token: string;
+  folio: string;
   shareUrl: string;
   status: QuoteRequestStatus;
+  customerName: string | null;
+  customerPhone: string | null;
   shippingPostalCode: string | null;
   estimatedSubtotal: number;
   estimatedShippingCost: number | null;

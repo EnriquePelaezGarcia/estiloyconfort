@@ -18,7 +18,7 @@ import { AuthService } from '../../../../core/auth/auth.service';
 import {
   AssemblyRates, DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, SaleScheme,
 } from '../../../../core/models/order.model';
-import { CreateQuoteRequest, Quote, QuoteDiscount } from '../../../../core/models/quote.model';
+import { CreateQuoteRequest, Quote, QuoteDiscount, QuoteStatus } from '../../../../core/models/quote.model';
 import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
 import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
@@ -53,6 +53,9 @@ interface QuoteDraftSnapshot {
   form: ReturnType<QuoteCreateComponent['form']['getRawValue']>;
   lines: QuoteLine[];
   editingId: number | null;
+  loadedQuoteNumber: string | null;
+  loadedQuoteStatus: QuoteStatus | null;
+  loadedQuoteOrderId: number | null;
   fromRequestToken: string | null;
   shippingCp: string;
   shippingQuote: ShippingQuote | null;
@@ -110,6 +113,17 @@ export class QuoteCreateComponent implements OnInit {
   /** Id de la cotización en edición; null = se está creando una nueva. */
   protected editingId = signal<number | null>(null);
   protected isEditing = computed(() => this.editingId() !== null);
+
+  /**
+   * Datos de la cotización cargada para editar (solo en modo edición). El
+   * estado decide qué acción se ofrece: confirmar+levantar pedido si sigue
+   * abierta, levantar pedido si ya está confirmada, o ver el pedido si ya se
+   * convirtió.
+   */
+  protected loadedQuoteNumber = signal<string | null>(null);
+  protected loadedQuoteStatus = signal<QuoteStatus | null>(null);
+  protected loadedQuoteOrderId = signal<number | null>(null);
+  protected isConverted = computed(() => this.loadedQuoteStatus() === 'converted');
 
   /**
    * Token de la precotización de origen (?fromRequest=). Viaja en el payload
@@ -395,8 +409,14 @@ export class QuoteCreateComponent implements OnInit {
 
   /** Docs/plan-aprobaciones-admin.md RN-EC — D5: captura discreta, sumada de todas las líneas. */
   protected readonly MAX_EXTRA_CHARGES = MAX_EXTRA_CHARGES;
+  /** El builder de cotizaciones no ofrece chips de sugerencia de cargo extra. */
+  protected readonly noExtraChargeSuggestions: string[] = [];
   protected extraChargesCount = computed(
     () => this.lines().reduce((sum, l) => sum + (l.extraCharges?.length ?? 0), 0),
+  );
+  /** Cada cargo extra capturado, aplanado de todas las líneas — para desglosarlos en el resumen. */
+  protected allExtraCharges = computed(
+    () => this.lines().flatMap((l) => l.extraCharges ?? []),
   );
   protected extraChargesTotal = computed(
     () => this.lines().reduce(
@@ -504,6 +524,16 @@ export class QuoteCreateComponent implements OnInit {
     this.quoteRequestsService.getDetail(token).subscribe({
       next: (detail) => {
         this.fromRequestToken.set(token);
+
+        // El contacto del carrito es opcional y NO viene validado (D2/D14):
+        // solo prellena. Los validadores duros del form siguen aplicando, así
+        // que si el cliente escribió basura el vendedor no puede crear la
+        // cotización sin corregirla.
+        this.form.patchValue({
+          customerName: detail.customerName ?? '',
+          customerPhone: detail.customerPhone ? formatPhoneDigits(detail.customerPhone) : '',
+        });
+
         const byId = new Map((detail.inventory ?? []).map((p) => [p.id, p]));
         const lines: QuoteLine[] = [];
         for (const it of detail.items) {
@@ -582,6 +612,9 @@ export class QuoteCreateComponent implements OnInit {
     this.form.patchValue(snap.form);
     this.lines.set(snap.lines);
     this.editingId.set(snap.editingId);
+    this.loadedQuoteNumber.set(snap.loadedQuoteNumber);
+    this.loadedQuoteStatus.set(snap.loadedQuoteStatus);
+    this.loadedQuoteOrderId.set(snap.loadedQuoteOrderId);
     this.fromRequestToken.set(snap.fromRequestToken);
     this.shippingCp.set(snap.shippingCp);
     this.shippingQuote.set(snap.shippingQuote);
@@ -599,6 +632,9 @@ export class QuoteCreateComponent implements OnInit {
       form: this.form.getRawValue(),
       lines: this.lines(),
       editingId: this.editingId(),
+      loadedQuoteNumber: this.loadedQuoteNumber(),
+      loadedQuoteStatus: this.loadedQuoteStatus(),
+      loadedQuoteOrderId: this.loadedQuoteOrderId(),
       fromRequestToken: this.fromRequestToken(),
       shippingCp: this.shippingCp(),
       shippingQuote: this.shippingQuote(),
@@ -622,6 +658,9 @@ export class QuoteCreateComponent implements OnInit {
     this.quotesService.getById(id).subscribe({
       next: (quote) => {
         this.editingId.set(quote.id);
+        this.loadedQuoteNumber.set(quote.quoteNumber);
+        this.loadedQuoteStatus.set(quote.status);
+        this.loadedQuoteOrderId.set(quote.orderId ?? null);
         this.form.patchValue({
           customerName: quote.customerName,
           customerPhone: formatPhoneDigits(quote.customerPhone ?? ''),
@@ -861,34 +900,39 @@ export class QuoteCreateComponent implements OnInit {
     this.discountReasonText.set(reason);
   }
 
-  protected submit(): void {
+  /**
+   * Valida el formulario y arma el payload de la cotización, o devuelve `null`
+   * tras mostrar la notificación del primer problema. Lo comparten `submit()`
+   * (guardar) y `confirmAndCreateOrder()` (guardar + confirmar + levantar pedido).
+   */
+  private buildValidatedPayload(): CreateQuoteRequest | null {
     this.submitAttempted.set(true);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.notification.error('Ingresa el nombre del cliente');
-      return;
+      return null;
     }
     if (this.needsManualShipping() && this.manualShippingCost() === null) {
       this.notification.error('Este CP no tiene cobertura automática: ingresa el costo de envío manualmente.');
-      return;
+      return null;
     }
     if (this.lines().length === 0) {
       this.notification.error('Agrega al menos un producto a la cotización');
-      return;
+      return null;
     }
     if (this.hasUnquotedLines()) {
       this.notification.error(
         `Estos muebles no se cotizan en el material elegido: ` +
           `${this.unquotedLines().map((l) => l.product.name).join(', ')}. Quítalos o cambia el material.`,
       );
-      return;
+      return null;
     }
     if (this.hasLinesMissingColor()) {
       this.notification.error(
         `Falta capturar el color de: ` +
           `${this.linesMissingColor().map((l) => l.product.name).join(', ')}.`,
       );
-      return;
+      return null;
     }
     // M12 — el backend es la defensa real, pero avisar aquí evita que el
     // vendedor descubra el mínimo hasta después de darle Crear.
@@ -897,29 +941,29 @@ export class QuoteCreateComponent implements OnInit {
         .map((l) => `${l.product.name} (faltan ${this.lineWholesaleShortfall(l)})`)
         .join(', ');
       this.notification.error(`Mayoreo exige cantidad mínima por línea: ${detail}.`);
-      return;
+      return null;
     }
     // Docs/plan-descuentos.md: solo se valida si se está capturando uno NUEVO.
     if (!this.activeMoneyDiscount() && this.discountAmount() != null) {
       if (!this.discountReasonCategory()) {
         this.notification.error('Selecciona el motivo del descuento');
-        return;
+        return null;
       }
       if (this.discountReasonCategory() === 'otro' && !this.discountReasonText().trim()) {
         this.notification.error('Escribe el motivo del descuento');
-        return;
+        return null;
       }
       if (this.discountExceedsCap()) {
         this.notification.error(
           `Este descuento supera el máximo permitido ($${this.maxSellerDiscount().toFixed(2)}). `
           + 'Pide que un admin lo capture directamente.',
         );
-        return;
+        return null;
       }
     }
 
     const raw = this.form.getRawValue();
-    const payload: CreateQuoteRequest = {
+    return {
       customerName: raw.customerName!.trim(),
       customerPhone: raw.customerPhone!.replace(/\D/g, ''),
       // Precotización de origen: el backend la marca 'converted' al crear.
@@ -955,6 +999,11 @@ export class QuoteCreateComponent implements OnInit {
         gift: !!l.gift,
       })),
     };
+  }
+
+  protected submit(): void {
+    const payload = this.buildValidatedPayload();
+    if (!payload) return;
 
     const editingId = this.editingId();
     this.saving.set(true);
@@ -979,6 +1028,54 @@ export class QuoteCreateComponent implements OnInit {
         );
       },
     });
+  }
+
+  /**
+   * Solo en edición: guarda los cambios pendientes, marca la cotización como
+   * confirmada (si seguía abierta) y abre el Punto de Venta con la cotización
+   * precargada para levantar el pedido. Un solo clic para el vendedor que ya
+   * revisó la cotización y el cliente dijo que sí.
+   */
+  protected confirmAndCreateOrder(): void {
+    const editingId = this.editingId();
+    if (editingId === null || this.isConverted()) return;
+    const payload = this.buildValidatedPayload();
+    if (!payload) return;
+
+    const openPos = () => {
+      this.saving.set(false);
+      const target = this.panelBase === '/admin' ? 'punto-venta' : 'nuevo';
+      this.router.navigate([this.panelBase, target], { queryParams: { fromQuote: editingId } });
+    };
+
+    this.saving.set(true);
+    this.quotesService.update(editingId, payload).subscribe({
+      next: () => {
+        // Ya confirmada: se salta /confirm y va directo al POS.
+        if (this.loadedQuoteStatus() !== 'open') {
+          openPos();
+          return;
+        }
+        this.quotesService.confirm(editingId).subscribe({
+          next: openPos,
+          error: (err: { error?: { message?: string } }) => {
+            this.saving.set(false);
+            this.notification.error(err?.error?.message ?? 'No se pudo confirmar la cotización');
+          },
+        });
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.saving.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo guardar la cotización');
+      },
+    });
+  }
+
+  /** Cotización ya convertida: abre el pedido que se levantó de ella. */
+  protected goToOrder(): void {
+    const orderId = this.loadedQuoteOrderId();
+    if (orderId === null) return;
+    this.router.navigate([this.panelBase, 'pedidos', orderId]);
   }
 
   /** Copia el link al portapapeles con feedback temporal en el botón. */
@@ -1007,9 +1104,13 @@ export class QuoteCreateComponent implements OnInit {
     return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 
+  /** Base del panel actual: el mismo componente sirve a admin y a vendedor. */
+  private get panelBase(): '/admin' | '/vendedor' {
+    return this.router.url.startsWith('/admin') ? '/admin' : '/vendedor';
+  }
+
   /** Vuelve al listado del panel correspondiente (admin o vendedor). */
   protected goToList(): void {
-    const base = this.router.url.startsWith('/admin') ? '/admin' : '/vendedor';
-    this.router.navigate([base, 'cotizaciones']);
+    this.router.navigate([this.panelBase, 'cotizaciones']);
   }
 }

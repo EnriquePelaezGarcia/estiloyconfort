@@ -22,21 +22,12 @@
       }
     </div>
 
-    @if (product().in_stock) {
-      <span class="product-card__badge product-card__badge--stock">Disponible</span>
-    } @else {
-      <span class="product-card__badge product-card__badge--order">Sobre pedido</span>
-    }
-    <!-- Los de la derecha se apilan: un producto en oferta suele ser además
-         destacado, y sueltos se encimarían en la misma esquina. -->
-    @if (product().is_featured || onOffer()) {
+    <!-- Disponibilidad y "Destacado" son datos internos: el cliente solo ve el
+         estado comercial de la pieza (oferta). Vendedor y admin los consultan
+         en sus propias pantallas. -->
+    @if (onOffer()) {
       <div class="product-card__badges">
-        @if (onOffer()) {
-          <span class="product-card__badge product-card__badge--offer">Oferta</span>
-        }
-        @if (product().is_featured) {
-          <span class="product-card__badge product-card__badge--featured">Destacado</span>
-        }
+        <span class="product-card__badge product-card__badge--offer">Oferta</span>
       </div>
     }
 

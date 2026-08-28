@@ -15,6 +15,8 @@ import { ApprovalsService } from '../../../core/services/approvals.service';
 import { isPickupWithinGrace } from '../../../core/utils/pickup';
 import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
 import { ExtraChargePickerComponent } from '../../../shared/components/extra-charge-picker/extra-charge-picker.component';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
 import {
   DeliveryCommitment, Order, OrderDiscount, OrderExtraCharge, OrderItem, OrderStatus, PaymentStatus,
@@ -64,6 +66,7 @@ interface AbonoReceipt {
   imports: [
     CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective,
     DeliveryRescheduleComponent, ExtraChargePickerComponent,
+    ImageLightboxComponent, MediaUrlPipe,
   ],
 })
 export class OrderDetailComponent implements OnInit {
@@ -86,6 +89,9 @@ export class OrderDetailComponent implements OnInit {
   protected savingPayment = signal(false);
   protected assemblyModalOpen = signal(false);
   protected removingAssembly = signal(false);
+
+  /** Foto de producto abierta a tamaño completo (clic en la miniatura); null = cerrada. */
+  protected zoomedImage = signal<string | null>(null);
 
   // ===== Descuentos (Docs/plan-descuentos.md) — aprobar/rechazar es exclusivo del admin =====
   protected approvingDiscountId = signal<number | null>(null);

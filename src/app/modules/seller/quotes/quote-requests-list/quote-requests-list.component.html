@@ -1,0 +1,85 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Tienda en línea</p>
+    <h1 class="page-head__title">Solicitudes de cotización</h1>
+    <p class="page-head__sub">
+      Pedidos que los clientes armaron en el carrito. Crea la cotización sin volver a capturar los productos.
+    </p>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="text"
+      placeholder="Buscar por folio (PRE-0013), nombre o WhatsApp"
+      [value]="requestQuery()"
+      (input)="onSearchInput($event)"
+    />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div></div>
+} @else {
+  <div class="request-list">
+    @for (r of filteredRequests(); track r.token) {
+      <article class="request-card">
+        <div class="request-card__info">
+          <span class="request-card__who">
+            <strong class="request-card__folio">{{ r.folio }}</strong>
+            @if (r.customerName) { · {{ r.customerName }} }
+          </span>
+          <span class="request-card__meta">
+            {{ r.createdAt | date:'d MMM y, HH:mm' }} · {{ r.itemCount ?? r.items.length }} producto(s)
+            @if (r.shippingPostalCode) { · CP {{ r.shippingPostalCode }} }
+          </span>
+          <span class="request-card__names">
+            @for (it of r.items.slice(0, 4); track $index) {
+              {{ it.productName }}{{ $last || $index === 3 ? '' : ', ' }}
+            }
+            @if (r.items.length > 4) { …+{{ r.items.length - 4 }} }
+          </span>
+          <span class="request-card__total">
+            Estimado {{ r.estimatedSubtotal | currency:'MXN':'symbol-narrow':'1.0-0' }}
+            @if (r.estimatedShippingCost != null) { + envío {{ r.estimatedShippingCost | currency:'MXN':'symbol-narrow':'1.0-0' }} }
+          </span>
+        </div>
+        <div class="request-card__actions">
+          <button type="button" class="btn btn--primary btn--sm" (click)="createQuoteFromRequest(r.token)">
+            <span class="material-symbols-outlined">receipt_long</span>
+            Crear cotización
+          </button>
+          <button type="button" class="btn btn--ghost btn--sm" (click)="reviewRequest(r.token)">
+            <span class="material-symbols-outlined">visibility</span>
+            Ver
+          </button>
+          @if (requestWhatsappUrl(r.customerPhone); as wa) {
+            <a class="btn btn--ghost btn--sm" [href]="wa" target="_blank" rel="noopener">
+              <span class="material-symbols-outlined">chat</span>
+              WhatsApp
+            </a>
+          }
+          <button
+            type="button"
+            class="btn btn--ghost btn--sm"
+            [disabled]="dismissingToken() === r.token"
+            (click)="dismissRequest(r.token)"
+          >
+            <span class="material-symbols-outlined">delete</span>
+            Descartar
+          </button>
+        </div>
+      </article>
+    } @empty {
+      <p class="empty">
+        @if (requestQuery()) {
+          Ninguna solicitud coincide con la búsqueda.
+        } @else {
+          No hay solicitudes de cotización por atender. Aquí aparecen las que los clientes envían desde el carrito de la tienda en línea.
+        }
+      </p>
+    }
+  </div>
+}

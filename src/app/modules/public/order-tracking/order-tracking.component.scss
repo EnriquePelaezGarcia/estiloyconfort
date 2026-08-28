@@ -11,8 +11,7 @@ $lavender: #c9b8e8;
 $hairline: rgba(61, 43, 94, 0.12);
 
 .track-page {
-  min-height: 100vh;
-  padding: vars.$spacing-lg vars.$spacing-md vars.$spacing-2xl;
+  padding: vars.$spacing-xl vars.$spacing-md vars.$spacing-2xl;
   background: $porcelain;
   display: flex;
   justify-content: center;

@@ -252,6 +252,21 @@
     color: #92620a;
   }
 
+  // "Gratis" y "+ cargo extra" en la misma fila: el segundo a la derecha del
+  // primero, no debajo.
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 4px;
+
+    .cart-line__gift-toggle,
+    .cart-line__extra-charge-toggle {
+      align-self: auto;
+      margin-top: 0;
+    }
+  }
+
   // Docs/plan-descuentos.md
   &__gift-toggle {
     align-self: flex-start;
@@ -475,6 +490,27 @@
   gap: 0.2rem;
 
   &__value { min-width: 28px; text-align: center; font-weight: 600; }
+}
+
+// Al editar: "Guardar cambios" y "Confirmar y crear pedido" van apilados;
+// un respiro entre ambos para que no se lean como un solo bloque.
+.btn + .btn--block { margin-top: vars.$spacing-sm; }
+
+// Cotización ya convertida en pedido: en vez de los botones de guardar.
+.quote-converted {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-md;
+  border: 1px solid vars.$color-success;
+  border-radius: vars.$radius-md;
+  background: color-mix(in srgb, vars.$color-success 8%, white);
+  text-align: center;
+
+  .material-symbols-outlined { font-size: 2rem; color: vars.$color-success; }
+  p { margin: 0; font-weight: 600; color: vars.$color-text; }
+  .btn { margin-top: vars.$spacing-xs; }
 }
 
 .cart__note {

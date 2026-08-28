@@ -10,7 +10,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -30,13 +30,21 @@ import {
   SALE_SCHEME_LABELS,
 } from '../../../core/models/order-labels';
 import { DiscountReasonPickerComponent } from '../../../shared/components/discount-reason-picker/discount-reason-picker.component';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 @Component({
   selector: 'app-delivery-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './delivery-detail.component.html',
   styleUrl: './delivery-detail.component.scss',
-  imports: [CurrencyPipe, ReactiveFormsModule, CurrencyInputDirective, DiscountReasonPickerComponent],
+  imports: [
+    CurrencyPipe,
+    DatePipe,
+    ReactiveFormsModule,
+    CurrencyInputDirective,
+    DiscountReasonPickerComponent,
+    MediaUrlPipe,
+  ],
 })
 export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   private deliveryService = inject(DeliveryService);
@@ -61,6 +69,14 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   protected saving = signal(false);
 
   protected photoData = signal<string | null>(null);
+  /** Foto de evidencia del intento fallido ("no había nadie"). Obligatoria para reportarlo. */
+  protected failPhotoData = signal<string | null>(null);
+  /**
+   * A qué foto va la próxima captura: la evidencia de entrega ('proof') o la
+   * del intento fallido ('fail'). Lo fija openPhotoCapture() antes de abrir la
+   * cámara / el selector.
+   */
+  private photoTarget: 'proof' | 'fail' = 'proof';
   /** Convirtiendo/validando la foto elegida (p.ej. HEIC de iPhone → JPEG). */
   protected photoProcessing = signal(false);
   /**
@@ -268,7 +284,10 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
    * en escritorio, o si el navegador no soporta getUserMedia / el usuario
    * niega el permiso, cae al selector de archivos nativo como respaldo.
    */
-  protected async openPhotoCapture(): Promise<void> {
+  protected async openPhotoCapture(target: 'proof' | 'fail' = 'proof'): Promise<void> {
+    this.photoTarget = target;
+    // 'proof' no tiene sentido en una entrega ya completada; 'fail' tampoco,
+    // pero el botón sólo existe mientras no lo esté.
     if (this.assignment()?.deliveryStatus === 'completed') return;
     if (!this.isMobileViewport() || !navigator.mediaDevices?.getUserMedia) {
       this.fileInputRef()?.nativeElement.click();
@@ -304,8 +323,14 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    this.photoData.set(canvas.toDataURL('image/jpeg', 0.9));
+    this.setCapturedPhoto(canvas.toDataURL('image/jpeg', 0.9));
     this.closeCamera();
+  }
+
+  /** Enruta la foto recién obtenida a la evidencia de entrega o a la del intento fallido. */
+  private setCapturedPhoto(dataUrl: string): void {
+    if (this.photoTarget === 'fail') this.failPhotoData.set(dataUrl);
+    else this.photoData.set(dataUrl);
   }
 
   protected closeCamera(): void {
@@ -330,10 +355,23 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     img.src = dataUrl;
   }
 
+  /**
+   * Posición del puntero EN COORDENADAS DEL CANVAS.
+   *
+   * Antes se usaba `getBoundingClientRect()` + `clientX/clientY`: en pantalla
+   * completa el recuadro de firma se rota 90° por CSS (ver
+   * .signature-wrap--fullscreen en el .scss) y ese cálculo sí se ve afectado
+   * por el `transform`, así que el trazo salía girado y desplazado hacia abajo.
+   *
+   * `offsetX/offsetY` vienen en el sistema de coordenadas LOCAL del canvas
+   * (sin rotar), y se escalan por si el buffer del canvas no mide lo mismo que
+   * su caja en pantalla.
+   */
   private pos(event: PointerEvent): { x: number; y: number } {
     const canvas = this.canvasRef()!.nativeElement;
-    const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const scaleX = canvas.width / (canvas.clientWidth || canvas.width);
+    const scaleY = canvas.height / (canvas.clientHeight || canvas.height);
+    return { x: event.offsetX * scaleX, y: event.offsetY * scaleY };
   }
 
   protected onPointerDown(event: PointerEvent): void {
@@ -389,7 +427,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     this.readImageFile(file)
       .then((dataUrl) => this.verifyImageDecodes(dataUrl))
       .then((dataUrl) => {
-        this.photoData.set(dataUrl);
+        this.setCapturedPhoto(dataUrl);
         this.photoProcessing.set(false);
       })
       .catch((err: unknown) => {
@@ -444,9 +482,23 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     this.notification.error('No se pudo mostrar la foto guardada; puede estar en un formato no compatible.');
   }
 
+  /**
+   * Exige foto Y firma antes de guardar/completar. Devuelve false y avisa
+   * exactamente qué falta ("la foto", "la firma" o ambas).
+   */
+  private requirePhotoAndSignature(): boolean {
+    const missing: string[] = [];
+    if (!this.photoData()) missing.push('la foto del mueble');
+    if (!this.hasSignature()) missing.push('la firma del cliente');
+    if (missing.length === 0) return true;
+    this.notification.error(`Debes agregar ${missing.join(' y ')} antes de guardar.`);
+    return false;
+  }
+
   protected saveProof(): void {
     const a = this.assignment();
     if (!a) return;
+    if (!this.requirePhotoAndSignature()) return;
     const canvas = this.canvasRef()?.nativeElement;
     const signature = this.hasSignature() && canvas ? canvas.toDataURL('image/png') : undefined;
     this.saving.set(true);
@@ -468,6 +520,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   protected markDelivered(): void {
     const a = this.assignment();
     if (!a) return;
+    if (!this.requirePhotoAndSignature()) return;
     const canvas = this.canvasRef()?.nativeElement;
     const signature = canvas ? canvas.toDataURL('image/png') : undefined;
     this.saving.set(true);
@@ -504,7 +557,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   // ===== "No se pudo entregar" (Plan rastreo, Hueco 1) =====
   protected readonly failReasons = [
-    'Cliente ausente',
+    'No había nadie / cliente ausente',
     'Dirección incorrecta',
     'Cliente rechazó el pedido',
     'Sin acceso al domicilio',
@@ -519,6 +572,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   protected openFailModal(): void {
     this.failReason.set('');
     this.failReasonOther.set('');
+    this.failPhotoData.set(null);
     this.failModalOpen.set(true);
   }
 
@@ -535,8 +589,13 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
       this.notification.error('Escribe el motivo');
       return;
     }
+    const evidence = this.failPhotoData();
+    if (!evidence) {
+      this.notification.error('Agrega una foto de evidencia del intento fallido');
+      return;
+    }
     this.savingFail.set(true);
-    this.deliveryService.markFailed(a.id, reason).subscribe({
+    this.deliveryService.markFailed(a.id, reason, evidence).subscribe({
       next: () => {
         this.savingFail.set(false);
         this.failModalOpen.set(false);
@@ -713,6 +772,55 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
         this.notification.error(err?.error?.message ?? 'No se pudo registrar el cobro');
       },
     });
+  }
+
+  // ===== Aviso "ya vamos en camino" por WhatsApp (entrega en curso) =====
+  /** Plantilla del repartidor, guardada por dispositivo (no hay tabla de preferencias). */
+  private readonly enRouteStorageKey = 'delivery:enRouteMessage';
+  private readonly defaultEnRouteMessage =
+    'Hola, somos del equipo de reparto de Mueblería Estilo y Confort. '
+    + 'Te confirmamos que ya vamos camino a tu domicilio.';
+
+  protected enRouteModalOpen = signal(false);
+  protected enRouteMessage = signal(this.loadEnRouteMessage());
+
+  private loadEnRouteMessage(): string {
+    try {
+      return localStorage.getItem(this.enRouteStorageKey)?.trim() || this.defaultEnRouteMessage;
+    } catch {
+      return this.defaultEnRouteMessage;
+    }
+  }
+
+  protected openEnRouteModal(): void {
+    this.enRouteMessage.set(this.loadEnRouteMessage());
+    this.enRouteModalOpen.set(true);
+  }
+
+  /** Vuelve al texto por defecto (no borra la plantilla guardada hasta el próximo envío). */
+  protected resetEnRouteMessage(): void {
+    this.enRouteMessage.set(this.defaultEnRouteMessage);
+  }
+
+  /**
+   * Guarda el texto actual como plantilla del repartidor en este dispositivo y
+   * abre WhatsApp con el mensaje ya escrito para el cliente. Sin teléfono
+   * capturado abre el selector de contactos de WhatsApp.
+   */
+  protected sendEnRouteWhatsApp(): void {
+    const a = this.assignment();
+    if (!a) return;
+    const message = this.enRouteMessage().trim() || this.defaultEnRouteMessage;
+    try {
+      localStorage.setItem(this.enRouteStorageKey, message);
+    } catch { /* modo privado / SSR: el texto sólo aplica a este envío */ }
+    const phone = (a.customerPhone ?? '').replace(/\D/g, '');
+    const text = encodeURIComponent(message);
+    window.open(
+      phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`,
+      '_blank',
+    );
+    this.enRouteModalOpen.set(false);
   }
 
   protected mapsUrl(a: DeliveryAssignment): string {

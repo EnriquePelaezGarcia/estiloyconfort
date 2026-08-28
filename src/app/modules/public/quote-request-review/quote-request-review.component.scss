@@ -41,11 +41,67 @@
     color: v.$color-primary;
   }
 
+  // Folio citable: es lo que el cliente escribe en el chat ("mi pedido PRE-0013").
+  &__ref {
+    margin: v.$spacing-xs 0 0;
+    font-family: v.$font-body;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: v.$color-text;
+  }
+
   &__meta {
     margin: v.$spacing-xs 0 0;
     font-family: v.$font-body;
     font-size: 0.75rem;
     color: v.$color-text-secondary;
+  }
+}
+
+.qr-customer {
+  display: flex;
+  align-items: center;
+  gap: v.$spacing-sm;
+  padding: v.$spacing-sm v.$spacing-md;
+  margin-bottom: v.$spacing-md;
+  border-radius: v.$radius-md;
+  background: v.$color-bg;
+
+  .material-symbols-outlined {
+    font-size: 1.2rem;
+    color: v.$color-primary;
+  }
+
+  &__data {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__name {
+    font-family: v.$font-body;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: v.$color-text;
+  }
+
+  &__phone {
+    font-family: v.$font-body;
+    font-size: 0.8rem;
+    color: v.$color-text-secondary;
+  }
+
+  &__wa {
+    flex-shrink: 0;
+    font-family: v.$font-body;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: v.$color-secondary;
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
   }
 }
 

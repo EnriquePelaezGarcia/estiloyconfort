@@ -19,13 +19,26 @@
     Compromiso de entrega (Docs/plan-fecha-hora-entrega.md §6.5). Va antes de
     todo lo demás: si es exacta, es lo primero que el repartidor tiene que ver.
   -->
-  @if (a.deliveryCommitment === 'exact' && windowOf(a); as win) {
+  @if (a.deliveryCommitment === 'exact' && (a.expectedDeliveryDate || windowOf(a))) {
     <p class="commitment commitment--exact">
       <span class="material-symbols-outlined">alarm</span>
-      Entregar entre {{ win }} — NO antes, NO después.
+      <span>
+        Entregar
+        @if (a.expectedDeliveryDate) { el {{ a.expectedDeliveryDate | date:'dd/MM/yyyy' }} }
+        @if (windowOf(a); as win) { entre {{ win }} }
+        — NO antes, NO después.
+      </span>
     </p>
-  } @else if (windowOf(a); as win) {
-    <p class="commitment">Horario aproximado {{ win }}</p>
+  } @else if (a.expectedDeliveryDate || windowOf(a)) {
+    <p class="commitment">
+      <span class="material-symbols-outlined">event</span>
+      <span>
+        Entrega
+        @if (a.expectedDeliveryDate) { {{ a.expectedDeliveryDate | date:'dd/MM/yyyy' }} }
+        @if (a.expectedDeliveryDate && windowOf(a)) { · }
+        @if (windowOf(a); as win) { horario aproximado {{ win }} }
+      </span>
+    </p>
   }
 
   <div class="detail-grid">
@@ -51,7 +64,17 @@
               </dd>
             </div>
           }
-          @if (a.customerPhone) { <div><dt>Teléfono</dt><dd>{{ a.customerPhone }}</dd></div> }
+          @if (a.customerPhone) {
+            <div>
+              <dt>Teléfono (WhatsApp)</dt>
+              <dd>
+                <button type="button" class="phone-wa" (click)="openEnRouteModal()">
+                  <span class="material-symbols-outlined">chat</span>
+                  {{ a.customerPhone }}
+                </button>
+              </dd>
+            </div>
+          }
           <div><dt>Condición de venta</dt><dd>{{ schemeLabel(a.paymentMethod) }}</dd></div>
           <div><dt>Total</dt><dd>{{ a.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
           <div>
@@ -113,7 +136,31 @@
           <h3 class="info-subtitle">Productos</h3>
           <ul class="items">
             @for (it of a.items; track it.id) {
-              <li><span>{{ it.productName }}</span><span class="muted">x{{ it.quantity }}</span></li>
+              <li class="prod-row">
+                @if (it.imageUrl) {
+                  <img
+                    class="prod-row__thumb"
+                    [src]="it.imageUrl | mediaUrl"
+                    [alt]="it.productName"
+                    width="52"
+                    height="52"
+                    loading="lazy"
+                  />
+                } @else {
+                  <span class="prod-row__thumb prod-row__thumb--empty material-symbols-outlined">chair</span>
+                }
+                <span class="prod-row__body">
+                  <span class="prod-row__name">{{ it.productName }}</span>
+                  @if (it.productSku) {
+                    <span class="prod-row__sku">SKU {{ it.productSku }}</span>
+                  }
+                  <span class="prod-row__meta">
+                    @if (it.materialLabel) { <span>{{ it.materialLabel }}</span> }
+                    @if (it.color) { <span>{{ it.color }}</span> }
+                    <span>x{{ it.quantity }}</span>
+                  </span>
+                </span>
+              </li>
             }
           </ul>
         }
@@ -156,6 +203,20 @@
       <div class="panel">
         <h2 class="panel__title">Evidencia de entrega</h2>
 
+        <!--
+          Respaldo para escritorio (o navegadores sin getUserMedia). Siempre en
+          el DOM: lo usan tanto la foto de entrega como la de evidencia del
+          intento fallido (openPhotoCapture('proof' | 'fail')).
+        -->
+        <input
+          #photoFileInput
+          type="file"
+          accept="image/*,.heic,.heif"
+          [attr.capture]="isMobileViewport() ? 'environment' : null"
+          (change)="onPhotoSelected($event)"
+          hidden
+        />
+
         <div class="field">
           <label>Foto del mueble entregado</label>
           @if (photoProcessing()) {
@@ -179,18 +240,10 @@
               elegir una de la galería. El input de abajo es el respaldo para
               escritorio o si el navegador no soporta getUserMedia.
             -->
-            <button type="button" class="photo-input" (click)="openPhotoCapture()">
+            <button type="button" class="photo-input" (click)="openPhotoCapture('proof')">
               <span class="material-symbols-outlined">photo_camera</span>
               <span>Tomar foto</span>
             </button>
-            <input
-              #photoFileInput
-              type="file"
-              accept="image/*,.heic,.heif"
-              [attr.capture]="isMobileViewport() ? 'environment' : null"
-              (change)="onPhotoSelected($event)"
-              hidden
-            />
           }
         </div>
 
@@ -240,14 +293,14 @@
             <button type="button" class="btn btn--ghost" (click)="saveProof()" [disabled]="saving()">
               <span class="material-symbols-outlined">save</span> Guardar evidencia
             </button>
-            <button type="button" class="btn btn--success" (click)="markDelivered()" [disabled]="!canComplete() || saving()">
+            <button type="button" class="btn btn--success" (click)="markDelivered()" [disabled]="saving()">
               @if (saving()) { <span class="spinner spinner--sm"></span> }
               @else { <span class="material-symbols-outlined">task_alt</span> }
               Marcar entregada
             </button>
           </div>
           @if (!canComplete()) {
-            <p class="hint">Se requiere foto y firma para completar la entrega.</p>
+            <p class="hint">Se requiere foto y firma para guardar o completar la entrega.</p>
           }
 
           <!-- Plan rastreo (Hueco 1): intento fallido → el pedido vuelve a "Listo". -->
@@ -423,10 +476,85 @@
             />
           </div>
         }
+
+        <div class="field">
+          <label>Evidencia (foto) <span class="req">*</span></label>
+          @if (photoProcessing() && !failPhotoData()) {
+            <div class="photo-input photo-input--loading">
+              <span class="spinner spinner--sm"></span>
+              <span>Procesando foto…</span>
+            </div>
+          } @else if (failPhotoData()) {
+            <div class="photo-preview">
+              <img [src]="failPhotoData()!" alt="Evidencia del intento fallido" />
+              <button
+                type="button"
+                class="icon-btn icon-btn--danger"
+                (click)="failPhotoData.set(null)"
+                aria-label="Quitar foto"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          } @else {
+            <button type="button" class="photo-input" (click)="openPhotoCapture('fail')">
+              <span class="material-symbols-outlined">photo_camera</span>
+              <span>Tomar foto de evidencia</span>
+            </button>
+          }
+        </div>
+
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="failModalOpen.set(false)">Cancelar</button>
-          <button type="button" class="btn btn--danger" [disabled]="savingFail()" (click)="submitFail()">
+          <button
+            type="button"
+            class="btn btn--danger"
+            [disabled]="savingFail() || !failReason() || !failPhotoData()"
+            (click)="submitFail()"
+          >
             @if (savingFail()) { <span class="spinner spinner--sm"></span> } @else { Registrar intento fallido }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Aviso "ya vamos en camino" por WhatsApp (se abre al tocar el teléfono). -->
+@if (enRouteModalOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Avisar al cliente por WhatsApp</h2>
+        <button type="button" class="icon-btn" (click)="enRouteModalOpen.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="field__hint">
+          Puedes editar el mensaje antes de enviarlo. Se guarda tu versión para las próximas entregas.
+        </p>
+        <div class="field">
+          <label for="enRouteMsg">Mensaje</label>
+          <textarea
+            id="enRouteMsg"
+            rows="4"
+            [value]="enRouteMessage()"
+            (input)="enRouteMessage.set($any($event.target).value)"
+          ></textarea>
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="resetEnRouteMessage()">
+          <span class="material-symbols-outlined">restart_alt</span> Restaurar texto por defecto
+        </button>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="enRouteModalOpen.set(false)">Cancelar</button>
+          <button
+            type="button"
+            class="btn btn--whatsapp"
+            [disabled]="!enRouteMessage().trim()"
+            (click)="sendEnRouteWhatsApp()"
+          >
+            <span class="material-symbols-outlined">send</span> Enviar por WhatsApp
           </button>
         </div>
       </div>

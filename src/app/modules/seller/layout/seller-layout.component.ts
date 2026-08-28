@@ -21,17 +21,23 @@ export class SellerLayoutComponent implements OnInit {
 
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Resumen', icon: 'dashboard', route: 'resumen' },
-    { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo' },
+    {
+      // Bandeja aparte de "Cotizaciones" (Docs/plan-precotizacion-carrito.md D10):
+      // es trabajo entrante y efímero, no documentos emitidos.
+      label: 'Solicitudes de cotización',
+      icon: 'move_to_inbox',
+      route: 'solicitudes-cotizacion',
+      badge: () => this.quoteRequestsService.pendingCount() ?? 0,
+    },
     {
       label: 'Cotizaciones',
       icon: 'request_quote',
       route: 'cotizaciones',
-      // Descuentos MÍOS rechazados sin ver (Docs/plan-descuentos.md) +
-      // precotizaciones del carrito pendientes (Docs/plan-precotizacion-carrito.md).
-      badge: () =>
-        (this.discountsService.myRejectedCount() ?? 0) +
-        (this.quoteRequestsService.pendingCount() ?? 0),
+      // Descuentos MÍOS rechazados sin ver (Docs/plan-descuentos.md).
+      badge: () => this.discountsService.myRejectedCount() ?? 0,
     },
+    { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo' },
+    { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     {
       label: 'Agenda de entregas',
@@ -41,7 +47,6 @@ export class SellerLayoutComponent implements OnInit {
       // en vivo en cada consulta (Docs/plan-fecha-hora-entrega.md §6.4).
       badge: () => this.scheduleService.counts()?.badge ?? 0,
     },
-    { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos' },
     { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
     { label: 'Reservas', icon: 'bookmark', route: 'reservas' },
   ];

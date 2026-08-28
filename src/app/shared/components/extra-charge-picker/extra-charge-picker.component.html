@@ -1,6 +1,7 @@
 <div class="extra-charge-picker">
+  @if (suggestions().length) {
   <div class="extra-charge-picker__chips">
-    @for (s of suggestions; track s) {
+    @for (s of suggestions(); track s) {
       <button
         type="button"
         class="extra-charge-picker__chip"
@@ -11,6 +12,7 @@
       </button>
     }
   </div>
+  }
   <input
     type="text"
     class="extra-charge-picker__input"

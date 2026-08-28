@@ -185,6 +185,15 @@
     font-size: 1rem;
     color: #625d5a;
     text-decoration: none;
+    // Sin esto "Rastrea tu pedido" parte en dos líneas y su texto queda por
+    // debajo del de los demás enlaces; forzando una sola línea todos los
+    // enlaces comparten la misma base.
+    white-space: nowrap;
+    // Borde inferior siempre presente pero transparente: el estado activo
+    // solo le cambia el color, así la altura del enlace no varía y ninguno
+    // se desplaza respecto a los otros.
+    border-bottom: 1.5px solid transparent;
+    padding-bottom: 2px;
     transition: color 200ms ease;
 
     &:hover,
@@ -193,8 +202,7 @@
     }
 
     &.is-active {
-      border-bottom: 1.5px solid #36203b;
-      padding-bottom: 2px;
+      border-bottom-color: #36203b;
     }
   }
 }

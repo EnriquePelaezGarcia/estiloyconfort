@@ -12,6 +12,7 @@
     "db:seed:categories": "node src/database/seed_categories.js",
     "db:migrate:image-urls": "node src/database/migrate_relative_image_urls.js",
     "db:migrate:price-list": "node src/database/migrate_product_list_price.js",
+    "db:migrate:order-number-yearly": "node src/database/backfill_order_number_yearly.js",
     "db:remove-melamina-blanca": "node src/database/remove_melamina_blanca.js",
     "db:rename-melamina": "node src/database/rename_melamina_color.js",
     "content:push": "node src/database/push_content_to_env.js",

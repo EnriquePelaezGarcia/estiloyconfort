@@ -29,6 +29,13 @@ export class SellerOrdersComponent implements OnInit {
   protected search = signal('');
   protected deliveryPeople = signal<DeliveryPerson[]>([]);
 
+  /** Fila resaltada al hacer clic (lectura tipo hoja de cálculo). */
+  protected selectedId = signal<number | null>(null);
+
+  protected selectRow(id: number): void {
+    this.selectedId.update((current) => (current === id ? null : id));
+  }
+
   /** Pedido seleccionado para asignar repartidor. */
   protected assigning = signal<Order | null>(null);
   protected selectedDeliveryPerson = signal<number | null>(null);

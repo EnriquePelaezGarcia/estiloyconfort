@@ -182,6 +182,7 @@ const quotesController = {
     // más allá de su nombre.
     res.json({
       data: {
+        quoteNumber: quote.quoteNumber,
         customerName: quote.customerName,
         sellerName: quote.sellerName,
         paymentMethod: quote.paymentMethod,

@@ -5,6 +5,7 @@ import { QuotesService } from '../../../core/services/quotes.service';
 import { PublicQuote } from '../../../core/models/quote.model';
 import { SaleScheme } from '../../../core/models/order.model';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 /** Cómo se le nombra al cliente cada condición de venta. */
 const SCHEME_LABELS: Record<SaleScheme, string> = {
@@ -29,7 +30,7 @@ const SCHEME_LABELS: Record<SaleScheme, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-view.component.html',
   styleUrl: './quote-view.component.scss',
-  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent],
+  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent, MediaUrlPipe],
 })
 export class QuoteViewComponent implements OnInit {
   private route = inject(ActivatedRoute);

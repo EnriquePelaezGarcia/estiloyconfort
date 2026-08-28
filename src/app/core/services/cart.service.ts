@@ -119,27 +119,49 @@ export class CartService {
   }
 
   /**
-   * URL de WhatsApp con el resumen del pedido. `precotizacionUrl` (opcional)
-   * agrega el link que el asesor abre para crear la cotización formal sin
-   * volver a capturar los productos (Docs/plan-precotizacion-carrito.md).
+   * URL de WhatsApp con el resumen del pedido. `opts` (todo opcional) agrega el
+   * folio que el cliente puede citar en el chat y el link que el asesor abre
+   * para crear la cotización formal sin volver a capturar los productos
+   * (Docs/plan-precotizacion-carrito.md).
+   *
+   * Con `precotizacionUrl` el mensaje va corto y ordenado (saludo + referencia
+   * + link): el asesor abre el link y ahí tiene la lista de productos y el
+   * total, así que no hace falta repetirlos en el chat.
+   *
+   * Sin `precotizacionUrl` (la precotización no se pudo crear, backend caído)
+   * se cae al mensaje detallado con la lista completa — lo único que tendría
+   * el asesor. La venta nunca se bloquea por un backend caído.
    */
-  buildWhatsAppUrl(whatsappNumber: string, precotizacionUrl?: string): string {
+  buildWhatsAppUrl(
+    whatsappNumber: string,
+    opts?: { precotizacionUrl?: string; folio?: string },
+  ): string {
     const items = this._cart().items;
     if (!items.length) return `https://wa.me/${whatsappNumber}`;
-    const lines = items.map(i => {
-      const variants = Object.entries(i.variantSelections)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(', ');
-      const price = ((i.priceCash + i.variantPriceModifier) * i.quantity).toLocaleString('es-MX', {
-        style: 'currency', currency: 'MXN',
+
+    let text: string;
+    if (opts?.precotizacionUrl) {
+      text = 'Hola, me interesa hacer un pedido:';
+      if (opts.folio) {
+        text += `\nReferencia: ${opts.folio}`;
+      }
+      text += `\nCotización lista para el asesor:\n${opts.precotizacionUrl}`;
+    } else {
+      const lines = items.map(i => {
+        const variants = Object.entries(i.variantSelections)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ');
+        const price = ((i.priceCash + i.variantPriceModifier) * i.quantity).toLocaleString('es-MX', {
+          style: 'currency', currency: 'MXN',
+        });
+        const materialLabel = this.materialsStore.labelOf(i.materialId);
+        return `▸ ${i.name} (${materialLabel}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
       });
-      const materialLabel = this.materialsStore.labelOf(i.materialId);
-      return `▸ ${i.name} (${materialLabel}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
-    });
-    const total = this.total().toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
-    let text = `Hola, me interesa hacer un pedido:\n\n${lines.join('\n')}\n\n*Total estimado: ${total}*\n\n¿Pueden confirmar disponibilidad?`;
-    if (precotizacionUrl) {
-      text += `\n\nCotización lista para el asesor: ${precotizacionUrl}`;
+      const total = this.total().toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+      text = `Hola, me interesa hacer un pedido:\n\n${lines.join('\n')}\n\n*Total estimado: ${total}*\n\n¿Pueden confirmar disponibilidad?`;
+      if (opts?.folio) {
+        text += `\n\nRef. de tu pedido: ${opts.folio}`;
+      }
     }
     return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
   }

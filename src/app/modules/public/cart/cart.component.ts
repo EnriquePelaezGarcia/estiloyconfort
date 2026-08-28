@@ -11,6 +11,14 @@ import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 const WHATSAPP_NUMBER = environment.whatsappNumber;
 
+/**
+ * Token de la última precotización creada desde ESTE navegador. Se reenvía
+ * como `replaceToken` para que el cliente que ajusta el carrito y vuelve a
+ * finalizar conserve su mismo folio en vez de generarle uno nuevo al vendedor
+ * (Docs/plan-precotizacion-carrito.md D6).
+ */
+const LAST_REQUEST_KEY = 'ec_last_quote_request';
+
 /** Estado del cálculo de envío por CP en el carrito. */
 type ShippingState = 'idle' | 'loading' | 'covered' | 'out-of-area';
 
@@ -31,6 +39,14 @@ export class CartComponent {
   protected shippingCp = signal('');
   protected shippingState = signal<ShippingState>('idle');
   protected shippingEstimate = signal<{ price: number; label: string } | null>(null);
+  /**
+   * Contacto OPCIONAL (D2): sin máscara ni validación — se manda tal cual para
+   * que el asesor no tenga que pedirlo por chat. La cotización formal sí exige
+   * nombre y 10 dígitos; ahí el vendedor confirma o corrige.
+   */
+  protected customerName = signal('');
+  protected customerPhone = signal('');
+
   /** El botón de finalizar está ocupado creando la precotización. */
   protected submitting = signal(false);
 
@@ -65,6 +81,14 @@ export class CartComponent {
 
   remove(item: CartItem): void {
     this.cart.removeItem(item.productId, item.materialId, item.variantSelections);
+  }
+
+  protected onNameInput(event: Event): void {
+    this.customerName.set((event.target as HTMLInputElement).value);
+  }
+
+  protected onPhoneInput(event: Event): void {
+    this.customerPhone.set((event.target as HTMLInputElement).value);
   }
 
   protected onCpInput(event: Event): void {
@@ -112,9 +136,44 @@ export class CartComponent {
     };
 
     const cp = this.shippingCp().length === 5 ? this.shippingCp() : null;
-    this.quoteRequests.create({ items: this.cart.buildRequestItems(), shippingPostalCode: cp }).subscribe({
-      next: (res) => go(this.cart.buildWhatsAppUrl(WHATSAPP_NUMBER, res.shareUrl)),
-      error: () => go(this.cart.buildWhatsAppUrl(WHATSAPP_NUMBER)),
-    });
+    this.quoteRequests
+      .create({
+        items: this.cart.buildRequestItems(),
+        shippingPostalCode: cp,
+        customerName: this.customerName().trim() || null,
+        customerPhone: this.customerPhone().trim() || null,
+        replaceToken: this.readLastToken(),
+      })
+      .subscribe({
+        next: (res) => {
+          this.rememberToken(res.token);
+          go(this.cart.buildWhatsAppUrl(WHATSAPP_NUMBER, {
+            precotizacionUrl: res.shareUrl,
+            folio: res.folio,
+          }));
+        },
+        error: () => go(this.cart.buildWhatsAppUrl(WHATSAPP_NUMBER)),
+      });
+  }
+
+  /**
+   * `localStorage` solo dentro de handlers de evento: en SSR no existe, y el
+   * modo privado de algunos navegadores lo hace lanzar aunque exista.
+   */
+  private readLastToken(): string | null {
+    try {
+      return localStorage.getItem(LAST_REQUEST_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private rememberToken(token: string): void {
+    try {
+      localStorage.setItem(LAST_REQUEST_KEY, token);
+    } catch {
+      // Sin persistencia el cliente solo genera un folio nuevo cada vez: molesto
+      // para el vendedor, pero nada se rompe.
+    }
   }
 }
