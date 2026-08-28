@@ -14,28 +14,6 @@
   min-height: 60vh;
   background: v.$color-bg;
 
-  // Mismo tratamiento que la frase de la home (.tagline__text): itálica,
-  // Playfair Display y morado claro. Aquí sí se ve en móvil, solo que a
-  // menor tamaño gracias al clamp().
-  &__tagline {
-    text-align: center;
-    padding: v.$spacing-2xl v.$spacing-lg v.$spacing-xl;
-
-    @media (max-width: v.$bp-tablet) {
-      display: none;
-    }
-  }
-
-  &__tagline-text {
-    font-family: v.$font-brand;
-    font-style: italic;
-    font-size: clamp(1.5rem, 3vw, 2.25rem);
-    font-weight: 400;
-    line-height: 1.35;
-    color: v.$color-primary-light;
-    margin: 0;
-  }
-
   &__layout {
     display: grid;
     grid-template-columns: 240px 1fr;
