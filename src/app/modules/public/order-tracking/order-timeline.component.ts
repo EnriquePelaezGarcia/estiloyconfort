@@ -219,6 +219,9 @@ const RANK: Record<OrderStatus, number> = {
       }
       .tl__step--done .tl__marker { background: #3d2b5e; border-color: #3d2b5e; }
       .tl__step--current .tl__marker { border-color: #3d2b5e; background: #c9b8e8; }
+      /* Morado tenue en vez del círculo blanco "vacío": se ve venir, sin
+         confundirse con el cumplido (sólido) ni con el actual (lavanda). */
+      .tl__step--future .tl__marker { background: rgba(61, 43, 94, 0.55); border-color: rgba(61, 43, 94, 0.55); }
       .tl__label { margin: 0; font-weight: 600; color: #1e1521; line-height: 1.3; }
       .tl__step--future .tl__label { color: #8c8480; font-weight: 500; }
       .tl__step--current .tl__label { color: #3d2b5e; }
@@ -293,7 +296,10 @@ const RANK: Record<OrderStatus, number> = {
         font-weight: 700;
         line-height: 1;
       }
-      .hnode--future .hnode__marker { border-color: rgba(61, 43, 94, 0.22); }
+      /* Mismo criterio que .tl__step--future: morado tenue en vez del
+         círculo blanco "vacío", sin palomita para no confundirlo con lo ya
+         cumplido. */
+      .hnode--future .hnode__marker { background: rgba(61, 43, 94, 0.55); border-color: rgba(61, 43, 94, 0.55); }
       .hnode--current .hnode__marker {
         width: 1.9rem;
         height: 1.9rem;
