@@ -18,6 +18,9 @@ function removeImageFile(imageUrl) {
     const filename = path.basename(imageUrl.split('?')[0]);
     const filePath = path.join(__dirname, '../../uploads/categories', filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Miniatura que genera processCategoryImage (ver middleware/upload.js).
+    const thumbPath = filePath.replace(/\.webp$/i, '-thumb.webp');
+    if (thumbPath !== filePath && fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
   } catch (_) {}
 }
 

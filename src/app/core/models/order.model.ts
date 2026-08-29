@@ -458,6 +458,14 @@ export interface InventoryMaterialPrice {
   priceCash: number | null;
   price6msi: number | null;
   priceMayoreo: number | null;
+  /**
+   * A2 (Docs/plan-stock-por-color.md): existencia física por color de este
+   * material en este producto. `[]` = no se rastrea color aquí → la
+   * disponibilidad se decide por `availableQuantity` como siempre. Con
+   * filas, un color fuera de la lista (o con cantidad insuficiente) se
+   * fabrica aunque el agregado tenga piezas.
+   */
+  colorStock?: Array<{ color: string; colorKey: string; quantity: number }>;
 }
 
 export interface InventoryItem {

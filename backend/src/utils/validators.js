@@ -27,6 +27,17 @@ function isValidCustomerPhone(value) {
 }
 
 /**
+ * Teléfono OPCIONAL (contacto público, alta de usuario, ficha de fabricante):
+ * vacío/nulo es válido, pero si viene algo tiene que ser un teléfono a 10
+ * dígitos tras quitar separadores. Mismo criterio que el front
+ * (`core/utils/phone.ts` PHONE_PATTERN).
+ */
+function isValidOptionalPhone(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return true;
+  return isValidCustomerPhone(value);
+}
+
+/**
  * Devuelve un arreglo de mensajes de error para los campos de registro.
  */
 function validateRegister(body) {
@@ -47,6 +58,7 @@ function validateAdminCreateUser(body) {
   const errors = [];
   if (!isValidEmail(body.email)) errors.push('Email inválido');
   if (!isNonEmptyString(body.fullName)) errors.push('El nombre completo es obligatorio');
+  if (!isValidOptionalPhone(body.phone)) errors.push('El teléfono debe tener 10 dígitos');
   return errors;
 }
 
@@ -104,8 +116,8 @@ function validateContactMessage(body) {
     errors.push('El nombre es obligatorio (máximo 120 caracteres)');
   }
   if (!isValidEmail(body.email)) errors.push('Email inválido');
-  if (body.phone && String(body.phone).trim().length > 30) {
-    errors.push('El teléfono es demasiado largo');
+  if (!isValidOptionalPhone(body.phone)) {
+    errors.push('El teléfono debe tener 10 dígitos');
   }
   if (
     !isNonEmptyString(body.message) ||
@@ -122,6 +134,7 @@ module.exports = {
   isValidPassword,
   isNonEmptyString,
   isValidCustomerPhone,
+  isValidOptionalPhone,
   validateRegister,
   validateAdminCreateUser,
   validateLogin,

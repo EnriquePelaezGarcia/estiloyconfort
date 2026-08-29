@@ -57,6 +57,22 @@ const Inventory = {
       `SELECT product_id, material_id, quantity, reason, note, customer_name
          FROM stock_reservations WHERE status = 'active'`,
     );
+
+    // A2 (Docs/plan-stock-por-color.md): desglose de existencia por color, para
+    // que el POS avise "en «Negro» se fabrica" cuando la pieza de bodega es de
+    // otro color. Par sin filas = no rastrea color (comportamiento de siempre).
+    const [colorStockRows] = await pool.execute(
+      `SELECT product_id, material_id, color, color_key, quantity
+         FROM product_material_stock_colors`,
+    );
+    const colorStockByPair = new Map();
+    for (const cr of colorStockRows) {
+      const key = `${cr.product_id}-${cr.material_id}`;
+      if (!colorStockByPair.has(key)) colorStockByPair.set(key, []);
+      colorStockByPair.get(key).push({
+        color: cr.color, colorKey: cr.color_key, quantity: Number(cr.quantity),
+      });
+    }
     const reservationsByPair = new Map();
     for (const rr of reservationRows) {
       const key = `${rr.product_id}-${rr.material_id}`;
@@ -90,6 +106,8 @@ const Inventory = {
         reservedQuantity,
         availableQuantity: Number(r.stock_quantity) - reservedQuantity,
         reservations,
+        // A2: [] = este material no rastrea color en este producto.
+        colorStock: colorStockByPair.get(`${r.id}-${r.material_id}`) ?? [],
         isQuoted: r.base_cost != null,
         priceCash: r.price_cash != null ? Number(r.price_cash) : null,
         price6msi: r.price_6msi != null ? Number(r.price_6msi) : null,

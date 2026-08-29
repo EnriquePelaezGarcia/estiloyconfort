@@ -105,7 +105,7 @@
                         title="Ver foto del producto"
                         (click)="zoomedImage.set(img)"
                       >
-                        <img class="prod-cell__thumb" [src]="img | mediaUrl" [alt]="it.productName" width="48" height="48" loading="lazy" />
+                        <img class="prod-cell__thumb" [src]="img | mediaUrl: 'thumb'" [alt]="it.productName" width="48" height="48" loading="lazy" />
                       </button>
                     } @else {
                       <span class="prod-cell__thumb prod-cell__thumb--empty no-print">

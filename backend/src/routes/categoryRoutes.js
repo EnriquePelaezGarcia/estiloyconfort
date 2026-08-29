@@ -2,7 +2,7 @@ const { Router } = require('express');
 const ctrl = require('../controllers/categoryController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
-const { categoryImages } = require('../middleware/upload');
+const { categoryImages, processCategoryImage } = require('../middleware/upload');
 
 const router = Router();
 
@@ -18,7 +18,7 @@ router.post('/', authenticate, authorize('admin'), ctrl.create);
 router.patch('/:id', authenticate, authorize('admin'), ctrl.update);
 router.delete('/:id', authenticate, authorize('admin'), ctrl.remove);
 
-router.post('/:id/image', authenticate, authorize('admin'), categoryImages.single('image'), ctrl.setImage);
+router.post('/:id/image', authenticate, authorize('admin'), categoryImages.single('image'), processCategoryImage, ctrl.setImage);
 router.delete('/:id/image', authenticate, authorize('admin'), ctrl.deleteImage);
 
 module.exports = router;

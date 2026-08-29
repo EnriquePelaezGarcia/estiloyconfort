@@ -526,6 +526,23 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
     requiresFabrication = true;
   }
 
+  // A2 (Docs/plan-stock-por-color.md): un color sin existencia se fabrica,
+  // aunque el agregado (producto, material) tenga piezas — la pieza que hay
+  // en bodega es de OTRO color y no cubre este pedido. Monótono: solo AGREGA
+  // casos de fabricación, nunca los quita. Si el par no lleva stock por color
+  // (ningún bucket capturado en Inventario) esto no tiene efecto.
+  if (!requiresFabrication) {
+    const [buckets] = await conn.execute(
+      'SELECT color_key, quantity FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
+      [product.id, materialId],
+    );
+    if (buckets.length > 0) {
+      const key = (color ?? '').trim().toLowerCase();
+      const bucket = buckets.find((b) => b.color_key === key);
+      if (qty > (bucket ? Number(bucket.quantity) : 0)) requiresFabrication = true;
+    }
+  }
+
   // Reserva de esta misma línea (D4/D8): opcional, cantidad parcial o total
   // respecto a `qty`. Nunca aplica sobre algo que se va a fabricar (D6,
   // fuera de alcance — no hay pieza física que reservar todavía).
@@ -588,6 +605,39 @@ async function adjustMaterialStock(conn, productId, materialId, delta) {
   await conn.execute(
     'UPDATE product_materials SET stock_quantity = stock_quantity + ? WHERE product_id = ? AND material_id = ?',
     [delta, productId, materialId],
+  );
+}
+
+/**
+ * A2 (Docs/plan-stock-por-color.md): ajusta el bucket de color de (producto,
+ * material). Se llama en PARALELO a adjustMaterialStock, SOLO para líneas de
+ * stock (nunca de fabricación — no hay pieza física de ese color).
+ *
+ * Si el par no lleva stock por color (ningún bucket capturado) NO crea nada:
+ * el UPDATE no afecta filas y no se hace el INSERT. Así, un producto sin
+ * desglose de color sigue comportándose como hoy.
+ */
+async function adjustColorStock(conn, productId, materialId, color, delta) {
+  const trimmed = (color ?? '').trim();
+  const key = trimmed.toLowerCase();
+  if (!key) return;
+  const [res] = await conn.execute(
+    `UPDATE product_material_stock_colors SET quantity = quantity + ?
+      WHERE product_id = ? AND material_id = ? AND color_key = ?`,
+    [delta, productId, materialId, key],
+  );
+  if (res.affectedRows > 0) return;
+  // El bucket de ese color no existe. Solo lo creamos si el par YA lleva
+  // stock por color (hay otros buckets); si no, no rastreamos color aquí.
+  const [[tracks]] = await conn.execute(
+    'SELECT 1 AS x FROM product_material_stock_colors WHERE product_id = ? AND material_id = ? LIMIT 1',
+    [productId, materialId],
+  );
+  if (!tracks) return;
+  await conn.execute(
+    `INSERT INTO product_material_stock_colors (product_id, material_id, color, color_key, quantity)
+     VALUES (?, ?, ?, ?, ?)`,
+    [productId, materialId, trimmed, key, delta],
   );
 }
 
@@ -1134,6 +1184,11 @@ const Order = {
         // M15.4: el stock siempre se descuenta de la fila (producto, material)
         // correcta, aunque quede negativo. No bloquea la venta.
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
+        // A2: el bucket de color solo se mueve para lo que sale de bodega —
+        // una línea a fabricar no tiene pieza física de ese color todavía.
+        if (!it.requiresFabrication) {
+          await adjustColorStock(conn, it.productId, it.materialId, it.color, -it.quantity);
+        }
 
         // Reserva de pieza (D4): nace ligada a este order_item recién creado.
         // RN-P5: en pickup no hay nada que apartar — el cliente se lleva la
@@ -1543,11 +1598,16 @@ const Order = {
       // 1. Devolver al inventario el stock de los items actuales, cada uno a
       // su material_id (M4/M15) — nunca al del producto en general.
       const [oldItems] = await conn.execute(
-        'SELECT product_id, material_id, quantity FROM order_items WHERE order_id = ?', [id],
+        'SELECT product_id, material_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
       );
       for (const it of oldItems) {
         if (it.product_id != null && it.material_id != null) {
           await adjustMaterialStock(conn, it.product_id, it.material_id, it.quantity);
+          // A2: devuelve al bucket de color lo que era línea de stock (las de
+          // fabricación nunca lo tocaron).
+          if (!it.requires_fabrication) {
+            await adjustColorStock(conn, it.product_id, it.material_id, it.color, it.quantity);
+          }
         }
       }
 
@@ -1823,6 +1883,9 @@ const Order = {
         );
         it.insertedItemId = itemResult.insertId;
         await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
+        if (!it.requiresFabrication) {
+          await adjustColorStock(conn, it.productId, it.materialId, it.color, -it.quantity);
+        }
 
         // RN-P5: en pickup no hay nada que apartar.
         if (it.reserve && !pickupInStore) {
@@ -2421,7 +2484,7 @@ const Order = {
 
   async remove(id) {
     const [items] = await pool.execute(
-      'SELECT product_id, material_id, quantity FROM order_items WHERE order_id = ?', [id],
+      'SELECT product_id, material_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
     );
     const existing = await this.findById(id);
     const conn = await pool.getConnection();
@@ -2445,6 +2508,10 @@ const Order = {
       for (const item of items) {
         if (item.product_id != null && item.material_id != null) {
           await adjustMaterialStock(conn, item.product_id, item.material_id, item.quantity);
+          // A2: y al bucket de color, si era línea de stock.
+          if (!item.requires_fabrication) {
+            await adjustColorStock(conn, item.product_id, item.material_id, item.color, item.quantity);
+          }
         }
       }
       // §4.3: cancelar el pedido libera cualquier reserva activa ligada a él.

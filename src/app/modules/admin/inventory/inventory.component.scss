@@ -100,3 +100,45 @@
     color: vars.$color-text-secondary;
   }
 }
+
+// A2 (Docs/plan-stock-por-color.md): desglose de existencia por color.
+.color-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  margin-top: 0.3rem;
+
+  &__item {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.05rem 0.4rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+    border: 1px solid vars.$color-border;
+    color: vars.$color-text-secondary;
+    white-space: nowrap;
+  }
+}
+
+.color-editor {
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+  }
+
+  &__total {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: vars.$color-text-secondary;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 1fr 5rem auto;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+  }
+}

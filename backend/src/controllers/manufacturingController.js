@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { pool } = require('../config/database');
+const { isValidOptionalPhone } = require('../utils/validators');
 
 const PO_STATUSES = ['draft', 'sent', 'in_production', 'received', 'cancelled'];
 
@@ -84,6 +85,7 @@ const manufacturingController = {
   createManufacturer: asyncHandler(async (req, res) => {
     const { name, contactName, phone, email, address, notes } = req.body;
     if (!name || !name.trim()) throw new ApiError(400, 'El nombre del fabricante es obligatorio');
+    if (!isValidOptionalPhone(phone)) throw new ApiError(400, 'El teléfono debe tener 10 dígitos');
     const [result] = await pool.execute(
       `INSERT INTO manufacturers (name, contact_name, phone, email, address, notes)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -98,6 +100,7 @@ const manufacturingController = {
     const { name, contactName, phone, email, address, notes } = req.body;
     const [[existing]] = await pool.execute('SELECT id FROM manufacturers WHERE id = ?', [req.params.id]);
     if (!existing) throw ApiError.notFound('Fabricante no encontrado');
+    if (!isValidOptionalPhone(phone)) throw new ApiError(400, 'El teléfono debe tener 10 dígitos');
     await pool.execute(
       `UPDATE manufacturers
        SET name = ?, contact_name = ?, phone = ?, email = ?, address = ?, notes = ?

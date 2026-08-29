@@ -112,11 +112,18 @@
             <input
               id="phone"
               class="field__input"
+              [class.is-invalid]="form.get('phone')?.invalid && form.get('phone')?.touched"
               type="tel"
+              inputmode="numeric"
+              maxlength="12"
               formControlName="phone"
               autocomplete="tel"
-              placeholder="10 dígitos"
+              placeholder="222 123 4567"
+              (input)="onPhoneInput($event)"
             />
+            @if (form.get('phone')?.invalid && form.get('phone')?.touched) {
+              <p class="field__error">Ingresa un teléfono a 10 dígitos</p>
+            }
           </div>
 
           <div class="field">

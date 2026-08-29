@@ -2,7 +2,7 @@ const { Router } = require('express');
 const ctrl = require('../controllers/productController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
-const { productImages } = require('../middleware/upload');
+const { productImages, processProductImage } = require('../middleware/upload');
 
 const router = Router();
 
@@ -20,7 +20,7 @@ router.patch('/:id', authenticate, authorize('admin'), ctrl.update);
 router.delete('/:id', authenticate, authorize('admin'), ctrl.remove);
 
 // Rutas admin — imágenes de producto
-router.post('/:id/images', authenticate, authorize('admin'), productImages.single('image'), ctrl.addImage);
+router.post('/:id/images', authenticate, authorize('admin'), productImages.single('image'), processProductImage, ctrl.addImage);
 router.delete('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.deleteImage);
 router.patch('/:id/images/:imageId', authenticate, authorize('admin'), ctrl.setPrimaryImage);
 

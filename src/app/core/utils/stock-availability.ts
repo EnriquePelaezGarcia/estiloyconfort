@@ -28,3 +28,22 @@ export function reservationsTooltip(mp: InventoryMaterialPrice): string {
     .map((r) => `${r.quantity} pza(s) — ${r.customerName ?? 'sin cliente'} (${r.note ?? r.reason})`)
     .join('\n');
 }
+
+/**
+ * A2 (Docs/plan-stock-por-color.md): ¿la pieza que hay en bodega es de otro
+ * color? Solo aplica si ese material rastrea color (`colorStock` con filas).
+ * `true` → la línea se fabrica aunque `availableOf(mp)` diga que hay piezas.
+ *
+ * Es el MISMO criterio que `resolveOrderLine` en el backend (la autoridad):
+ * esto solo lo adelanta en pantalla para el vendedor.
+ */
+export function colorMismatch(
+  mp: InventoryMaterialPrice | null | undefined,
+  color: string | null | undefined,
+  quantity: number,
+): boolean {
+  if (!mp || !mp.colorStock || mp.colorStock.length === 0) return false;
+  const key = (color ?? '').trim().toLowerCase();
+  const bucket = mp.colorStock.find((c) => c.colorKey === key);
+  return quantity > (bucket ? bucket.quantity : 0);
+}

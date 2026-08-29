@@ -311,6 +311,20 @@ async function importTocadorLuna(materialIdMap, manufacturers, force, seq) {
     );
   }
 
+  // A2 (Docs/plan-stock-por-color.md): fixture de aceptación del stock por
+  // color. La pieza de MDF es BLANCA; un pedido de Tocador Luna en MDF Negro
+  // debe irse a fabricación aunque el agregado diga 1. Melamina NO lleva
+  // desglose: sigue decidiendo por la cantidad agregada, como el resto.
+  await pool.execute(
+    'DELETE FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
+    [productId, materialIdMap.MDF],
+  );
+  await pool.execute(
+    `INSERT INTO product_material_stock_colors (product_id, material_id, color, color_key, quantity)
+     VALUES (?, ?, 'Blanco', 'blanco', 1)`,
+    [productId, materialIdMap.MDF],
+  );
+
   return { productId, slug, status, sku };
 }
 

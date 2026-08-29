@@ -9,6 +9,7 @@ import {
   ManufacturerInput,
 } from '../../../../core/models/manufacturing.model';
 import { MaterialsStore } from '../../../../core/services/materials.store';
+import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../../core/utils/phone';
 
 @Component({
   selector: 'app-manufacturer-catalog',
@@ -36,7 +37,8 @@ export class ManufacturerCatalogComponent implements OnInit {
   protected readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(255)]],
     contactName: [''],
-    phone: [''],
+    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
+    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
     email: ['', [Validators.email]],
     address: [''],
     notes: [''],
@@ -89,7 +91,7 @@ export class ManufacturerCatalogComponent implements OnInit {
     this.form.reset({
       name: m.name,
       contactName: m.contactName ?? '',
-      phone: m.phone ?? '',
+      phone: formatPhoneForDisplay(m.phone ?? ''),
       email: m.email ?? '',
       address: m.address ?? '',
       notes: m.notes ?? '',
@@ -98,6 +100,11 @@ export class ManufacturerCatalogComponent implements OnInit {
 
   protected closeForm(): void {
     this.editing.set(null);
+  }
+
+  /** Recorta a 10 dígitos y formatea "222 123 4567" mientras se escribe. */
+  protected onPhoneInput(event: Event): void {
+    this.form.controls.phone.setValue(formatPhoneDigits((event.target as HTMLInputElement).value));
   }
 
   protected save(): void {

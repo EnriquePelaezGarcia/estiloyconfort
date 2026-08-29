@@ -1,6 +1,6 @@
 <header class="page-head">
   <div>
-    <span class="page-head__overline">Administración</span>
+    <span class="page-head__overline">{{ showValue() ? 'Administración' : 'Operación' }}</span>
     <h1 class="page-head__title">Inventario</h1>
     <p class="page-head__sub">Existencias por producto × material, alertas y ajuste manual (M15).</p>
   </div>
@@ -23,11 +23,13 @@
     <span class="stat-card__label">Agotados o negativos</span>
     <span class="stat-card__value">{{ outOfStockCount() }}</span>
   </div>
-  <div class="stat-card stat-card--success">
-    <span class="stat-card__icon material-symbols-outlined">payments</span>
-    <span class="stat-card__label">Valor de inventario</span>
-    <span class="stat-card__value">{{ money(inventoryValue()) }}</span>
-  </div>
+  @if (showValue()) {
+    <div class="stat-card stat-card--success">
+      <span class="stat-card__icon material-symbols-outlined">payments</span>
+      <span class="stat-card__label">Valor de inventario</span>
+      <span class="stat-card__value">{{ money(inventoryValue()) }}</span>
+    </div>
+  }
 </div>
 
 <!-- ===== Toolbar ===== -->
@@ -58,16 +60,18 @@
       Agotados
     </button>
   </div>
-  <button
-    type="button"
-    class="btn btn--ghost btn--labels"
-    (click)="printFilteredLabels()"
-    [disabled]="printingLabels()"
-    title="Imprime una etiqueta QR por cada producto visible"
-  >
-    <span class="material-symbols-outlined">qr_code_2</span>
-    Imprimir etiquetas
-  </button>
+  @if (canManage()) {
+    <button
+      type="button"
+      class="btn btn--ghost btn--labels"
+      (click)="printFilteredLabels()"
+      [disabled]="printingLabels()"
+      title="Imprime una etiqueta QR por cada producto visible"
+    >
+      <span class="material-symbols-outlined">qr_code_2</span>
+      Imprimir etiquetas
+    </button>
+  }
 </div>
 
 @if (loading()) {
@@ -84,8 +88,8 @@
           <th class="num" title="Piezas apartadas por una reserva activa (Docs/plan-reserva-de-piezas.md)">Apartado</th>
           <th class="num">Disponible</th>
           <th>Estado</th>
-          <th class="num">Valor</th>
-          <th class="actions-col">Acciones</th>
+          @if (showValue()) { <th class="num">Valor</th> }
+          @if (canManage()) { <th class="actions-col">Acciones</th> }
         </tr>
       </thead>
       <tbody>
@@ -94,7 +98,16 @@
             <td data-label="Producto" class="strong">{{ row.name }}</td>
             <td data-label="SKU" class="muted">{{ row.sku || '—' }}</td>
             <td data-label="Material">{{ row.materialLabel }}</td>
-            <td data-label="Stock" class="num" [class.negative]="row.stockQuantity < 0">{{ row.stockQuantity }}</td>
+            <td data-label="Stock" class="num" [class.negative]="row.stockQuantity < 0">
+              {{ row.stockQuantity }}
+              @if (row.colors.length > 0) {
+                <span class="color-chips" title="Desglose por color (A2): lo que no esté aquí se fabrica">
+                  @for (c of row.colors; track c.color) {
+                    <span class="color-chips__item">{{ c.color }} {{ c.quantity }}</span>
+                  }
+                </span>
+              }
+            </td>
             <td data-label="Apartado" class="num">
               @if (row.reservedQuantity > 0) {
                 <span class="badge badge--amber">{{ row.reservedQuantity }}</span>
@@ -107,23 +120,27 @@
                 @case ('low') { <span class="badge badge--amber">Stock bajo</span> }
                 @default { <span class="badge badge--green">Disponible</span> }
               }
-              @if (row.baseCost === null) {
+              @if (showValue() && row.baseCost === null) {
                 <span class="badge badge--gray" title="Declarado pero sin costo capturado por ningún fabricante (M2)">sin costo</span>
               }
             </td>
-            <td data-label="Valor" class="num">{{ money(row.stockValue) }}</td>
-            <td data-label="Acciones" class="actions">
-              <button type="button" class="icon-btn" (click)="openAdjust(row)" title="Ajustar stock">
-                <span class="material-symbols-outlined">tune</span>
-              </button>
-              <button type="button" class="icon-btn" (click)="openLabels(row)" title="Imprimir etiquetas QR">
-                <span class="material-symbols-outlined">qr_code_2</span>
-              </button>
-            </td>
+            @if (showValue()) {
+              <td data-label="Valor" class="num">{{ money(row.stockValue) }}</td>
+            }
+            @if (canManage()) {
+              <td data-label="Acciones" class="actions">
+                <button type="button" class="icon-btn" (click)="openAdjust(row)" title="Ajustar stock">
+                  <span class="material-symbols-outlined">tune</span>
+                </button>
+                <button type="button" class="icon-btn" (click)="openLabels(row)" title="Imprimir etiquetas QR">
+                  <span class="material-symbols-outlined">qr_code_2</span>
+                </button>
+              </td>
+            }
           </tr>
         } @empty {
           <tr>
-            <td colspan="9" class="empty">No hay renglones que coincidan con el filtro.</td>
+            <td [attr.colspan]="columnCount()" class="empty">No hay renglones que coincidan con el filtro.</td>
           </tr>
         }
       </tbody>
@@ -145,22 +162,75 @@
       <form [formGroup]="form" (ngSubmit)="saveAdjust()" novalidate class="modal__body">
         <p class="adjust-product">{{ row.name }} — {{ row.materialLabel }}</p>
 
+        @if (!hasColorBreakdown()) {
+          <div class="field">
+            <label for="stockQuantity">Stock actual</label>
+            <input id="stockQuantity" type="number" formControlName="stockQuantity" step="1" />
+            <p class="field__hint">Puede quedar negativo: significa vendido y pendiente de fabricar (M15.4). No se bloquea.</p>
+            @if (form.get('stockQuantity')?.invalid && form.get('stockQuantity')?.touched) {
+              <p class="field__error">Ingresa un valor válido</p>
+            }
+            <!-- Docs/plan-reserva-de-piezas.md §6.4: advierte, no bloquea — el
+                 admin puede confirmar y guardar igual (ej. la pieza reservada
+                 se dañó o se perdió). -->
+            @if (row.reservedQuantity > 0 && (form.get('stockQuantity')?.value ?? 0) < row.reservedQuantity) {
+              <p class="field__warning">
+                <span class="material-symbols-outlined">warning</span>
+                Ojo: hay {{ row.reservedQuantity }} pieza(s) apartada(s) y el nuevo conteo
+                ({{ form.get('stockQuantity')?.value }}) es menor. Revisa las reservas antes de guardar.
+              </p>
+            }
+          </div>
+        }
+
+        <!-- A2 (Docs/plan-stock-por-color.md): desglose por color. Regla:
+             capturas lo que tienes en piso; cualquier otro color se fabrica. -->
         <div class="field">
-          <label for="stockQuantity">Stock actual</label>
-          <input id="stockQuantity" type="number" formControlName="stockQuantity" step="1" />
-          <p class="field__hint">Puede quedar negativo: significa vendido y pendiente de fabricar (M15.4). No se bloquea.</p>
-          @if (form.get('stockQuantity')?.invalid && form.get('stockQuantity')?.touched) {
-            <p class="field__error">Ingresa un valor válido</p>
-          }
-          <!-- Docs/plan-reserva-de-piezas.md §6.4: advierte, no bloquea — el
-               admin puede confirmar y guardar igual (ej. la pieza reservada
-               se dañó o se perdió). -->
-          @if (row.reservedQuantity > 0 && (form.get('stockQuantity')?.value ?? 0) < row.reservedQuantity) {
-            <p class="field__warning">
-              <span class="material-symbols-outlined">warning</span>
-              Ojo: hay {{ row.reservedQuantity }} pieza(s) apartada(s) y el nuevo conteo
-              ({{ form.get('stockQuantity')?.value }}) es menor. Revisa las reservas antes de guardar.
+          <div class="color-editor__head">
+            <label>Existencia por color</label>
+            @if (hasColorBreakdown()) {
+              <span class="color-editor__total">Total: {{ colorTotal() }}</span>
+            }
+          </div>
+
+          @if (hasColorBreakdown()) {
+            @for (c of colorRows(); track $index) {
+              <div class="color-editor__row">
+                <input
+                  type="text"
+                  placeholder="Color (ej. Blanco)"
+                  [value]="c.color"
+                  (input)="setColorName($index, $any($event.target).value)"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  [value]="c.quantity"
+                  (input)="setColorQty($index, $any($event.target).value)"
+                />
+                <button type="button" class="icon-btn icon-btn--danger" (click)="removeColorRow($index)" aria-label="Quitar color">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            }
+            @if (duplicateColorNames().size > 0) {
+              <p class="field__error">Hay colores repetidos.</p>
+            }
+            <button type="button" class="btn btn--ghost btn--sm" (click)="addColorRow()">
+              <span class="material-symbols-outlined">add</span> Agregar color
+            </button>
+            <p class="field__hint">
+              El total pasa a ser la suma. Un pedido en un color que no esté en la lista
+              (o sin piezas) se manda a fabricación, aunque el total tenga existencia.
             </p>
+          } @else {
+            <p class="field__hint">
+              Sin desglose: la disponibilidad se decide por el total de arriba.
+            </p>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="addColorRow()">
+              <span class="material-symbols-outlined">palette</span> Desglosar por color
+            </button>
           }
         </div>
 

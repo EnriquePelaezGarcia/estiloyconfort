@@ -45,6 +45,22 @@ const inventoryController = {
         params,
       );
 
+      // A2 (Docs/plan-stock-por-color.md): desglose de existencia por color.
+      // Renglón sin filas aquí = no rastrea color, decide por la cantidad
+      // agregada como siempre.
+      const [colorRows] = await pool.execute(
+        `SELECT c.product_id, c.material_id, c.color, c.quantity
+           FROM product_material_stock_colors c
+           JOIN product_materials pm
+             ON pm.product_id = c.product_id AND pm.material_id = c.material_id`,
+      );
+      const colorsByPair = new Map();
+      for (const c of colorRows) {
+        const key = `${c.product_id}-${c.material_id}`;
+        if (!colorsByPair.has(key)) colorsByPair.set(key, []);
+        colorsByPair.get(key).push({ color: c.color, quantity: Number(c.quantity) });
+      }
+
       const data = rows.map((r) => ({
         productId: r.product_id,
         name: r.name,
@@ -62,7 +78,28 @@ const inventoryController = {
         baseCost: r.base_cost != null ? Number(r.base_cost) : null,
         priceCash: r.price_cash != null ? Number(r.price_cash) : null,
         stockValue: r.base_cost != null ? Number(r.base_cost) * r.stock_quantity : null,
+        // A2: [] o ausente = este renglón no rastrea color.
+        colors: colorsByPair.get(`${r.product_id}-${r.material_id}`) ?? [],
       }));
+      // El valor de inventario es información financiera reservada al admin: el
+      // vendedor consulta existencias, no cuánto valen. Se omiten también el
+      // costo y el valor por renglón para que no se pueda reconstruir.
+      if (req.user?.role !== 'admin') {
+        const publicData = data.map((r) => ({
+          productId: r.productId,
+          name: r.name,
+          sku: r.sku,
+          materialId: r.materialId,
+          materialCode: r.materialCode,
+          materialLabel: r.materialLabel,
+          stockQuantity: r.stockQuantity,
+          reservedQuantity: r.reservedQuantity,
+          availableQuantity: r.availableQuantity,
+          colors: r.colors,
+        }));
+        return res.json({ data: publicData });
+      }
+
       const totalValue = data.reduce((s, r) => s + (r.stockValue ?? 0), 0);
       res.json({ data, totalValue });
     } catch (err) { next(err); }
@@ -70,9 +107,16 @@ const inventoryController = {
 
   /**
    * PUT /api/admin/inventory — ajuste de existencias.
-   * Body: { items: [{ productId, materialId, stockQuantity }] }.
-   * Acepta NEGATIVOS (M15.4: "vendido y pendiente de fabricar" es
-   * información, no un error). Rechaza pares que el producto no declare.
+   * Body: { items: [{ productId, materialId, stockQuantity, colors? }] }.
+   *
+   * - Sin `colors`: ajusta solo la cantidad agregada. Acepta NEGATIVOS
+   *   (M15.4: "vendido y pendiente de fabricar" es información, no un error).
+   * - Con `colors: [{ color, quantity }]` (A2, Docs/plan-stock-por-color.md):
+   *   reemplaza el desglose por color de ese par y deja `stock_quantity`
+   *   igual a la SUMA capturada. `colors: []` borra el desglose (vuelve a
+   *   inventario simple) y usa `stockQuantity` como total.
+   *
+   * Rechaza pares que el producto no declare.
    */
   async update(req, res, next) {
     try {
@@ -84,19 +128,85 @@ const inventoryController = {
       for (const it of items) {
         const productId = Number(it.productId);
         const materialId = Number(it.materialId);
-        const stockQuantity = Math.trunc(Number(it.stockQuantity));
-        if (!Number.isFinite(stockQuantity)) {
-          return res.status(400).json({ message: `stockQuantity inválido para el producto ${productId}.` });
-        }
-        const [result] = await pool.execute(
-          'UPDATE product_materials SET stock_quantity = ? WHERE product_id = ? AND material_id = ?',
-          [stockQuantity, productId, materialId],
+        const hasColors = Array.isArray(it.colors);
+
+        const [[pair]] = await pool.execute(
+          'SELECT 1 AS x FROM product_materials WHERE product_id = ? AND material_id = ?',
+          [productId, materialId],
         );
-        if (result.affectedRows === 0) {
+        if (!pair) {
           return res.status(400).json({
             message: `El producto ${productId} no declara el material ${materialId}: no se puede tener existencia de un material que no ofrece.`,
           });
         }
+
+        if (hasColors) {
+          // Normaliza y colapsa por color_key (LOWER(TRIM)).
+          const byKey = new Map();
+          for (const c of it.colors) {
+            const color = String(c?.color ?? '').trim();
+            const key = color.toLowerCase();
+            const qty = Math.trunc(Number(c?.quantity));
+            if (!key) {
+              return res.status(400).json({ message: `Hay un color vacío en el desglose del producto ${productId}.` });
+            }
+            if (!Number.isFinite(qty)) {
+              return res.status(400).json({ message: `Cantidad inválida para el color "${color}" del producto ${productId}.` });
+            }
+            byKey.set(key, { color, quantity: (byKey.get(key)?.quantity ?? 0) + qty });
+          }
+
+          const conn = await pool.getConnection();
+          try {
+            await conn.beginTransaction();
+            await conn.execute(
+              'DELETE FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
+              [productId, materialId],
+            );
+            let sum = 0;
+            for (const [key, v] of byKey) {
+              await conn.execute(
+                `INSERT INTO product_material_stock_colors (product_id, material_id, color, color_key, quantity)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [productId, materialId, v.color, key, v.quantity],
+              );
+              sum += v.quantity;
+            }
+            // Desglose vacío -> vuelve a inventario simple con el total dado.
+            const aggregate = byKey.size > 0 ? sum : Math.trunc(Number(it.stockQuantity)) || 0;
+            await conn.execute(
+              'UPDATE product_materials SET stock_quantity = ? WHERE product_id = ? AND material_id = ?',
+              [aggregate, productId, materialId],
+            );
+            await conn.commit();
+          } catch (e) {
+            await conn.rollback();
+            throw e;
+          } finally {
+            conn.release();
+          }
+          continue;
+        }
+
+        // Sin desglose por color: comportamiento clásico. Si el par YA lleva
+        // desglose, no se puede tocar solo el agregado (quedaría inconsistente).
+        const [[tracks]] = await pool.execute(
+          'SELECT 1 AS x FROM product_material_stock_colors WHERE product_id = ? AND material_id = ? LIMIT 1',
+          [productId, materialId],
+        );
+        if (tracks) {
+          return res.status(400).json({
+            message: `El producto ${productId} lleva desglose por color en ese material: ajusta las cantidades por color, no el total.`,
+          });
+        }
+        const stockQuantity = Math.trunc(Number(it.stockQuantity));
+        if (!Number.isFinite(stockQuantity)) {
+          return res.status(400).json({ message: `stockQuantity inválido para el producto ${productId}.` });
+        }
+        await pool.execute(
+          'UPDATE product_materials SET stock_quantity = ? WHERE product_id = ? AND material_id = ?',
+          [stockQuantity, productId, materialId],
+        );
       }
 
       res.json({ message: 'Existencias actualizadas' });

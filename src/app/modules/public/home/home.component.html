@@ -30,7 +30,7 @@
             <div class="mini-card__img-wrap">
               @if (product.primary_image) {
                 <img
-                  [src]="product.primary_image | mediaUrl"
+                  [src]="product.primary_image | mediaUrl: 'thumb'"
                   [alt]="product.name"
                   class="mini-card__img"
                   loading="lazy"

@@ -59,7 +59,7 @@
                 [class.gallery__thumb--active]="activeImageIndex() === i"
                 (click)="selectImage(i)"
               >
-                <img [src]="img.image_url | mediaUrl" [alt]="img.alt_text || product()!.name" />
+                <img [src]="img.image_url | mediaUrl: 'thumb'" [alt]="img.alt_text || product()!.name" />
               </button>
             }
           </div>

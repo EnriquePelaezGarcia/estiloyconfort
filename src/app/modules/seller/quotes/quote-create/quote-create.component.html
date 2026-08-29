@@ -77,6 +77,7 @@
             id="customerPhone"
             type="tel"
             inputmode="numeric"
+            maxlength="12"
             formControlName="customerPhone"
             placeholder="222 123 4567"
             (input)="onPhoneInput($event)"
@@ -253,7 +254,7 @@
             @for (p of searchResults(); track p.id) {
               <button type="button" class="result" (click)="addProduct(p)">
                 @if (p.primaryImage) {
-                  <img class="result__thumb" [src]="p.primaryImage | mediaUrl" [alt]="p.name" loading="lazy" />
+                  <img class="result__thumb" [src]="p.primaryImage | mediaUrl: 'thumb'" [alt]="p.name" loading="lazy" />
                 } @else {
                   <span class="result__thumb result__thumb--empty">
                     <span class="material-symbols-outlined">chair</span>
@@ -289,7 +290,7 @@
                 (click)="openProductPage(l)"
               >
                 @if (l.product.primaryImage) {
-                  <img class="cart-line__thumb" [src]="l.product.primaryImage | mediaUrl" [alt]="l.product.name" loading="lazy" />
+                  <img class="cart-line__thumb" [src]="l.product.primaryImage | mediaUrl: 'thumb'" [alt]="l.product.name" loading="lazy" />
                 } @else {
                   <span class="cart-line__thumb cart-line__thumb--empty">
                     <span class="material-symbols-outlined">chair</span>
@@ -406,7 +407,12 @@
                 <!-- Piezas disponibles del material YA SELECCIONADO en esta línea: se
                      actualiza solo al cambiar el material (mismo dato que el precio). -->
                 @if (lineMaterialPrice(l); as stockMp) {
-                  @if (lineAvailableQuantity(l) > 0) {
+                  @if (lineColorMismatch(l)) {
+                    <!-- A2 (Docs/plan-stock-por-color.md): hay piezas, de otro color. -->
+                    <span class="cart-line__stock cart-line__stock--out">
+                      En «{{ l.color }}» se fabrica (listo aprox. {{ fabricationEta() }})
+                    </span>
+                  } @else if (lineAvailableQuantity(l) > 0) {
                     <span class="cart-line__stock cart-line__stock--available">
                       {{ lineAvailableQuantity(l) }} disponibles
                       @if ((stockMp.reservedQuantity ?? 0) > 0) {

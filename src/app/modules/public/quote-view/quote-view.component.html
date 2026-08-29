@@ -33,7 +33,7 @@
             @if (it.imageUrl; as img) {
               <img
                 class="item__thumb item__thumb--zoomable"
-                [src]="img | mediaUrl"
+                [src]="img | mediaUrl: 'thumb'"
                 [alt]="it.productName"
                 loading="lazy"
                 (click)="zoomedImage.set(img)"

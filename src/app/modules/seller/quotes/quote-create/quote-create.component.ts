@@ -12,7 +12,7 @@ import { NotificationService } from '../../../../core/services/notification.serv
 import { DraftHandoffService } from '../../../../core/services/draft-handoff.service';
 import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
 import { addBusinessDays } from '../../../../core/utils/business-days';
-import { availableOf, reservationsTooltip } from '../../../../core/utils/stock-availability';
+import { availableOf, colorMismatch, reservationsTooltip } from '../../../../core/utils/stock-availability';
 import { PHONE_PATTERN, formatPhoneDigits } from '../../../../core/utils/phone';
 import { AuthService } from '../../../../core/auth/auth.service';
 import {
@@ -268,6 +268,15 @@ export class QuoteCreateComponent implements OnInit {
   protected lineAvailableQuantity(line: QuoteLine): number {
     const mp = this.lineMaterialPrice(line);
     return mp ? availableOf(mp) : 0;
+  }
+
+  /**
+   * A2 (Docs/plan-stock-por-color.md): ese material rastrea color y el de la
+   * línea no tiene piezas — al convertir a pedido, `resolveOrderLine` la
+   * mandará a fabricación. Aquí solo se adelanta el aviso.
+   */
+  protected lineColorMismatch(line: QuoteLine): boolean {
+    return colorMismatch(this.lineMaterialPrice(line), line.color, line.quantity);
   }
 
   /** Tooltip "quién tiene apartado esto" — mismo helper que el POS. */

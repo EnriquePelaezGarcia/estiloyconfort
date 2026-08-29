@@ -6,6 +6,7 @@ import { MaterialsStore } from '../../../core/services/materials.store';
 import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
 import { ShippingService } from '../../../core/services/shipping.service';
 import { CartItem } from '../../../core/models/cart.model';
+import { formatPhoneDigits } from '../../../core/utils/phone';
 import { environment } from '../../../../environments/environment';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
@@ -40,9 +41,11 @@ export class CartComponent {
   protected shippingState = signal<ShippingState>('idle');
   protected shippingEstimate = signal<{ price: number; label: string } | null>(null);
   /**
-   * Contacto OPCIONAL (D2): sin máscara ni validación — se manda tal cual para
-   * que el asesor no tenga que pedirlo por chat. La cotización formal sí exige
-   * nombre y 10 dígitos; ahí el vendedor confirma o corrige.
+   * Contacto OPCIONAL (D2): se manda tal cual para que el asesor no tenga que
+   * pedirlo por chat. El teléfono sí lleva máscara (recorta a 10 dígitos y los
+   * agrupa "222 123 4567") pero NO es obligatorio ni bloquea el finalizar; la
+   * cotización formal es la que exige nombre y teléfono, y ahí el vendedor
+   * confirma o corrige.
    */
   protected customerName = signal('');
   protected customerPhone = signal('');
@@ -88,7 +91,7 @@ export class CartComponent {
   }
 
   protected onPhoneInput(event: Event): void {
-    this.customerPhone.set((event.target as HTMLInputElement).value);
+    this.customerPhone.set(formatPhoneDigits((event.target as HTMLInputElement).value));
   }
 
   protected onCpInput(event: Event): void {

@@ -34,7 +34,7 @@
         @for (p of store.availableSearchResults(); track p.id) {
           <button type="button" class="result" (click)="store.addProduct(p)">
             @if (p.primaryImage) {
-              <img class="result__thumb" [src]="p.primaryImage | mediaUrl" [alt]="p.name" loading="lazy" />
+              <img class="result__thumb" [src]="p.primaryImage | mediaUrl: 'thumb'" [alt]="p.name" loading="lazy" />
             } @else {
               <span class="result__thumb result__thumb--empty">
                 <span class="material-symbols-outlined">chair</span>
@@ -69,7 +69,7 @@
             (click)="store.openProductPage(l)"
           >
             @if (l.product.primaryImage) {
-              <img class="cart-line__thumb" [src]="l.product.primaryImage | mediaUrl" [alt]="l.product.name" loading="lazy" />
+              <img class="cart-line__thumb" [src]="l.product.primaryImage | mediaUrl: 'thumb'" [alt]="l.product.name" loading="lazy" />
             } @else {
               <span class="cart-line__thumb cart-line__thumb--empty">
                 <span class="material-symbols-outlined">chair</span>
@@ -108,12 +108,13 @@
                   [value]="l.color ?? ''"
                   [disabled]="mp.colorPolicy === 'fixed' || !store.canEditLine(l)"
                   [placeholder]="mp.colorPolicy === 'required' ? 'Color (obligatorio)' : 'Color'"
-                  [attr.list]="'order-colors-' + l.materialId"
+                  [attr.list]="'order-colors-' + i"
                   (input)="store.changeLineColor(i, $event)"
                 />
-                <!-- Docs/plan-aprobaciones-admin.md §11.1: sugerencias, no restricción. -->
-                <datalist [id]="'order-colors-' + l.materialId">
-                  @for (c of store.colorSuggestionsFor(l.materialId); track c) {
+                <!-- Docs/plan-aprobaciones-admin.md §11.1 + plan-stock-por-color.md:
+                     sugerencias (colores en bodega primero), no restricción. -->
+                <datalist [id]="'order-colors-' + i">
+                  @for (c of store.lineColorSuggestions(l); track c) {
                     <option [value]="c"></option>
                   }
                 </datalist>
@@ -145,7 +146,12 @@
                  Docs/plan-reserva-de-piezas.md §7.2: "disponible" ya descuenta lo
                  apartado por otros pedidos — no es el stock físico crudo. -->
             @if (store.lineMaterialPrice(l); as stockMp) {
-              @if (store.lineAvailableQuantity(l) > 0) {
+              @if (store.lineColorMismatch(l)) {
+                <!-- A2: hay piezas, pero de otro color. -->
+                <span class="cart-line__stock cart-line__stock--out">
+                  En «{{ l.color }}» se fabrica (listo aprox. {{ store.fabricationEta() }})
+                </span>
+              } @else if (store.lineAvailableQuantity(l) > 0) {
                 <span class="cart-line__stock cart-line__stock--available">
                   {{ store.lineAvailableQuantity(l) }} disponibles
                   @if ((stockMp.reservedQuantity ?? 0) > 0) {

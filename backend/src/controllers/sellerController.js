@@ -55,6 +55,24 @@ async function validateStockOnlyChange(existing, newItems, userId) {
       err.statusCode = 400;
       throw err;
     }
+    // A2 (Docs/plan-stock-por-color.md): si ese (producto, material) lleva
+    // desglose por color, el color pedido tiene que tener piezas — si no, la
+    // línea es de fabricación y no cabe en un pedido ya cobrado.
+    const [colorBuckets] = await pool.execute(
+      'SELECT color_key, quantity FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
+      [ni.productId, ni.materialId],
+    );
+    if (colorBuckets.length > 0) {
+      const key = String(ni.color ?? '').trim().toLowerCase();
+      const bucket = colorBuckets.find((b) => b.color_key === key);
+      if (Number(ni.quantity) > (bucket ? Number(bucket.quantity) : 0)) {
+        const err = new Error(
+          `No hay existencia de "${product.name}" en ese color: la pieza se fabrica y no se puede agregar a un pedido ya cobrado.`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
     productNames.set(Number(ni.productId), product.name);
   }
 

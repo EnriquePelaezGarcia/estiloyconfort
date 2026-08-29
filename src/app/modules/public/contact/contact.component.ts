@@ -4,6 +4,7 @@ import { NgOptimizedImage } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ContactService } from '../../../core/services/contact.service';
 import { ContactRequest } from '../../../core/models/contact.model';
+import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
 import { environment } from '../../../../environments/environment';
 import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 
@@ -53,9 +54,16 @@ export class ContactComponent {
   protected form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
     email: ['', [Validators.required, Validators.email]],
-    phone: [''],
+    // Opcional, pero si lo dejan tiene que ser un teléfono a 10 dígitos:
+    // `Validators.pattern` da por válido el campo vacío.
+    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
     message: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(4000)]],
   });
+
+  /** Recorta a 10 dígitos y formatea "222 123 4567" mientras el visitante escribe. */
+  protected onPhoneInput(event: Event): void {
+    this.form.controls.phone.setValue(formatPhoneDigits((event.target as HTMLInputElement).value));
+  }
 
   protected submit(): void {
     if (this.form.invalid) {

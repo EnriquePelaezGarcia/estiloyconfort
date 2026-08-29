@@ -65,6 +65,8 @@ export interface CreateUserRequest {
   roleId: number;
   /** Fabricante que representa. Solo se guarda si el rol es 'manufacturer'. */
   manufacturerId?: number | null;
+  /** Solo rol 'seller': habilita ajustar inventario e imprimir etiquetas. */
+  canAdjustInventory?: boolean;
 }
 
 /** Respuesta al crear un usuario: la temporal llega una sola vez. */
@@ -82,4 +84,6 @@ export interface UpdateUserRequest {
   roleId?: number;
   manufacturerId?: number | null;
   isActive?: boolean;
+  /** Solo rol 'seller': habilita ajustar inventario e imprimir etiquetas. */
+  canAdjustInventory?: boolean;
 }

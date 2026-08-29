@@ -13,7 +13,7 @@ import { DraftHandoffService } from '../../../core/services/draft-handoff.servic
 import { AuthService } from '../../../core/auth/auth.service';
 import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
 import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
-import { availableOf, reservationsTooltip } from '../../../core/utils/stock-availability';
+import { availableOf, colorMismatch, reservationsTooltip } from '../../../core/utils/stock-availability';
 import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
@@ -176,7 +176,18 @@ export class OrderDraftStore {
    */
   lineRequiresFabrication(line: CartLine): boolean {
     const mp = line.product.materialPrices.find((m) => m.materialId === line.materialId);
-    return !mp || availableOf(mp) <= 0;
+    if (!mp || availableOf(mp) <= 0) return true;
+    // A2 (Docs/plan-stock-por-color.md): hay piezas, pero de otro color.
+    return this.lineColorMismatch(line);
+  }
+
+  /**
+   * A2: ese material rastrea color y el color de la línea no tiene piezas
+   * (bucket ausente o insuficiente). El backend decide igual en
+   * `resolveOrderLine`; esto solo pinta el aviso antes de guardar.
+   */
+  lineColorMismatch(line: CartLine): boolean {
+    return colorMismatch(this.lineMaterialPrice(line), line.color, line.quantity);
   }
 
   /** Piezas disponibles del material elegido en esta línea (para el badge "N disponibles · M apartada(s)"). */
@@ -534,6 +545,21 @@ export class OrderDraftStore {
 
   colorSuggestionsFor(materialId: number): string[] {
     return this.materialColorsCache()[materialId] ?? [];
+  }
+
+  /**
+   * A2 (Docs/plan-stock-por-color.md): sugerencias del `<datalist>` de una
+   * línea. Primero los colores que SÍ hay en bodega para ese producto+material
+   * (para que el vendedor teclee el mismo nombre y no dispare una fabricación
+   * por "café" vs "chocolate"), luego el histórico del material.
+   */
+  lineColorSuggestions(line: CartLine): string[] {
+    const inStock = (this.lineMaterialPrice(line)?.colorStock ?? [])
+      .filter((c) => c.quantity > 0)
+      .map((c) => c.color);
+    const history = this.colorSuggestionsFor(line.materialId);
+    const seen = new Set(inStock.map((c) => c.toLowerCase()));
+    return [...inStock, ...history.filter((c) => !seen.has(c.toLowerCase()))];
   }
 
   private ensureColorsLoaded(materialId: number): void {

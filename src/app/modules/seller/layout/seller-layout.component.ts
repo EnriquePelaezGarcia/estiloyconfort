@@ -39,6 +39,7 @@ export class SellerLayoutComponent implements OnInit {
     { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo' },
     { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
+    { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
     {
       label: 'Agenda de entregas',
       icon: 'event_upcoming',

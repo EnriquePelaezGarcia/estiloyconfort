@@ -5,7 +5,7 @@ const PasswordReset = require('../models/PasswordReset');
 const PasswordAudit = require('../models/PasswordAudit');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { validateAdminCreateUser } = require('../utils/validators');
+const { validateAdminCreateUser, isValidOptionalPhone } = require('../utils/validators');
 const { generateTemporaryPassword } = require('../utils/passwordUtils');
 const { pool } = require('../config/database');
 
@@ -59,7 +59,7 @@ const create = asyncHandler(async (req, res) => {
   const errors = validateAdminCreateUser(req.body);
   if (errors.length) throw ApiError.badRequest(errors.join(', '));
 
-  const { email, fullName, phone, roleId, manufacturerId } = req.body;
+  const { email, fullName, phone, roleId, manufacturerId, canAdjustInventory } = req.body;
   const normalizedEmail = email.trim().toLowerCase();
 
   const role = await Role.findById(roleId);
@@ -79,6 +79,8 @@ const create = asyncHandler(async (req, res) => {
     roleId,
     manufacturerId: await resolveManufacturerId(role, manufacturerId),
     mustChangePassword: true,
+    // El permiso solo tiene sentido para vendedores; en cualquier otro rol se ignora.
+    canAdjustInventory: role.name === 'seller' && !!canAdjustInventory,
   });
 
   await PasswordAudit.log({
@@ -105,6 +107,10 @@ const update = asyncHandler(async (req, res) => {
   const existing = await User.findById(id);
   if (!existing) throw ApiError.notFound('Usuario no encontrado');
 
+  if (req.body.phone !== undefined && !isValidOptionalPhone(req.body.phone)) {
+    throw ApiError.badRequest('El teléfono debe tener 10 dígitos');
+  }
+
   // El vínculo con el fabricante depende del rol resultante, así que se resuelve
   // contra el rol que quedará (el nuevo si viene en el payload, si no el actual).
   const roleId = req.body.roleId !== undefined ? req.body.roleId : existing.roleId;
@@ -130,6 +136,9 @@ const update = asyncHandler(async (req, res) => {
     roleId: req.body.roleId,
     manufacturerId,
     isActive: req.body.isActive,
+    // Solo aplica a vendedores. Si el usuario deja de serlo (o nunca lo fue),
+    // el permiso se apaga; si sigue siéndolo, se toma lo que envíe el panel.
+    canAdjustInventory: role.name === 'seller' ? !!req.body.canAdjustInventory : false,
   });
   res.json(updated);
 });

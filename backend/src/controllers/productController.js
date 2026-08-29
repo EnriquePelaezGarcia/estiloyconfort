@@ -217,6 +217,9 @@ const productController = {
         const filename = path.basename(image.image_url.split('?')[0]);
         const filePath = path.join(__dirname, '../../uploads/products', filename);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        // La miniatura que genera processProductImage para las tarjetas del catálogo.
+        const thumbPath = filePath.replace(/\.webp$/i, '-thumb.webp');
+        if (thumbPath !== filePath && fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
       } catch (_) {}
 
       res.json({ message: 'Imagen eliminada' });

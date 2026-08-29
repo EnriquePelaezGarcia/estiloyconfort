@@ -16,6 +16,8 @@ function mapUser(row) {
     isActive: !!row.is_active,
     /** Trae una contraseña temporal del admin y no puede usar el sistema hasta cambiarla. */
     mustChangePassword: !!row.must_change_password,
+    /** El admin le activó ajustar existencias e imprimir etiquetas (solo rol seller). */
+    canAdjustInventory: !!row.can_adjust_inventory,
     passwordChangedAt: row.password_changed_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -25,8 +27,8 @@ function mapUser(row) {
 const BASE_SELECT = `
   SELECT u.id, u.email, u.full_name, u.phone, u.role_id, r.name AS role_name,
          u.manufacturer_id, m.name AS manufacturer_name,
-         u.is_active, u.must_change_password, u.password_changed_at,
-         u.created_at, u.updated_at
+         u.is_active, u.must_change_password, u.can_adjust_inventory,
+         u.password_changed_at, u.created_at, u.updated_at
   FROM users u
   JOIN roles r ON r.id = u.role_id
   LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
@@ -40,7 +42,7 @@ const User = {
     const [rows] = await pool.query(
       `SELECT u.id, u.email, u.password_hash, u.full_name, u.phone,
               u.role_id, r.name AS role_name, u.is_active,
-              u.must_change_password, u.password_changed_at,
+              u.must_change_password, u.can_adjust_inventory, u.password_changed_at,
               u.created_at, u.updated_at
        FROM users u JOIN roles r ON r.id = u.role_id
        WHERE u.email = :email`,
@@ -68,7 +70,7 @@ const User = {
     const [rows] = await pool.query(
       `SELECT u.id, u.email, u.password_hash, u.full_name, u.phone,
               u.role_id, r.name AS role_name, u.is_active,
-              u.must_change_password, u.password_changed_at,
+              u.must_change_password, u.can_adjust_inventory, u.password_changed_at,
               u.created_at, u.updated_at
        FROM users u JOIN roles r ON r.id = u.role_id
        WHERE u.id = :id`,
@@ -102,11 +104,12 @@ const User = {
     roleId,
     manufacturerId = null,
     mustChangePassword = false,
+    canAdjustInventory = false,
   }) {
     const [result] = await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, phone, role_id, manufacturer_id, must_change_password)
-       VALUES (:email, :passwordHash, :fullName, :phone, :roleId, :manufacturerId, :mustChangePassword)`,
-      { email, passwordHash, fullName, phone, roleId, manufacturerId, mustChangePassword },
+      `INSERT INTO users (email, password_hash, full_name, phone, role_id, manufacturer_id, must_change_password, can_adjust_inventory)
+       VALUES (:email, :passwordHash, :fullName, :phone, :roleId, :manufacturerId, :mustChangePassword, :canAdjustInventory)`,
+      { email, passwordHash, fullName, phone, roleId, manufacturerId, mustChangePassword, canAdjustInventory: canAdjustInventory ? 1 : 0 },
     );
     return result.insertId;
   },
@@ -135,7 +138,7 @@ const User = {
   },
 
   async update(id, fields) {
-    const allowed = ['email', 'full_name', 'phone', 'role_id', 'manufacturer_id', 'is_active'];
+    const allowed = ['email', 'full_name', 'phone', 'role_id', 'manufacturer_id', 'is_active', 'can_adjust_inventory'];
     const map = {
       email: 'email',
       fullName: 'full_name',
@@ -143,6 +146,7 @@ const User = {
       roleId: 'role_id',
       manufacturerId: 'manufacturer_id',
       isActive: 'is_active',
+      canAdjustInventory: 'can_adjust_inventory',
     };
     const sets = [];
     const params = { id };
@@ -153,7 +157,7 @@ const User = {
       // Sin esta guarda, un PATCH parcial borraba el email del usuario.
       if (value !== undefined && column && allowed.includes(column)) {
         sets.push(`${column} = :${key}`);
-        params[key] = value;
+        params[key] = key === 'canAdjustInventory' ? (value ? 1 : 0) : value;
       }
     }
     if (sets.length === 0) return this.findById(id);

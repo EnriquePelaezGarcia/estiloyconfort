@@ -140,7 +140,7 @@
                 @if (it.imageUrl) {
                   <img
                     class="prod-row__thumb"
-                    [src]="it.imageUrl | mediaUrl"
+                    [src]="it.imageUrl | mediaUrl: 'thumb'"
                     [alt]="it.productName"
                     width="52"
                     height="52"

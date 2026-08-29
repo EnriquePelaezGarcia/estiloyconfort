@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { AdminService } from '../../../../core/services/admin.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../../core/utils/phone';
 import { Manufacturer, ManufacturerInput } from '../../../../core/models/manufacturing.model';
 import { CreateUserResponse } from '../../../../core/models/admin.model';
 
@@ -40,7 +41,8 @@ export class ManufacturersComponent implements OnInit {
   protected form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(3)]],
     contactName: [''],
-    phone: [''],
+    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
+    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
     email: [''],
     address: [''],
     notes: [''],
@@ -134,7 +136,7 @@ export class ManufacturersComponent implements OnInit {
     this.form.reset({
       name: manufacturer.name,
       contactName: manufacturer.contactName ?? '',
-      phone: manufacturer.phone ?? '',
+      phone: formatPhoneForDisplay(manufacturer.phone ?? ''),
       email: manufacturer.email ?? '',
       address: manufacturer.address ?? '',
       notes: manufacturer.notes ?? '',
@@ -155,6 +157,11 @@ export class ManufacturersComponent implements OnInit {
   protected closeModal(): void {
     this.editing.set(undefined);
     this.createAccess.set(false);
+  }
+
+  /** Recorta a 10 dígitos y formatea "222 123 4567" mientras se escribe. */
+  protected onPhoneInput(event: Event): void {
+    this.form.controls.phone.setValue(formatPhoneDigits((event.target as HTMLInputElement).value));
   }
 
   protected save(): void {

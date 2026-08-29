@@ -55,6 +55,15 @@ export const sellerRoutes: Routes = [
         title: 'Catálogo - Vendedor',
       },
       {
+        // Misma pantalla que /admin/inventario (M15). El vendedor la ve siempre
+        // en consulta; ajustar stock e imprimir etiquetas depende del permiso
+        // canAdjustInventory, que concede el admin y revalida el backend.
+        path: 'inventario',
+        loadComponent: () =>
+          import('../admin/inventory/inventory.component').then((m) => m.InventoryComponent),
+        title: 'Inventario - Vendedor',
+      },
+      {
         path: 'pedidos',
         loadComponent: () =>
           import('./orders/seller-orders.component').then((m) => m.SellerOrdersComponent),

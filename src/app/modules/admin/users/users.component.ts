@@ -5,6 +5,7 @@ import { AdminService } from '../../../core/services/admin.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../core/utils/phone';
 import { User, UserRole } from '../../../core/models/user.model';
 import { Manufacturer } from '../../../core/models/manufacturing.model';
 import {
@@ -63,10 +64,14 @@ export class UsersComponent implements OnInit {
   protected form = this.fb.group({
     fullName: ['', [Validators.required, Validators.minLength(3)]],
     email: ['', [Validators.required, Validators.email]],
-    phone: [''],
+    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
+    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
     roleId: [null as number | null, Validators.required],
     manufacturerId: [null as number | null],
     isActive: [true],
+    // Solo se envía (y se muestra) para el rol Vendedor: le permite ajustar
+    // existencias e imprimir etiquetas en la pantalla de Inventario.
+    canAdjustInventory: [false],
   });
 
   /**
@@ -75,10 +80,19 @@ export class UsersComponent implements OnInit {
    */
   protected isManufacturerRole = signal(false);
 
+  /** El checkbox de permiso de inventario solo aplica al rol Vendedor. */
+  protected isSellerRole = signal(false);
+
   constructor() {
     this.form.controls.roleId.valueChanges.pipe(takeUntilDestroyed()).subscribe((roleId) => {
-      const isManufacturer = this.roles().find((r) => r.id === roleId)?.name === 'manufacturer';
+      const roleName = this.roles().find((r) => r.id === roleId)?.name;
+      const isManufacturer = roleName === 'manufacturer';
       this.isManufacturerRole.set(isManufacturer);
+
+      this.isSellerRole.set(roleName === 'seller');
+      if (roleName !== 'seller') {
+        this.form.controls.canAdjustInventory.setValue(false, { emitEvent: false });
+      }
 
       const control = this.form.controls.manufacturerId;
       if (isManufacturer) {
@@ -141,7 +155,7 @@ export class UsersComponent implements OnInit {
   // ===== Modal =====
   protected openCreate(): void {
     this.editing.set(null);
-    this.form.reset({ isActive: true, roleId: null, manufacturerId: null });
+    this.form.reset({ isActive: true, roleId: null, manufacturerId: null, canAdjustInventory: false });
   }
 
   protected openEdit(user: User): void {
@@ -149,15 +163,21 @@ export class UsersComponent implements OnInit {
     this.form.reset({
       fullName: user.fullName,
       email: user.email,
-      phone: user.phone ?? '',
+      phone: formatPhoneForDisplay(user.phone ?? ''),
       roleId: this.roles().find((r) => r.name === user.role)?.id ?? null,
       manufacturerId: user.manufacturerId ?? null,
       isActive: user.isActive,
+      canAdjustInventory: user.canAdjustInventory ?? false,
     });
   }
 
   protected closeModal(): void {
     this.editing.set(undefined);
+  }
+
+  /** Recorta a 10 dígitos y formatea "222 123 4567" mientras se escribe. */
+  protected onPhoneInput(event: Event): void {
+    this.form.controls.phone.setValue(formatPhoneDigits((event.target as HTMLInputElement).value));
   }
 
   protected save(): void {
@@ -177,6 +197,7 @@ export class UsersComponent implements OnInit {
         roleId: raw.roleId!,
         manufacturerId: raw.manufacturerId ?? null,
         isActive: raw.isActive!,
+        canAdjustInventory: raw.canAdjustInventory ?? false,
       };
       this.adminService.updateUser(target.id, payload).subscribe({
         next: (updated) => this.onSaved(updated, 'Usuario actualizado'),
@@ -189,6 +210,7 @@ export class UsersComponent implements OnInit {
         phone: raw.phone || null,
         roleId: raw.roleId!,
         manufacturerId: raw.manufacturerId ?? null,
+        canAdjustInventory: raw.canAdjustInventory ?? false,
       };
       this.adminService.createUser(payload).subscribe({
         next: (res) => this.onCreated(res),

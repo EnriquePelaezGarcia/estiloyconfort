@@ -127,7 +127,18 @@
           </div>
           <div class="field">
             <label for="phone">Teléfono</label>
-            <input id="phone" type="text" formControlName="phone" />
+            <input
+              id="phone"
+              type="tel"
+              inputmode="numeric"
+              maxlength="12"
+              formControlName="phone"
+              placeholder="222 123 4567"
+              (input)="onPhoneInput($event)"
+            />
+            @if (form.controls.phone.touched && form.controls.phone.invalid) {
+              <p class="field__error">Ingresa un teléfono a 10 dígitos.</p>
+            }
           </div>
         </div>
         <div class="field">

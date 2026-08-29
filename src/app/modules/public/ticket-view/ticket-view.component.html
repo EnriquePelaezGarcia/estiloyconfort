@@ -66,7 +66,7 @@
               @if (it.imageUrl; as img) {
                 <img
                   class="line__thumb line__thumb--zoomable"
-                  [src]="img | mediaUrl"
+                  [src]="img | mediaUrl: 'thumb'"
                   [alt]="it.productName"
                   width="56"
                   height="56"

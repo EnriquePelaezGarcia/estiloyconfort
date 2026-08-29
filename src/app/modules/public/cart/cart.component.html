@@ -20,7 +20,7 @@
             <article class="cart-item">
               <div class="cart-item__image">
                 @if (item.primaryImage) {
-                  <img [src]="item.primaryImage | mediaUrl" [alt]="item.name" loading="lazy" />
+                  <img [src]="item.primaryImage | mediaUrl: 'thumb'" [alt]="item.name" loading="lazy" />
                 } @else {
                   <span class="material-symbols-outlined">chair</span>
                 }
@@ -100,8 +100,9 @@
             }
           </div>
 
-          <!-- Contacto opcional: sin validación a propósito (D2). Solo sirve
-               para que el asesor no tenga que pedirlo por chat. -->
+          <!-- Contacto opcional (D2): el teléfono se enmascara a 10 dígitos
+               pero no es obligatorio. Solo sirve para que el asesor no tenga
+               que pedirlo por chat. -->
           <div class="cart-summary__contact">
             <p class="cart-summary__contact-label">
               Para que el asesor te atienda más rápido <span>(opcional)</span>
@@ -121,8 +122,9 @@
               id="cart-phone"
               class="cart-summary__contact-input"
               type="tel"
-              maxlength="20"
-              placeholder="WhatsApp"
+              inputmode="numeric"
+              maxlength="12"
+              placeholder="WhatsApp (222 123 4567)"
               autocomplete="tel"
               aria-label="Tu WhatsApp"
               [value]="customerPhone()"

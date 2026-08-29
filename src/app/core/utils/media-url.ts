@@ -51,3 +51,22 @@ export function mediaUrl(src: string | null | undefined): string | null {
 
   return `${API_ORIGIN}${src.startsWith('/') ? '' : '/'}${src}`;
 }
+
+/**
+ * URL de la miniatura para donde la imagen se pinta chica (tarjetas del
+ * catálogo, líneas de carrito/pedido/cotización, tiras de miniaturas). El
+ * backend guarda `<base>.webp` y, junto a él, `<base>-thumb.webp` (800 px)
+ * para toda imagen que sube por multer —producto y categoría—; ver processImage
+ * en backend/src/middleware/upload.js.
+ *
+ * Solo se deriva para rutas locales `.webp`, que son las subidas nuevas y sí
+ * tienen miniatura en disco. Para el resto —filas viejas `.jpg/.png`, URLs
+ * externas, data: URI— devuelve la imagen completa, así nada se rompe mientras
+ * no se hayan resubido todas las fotos.
+ */
+export function mediaThumbUrl(src: string | null | undefined): string | null {
+  if (src && !/^https?:\/\//i.test(src) && !src.startsWith('data:') && /\.webp$/i.test(src)) {
+    return mediaUrl(src.replace(/\.webp$/i, '-thumb.webp'));
+  }
+  return mediaUrl(src);
+}

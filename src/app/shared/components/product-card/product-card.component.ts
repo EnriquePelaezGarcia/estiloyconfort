@@ -10,7 +10,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { Product, hasOffer } from '../../../core/models/product.model';
 import { PriceDisplayComponent } from '../price-display/price-display.component';
-import { mediaUrl } from '../../../core/utils/media-url';
+import { mediaThumbUrl } from '../../../core/utils/media-url';
 
 @Component({
   selector: 'app-product-card',
@@ -33,8 +33,9 @@ export class ProductCardComponent {
   protected images = computed<string[]>(() => {
     const p = this.product();
     const raw = p.gallery?.length ? p.gallery : p.primary_image ? [p.primary_image] : [];
-    // La base guarda rutas relativas; el origen lo pone el ambiente.
-    return raw.map((src) => mediaUrl(src)!).filter(Boolean);
+    // En la tarjeta la imagen se pinta chica: se usa la miniatura (800 px)
+    // cuando existe. La base guarda rutas relativas; el origen lo pone el ambiente.
+    return raw.map((src) => mediaThumbUrl(src)!).filter(Boolean);
   });
 
   /** Regla compartida con la portada: ver hasOffer() en el modelo. */

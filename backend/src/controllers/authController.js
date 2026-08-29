@@ -51,6 +51,10 @@ function publicUser(user) {
     // El frontend la usa para encerrar al usuario en la pantalla de cambio.
     // El servidor no confía en eso: lo impone middleware/mustChangePassword.
     mustChangePassword: !!user.mustChangePassword,
+    // Habilita ajustar existencias e imprimir etiquetas en Inventario (solo
+    // rol seller; el admin siempre puede). El backend lo revalida contra la
+    // base en requireInventoryAdjust: esto es solo para pintar/ocultar la UI.
+    canAdjustInventory: !!user.canAdjustInventory,
   };
 }
 

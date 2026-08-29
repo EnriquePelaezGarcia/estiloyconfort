@@ -48,9 +48,25 @@ export interface InventoryRow {
   /** Reserva de piezas (Docs/plan-reserva-de-piezas.md): cuánto de stockQuantity ya está apartado, y cuánto queda libre. */
   reservedQuantity: number;
   availableQuantity: number;
-  baseCost: number | null;
-  priceCash: number | null;
-  stockValue: number | null;
+  /** Costo y valor solo llegan al admin; al vendedor el servidor los omite. */
+  baseCost?: number | null;
+  priceCash?: number | null;
+  stockValue?: number | null;
+  /**
+   * A2 (Docs/plan-stock-por-color.md): desglose físico por color. `[]` = este
+   * renglón no rastrea color y decide por la cantidad agregada, como siempre.
+   */
+  colors: Array<{ color: string; quantity: number }>;
+}
+
+/** Un item del PUT de inventario: ajusta el agregado, o captura el desglose por color. */
+export interface InventoryUpdateItem {
+  productId: number;
+  materialId: number;
+  /** Total agregado. Se ignora si `colors` trae al menos un color. */
+  stockQuantity: number;
+  /** A2: presente = reemplaza el desglose por color de ese par (`[]` lo borra). */
+  colors?: Array<{ color: string; quantity: number }>;
 }
 
 /** Material declarado sin costo capturado por ningún fabricante (M2). */
@@ -344,17 +360,20 @@ export class AdminService {
   }
 
   // ===== Inventario por (producto, material) — M15 =====
+  // Endpoint compartido admin/vendedor (/inventory/stock). El servidor decide
+  // qué devuelve según el rol: al vendedor le omite costo y valor, y el ajuste
+  // lo restringe a admin o vendedor con permiso (can_adjust_inventory).
 
-  getInventory(filters: { search?: string; materialId?: number; onlyWithStock?: boolean } = {}): Observable<{ data: InventoryRow[]; totalValue: number }> {
+  getInventory(filters: { search?: string; materialId?: number; onlyWithStock?: boolean } = {}): Observable<{ data: InventoryRow[]; totalValue?: number }> {
     const params: Record<string, string> = {};
     if (filters.search) params['search'] = filters.search;
     if (filters.materialId) params['materialId'] = String(filters.materialId);
     if (filters.onlyWithStock) params['onlyWithStock'] = 'true';
-    return this.api.get<{ data: InventoryRow[]; totalValue: number }>('/admin/inventory', params);
+    return this.api.get<{ data: InventoryRow[]; totalValue?: number }>('/inventory/stock', params);
   }
 
-  updateInventory(items: Array<{ productId: number; materialId: number; stockQuantity: number }>): Observable<{ message: string }> {
-    return this.api.put<{ message: string }>('/admin/inventory', { items });
+  updateInventory(items: InventoryUpdateItem[]): Observable<{ message: string }> {
+    return this.api.put<{ message: string }>('/inventory/stock', { items });
   }
 
   // ===== Reservas de inventario (Docs/plan-reserva-de-piezas.md) =====
