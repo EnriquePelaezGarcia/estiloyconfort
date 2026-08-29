@@ -908,6 +908,52 @@ folios ya están en formato nuevo, solo re-sincroniza `order_sequences`.
 > `/^EC-\d{4}-\d{4}$/`: **corte limpio**, los números viejos dejan de servir. Si
 > ya diste números de pedido viejos a algún cliente real, avísale del cambio.
 
+### Ficha de producto — imagen por material y SEO: pasos de una sola vez
+
+Estos tres cambios (spec en `Docs/plan-imagen-y-ayuda-por-material.md`) traen
+cosas que `deploy.sh` **no** hace solo. Van una vez por ambiente.
+
+**1. Aplicar el esquema `schema_imagen_por_material.sql`.** Agrega la columna
+`product_images.material_id` (para marcar qué material representa cada foto). Es
+**aditiva y sin backfill**: todas las fotos actuales quedan como genéricas y la
+ficha sigue igual hasta que alguien etiquete una en el panel. Se corre en el
+**mismo despliegue** que trae el código nuevo, **después** de `deploy.sh` (así el
+archivo ya está dentro del contenedor):
+
+```bash
+cd /opt/estiloyconfort/app/deploy
+docker compose exec backend-staging node src/database/run-schema.js schema_imagen_por_material.sql   # preproducción
+docker compose exec backend-prod    node src/database/run-schema.js schema_imagen_por_material.sql   # producción
+```
+
+> **No es idempotente:** correrlo dos veces falla con *"Duplicate column name
+> 'material_id'"* — sin daño, pero sin efecto. Entre `deploy.sh` y este paso, el
+> panel de Catálogo da error 500 al subir o editar una foto; es una ventana
+> corta y solo afecta al admin.
+
+**2. Comprobar que `robots.txt` y `sitemap.xml` responden** (los sirve el
+servidor SSR, no Nginx):
+
+```bash
+curl -s https://estiloyconfortm.com/robots.txt
+curl -s https://estiloyconfortm.com/sitemap.xml | head -20
+```
+
+El sitemap se arma pidiendo la lista de productos a `https://api.estiloyconfortm.com/api/products/sitemap`
+y se cachea 1 h en memoria del proceso SSR.
+
+**3. Verificar que la foto del preview (OpenGraph) carga.** El `og:image`
+apunta a `https://api.estiloyconfortm.com/uploads/products/...`. El bloque
+`location /uploads/` del Nginx de la API sirve esos archivos como estáticos sin
+restricción de referer, así que el crawler de WhatsApp/Facebook los baja bien —
+pero conviene confirmarlo pegando una URL de producto en
+[opengraph.dev](https://opengraph.dev) o en un chat de WhatsApp de prueba.
+
+**4. Registrar el sitemap en Google Search Console** (una sola vez, en la web):
+propiedad `estiloyconfortm.com` → *Sitemaps* → agregar `sitemap.xml`. Staging
+queda fuera: su Nginx ya manda `X-Robots-Tag: noindex` y pide usuario/contraseña,
+así que Google nunca lo ve aunque el archivo exista.
+
 ### Ver qué está pasando
 
 ```bash

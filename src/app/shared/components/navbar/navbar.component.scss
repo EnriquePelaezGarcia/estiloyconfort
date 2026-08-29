@@ -165,10 +165,11 @@
   border-top: 1px solid rgba(98, 93, 90, 0.1);
   padding: 0.75rem 1rem;
 
-  // En teléfonos la fila se aprieta al máximo para que los 5 enlaces
-  // ("Home"… "Rastrea tu pedido") quepan en una sola línea horizontal.
+  // En teléfonos la fila usa casi todo el ancho disponible (poco padding
+  // lateral) para que los 5 enlaces ("Home"… "Rastrear pedido") respiren en
+  // una sola línea horizontal.
   @media (max-width: 767px) {
-    padding: 0.625rem 0.5rem;
+    padding: 0.625rem 0.25rem;
   }
 }
 
@@ -186,12 +187,14 @@
   // de la pantalla para que los 5 enlaces entren aunque sea a 320px.
   @media (max-width: 767px) {
     flex-wrap: nowrap;
-    gap: clamp(0.4rem, 2vw, 1.25rem);
+    gap: clamp(0.55rem, 3.4vw, 1.5rem);
   }
 
   a {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 1.125rem;
+    // Solo escritorio: la fila de navegación se veía algo chica frente a la
+    // marca. En teléfono el tamaño lo fija el `clamp` de abajo.
+    font-size: 1.25rem;
 
     @media (max-width: 767px) {
       font-size: clamp(0.82rem, 3.4vw, 1.15rem);
@@ -203,7 +206,7 @@
     }
     color: #625d5a;
     text-decoration: none;
-    // Sin esto "Rastrea tu pedido" parte en dos líneas y su texto queda por
+    // Sin esto "Rastrear pedido" parte en dos líneas y su texto queda por
     // debajo del de los demás enlaces; forzando una sola línea todos los
     // enlaces comparten la misma base.
     white-space: nowrap;

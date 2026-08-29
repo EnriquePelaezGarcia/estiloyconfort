@@ -1,73 +1,32 @@
 <div class="catalog">
   <div class="container catalog__layout">
-    <!-- Sidebar filtros -->
-    <aside class="catalog__sidebar">
-      <div class="filter-group">
-        <h3 class="filter-group__title">Categorías</h3>
-
-        <ul class="filter-group__list">
-          <li>
-            <button
-              type="button"
-              class="filter-group__item"
-              [class.filter-group__item--active]="!filters().category"
-              (click)="onCategoryChange('')"
-            >
-              Todas las categorías
-            </button>
-          </li>
-          @for (cat of categories(); track cat.id) {
-            <li>
-              <button
-                type="button"
-                class="filter-group__item"
-                [class.filter-group__item--active]="filters().category === cat.slug"
-                (click)="onCategoryChange(cat.slug)"
-              >
-                {{ cat.name }}
-              </button>
-            </li>
-          }
-        </ul>
+    <!-- Barra de filtros horizontal: categorías como chips arriba, y debajo el
+         buscador + contador + orden. En escritorio los chips envuelven a otra
+         línea si no caben; en móvil la tira de chips se desliza en horizontal. -->
+    <div class="catalog__filters">
+      <div class="catalog__chips" role="group" aria-label="Categorías">
+        <button
+          type="button"
+          class="chip"
+          [class.chip--active]="!filters().category"
+          (click)="onCategoryChange('')"
+        >
+          Todas
+        </button>
+        @for (cat of categories(); track cat.id) {
+          <button
+            type="button"
+            class="chip"
+            [class.chip--active]="filters().category === cat.slug"
+            (click)="onCategoryChange(cat.slug)"
+          >
+            {{ cat.name }}
+          </button>
+        }
       </div>
 
-      <div class="filter-group">
-        <h3 class="filter-group__title">Ordenar por</h3>
-        <select class="filter-group__select" [value]="filters().sort" (change)="onSortChange($any($event.target).value)">
-          <option value="popular">Más populares</option>
-          <option value="newest">Más reciente</option>
-          <option value="price_asc">Precio: menor a mayor</option>
-          <option value="price_desc">Precio: mayor a menor</option>
-          <option value="name">Nombre A–Z</option>
-        </select>
-      </div>
-    </aside>
-
-    <!-- Contenido principal -->
-    <main class="catalog__main">
-      <!-- Barra de filtros: en móvil la sidebar se oculta y esta fila lleva
-           categorías (izquierda) y búsqueda (derecha). El orden queda solo en
-           escritorio. En teléfono, apenas una de las dos está en uso, la otra
-           se oculta y la activa ocupa todo el ancho de la fila. -->
-      <div class="catalog__toolbar">
-        <select
-          class="catalog__categories"
-          aria-label="Categorías"
-          [value]="filters().category || ''"
-          (change)="onCategoryChange($any($event.target).value)"
-          [class.catalog__categories--hidden]="isSearchActive"
-          [class.catalog__categories--full]="isCategoryFilterActive && !isSearchActive"
-        >
-          <option value="">Todas las categorías</option>
-          @for (cat of categories(); track cat.id) {
-            <option [value]="cat.slug">{{ cat.name }}</option>
-          }
-        </select>
-
-        <div
-          class="catalog__search"
-          [class.catalog__search--hidden]="isCategoryFilterActive && !isSearchActive"
-        >
+      <div class="catalog__controls">
+        <div class="catalog__search">
           <span class="material-symbols-outlined">search</span>
           <input
             type="search"
@@ -77,11 +36,26 @@
             (ngModelChange)="onSearch($event)"
           />
         </div>
+
         @if (!loading()) {
           <p class="catalog__count">{{ totalItems() }} productos encontrados</p>
         }
-      </div>
 
+        <label class="catalog__sort">
+          <span class="catalog__sort-label">Ordenar por</span>
+          <select [value]="filters().sort" (change)="onSortChange($any($event.target).value)">
+            <option value="popular">Más populares</option>
+            <option value="newest">Más reciente</option>
+            <option value="price_asc">Precio: menor a mayor</option>
+            <option value="price_desc">Precio: mayor a menor</option>
+            <option value="name">Nombre A–Z</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <!-- Contenido principal -->
+    <main class="catalog__main">
       <!-- Grid de productos -->
       @if (loading()) {
         <div class="catalog__loading">
@@ -99,7 +73,11 @@
       } @else {
         <div class="catalog__grid">
           @for (product of products(); track product.id) {
-            <app-product-card [product]="product" (addToCart)="onAddToCart($event)" />
+            <app-product-card
+              [product]="product"
+              [justAdded]="addedProductId() === product.id"
+              (addToCart)="onAddToCart($event)"
+            />
           }
         </div>
 

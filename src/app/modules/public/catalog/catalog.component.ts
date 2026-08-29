@@ -66,19 +66,6 @@ export class CatalogComponent implements OnInit {
   searchValue = '';
   private searchSubject = new Subject<string>();
 
-  /**
-   * En móvil la barra de categorías y la de búsqueda comparten fila y no
-   * caben cómodas a la vez; apenas una está en uso, la plantilla oculta la
-   * otra y deja que esta ocupe todo el ancho.
-   */
-  get isSearchActive(): boolean {
-    return !!this.searchValue.trim();
-  }
-
-  get isCategoryFilterActive(): boolean {
-    return !!this.filters().category;
-  }
-
   ngOnInit(): void {
     this.productService.getCategories().subscribe(cats => this.categories.set(cats));
 
@@ -148,21 +135,28 @@ export class CatalogComponent implements OnInit {
   }
 
   /**
-   * Desde el catálogo no hay selector de material (Fase 4bis.3): si el
-   * producto se cotiza en más de un material, "Agregar" lleva a la ficha en
-   * vez de adivinar cuál. Con uno solo, agrega directo.
+   * "Agregar" desde el catálogo mete el producto al carrito sin abrir la ficha.
+   * Como aquí no hay selector de material, se agrega el material COTIZADO más
+   * barato: es justo el precio que la tarjeta muestra como "Desde", así que lo
+   * que cae al carrito coincide con lo que el cliente vio. Puede cambiar el
+   * material desde la ficha, y el asesor lo confirma al cotizar.
+   *
+   * Sin ningún material cotizado (la tarjeta mostraría "—") no hay nada que
+   * agregar: se abre la ficha.
    */
   onAddToCart(product: Product): void {
-    if ((product.quoted_materials ?? 0) !== 1) {
-      this.router.navigate(['/producto', product.slug]);
-      return;
-    }
     this.productService.getProduct(product.slug).subscribe((full) => {
-      const materialId = full.materialPrices?.find((m) => m.base_cost != null)?.material_id;
-      if (materialId == null) { this.router.navigate(['/producto', product.slug]); return; }
-      this.cartService.addItem(full, materialId, 1);
+      const quoted = (full.materialPrices ?? []).filter((m) => m.base_cost != null);
+      if (!quoted.length) {
+        this.router.navigate(['/producto', product.slug]);
+        return;
+      }
+      const cheapest = quoted.reduce((a, b) =>
+        Number(b.price_cash) < Number(a.price_cash) ? b : a
+      );
+      this.cartService.addItem(full, cheapest.material_id, 1);
       this.addedProductId.set(product.id);
-      setTimeout(() => this.addedProductId.set(null), 1500);
+      setTimeout(() => this.addedProductId.set(null), 1800);
     });
   }
 }

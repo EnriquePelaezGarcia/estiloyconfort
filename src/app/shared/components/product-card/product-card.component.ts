@@ -8,8 +8,8 @@ import {
   signal,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Product, hasOffer } from '../../../core/models/product.model';
-import { PriceDisplayComponent } from '../price-display/price-display.component';
+import { CurrencyPipe } from '@angular/common';
+import { Product } from '../../../core/models/product.model';
 import { mediaThumbUrl } from '../../../core/utils/media-url';
 
 @Component({
@@ -17,12 +17,14 @@ import { mediaThumbUrl } from '../../../core/utils/media-url';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './product-card.component.html',
   styleUrl: './product-card.component.scss',
-  imports: [RouterLink, PriceDisplayComponent],
+  imports: [RouterLink, CurrencyPipe],
 })
 export class ProductCardComponent {
   private router = inject(Router);
 
   product = input.required<Product>();
+  /** El catálogo lo pone en true ~2 s tras agregar esta pieza al carrito. */
+  justAdded = input(false);
   addToCart = output<Product>();
 
   /**
@@ -38,8 +40,15 @@ export class ProductCardComponent {
     return raw.map((src) => mediaThumbUrl(src)!).filter(Boolean);
   });
 
-  /** Regla compartida con la portada: ver hasOffer() en el modelo. */
-  protected onOffer = computed(() => hasOffer(this.product()));
+  /**
+   * Precio total pagando a 6 meses sin intereses con tarjeta (cuesta un poco
+   * más que el de contado). `price_6msi_from` solo llega en el listado del
+   * catálogo; donde no venga, la línea de MSI no se pinta.
+   */
+  protected price6msi = computed<number | null>(() => {
+    const v = this.product().price_6msi_from;
+    return v != null ? Number(v) : null;
+  });
 
   protected activeIndex = signal(0);
 

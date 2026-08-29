@@ -15,31 +15,15 @@
   background: v.$color-bg;
 
   &__layout {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    gap: v.$spacing-xl;
-    padding-top: v.$spacing-xl;
-    padding-bottom: v.$spacing-2xl;
-    align-items: start;
-
-    @media (max-width: v.$bp-tablet) {
-      grid-template-columns: 1fr;
-      padding-top: v.$spacing-md;
-      gap: v.$spacing-md;
-    }
-  }
-
-  &__sidebar {
-    position: sticky;
-    top: 80px;
     display: flex;
     flex-direction: column;
     gap: v.$spacing-lg;
+    padding-top: v.$spacing-xl;
+    padding-bottom: v.$spacing-2xl;
 
-    // En móvil los filtros viven en la barra superior (categorías + búsqueda),
-    // así que la columna lateral entera sobra.
     @media (max-width: v.$bp-tablet) {
-      display: none;
+      padding-top: v.$spacing-md;
+      gap: v.$spacing-md;
     }
   }
 
@@ -49,75 +33,80 @@
     gap: v.$spacing-lg;
   }
 
-  &__toolbar {
+  // Barra horizontal de filtros que sustituye a la antigua columna lateral.
+  &__filters {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: v.$spacing-md;
-    flex-wrap: wrap;
 
     @media (max-width: v.$bp-tablet) {
       gap: v.$spacing-sm;
     }
   }
 
-  // Duplica la lista de la sidebar en formato compacto; solo existe en móvil.
-  &__categories {
-    display: none;
+  // Tira de categorías. En escritorio los chips envuelven a otra línea; en
+  // móvil no envuelven y la tira se desliza en horizontal (patrón de tienda
+  // en el teléfono).
+  &__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: v.$spacing-xs;
 
     @media (max-width: v.$bp-tablet) {
-      display: block;
-      // 46%: con menos, "Todas las categorías" se cortaba en el ancho de un
-      // teléfono y el control mostraba "Todas las categ…".
-      flex: 0 0 46%;
-      min-width: 0;
-      // `appearance: none` quita el recuadro gris nativo del sistema; a cambio
-      // hay que dibujar la flecha, que va como SVG de fondo (no como imagen
-      // externa) para no pedir un archivo extra.
-      appearance: none;
-      -webkit-appearance: none;
-      padding: v.$spacing-sm 1.5rem v.$spacing-sm 0.9rem;
-      border: 1px solid v.$color-border;
-      border-radius: v.$radius-full;
-      background-color: v.$color-surface;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%236b6b7b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.7rem center;
-      background-size: 10px 7px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 2px; // que la sombra del focus no se recorte
+
+      &::-webkit-scrollbar { display: none; }
+    }
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: v.$spacing-md;
+
+    @media (max-width: v.$bp-tablet) {
+      flex-wrap: wrap;
+      gap: v.$spacing-sm;
+    }
+  }
+
+  &__sort {
+    display: flex;
+    align-items: center;
+    gap: v.$spacing-sm;
+    flex: 0 0 auto;
+
+    &-label {
       font-family: v.$font-body;
-      font-size: 0.8rem;
-      font-weight: 500;
-      line-height: 1.2;
+      font-size: 0.85rem;
+      color: v.$color-text-secondary;
+      white-space: nowrap;
+    }
+
+    select {
+      padding: v.$spacing-sm v.$spacing-md;
+      border: 1.5px solid v.$color-border;
+      border-radius: v.$radius-full;
+      font-family: v.$font-body;
+      font-size: 0.85rem;
       color: v.$color-text;
+      background: v.$color-surface;
       cursor: pointer;
       outline: none;
-      // Evita que el texto largo de una categoría empuje el ancho del control.
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      overflow: hidden;
-      transition: border-color v.$transition-fast, box-shadow v.$transition-fast;
+      transition: border-color v.$transition-fast;
 
-      &:hover { border-color: v.$color-primary; }
+      &:focus { border-color: v.$color-primary; }
+    }
 
-      &:focus-visible {
-        border-color: v.$color-primary;
-        box-shadow: 0 0 0 3px rgba(61, 43, 94, 0.12);
-      }
+    @media (max-width: v.$bp-tablet) {
+      flex: 1 1 100%;
+      justify-content: space-between;
 
-      // El menú desplegable lo pinta el sistema: lo único que se puede
-      // controlar de cada opción es el color, y sin esto en Android las
-      // opciones heredan el fondo transparente del control.
-      option {
-        background: v.$color-surface;
-        color: v.$color-text;
-      }
-
-      // Mientras se está buscando, el selector de categorías estorba: se
-      // oculta del todo.
-      &--hidden { display: none; }
-
-      // Con una categoría elegida y sin búsqueda activa, el selector pasa a
-      // ser el único control de la fila: ocupa todo el ancho en vez del 46%.
-      &--full { flex: 1 1 100%; }
+      select { flex: 1; }
     }
   }
 
@@ -133,15 +122,10 @@
     background: v.$color-surface;
     transition: border-color v.$transition-fast;
 
-    // Va al final del bloque a propósito: un @media entre declaraciones se
-    // emite antes que ellas y las de abajo terminan ganando.
     @media (max-width: v.$bp-tablet) {
-      min-width: 0; // sin esto no cabe junto al selector de categorías
+      flex: 1 1 100%;
+      min-width: 0;
       border-width: 1px;
-
-      // Con una categoría elegida y sin texto de búsqueda, el buscador se
-      // oculta y le deja toda la fila al selector de categorías.
-      &--hidden { display: none; }
     }
 
     &:focus-within { border-color: v.$color-primary; }
@@ -177,13 +161,24 @@
 
   &__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: v.$spacing-lg;
+    // 4 por fila en escritorio (foto grande, ~290 px de tarjeta en el ancho del
+    // contenedor). Baja a 3 en pantallas medianas y a 2 en teléfono para que la
+    // tarjeta nunca se apriete.
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    // A prueba: la cuadrícula rompe parte del margen lateral del contenedor,
+    // dejando solo un pequeño respiro contra los bordes.
+    margin-left: calc(-1 * #{v.$spacing-md});
+    margin-right: calc(-1 * #{v.$spacing-md});
 
-    // Dos productos por fila en teléfono: con `minmax(260px)` sólo cabía uno.
+    @media (max-width: v.$bp-desktop) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
     @media (max-width: v.$bp-tablet) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: v.$spacing-sm;
+      margin-left: calc(-1 * #{v.$spacing-sm});
+      margin-right: calc(-1 * #{v.$spacing-sm});
     }
   }
 
@@ -201,62 +196,35 @@
   }
 }
 
-.filter-group {
-  &__title {
-    font-family: v.$font-headline;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: v.$color-text-secondary;
-    margin: 0 0 v.$spacing-sm;
+.chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: v.$spacing-xs v.$spacing-md;
+  border: 1px solid v.$color-border;
+  border-radius: v.$radius-full;
+  background: v.$color-surface;
+  font-family: v.$font-body;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: v.$color-text;
+  cursor: pointer;
+  transition: background v.$transition-fast, border-color v.$transition-fast, color v.$transition-fast;
+
+  &:hover {
+    border-color: v.$color-primary;
+    color: v.$color-primary;
   }
 
-  &__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  &__item {
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    padding: v.$spacing-sm v.$spacing-md;
-    border-radius: v.$radius-md;
-    font-family: v.$font-body;
-    font-size: 0.875rem;
-    color: v.$color-text;
-    cursor: pointer;
-    transition: background v.$transition-fast, color v.$transition-fast;
-
-    &:hover { background: v.$color-bg; color: v.$color-primary; }
-
-    &--active {
-      background: rgba(61, 43, 94, 0.1);
-      color: v.$color-primary;
-      font-weight: 600;
-    }
-  }
-
-  &__select {
-    width: 100%;
-    padding: v.$spacing-sm v.$spacing-md;
-    border: 1.5px solid v.$color-border;
-    border-radius: v.$radius-md;
-    font-family: v.$font-body;
-    font-size: 0.875rem;
-    color: v.$color-text;
-    background: v.$color-surface;
-    cursor: pointer;
+  &:focus-visible {
     outline: none;
-    transition: border-color v.$transition-fast;
+    border-color: v.$color-primary;
+    box-shadow: 0 0 0 3px rgba(61, 43, 94, 0.12);
+  }
 
-    &:focus { border-color: v.$color-primary; }
+  &--active {
+    background: v.$color-primary;
+    border-color: v.$color-primary;
+    color: #fff;
   }
 }
 
