@@ -87,6 +87,7 @@ module.exports = {
         items: (order.items ?? []).map((it) => ({
           productName: it.productName,
           materialLabel: it.materialLabel,
+          sizeLabel: it.sizeLabel ?? null,
           color: it.color,
           quantity: it.quantity,
           unitPrice: it.unitPrice,

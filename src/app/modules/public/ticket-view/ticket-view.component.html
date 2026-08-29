@@ -76,7 +76,7 @@
               <div class="line__main">
                 <p class="line__name">{{ it.productName }}</p>
                 <p class="line__spec">
-                  {{ it.materialLabel }}@if (it.color) { · {{ it.color }} }
+                  {{ it.materialLabel }}@if (it.sizeLabel) { · {{ it.sizeLabel }} }@if (it.color) { · {{ it.color }} }
                   @if (it.quantity > 1) {
                     · {{ it.quantity }} × {{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}
                   }

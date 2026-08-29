@@ -29,6 +29,9 @@ export interface QuoteItem {
   productSku?: string | null;
   materialId: number;
   materialLabel: string;
+  /** Talla congelada de la línea (D3/D6). null = producto sin talla. */
+  sizeId?: number | null;
+  sizeLabel?: string | null;
   color?: string | null;
   quantity: number;
   unitPrice: number;
@@ -171,6 +174,8 @@ export interface CreateQuoteRequest {
   items: Array<{
     productId: number;
     materialId: number;
+    /** D3/D6: talla de la línea; null = producto sin talla. */
+    sizeId?: number | null;
     color?: string | null;
     quantity: number;
     /** Regala esta línea (precio $0). */

@@ -52,6 +52,8 @@ function mapItem(row) {
     productName: row.product_name,
     materialId: row.material_id,
     materialLabel: row.material_label ?? null,
+    sizeId: row.size_id ?? null,
+    sizeLabel: row.size_label ?? null,
     color: row.color ?? null,
     variantSelections,
     quantity: Number(row.quantity),
@@ -131,6 +133,25 @@ const QuoteRequest = {
       const quantity = Math.min(MAX_QTY_PER_LINE, Math.max(1, Math.trunc(Number(it.quantity)) || 1));
       if (!productId || !materialId) continue;
 
+      // D3/D6: la celda de precio es (material × talla). 0 = sin talla; si el
+      // cliente eligió una talla en la ficha, se respeta.
+      const [declaredSizes] = await pool.execute(
+        `SELECT ps.size_id, s.label FROM product_sizes ps JOIN sizes s ON s.id = ps.size_id
+          WHERE ps.product_id = ? AND ps.is_active = TRUE`,
+        [productId],
+      );
+      const rawSizeId = it.sizeId != null && it.sizeId !== '' ? Number(it.sizeId) : 0;
+      let sizeId = 0;
+      let sizeLabel = null;
+      if (declaredSizes.length) {
+        const match = declaredSizes.find((s) => s.size_id === rawSizeId);
+        // Sin talla válida elegida se descarta en silencio, como el resto de
+        // casos no cotizables: el vendedor la agrega a mano si hace falta.
+        if (!match) continue;
+        sizeId = match.size_id;
+        sizeLabel = match.label;
+      }
+
       const [[row]] = await pool.execute(
         `SELECT p.name AS product_name, mat.label AS material_label,
                 mat.color_policy AS color_policy, mat.fixed_color AS fixed_color,
@@ -138,11 +159,12 @@ const QuoteRequest = {
            FROM products p
            JOIN product_materials pm ON pm.product_id = p.id AND pm.material_id = ? AND pm.is_active = TRUE
            JOIN materials mat ON mat.id = pm.material_id
-           LEFT JOIN product_material_prices mp ON mp.product_id = p.id AND mp.material_id = pm.material_id
+           LEFT JOIN product_material_prices mp
+                  ON mp.product_id = p.id AND mp.material_id = pm.material_id AND mp.size_id = ?
           WHERE p.id = ? AND p.is_active = TRUE`,
-        [materialId, productId],
+        [materialId, sizeId, productId],
       );
-      // Producto/material inexistente o sin costo capturado (RN-03): se
+      // Producto/material/talla inexistente o sin costo capturado (RN-03): se
       // descarta en silencio; el vendedor lo agrega a mano si hace falta.
       if (!row || row.base_cost == null) continue;
 
@@ -157,6 +179,8 @@ const QuoteRequest = {
         productName: row.product_name,
         materialId,
         materialLabel: row.material_label,
+        sizeId: declaredSizes.length ? sizeId : null,
+        sizeLabel,
         color: deriveColor(row.color_policy, row.fixed_color, variantSelections),
         variantSelections,
         quantity,
@@ -249,11 +273,11 @@ const QuoteRequest = {
       for (const r of resolved) {
         await conn.execute(
           `INSERT INTO quote_request_items
-             (quote_request_id, product_id, product_name, material_id, material_label,
+             (quote_request_id, product_id, product_name, material_id, material_label, size_id, size_label,
               color, variant_selections, quantity, unit_price_cash)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
           [
-            requestId, r.productId, r.productName, r.materialId, r.materialLabel,
+            requestId, r.productId, r.productName, r.materialId, r.materialLabel, r.sizeId ?? null, r.sizeLabel ?? null,
             r.color, r.variantSelections ? JSON.stringify(r.variantSelections) : null,
             r.quantity, r.unitPriceCash,
           ],

@@ -93,11 +93,14 @@
         </tr>
       </thead>
       <tbody>
-        @for (row of filteredRows(); track row.productId + '-' + row.materialId) {
+        @for (row of filteredRows(); track row.productId + '-' + row.materialId + '-' + (row.sizeId ?? 0)) {
           <tr>
             <td data-label="Producto" class="strong">{{ row.name }}</td>
             <td data-label="SKU" class="muted">{{ row.sku || '—' }}</td>
-            <td data-label="Material">{{ row.materialLabel }}</td>
+            <td data-label="Material">
+              {{ row.materialLabel }}
+              @if (row.sizeLabel) { <span class="badge badge--gray">{{ row.sizeLabel }}</span> }
+            </td>
             <td data-label="Stock" class="num" [class.negative]="row.stockQuantity < 0">
               {{ row.stockQuantity }}
               @if (row.colors.length > 0) {
@@ -163,7 +166,7 @@
       </div>
 
       <form [formGroup]="form" (ngSubmit)="saveAdjust()" novalidate class="modal__body">
-        <p class="adjust-product">{{ row.name }} — {{ row.materialLabel }}</p>
+        <p class="adjust-product">{{ row.name }} — {{ cellLabel(row) }}</p>
 
         @if (!hasColorBreakdown()) {
           <div class="field">
@@ -261,7 +264,7 @@
   <div class="modal-backdrop">
     <div class="modal">
       <div class="modal__head">
-        <h2>Movimientos — {{ row.name }} · {{ row.materialLabel }}</h2>
+        <h2>Movimientos — {{ row.name }} · {{ cellLabel(row) }}</h2>
         <button type="button" class="icon-btn" (click)="closeMovements()" aria-label="Cerrar">
           <span class="material-symbols-outlined">close</span>
         </button>

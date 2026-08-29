@@ -4,6 +4,7 @@ const userRoutes = require('./userRoutes');
 const categoryRoutes = require('./categoryRoutes');
 const productRoutes = require('./productRoutes');
 const materialsRoutes = require('./materialsRoutes');
+const sizesRoutes = require('./sizesRoutes');
 const adminRoutes = require('./adminRoutes');
 const roleRoutes = require('./roleRoutes');
 const sellerRoutes = require('./sellerRoutes');
@@ -23,6 +24,7 @@ const discountsRoutes = require('./discountsRoutes');
 const reviewsRoutes = require('./reviewsRoutes');
 const contactRoutes = require('./contactRoutes');
 const siteContentRoutes = require('./siteContentRoutes');
+const heroImagesRoutes = require('./heroImagesRoutes');
 const blockIfMustChangePassword = require('../middleware/mustChangePassword');
 
 const router = Router();
@@ -41,6 +43,7 @@ router.use('/users', userRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/products', productRoutes);
 router.use('/materials', materialsRoutes);
+router.use('/sizes', sizesRoutes);
 router.use('/admin', adminRoutes);
 router.use('/roles', roleRoutes);
 router.use('/seller', sellerRoutes);
@@ -70,5 +73,7 @@ router.use('/reviews', reviewsRoutes);
 router.use('/contact', contactRoutes);
 // Bloques de contenido fijo (política de envíos, aceptación) — público en GET.
 router.use('/site-content', siteContentRoutes);
+// Fotos del hero de la portada — público en GET, admin para subir/ordenar.
+router.use('/hero-images', heroImagesRoutes);
 
 module.exports = router;

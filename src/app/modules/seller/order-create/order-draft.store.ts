@@ -34,6 +34,12 @@ import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/p
 export interface CartLine {
   product: InventoryItem;
   materialId: number;
+  /**
+   * Talla elegida de esta línea (Docs/plan-productos-por-tamano.md — D3/D6).
+   * `null` = el producto no usa el eje de talla. Junto con `materialId`
+   * identifica la celda de precio y de stock.
+   */
+  sizeId: number | null;
   color: string | null;
   quantity: number;
   /**
@@ -175,7 +181,7 @@ export class OrderDraftStore {
    * otro pedido ya no cuenta como disponible para uno nuevo.
    */
   lineRequiresFabrication(line: CartLine): boolean {
-    const mp = line.product.materialPrices.find((m) => m.materialId === line.materialId);
+    const mp = this.lineMaterialPrice(line);
     if (!mp || availableOf(mp) <= 0) return true;
     // A2 (Docs/plan-stock-por-color.md): hay piezas, pero de otro color.
     return this.lineColorMismatch(line);
@@ -512,9 +518,32 @@ export class OrderDraftStore {
   /** RN-10/M11-M13 — venta de contado entre negocios: sin IVA ni comisiones (mientras esté activo). */
   readonly isWholesale = computed(() => this.paymentMethodSig() === 'wholesale');
 
-  /** Fila de precios de un producto EN EL MATERIAL de esa línea, o null si no se cotiza ahí (RN-03). */
+  /** Fila de precios de un producto EN LA CELDA (material × talla) de esa línea, o null si no se cotiza ahí (RN-03). */
   lineMaterialPrice(line: CartLine): InventoryMaterialPrice | null {
-    return line.product.materialPrices.find((mp) => mp.materialId === line.materialId) ?? null;
+    return line.product.materialPrices.find(
+      (mp) => mp.materialId === line.materialId && (mp.sizeId ?? null) === (line.sizeId ?? null),
+    ) ?? null;
+  }
+
+  /** ¿El producto de esta línea se vende por talla? (D2) */
+  productUsesSizes(product: InventoryItem): boolean {
+    return product.materialPrices.some((mp) => mp.sizeId != null);
+  }
+
+  /** Materiales DISTINTOS del producto (las celdas por talla no se duplican en el <select>). */
+  distinctMaterialsOf(product: InventoryItem): { materialId: number; label: string; isQuoted: boolean }[] {
+    const byId = new Map<number, { materialId: number; label: string; isQuoted: boolean }>();
+    for (const mp of product.materialPrices) {
+      const e = byId.get(mp.materialId);
+      if (!e) byId.set(mp.materialId, { materialId: mp.materialId, label: mp.label, isQuoted: mp.isQuoted });
+      else if (mp.isQuoted) e.isQuoted = true;
+    }
+    return [...byId.values()];
+  }
+
+  /** Tallas disponibles de un material concreto del producto, para el <select> de talla. */
+  sizesForMaterial(product: InventoryItem, materialId: number): InventoryMaterialPrice[] {
+    return product.materialPrices.filter((mp) => mp.materialId === materialId && mp.sizeId != null);
   }
 
   /** Precio unitario según esquema de venta Y material de la línea. null = no se cotiza (RN-03). */
@@ -1041,6 +1070,8 @@ export class OrderDraftStore {
                   materialId: it.materialId,
                   code: '',
                   label: it.materialLabel ?? '',
+                  sizeId: it.sizeId ?? null,
+                  sizeLabel: it.sizeLabel ?? null,
                   colorPolicy: 'free' as const,
                   fixedColor: null,
                   stockQuantity: it.requiresFabrication ? 0 : 1,
@@ -1052,6 +1083,7 @@ export class OrderDraftStore {
               ],
             },
             materialId: it.materialId,
+            sizeId: it.sizeId ?? null,
             color: it.color ?? null,
             quantity: it.quantity,
             // Precarga de reserva (§7.2): si el vendedor desmarca el checkbox
@@ -1138,6 +1170,8 @@ export class OrderDraftStore {
                   materialId: it.materialId,
                   code: '',
                   label: it.materialLabel,
+                  sizeId: it.sizeId ?? null,
+                  sizeLabel: it.sizeLabel ?? null,
                   colorPolicy: 'free' as const,
                   fixedColor: null,
                   // La cotización no reserva inventario: el stock real se
@@ -1157,6 +1191,7 @@ export class OrderDraftStore {
               ],
             },
             materialId: it.materialId,
+            sizeId: it.sizeId ?? null,
             color: it.color ?? null,
             quantity: it.quantity,
             gift: giftedItemIds.has(it.id ?? -1),
@@ -1249,10 +1284,15 @@ export class OrderDraftStore {
       this.notification.error(`"${product.name}" no tiene costo capturado en ningún material.`);
       return;
     }
-    const defaultMaterial = quoted.length === 1 ? quoted[0] : quoted[0];
+    // La celda por defecto es la primera cotizada (material × talla, D3).
+    const defaultCell = quoted[0];
     const wasFabricationRequired = this.hasFabricationLines();
     this.lines.update((lines) => {
-      const existing = lines.find((l) => l.product.id === product.id && l.materialId === defaultMaterial.materialId);
+      const existing = lines.find(
+        (l) => l.product.id === product.id
+          && l.materialId === defaultCell.materialId
+          && (l.sizeId ?? null) === (defaultCell.sizeId ?? null),
+      );
       if (existing) {
         if (!this.canEditLine(existing)) return lines;
         return lines.map((l) =>
@@ -1261,8 +1301,9 @@ export class OrderDraftStore {
       }
       return [...lines, {
         product,
-        materialId: defaultMaterial.materialId,
-        color: this.initialColorFor(defaultMaterial),
+        materialId: defaultCell.materialId,
+        sizeId: defaultCell.sizeId ?? null,
+        color: this.initialColorFor(defaultCell),
         quantity: 1,
       }];
     });
@@ -1294,16 +1335,29 @@ export class OrderDraftStore {
     this.lines.update((lines) =>
       lines.map((l, i) => {
         if (i !== index) return l;
-        const mp = l.product.materialPrices.find((m) => m.materialId === materialId);
-        if (!mp) return { ...l, materialId };
-        // Al cambiar de material la política de color puede cambiar (M6 §6.2.4):
-        // un color incompatible no se conserva en silencio ('fixed'/'required'
-        // siempre se recalculan). Si la línea ya traía un color libre
-        // capturado a mano, se respeta al cambiar entre dos materiales
-        // 'free' — no se pisa lo que el vendedor ya escribió.
+        // D3: al cambiar de material la talla actual puede no existir en el
+        // nuevo. Se conserva si sigue disponible; si no, cae a la primera
+        // talla del material nuevo (o null si el producto no usa talla).
+        const cellsForMaterial = l.product.materialPrices.filter((m) => m.materialId === materialId);
+        const keepSize = l.sizeId != null && cellsForMaterial.some((m) => m.sizeId === l.sizeId)
+          ? l.sizeId
+          : (cellsForMaterial.find((m) => m.sizeId != null)?.sizeId ?? null);
+        const mp = cellsForMaterial.find((m) => (m.sizeId ?? null) === (keepSize ?? null));
+        if (!mp) return { ...l, materialId, sizeId: keepSize };
         const color = mp.colorPolicy === 'free' ? (l.color ?? this.initialColorFor(mp)) : this.initialColorFor(mp);
-        return { ...l, materialId, color };
+        return { ...l, materialId, sizeId: keepSize, color };
       }),
+    );
+    this.syncFabricationDeliverySchedule(wasFabricationRequired);
+  }
+
+  /** Cambia la talla de ESA línea (D3): solo esa línea reprecia. */
+  changeLineSize(index: number, event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    const sizeId = raw ? Number(raw) : null;
+    const wasFabricationRequired = this.hasFabricationLines();
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index ? { ...l, sizeId } : l)),
     );
     this.syncFabricationDeliverySchedule(wasFabricationRequired);
   }
@@ -1582,6 +1636,7 @@ export class OrderDraftStore {
       items: this.lines().map((l) => ({
         productId: l.product.id,
         materialId: l.materialId,
+        sizeId: l.sizeId,
         color: l.color,
         quantity: l.quantity,
         // El backend recalcula el precio autoritativo por esquema y material

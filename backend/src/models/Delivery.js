@@ -83,7 +83,7 @@ const Delivery = {
     const delivery = mapDelivery(row);
     const [items] = await pool.execute(
       `SELECT oi.id, oi.product_name, oi.product_sku, oi.quantity, oi.variant_selections,
-              oi.material_label, oi.color,
+              oi.material_label, oi.size_label, oi.color,
               (SELECT image_url FROM product_images
                  WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
        FROM order_items oi WHERE oi.order_id = ?`,
@@ -94,8 +94,9 @@ const Delivery = {
       productName: it.product_name,
       productSku: it.product_sku,
       quantity: it.quantity,
-      // M4: material y color son por línea, ya no del pedido completo.
+      // M4: material y color son por línea, ya no del pedido completo. D6: talla.
       materialLabel: it.material_label,
+      sizeLabel: it.size_label ?? null,
       color: it.color,
       // Foto principal VIGENTE del producto (tabla product_images) — para que
       // el repartidor vea qué mueble lleva. Ruta relativa: el front la resuelve

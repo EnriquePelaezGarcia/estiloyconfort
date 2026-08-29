@@ -57,11 +57,13 @@ const StockReservation = {
    * excluyendo opcionalmente las de un pedido (para que al editar un pedido
    * sus propias reservas no cuenten contra sí mismas, §4.2).
    */
-  async activeReservedQuantity(productId, materialId, { excludeOrderId, conn } = {}) {
+  async activeReservedQuantity(productId, materialId, { excludeOrderId, conn, sizeId = null } = {}) {
     const runner = conn ?? pool;
     const params = [productId, materialId];
     let sql = `SELECT COALESCE(SUM(quantity), 0) AS qty FROM stock_reservations
                 WHERE product_id = ? AND material_id = ? AND status = 'active'`;
+    // D5/D6: para un producto con talla, cada talla es un cubo aparte.
+    if (sizeId != null) { sql += ' AND size_id = ?'; params.push(sizeId); }
     if (excludeOrderId) {
       sql += ' AND order_id != ?';
       params.push(excludeOrderId);
@@ -71,7 +73,7 @@ const StockReservation = {
   },
 
   /** Detalle de las reservas activas que están tocando ese (producto, material) — para el mensaje de bloqueo (§4.2). */
-  async listActiveByProductMaterial(productId, materialId, { excludeOrderId, conn } = {}) {
+  async listActiveByProductMaterial(productId, materialId, { excludeOrderId, conn, sizeId = null } = {}) {
     const runner = conn ?? pool;
     const params = [productId, materialId];
     // order_number: Docs/plan-venta-multiesquema.md RN-G10 — para poder
@@ -82,6 +84,7 @@ const StockReservation = {
                  FROM stock_reservations r
                  JOIN orders o ON o.id = r.order_id
                 WHERE r.product_id = ? AND r.material_id = ? AND r.status = 'active'`;
+    if (sizeId != null) { sql += ' AND r.size_id = ?'; params.push(sizeId); }
     if (excludeOrderId) {
       sql += ' AND r.order_id != ?';
       params.push(excludeOrderId);
@@ -96,7 +99,7 @@ const StockReservation = {
    * order_item. No valida disponibilidad aquí — resolveOrderLine() ya validó
    * el bloqueo duro (§4.2) antes de llegar a este punto.
    */
-  async create({ productId, materialId, quantity, reason, note, customerName, orderId, orderItemId, createdBy }, conn) {
+  async create({ productId, materialId, sizeId = null, quantity, reason, note, customerName, orderId, orderItemId, createdBy }, conn) {
     const runner = conn ?? pool;
     const qty = Math.trunc(Number(quantity)) || 0;
     if (qty <= 0) {
@@ -111,9 +114,9 @@ const StockReservation = {
     }
     const [result] = await runner.execute(
       `INSERT INTO stock_reservations
-        (product_id, material_id, quantity, reason, note, customer_name, order_id, order_item_id, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [productId, materialId, qty, reason, note ?? null, customerName ?? null, orderId, orderItemId, createdBy],
+        (product_id, material_id, size_id, quantity, reason, note, customer_name, order_id, order_item_id, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [productId, materialId, sizeId ?? null, qty, reason, note ?? null, customerName ?? null, orderId, orderItemId, createdBy],
     );
     return result.insertId;
   },

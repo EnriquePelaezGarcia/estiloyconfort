@@ -63,13 +63,14 @@ export class CartComponent {
   }
 
   materialLabel(item: CartItem): string {
-    return this.materialsStore.labelOf(item.materialId);
+    const material = this.materialsStore.labelOf(item.materialId);
+    return item.sizeLabel ? `${material} · ${item.sizeLabel}` : material;
   }
 
-  /** El mismo producto puede aparecer en dos líneas si se agregó en materiales
-   * distintos; la clave de track debe distinguirlas. */
+  /** El mismo producto puede aparecer en varias líneas si se agregó en materiales
+   * o tallas distintos; la clave de track debe distinguirlas. */
   lineKey(item: CartItem): string {
-    return `${item.productId}:${item.materialId}:${JSON.stringify(item.variantSelections)}`;
+    return `${item.productId}:${item.materialId}:${item.sizeId ?? 0}:${JSON.stringify(item.variantSelections)}`;
   }
 
   variantLabel(item: CartItem): string {
@@ -79,11 +80,11 @@ export class CartComponent {
   }
 
   updateQty(item: CartItem, qty: number): void {
-    this.cart.updateQuantity(item.productId, item.materialId, item.variantSelections, qty);
+    this.cart.updateQuantity(item.productId, item.materialId, item.variantSelections, qty, item.sizeId ?? null);
   }
 
   remove(item: CartItem): void {
-    this.cart.removeItem(item.productId, item.materialId, item.variantSelections);
+    this.cart.removeItem(item.productId, item.materialId, item.variantSelections, item.sizeId ?? null);
   }
 
   protected onNameInput(event: Event): void {

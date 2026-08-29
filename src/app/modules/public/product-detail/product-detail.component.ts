@@ -72,6 +72,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   /** Material elegido para cotizar y agregar al carrito (M4/M6). */
   selectedMaterial = signal<number | null>(null);
+  /** Talla elegida (D2/D8). null = el producto no usa el eje de talla, o aún no se elige. */
+  selectedSize = signal<number | null>(null);
 
   private queryParams = toSignal(this.route.queryParamMap, {
     initialValue: this.route.snapshot.queryParamMap,
@@ -94,21 +96,70 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     this.returnUrl()?.includes('/cotizaciones') ? 'Volver a la cotización' : 'Volver al pedido',
   );
 
+  /** Todas las celdas (material × talla) declaradas del producto. */
+  private priceCells = computed<MaterialPrices[]>(() => this.product()?.materialPrices ?? []);
+
+  /** ¿El producto usa el eje de talla? (D2) */
+  usesSizes = computed(() => (this.product()?.sizes?.length ?? 0) > 0);
+
   /**
-   * Los materiales DECLARADOS del producto (M2), cotizados o "No aplica"
-   * (RN-03). M5: si solo hay uno, la ficha no pregunta — se autoselecciona
-   * y la plantilla oculta el selector.
+   * Los materiales DECLARADOS del producto (M2), sin duplicar por talla. Un
+   * material está "cotizado" si al menos una de sus celdas tiene precio.
+   * M5: si solo hay uno, la plantilla oculta el selector.
    */
-  materialOptions = computed<(MaterialPrices & { isQuoted: boolean })[]>(() => {
-    const rows = this.product()?.materialPrices ?? [];
-    return rows.map((row) => ({ ...row, isQuoted: row.base_cost != null }));
+  materialOptions = computed<(Pick<MaterialPrices, 'material_id' | 'code' | 'label' | 'color_policy' | 'fixed_color'> & { isQuoted: boolean })[]>(() => {
+    const byId = new Map<number, Pick<MaterialPrices, 'material_id' | 'code' | 'label' | 'color_policy' | 'fixed_color'> & { isQuoted: boolean }>();
+    for (const row of this.priceCells()) {
+      const entry = byId.get(row.material_id);
+      if (!entry) {
+        byId.set(row.material_id, {
+          material_id: row.material_id,
+          code: row.code,
+          label: row.label,
+          color_policy: row.color_policy,
+          fixed_color: row.fixed_color,
+          isQuoted: row.base_cost != null,
+        });
+      } else if (row.base_cost != null) {
+        entry.isQuoted = true;
+      }
+    }
+    return [...byId.values()];
   });
 
-  /** Precios del material elegido, o null si aún no se elige ninguno. */
+  /**
+   * Tallas disponibles para el material elegido (D8). Vacío si el producto no
+   * usa tallas. Cada una marca si esa celda concreta está cotizada.
+   */
+  sizeOptions = computed<{ sizeId: number; label: string; isQuoted: boolean }[]>(() => {
+    if (!this.usesSizes()) return [];
+    const mat = this.selectedMaterial();
+    const declared = this.product()?.sizes ?? [];
+    const cells = this.priceCells();
+    return declared.map((s) => {
+      const cell = mat != null ? cells.find((c) => c.material_id === mat && c.size_id === s.size_id) : undefined;
+      return { sizeId: s.size_id, label: s.label, isQuoted: !!cell && cell.base_cost != null };
+    });
+  });
+
+  /** Precios de la celda elegida (material × talla), o null si falta elegir algo. */
   selectedMaterialPrices = computed(() => {
     const materialId = this.selectedMaterial();
     if (materialId == null) return null;
-    return this.materialOptions().find((m) => m.material_id === materialId) ?? null;
+    const cells = this.priceCells();
+    if (!this.usesSizes()) {
+      return cells.find((m) => m.material_id === materialId) ?? null;
+    }
+    const sizeId = this.selectedSize();
+    if (sizeId == null) return null;
+    return cells.find((m) => m.material_id === materialId && m.size_id === sizeId) ?? null;
+  });
+
+  /** ¿Se puede agregar al carrito? Material elegido y —si aplica— talla elegida y cotizada. */
+  canAddToCart = computed(() => {
+    if (this.selectedMaterial() == null) return false;
+    if (this.usesSizes() && this.selectedSize() == null) return false;
+    return this.selectedMaterialPrices()?.base_cost != null;
   });
 
   /**
@@ -198,6 +249,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
       this.loading.set(true);
       this.error.set(false);
       this.selectedMaterial.set(null);
+      this.selectedSize.set(null);
       this.activeImageIndex.set(0);
       this.productService.getProduct(slug).subscribe({
         next: p => {
@@ -207,20 +259,25 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           // el `title` estático de la ruta. En SSR el render espera a que el
           // HTTP termine, así que el HTML servido ya trae estas etiquetas.
           this.seo.setProduct(p);
-          // `?material=<id>`: el vendedor abrió la ficha desde una línea de un
-          // pedido o cotización, así que la ficha nace mostrando EL material
-          // que ya eligió — no el precio de otro.
+          // `?material=<id>` / `?size=<id>`: el vendedor abrió la ficha desde
+          // una línea de un pedido o cotización, así que la ficha nace
+          // mostrando LA celda que ya eligió — no el precio de otra.
           const quoted = (p.materialPrices ?? []).filter((m) => m.base_cost != null);
-          const requested = Number(this.route.snapshot.queryParamMap.get('material'));
-          const preselected = quoted.find((m) => m.material_id === requested);
-          if (preselected) {
-            this.selectedMaterial.set(preselected.material_id);
-            return;
-          }
-          // M5: si solo hay UN material cotizado, se elige solo y la ficha no
-          // pregunta; con varios, el cliente decide — no hay "el" precio hasta
-          // que elige.
-          if (quoted.length === 1) this.selectedMaterial.set(quoted[0].material_id);
+          const usesSizes = (p.sizes?.length ?? 0) > 0;
+          const reqMaterial = Number(this.route.snapshot.queryParamMap.get('material'));
+          const reqSize = Number(this.route.snapshot.queryParamMap.get('size'));
+
+          const distinctMaterials = [...new Set(quoted.map((m) => m.material_id))];
+          let material: number | null = null;
+          if (distinctMaterials.includes(reqMaterial)) material = reqMaterial;
+          else if (distinctMaterials.length === 1) material = distinctMaterials[0];
+          if (material == null) return;
+          this.selectedMaterial.set(material);
+
+          if (!usesSizes) return;
+          const sizesForMaterial = quoted.filter((m) => m.material_id === material).map((m) => m.size_id);
+          if (sizesForMaterial.includes(reqSize)) this.selectedSize.set(reqSize);
+          else if (sizesForMaterial.length === 1) this.selectedSize.set(sizesForMaterial[0]);
         },
         error: () => { this.loading.set(false); this.error.set(true); },
       });
@@ -243,12 +300,30 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     if (!option?.isQuoted) return;
     this.selectedMaterial.set(materialId);
     this.activeImageIndex.set(0);
+    // La talla elegida puede no existir en el material nuevo: si queda una
+    // sola cotizada se elige sola, si no se limpia y el cliente vuelve a elegir.
+    if (this.usesSizes()) {
+      const quotedSizes = this.sizeOptions().filter((s) => s.isQuoted);
+      this.selectedSize.set(quotedSizes.length === 1 ? quotedSizes[0].sizeId : null);
+    }
     // El material elegido queda en la URL: el link que comparte el cliente (o
     // el vendedor) conserva la elección. El canonical de SEO ignora este
     // querystring (Parte 3), así que no crea una página duplicada.
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { material: materialId },
+      queryParams: { material: materialId, size: this.selectedSize() },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  selectSize(sizeId: number): void {
+    const option = this.sizeOptions().find((s) => s.sizeId === sizeId);
+    if (!option?.isQuoted) return;
+    this.selectedSize.set(sizeId);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { size: sizeId },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
@@ -273,8 +348,15 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   addToCart(): void {
     const p = this.product();
     const materialId = this.selectedMaterial();
-    if (!p || materialId == null) return;
-    this.cartService.addItem(p, materialId, this.quantity(), this.selectedVariants(), this.variantPriceModifier());
+    if (!p || materialId == null || !this.canAddToCart()) return;
+    this.cartService.addItem(
+      p,
+      materialId,
+      this.quantity(),
+      this.selectedVariants(),
+      this.variantPriceModifier(),
+      this.usesSizes() ? this.selectedSize() : null,
+    );
     this.added.set(true);
     setTimeout(() => this.added.set(false), 2000);
   }

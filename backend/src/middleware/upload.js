@@ -86,6 +86,11 @@ function processImage(subfolder, { maxWidth = 1600, quality = 80, thumb = false 
 module.exports = {
   productImages: uploader(),
   categoryImages: uploader(),
+  heroImages: uploader(),
   processProductImage: processImage('products', { thumb: true }),
   processCategoryImage: processImage('categories', { thumb: true }),
+  // El hero se pinta a todo el ancho, por eso 2000 px y no los 1600 de
+  // catálogo: abajo de eso se ve suave en pantallas grandes. No se sube más
+  // porque esta foto es el LCP de la portada y cada KB se nota al abrir.
+  processHeroImage: processImage('hero', { maxWidth: 2000, quality: 80, thumb: true }),
 };

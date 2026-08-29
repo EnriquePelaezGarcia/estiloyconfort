@@ -34,11 +34,17 @@ export class CartService {
     materialId: number,
     quantity = 1,
     variantSelections: CartVariantSelection = {},
-    variantPriceModifier = 0
+    variantPriceModifier = 0,
+    sizeId: number | null = null,
   ): void {
-    const materialPrice = product.materialPrices?.find((mp) => mp.material_id === materialId);
+    // D3: el precio sale de la CELDA (material × talla). Sin talla, la celda es
+    // la fila con size_id = 0. Con talla, la que coincida con la elegida.
+    const materialPrice = product.materialPrices?.find(
+      (mp) => mp.material_id === materialId && (sizeId == null ? true : mp.size_id === sizeId),
+    );
     const priceCash = materialPrice?.price_cash ?? 0;
     const price6msi = materialPrice?.price_6msi ?? 0;
+    const sizeLabel = materialPrice?.size_label ?? null;
 
     // La ficha del producto (GET /products/:slug) NO trae `primary_image` plano
     // —solo el arreglo `images`—, así que sin este fallback el carrito quedaba
@@ -50,7 +56,7 @@ export class CartService {
       null;
 
     this._cart.update(cart => {
-      const existing = cart.items.find((i) => this.sameLine(i, product.id, materialId, variantSelections));
+      const existing = cart.items.find((i) => this.sameLine(i, product.id, materialId, variantSelections, sizeId));
       const items = existing
         ? cart.items.map(i =>
             i === existing ? { ...i, quantity: i.quantity + quantity } : i
@@ -63,6 +69,8 @@ export class CartService {
               slug: product.slug,
               primaryImage,
               materialId,
+              sizeId,
+              sizeLabel,
               priceCash,
               price6msi,
               quantity,
@@ -82,34 +90,42 @@ export class CartService {
     materialId: number,
     variantSelections: CartVariantSelection,
     quantity: number,
+    sizeId: number | null = null,
   ): void {
-    if (quantity <= 0) { this.removeItem(productId, materialId, variantSelections); return; }
+    if (quantity <= 0) { this.removeItem(productId, materialId, variantSelections, sizeId); return; }
     this._cart.update(cart => ({
       ...cart,
       items: cart.items.map(i =>
-        this.sameLine(i, productId, materialId, variantSelections) ? { ...i, quantity } : i
+        this.sameLine(i, productId, materialId, variantSelections, sizeId) ? { ...i, quantity } : i
       ),
     }));
     this.persist();
   }
 
-  removeItem(productId: number, materialId: number, variantSelections: CartVariantSelection = {}): void {
+  removeItem(
+    productId: number,
+    materialId: number,
+    variantSelections: CartVariantSelection = {},
+    sizeId: number | null = null,
+  ): void {
     this._cart.update(cart => ({
       ...cart,
-      items: cart.items.filter((i) => !this.sameLine(i, productId, materialId, variantSelections)),
+      items: cart.items.filter((i) => !this.sameLine(i, productId, materialId, variantSelections, sizeId)),
     }));
     this.persist();
   }
 
-  /** El mismo mueble en dos materiales son dos líneas distintas. */
+  /** El mismo mueble en dos materiales —o dos tallas— son dos líneas distintas. */
   private sameLine(
     item: CartItem,
     productId: number,
     materialId: number,
     variantSelections: CartVariantSelection,
+    sizeId: number | null = null,
   ): boolean {
     return item.productId === productId
       && item.materialId === materialId
+      && (item.sizeId ?? null) === (sizeId ?? null)
       && JSON.stringify(item.variantSelections) === JSON.stringify(variantSelections);
   }
 
@@ -155,7 +171,8 @@ export class CartService {
           style: 'currency', currency: 'MXN',
         });
         const materialLabel = this.materialsStore.labelOf(i.materialId);
-        return `▸ ${i.name} (${materialLabel}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
+        const size = i.sizeLabel ? `, ${i.sizeLabel}` : '';
+        return `▸ ${i.name} (${materialLabel}${size}${variants ? `, ${variants}` : ''}) x${i.quantity} — ${price}`;
       });
       const total = this.total().toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
       text = `Hola, me interesa hacer un pedido:\n\n${lines.join('\n')}\n\n*Total estimado: ${total}*\n\n¿Pueden confirmar disponibilidad?`;
@@ -173,12 +190,14 @@ export class CartService {
   buildRequestItems(): {
     productId: number;
     materialId: number;
+    sizeId: number | null;
     variantSelections: CartVariantSelection;
     quantity: number;
   }[] {
     return this._cart().items.map((i) => ({
       productId: i.productId,
       materialId: i.materialId,
+      sizeId: i.sizeId ?? null,
       variantSelections: i.variantSelections ?? {},
       quantity: i.quantity,
     }));
@@ -205,7 +224,13 @@ export class CartService {
       // cuanto vuelve a agregar el producto.
       return {
         ...cart,
-        items: (cart.items ?? []).map((i) => ({ ...i, inStock: i.inStock ?? true })),
+        // sizeId/sizeLabel no existían antes del eje de talla: null = sin talla.
+        items: (cart.items ?? []).map((i) => ({
+          ...i,
+          inStock: i.inStock ?? true,
+          sizeId: i.sizeId ?? null,
+          sizeLabel: i.sizeLabel ?? null,
+        })),
       };
     } catch { return this.emptyCart(); }
   }

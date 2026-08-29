@@ -278,7 +278,7 @@
         @if (lines().length === 0) {
           <p class="empty">Agrega productos desde el buscador.</p>
         } @else {
-          @for (l of lines(); track l.product.id + '-' + l.materialId; let i = $index) {
+          @for (l of lines(); track l.product.id + '-' + l.materialId + '-' + (l.sizeId ?? 0); let i = $index) {
             <div class="cart-line" [class.cart-line--alert]="unitPrice(l) === null">
               <!-- Foto y nombre abren la ficha pública del mueble con ESTE
                    material ya elegido; la cotización queda guardada y se repone
@@ -306,16 +306,27 @@
                 >{{ l.product.name }}</button>
 
                 <div class="cart-line__variant">
-                  @if (l.product.materialPrices.length > 1) {
+                  @if (distinctMaterialsOf(l.product).length > 1) {
                     <select class="cart-line__material" (change)="changeLineMaterial(i, $event)">
-                      @for (mp of l.product.materialPrices; track mp.materialId) {
-                        <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
-                          {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
+                      @for (mat of distinctMaterialsOf(l.product); track mat.materialId) {
+                        <option [value]="mat.materialId" [selected]="mat.materialId === l.materialId" [disabled]="!mat.isQuoted">
+                          {{ mat.label }}@if (!mat.isQuoted) { (no disponible) }
                         </option>
                       }
                     </select>
                   } @else if (l.product.materialPrices[0]; as onlyMaterial) {
                     <span class="cart-line__material-fixed">{{ onlyMaterial.label }}</span>
+                  }
+
+                  @if (productUsesSizes(l.product)) {
+                    <select class="cart-line__material" (change)="changeLineSize(i, $event)">
+                      <option value="" [selected]="l.sizeId == null">Elige talla…</option>
+                      @for (sz of sizesForMaterial(l.product, l.materialId); track sz.sizeId) {
+                        <option [value]="sz.sizeId" [selected]="sz.sizeId === l.sizeId" [disabled]="!sz.isQuoted">
+                          {{ sz.sizeLabel }}@if (!sz.isQuoted) { (no disponible) }
+                        </option>
+                      }
+                    </select>
                   }
 
                   @if (lineMaterialPrice(l); as mp) {

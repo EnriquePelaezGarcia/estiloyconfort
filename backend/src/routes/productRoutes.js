@@ -32,6 +32,10 @@ router.get('/:id/material-prices', authenticate, authorize('admin', 'seller'), c
 router.get('/:id/materials', authenticate, authorize('admin'), ctrl.getMaterials);
 router.put('/:id/materials', authenticate, authorize('admin'), ctrl.setMaterials);
 
+// Tallas declaradas del producto (Docs/plan-productos-por-tamano.md — D2)
+router.get('/:id/sizes', authenticate, authorize('admin'), ctrl.getSizes);
+router.put('/:id/sizes', authenticate, authorize('admin'), ctrl.setSizes);
+
 // Rutas admin — costos por fabricante × material, en filas (M3)
 router.get('/:id/manufacturer-costs', authenticate, authorize('admin'), ctrl.getManufacturerPrices);
 router.put('/:id/manufacturer-costs/:manufacturerId', authenticate, authorize('admin'), ctrl.setManufacturerPrice);

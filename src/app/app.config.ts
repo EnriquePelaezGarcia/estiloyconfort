@@ -14,6 +14,7 @@ import { firstValueFrom, catchError, of } from 'rxjs';
 import { routes } from './app.routes';
 import { jwtInterceptor } from './core/auth/jwt.interceptor';
 import { MaterialsStore } from './core/services/materials.store';
+import { SizesStore } from './core/services/sizes.store';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -29,6 +30,13 @@ export const appConfig: ApplicationConfig = {
     // bloquear el primer render.
     provideAppInitializer(() => {
       const store = inject(MaterialsStore);
+      return firstValueFrom(store.load().pipe(catchError(() => of(null))));
+    }),
+    // Catálogo de tallas (Docs/plan-productos-por-tamano.md — D1), mismo
+    // criterio: si el backend no responde, la app arranca con el catálogo
+    // vacío y los productos sin talla siguen funcionando igual.
+    provideAppInitializer(() => {
+      const store = inject(SizesStore);
       return firstValueFrom(store.load().pipe(catchError(() => of(null))));
     }),
   ],

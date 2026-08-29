@@ -6,6 +6,7 @@ import { Category } from '../models/category.model';
 import {
   Product,
   ProductDeclaredMaterial,
+  ProductDeclaredSize,
   ProductFilters,
   ProductImage,
   ProductListResponse,
@@ -127,7 +128,21 @@ export class ProductService {
       .pipe(map((r) => r.data));
   }
 
-  // ===== Costos por fabricante × material, en filas (M3) =====
+  // ===== Tallas declaradas del producto (Docs/plan-productos-por-tamano.md — D2) =====
+
+  getProductSizes(productId: number): Observable<ProductDeclaredSize[]> {
+    return this.api
+      .get<{ data: ProductDeclaredSize[] }>(`/products/${productId}/sizes`)
+      .pipe(map((r) => r.data));
+  }
+
+  setProductSizes(productId: number, sizeIds: number[]): Observable<ProductDeclaredSize[]> {
+    return this.api
+      .put<{ data: ProductDeclaredSize[] }>(`/products/${productId}/sizes`, { sizeIds })
+      .pipe(map((r) => r.data));
+  }
+
+  // ===== Costos por fabricante × material × talla, en filas (M3 + D3) =====
 
   getManufacturerPrices(productId: number): Observable<ProductManufacturerPricesResponse> {
     return this.api.get<ProductManufacturerPricesResponse>(
@@ -149,7 +164,7 @@ export class ProductService {
   setManufacturerPrice(
     productId: number,
     manufacturerId: number,
-    costs: Array<{ materialId: number; cost: number | null; affectsBaseCost?: boolean }>,
+    costs: Array<{ materialId: number; sizeId?: number; cost: number | null; affectsBaseCost?: boolean }>,
   ): Observable<ProductManufacturerPricesResponse> {
     return this.api.put<ProductManufacturerPricesResponse>(
       `/products/${productId}/manufacturer-costs/${manufacturerId}`,

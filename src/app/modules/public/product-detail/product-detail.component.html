@@ -114,6 +114,30 @@
           </div>
         }
 
+        <!-- Talla: solo camas/cabeceras/bases/colchones (D2/D8) -->
+        @if (usesSizes() && selectedMaterial()) {
+          <div class="detail__variants">
+            <p class="detail__variants-label">Talla *</p>
+            <div class="detail__variants-options">
+              @for (option of sizeOptions(); track option.sizeId) {
+                <button
+                  type="button"
+                  class="variant-btn"
+                  [class.variant-btn--active]="selectedSize() === option.sizeId"
+                  [disabled]="!option.isQuoted"
+                  [title]="option.isQuoted ? '' : 'No disponible en ' + option.label"
+                  (click)="selectSize(option.sizeId)"
+                >
+                  {{ option.label }}
+                  @if (!option.isQuoted) {
+                    <span class="variant-btn__extra">No disponible</span>
+                  }
+                </button>
+              }
+            </div>
+          </div>
+        }
+
         <app-price-display
           [priceCash]="finalPriceCash()"
           [price6msi]="finalPrice6msi()"
@@ -121,6 +145,8 @@
         />
         @if (!selectedMaterial() && materialOptions().length > 1) {
           <p class="detail__badge detail__badge--order">Elige un material para ver el precio</p>
+        } @else if (usesSizes() && selectedMaterial() && !selectedSize()) {
+          <p class="detail__badge detail__badge--order">Elige una talla para ver el precio</p>
         }
         <app-reviews-badge />
 
@@ -166,11 +192,19 @@
             type="button"
             class="btn-primary btn--full"
             [class.btn--added]="added()"
-            [disabled]="!selectedMaterial()"
+            [disabled]="!canAddToCart()"
             (click)="addToCart()"
           >
             <span class="material-symbols-outlined">{{ added() ? 'check' : 'shopping_cart' }}</span>
-            {{ added() ? '¡Agregado!' : (selectedMaterial() ? 'Agregar al carrito' : 'Elige un material') }}
+            @if (added()) {
+              ¡Agregado!
+            } @else if (!selectedMaterial()) {
+              Elige un material
+            } @else if (usesSizes() && !selectedSize()) {
+              Elige una talla
+            } @else {
+              Agregar al carrito
+            }
           </button>
           <a routerLink="/carrito" class="btn-outline-primary btn--full">
             Ver carrito

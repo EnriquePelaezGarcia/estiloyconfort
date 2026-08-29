@@ -57,6 +57,7 @@ const quoteRequestsController = {
         items: (request.items ?? []).map((it) => ({
           productName: it.productName,
           materialLabel: it.materialLabel,
+          sizeLabel: it.sizeLabel ?? null,
           color: it.color,
           variantSelections: it.variantSelections,
           quantity: it.quantity,

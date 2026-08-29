@@ -122,7 +122,8 @@ export class InventoryComponent implements OnInit {
       return (
         r.name.toLowerCase().includes(term) ||
         (r.sku?.toLowerCase().includes(term) ?? false) ||
-        r.materialLabel.toLowerCase().includes(term)
+        r.materialLabel.toLowerCase().includes(term) ||
+        (r.sizeLabel?.toLowerCase().includes(term) ?? false)
       );
     });
   });
@@ -152,6 +153,11 @@ export class InventoryComponent implements OnInit {
     // no hay umbral por material), "bajo" es un margen fijo de referencia.
     if (row.stockQuantity <= 3) return 'low';
     return 'ok';
+  }
+
+  /** "Melamina" o "Melamina · Matrimonial" cuando la celda lleva talla. */
+  protected cellLabel(row: InventoryRow): string {
+    return row.sizeLabel ? `${row.materialLabel} · ${row.sizeLabel}` : row.materialLabel;
   }
 
   protected money(value: number | string | null | undefined): string {
@@ -220,7 +226,7 @@ export class InventoryComponent implements OnInit {
     this.viewingMovements.set(row);
     this.movements.set([]);
     this.loadingMovements.set(true);
-    this.adminService.getInventoryMovements(row.productId, row.materialId).subscribe({
+    this.adminService.getInventoryMovements(row.productId, row.materialId, row.sizeId).subscribe({
       next: (res) => {
         this.movements.set(res.data);
         this.loadingMovements.set(false);
@@ -306,6 +312,7 @@ export class InventoryComponent implements OnInit {
       this.submitInventory({
         productId: row.productId,
         materialId: row.materialId,
+        sizeId: row.sizeId,
         stockQuantity: stockFallback,
         colors: cleaned,
         note,
@@ -320,6 +327,7 @@ export class InventoryComponent implements OnInit {
     this.submitInventory({
       productId: row.productId,
       materialId: row.materialId,
+      sizeId: row.sizeId,
       stockQuantity: this.form.getRawValue().stockQuantity ?? 0,
       note,
     });

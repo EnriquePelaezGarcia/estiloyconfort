@@ -82,6 +82,22 @@ export interface Material {
   createdAt?: string;
 }
 
+/**
+ * Catálogo de tallas (Docs/plan-productos-por-tamano.md — D1). Lista fija:
+ * Individual / Matrimonial / King. La talla es un eje de precio OPT-IN: solo
+ * los productos que la declaran (camas, cabeceras, bases, colchones) la usan;
+ * el resto se comporta igual que siempre. Las FK usan `id`; el centinela
+ * `size_id = 0` ("sin talla") no es una fila de este catálogo.
+ */
+export interface Size {
+  id: number;
+  code: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+}
+
 export interface OrderItem {
   id?: number;
   orderId?: number;
@@ -103,6 +119,9 @@ export interface OrderItem {
    */
   materialId: number;
   materialLabel?: string;
+  /** Talla CONGELADA por línea (D3/D6). null = producto sin talla. */
+  sizeId?: number | null;
+  sizeLabel?: string | null;
   color?: string | null;
   /** TRUE si el mueble se fabrica sobre pedido; se DERIVA del stock de (producto, material) al crear la línea (M15.4), no se captura a mano. */
   requiresFabrication?: boolean;
@@ -394,6 +413,8 @@ export interface CreateOrderRequest {
     productId: number;
     /** M4: el material se elige POR LÍNEA, ya no hay un material de pedido. */
     materialId: number;
+    /** D3/D6: talla de la línea; null = producto sin talla. */
+    sizeId?: number | null;
     color?: string | null;
     quantity: number;
     unitPrice: number;
@@ -433,11 +454,17 @@ export interface SellerDashboard {
   }>;
 }
 
-/** Precio de un producto en un material concreto, para el buscador del POS. */
+/** Precio de un producto en una celda (material × talla), para el buscador del POS. */
 export interface InventoryMaterialPrice {
   materialId: number;
   code: string;
   label: string;
+  /**
+   * Talla de esta celda (D3/D6). `null` = el producto no usa el eje de talla.
+   * La misma cama en Individual y King son dos celdas con precio distinto.
+   */
+  sizeId: number | null;
+  sizeLabel: string | null;
   colorPolicy: ColorPolicy;
   fixedColor: string | null;
   /** Existencia de ESTE material (M15). 0 o negativo -> se fabrica (M15.4), nunca bloquea la venta. */
@@ -526,6 +553,7 @@ export interface DeliveryAssignment {
     productSku: string;
     quantity: number;
     materialLabel?: string | null;
+    sizeLabel?: string | null;
     color?: string | null;
     /** Foto principal vigente del producto (ruta relativa, resolver con `mediaUrl`). */
     imageUrl?: string | null;
@@ -599,6 +627,8 @@ export interface ManufacturerOrder {
     fabricationNote?: string | null;
     materialId?: number | null;
     materialLabel?: string | null;
+    sizeId?: number | null;
+    sizeLabel?: string | null;
     color?: string | null;
   }>;
 }

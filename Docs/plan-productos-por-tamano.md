@@ -5,6 +5,48 @@
 > **Audiencia:** autocontenido. No requiere contexto de ninguna conversación previa.
 > **Decisiones del dueño (28-ago-2026):** eje de talla de primera clase · matriz real material × talla · lista fija (Individual, Matrimonial, King) · stock separado por talla.
 
+> ### Avance de implementación (29-ago-2026, rama `development`)
+> Todo lo de abajo con `ng build` verde y tests backend verdes; migraciones aplicadas e idempotentes
+> en local. **Falta aplicarlas en preprod/prod** (ver [[migraciones-antes-del-deploy]]).
+>
+> - ✅ **Fase 1 — Esquema + API.** `schema_sizes.sql`, `schema_size_pricing.sql`, `schema_size_stock.sql`,
+>   `schema_size_lines.sql`. `sizes` sembrado. `GET /api/sizes` + `SizesStore` + initializer.
+> - ✅ **Fase 2 — Motor.** `syncMaterialPricesAndReprice` por celda (material × talla). Productos
+>   existentes se reprecian **idénticos** (verificado).
+> - ✅ **Fase 3 — Backend costos.** `product_manufacturer_costs.size_id`, `ProductManufacturerCost`
+>   (matriz `costs[matId][sizeId]`), `Product.create/update(…, sizeIds)` + `syncProductSizes` +
+>   `getDeclaredSizes`, `PUT/GET /products/:id/sizes`, `manufacturerPricesPayload` devuelve `cells`+`sizes`,
+>   `getMaterialPrices` (POS) devuelve celdas.
+> - ✅ **Fase 4 — Alta de producto + ficha pública + carrito.** `catalog.component` reescrito a celdas
+>   (paso ②b Tallas, sub-tabla de costos por material, resumen de precio por celda, modo inverso por
+>   "celda de referencia"). Ficha `/producto/:slug`: selector de talla, precio por celda, `?size=`.
+>   `cart.service` + `cart.model` + carrito público + revisión de precotización: talla en la línea.
+> - ✅ **Fase 6 — Pedidos / POS.** `resolveOrderLine` resuelve la celda (precio + stock por
+>   `product_material_size_stock` + reservas por talla + bucket de color por talla), congela
+>   `size_id`/`size_label`. `applyStockDelta`/`InventoryMovement`/`StockReservation` size-aware.
+>   `order-draft.store` + `order-step-products` (selector de talla). Detalle de pedido, ticket,
+>   vista de fabricante y de repartidor muestran la talla.
+> - ✅ **Fase 7 — Cotizaciones.** `Quote.resolveQuoteLine` + `quote_items` + `QuoteRequest`
+>   (precotización) resuelven la celda y congelan la talla; `quote-create.component` con selector de talla.
+> - ✅ **Fase 8 (parcial) — Reportes.** Los 5 JOIN a `product_material_prices` de `adminController`
+>   ahora cierran por `size_id = COALESCE(oi.size_id, 0)` (evita el triple conteo de costo). `getPriceList`
+>   expone `sizeLabel`.
+>
+> - ✅ **Fase 5 — Inventario admin (29-ago-2026).** `inventoryController.list` devuelve una fila por
+>   CELDA (producto, material, talla) — driven por `product_material_prices`, con stock de la celda
+>   (`product_material_size_stock` para tallas, `product_materials` para `size_id = 0`), reservas y
+>   desglose de color por celda. `inventoryController.update` acepta `sizeId`: ajusta la celda y deja
+>   `product_materials.stock_quantity` como la SUMA de las celdas (`recomputeAggregate`); valida la
+>   talla contra `product_sizes` (rechaza talla en producto sin tallas, y falta de talla en producto
+>   con tallas). Desglose de color por `(producto, material, talla)`. `movements` acepta `?sizeId=` y
+>   `InventoryMovement.listForPair` filtra por talla. Front: `InventoryRow`/`InventoryUpdateItem` con
+>   `sizeId`/`sizeLabel`, `inventory.component` con la talla en la fila, el modal de ajuste y el kardex;
+>   track key por celda. Probado E2E (ajuste por talla, regresión sin talla, rechazo de talla inválida,
+>   color-en-talla, agregado consistente).
+> - ⏳ **Pulido pendiente:** `manufacturingController.catalogByManufacturer` y la lista de mayoreo
+>   (`getWholesalePriceList` + su componente) pueden mostrar filas repetidas por talla sin la etiqueta;
+>   `product_material_stock_colors` gana `size_id` pero la captura color-dentro-de-talla no tiene UI.
+
 ---
 
 ## 1. Qué se busca

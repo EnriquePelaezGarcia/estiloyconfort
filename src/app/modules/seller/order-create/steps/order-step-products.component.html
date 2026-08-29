@@ -58,7 +58,7 @@
     @if (store.lines().length === 0) {
       <p class="empty">Agrega productos desde el buscador.</p>
     } @else {
-      @for (l of store.lines(); track l.product.id + '-' + l.materialId; let i = $index) {
+      @for (l of store.lines(); track l.product.id + '-' + l.materialId + '-' + (l.sizeId ?? 0); let i = $index) {
         <div class="cart-line" [class.cart-line--locked]="!store.canEditLine(l)" [class.cart-line--alert]="store.unitPrice(l) === null">
           <!-- Foto y nombre abren la ficha pública del mueble con ESTE material
                ya elegido; el pedido queda guardado y se repone al volver. -->
@@ -84,18 +84,30 @@
               (click)="store.openProductPage(l)"
             >{{ l.product.name }}</button>
 
-            <!-- M4: material y color son de ESTA línea. -->
+            <!-- M4: material y color son de ESTA línea. D3: la talla también. -->
             <div class="cart-line__variant">
-              @if (l.product.materialPrices.length > 1) {
+              @if (store.distinctMaterialsOf(l.product).length > 1) {
                 <select class="cart-line__material" [disabled]="!store.canEditLine(l)" (change)="store.changeLineMaterial(i, $event)">
-                  @for (mp of l.product.materialPrices; track mp.materialId) {
-                    <option [value]="mp.materialId" [selected]="mp.materialId === l.materialId" [disabled]="!mp.isQuoted">
-                      {{ mp.label }}@if (!mp.isQuoted) { (no disponible) }
+                  @for (mat of store.distinctMaterialsOf(l.product); track mat.materialId) {
+                    <option [value]="mat.materialId" [selected]="mat.materialId === l.materialId" [disabled]="!mat.isQuoted">
+                      {{ mat.label }}@if (!mat.isQuoted) { (no disponible) }
                     </option>
                   }
                 </select>
               } @else if (l.product.materialPrices[0]; as onlyMaterial) {
                 <span class="cart-line__material-fixed">{{ onlyMaterial.label }}</span>
+              }
+
+              <!-- D3: selector de talla, solo si el producto se vende por talla. -->
+              @if (store.productUsesSizes(l.product)) {
+                <select class="cart-line__material" [disabled]="!store.canEditLine(l)" (change)="store.changeLineSize(i, $event)">
+                  <option value="" [selected]="l.sizeId == null">Elige talla…</option>
+                  @for (sz of store.sizesForMaterial(l.product, l.materialId); track sz.sizeId) {
+                    <option [value]="sz.sizeId" [selected]="sz.sizeId === l.sizeId" [disabled]="!sz.isQuoted">
+                      {{ sz.sizeLabel }}@if (!sz.isQuoted) { (no disponible) }
+                    </option>
+                  }
+                </select>
               }
 
               @if (store.lineMaterialPrice(l); as mp) {

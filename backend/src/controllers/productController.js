@@ -20,12 +20,15 @@ async function resolveMaterialId(raw) {
 }
 
 /**
- * Arma la respuesta de costos por fabricante de un producto EN LOS
- * MATERIALES QUE DECLARA (M2, M3). Cada fabricante trae su costo por
- * material declarado y la utilidad que deja (RN-12…RN-15);
- * ProductManufacturerCost ya resuelve `isBaseCost` por material (RN-02) y
- * deja `cost: null` donde el fabricante no cotiza ese material (RN-03) o
- * donde nadie lo ha capturado todavía (el hueco de M2).
+ * Arma la respuesta de costos por fabricante de un producto EN LAS CELDAS
+ * QUE DECLARA (material M2 × talla D2, o size_id 0 si no usa tallas). Cada
+ * fabricante trae su costo por celda y la utilidad que deja;
+ * ProductManufacturerCost ya resuelve `isBaseCost` por celda (RN-02) y deja
+ * `cost: null` donde nadie ha capturado nada todavía (el hueco de M2).
+ *
+ * `cells["materialId:sizeId"]` = precio derivado de esa celda.
+ * `sizes` = tallas declaradas ([] si el producto no usa el eje de talla).
+ * `materials` = materiales declarados, para que el frontend arme las sub-tablas.
  */
 async function manufacturerPricesPayload(productId) {
   const [[product]] = await pool.execute(
@@ -34,39 +37,47 @@ async function manufacturerPricesPayload(productId) {
   );
   if (!product) return null;
 
-  const [manufacturerCosts, declaredMaterials] = await Promise.all([
+  const [manufacturerCosts, declaredMaterials, declaredSizes] = await Promise.all([
     ProductManufacturerCost.findByProduct(productId),
     Product.getDeclaredMaterials(productId),
+    Product.getDeclaredSizes(productId),
   ]);
 
   const [priceRows] = await pool.execute(
-    'SELECT material_id, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
+    'SELECT material_id, size_id, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
     [productId],
   );
-  const priceByMaterial = new Map(priceRows.map((r) => [r.material_id, r]));
 
-  const materials = {};
-  for (const m of declaredMaterials) {
-    const row = priceByMaterial.get(m.materialId);
-    materials[m.materialId] = row
-      ? {
-        code: m.code,
-        label: m.label,
-        baseCost: row.base_cost != null ? Number(row.base_cost) : null,
-        priceCash: row.price_cash != null ? Number(row.price_cash) : null,
-        price6msi: row.price_6msi != null ? Number(row.price_6msi) : null,
-        priceCredit: row.price_credit != null ? Number(row.price_credit) : null,
-        priceMayoreo: row.price_mayoreo != null ? Number(row.price_mayoreo) : null,
-        isQuoted: row.base_cost != null,
-      }
-      : {
-        code: m.code, label: m.label,
-        baseCost: null, priceCash: null, price6msi: null, priceCredit: null, priceMayoreo: null,
-        isQuoted: false,
+  const activeSizes = declaredSizes.filter((s) => s.isActive);
+  const sizeIds = activeSizes.length ? activeSizes.map((s) => s.sizeId) : [0];
+
+  const cells = {};
+  const priceByCell = new Map(priceRows.map((r) => [`${r.material_id}:${r.size_id}`, r]));
+  for (const m of declaredMaterials.filter((x) => x.isActive)) {
+    for (const sizeId of sizeIds) {
+      const row = priceByCell.get(`${m.materialId}:${sizeId}`);
+      cells[`${m.materialId}:${sizeId}`] = {
+        materialId: m.materialId,
+        sizeId,
+        baseCost: row?.base_cost != null ? Number(row.base_cost) : null,
+        priceCash: row?.price_cash != null ? Number(row.price_cash) : null,
+        price6msi: row?.price_6msi != null ? Number(row.price_6msi) : null,
+        priceCredit: row?.price_credit != null ? Number(row.price_credit) : null,
+        priceMayoreo: row?.price_mayoreo != null ? Number(row.price_mayoreo) : null,
+        isQuoted: row?.base_cost != null,
       };
+    }
   }
 
-  return { data: manufacturerCosts, materials, marginPercentage: Number(product.margin_percentage) };
+  return {
+    data: manufacturerCosts,
+    cells,
+    materials: declaredMaterials
+      .filter((m) => m.isActive)
+      .map((m) => ({ materialId: m.materialId, code: m.code, label: m.label })),
+    sizes: activeSizes.map((s) => ({ sizeId: s.sizeId, code: s.code, label: s.label })),
+    marginPercentage: Number(product.margin_percentage),
+  };
 }
 
 const productController = {
@@ -137,7 +148,7 @@ const productController = {
       // materialIds se declara aparte con PUT /api/products/:id/materials (Fase 3);
       // si llega inline aquí también se respeta, por comodidad del cliente.
       // eslint-disable-next-line no-unused-vars
-      const { base_cost, price_cash, price_6msi, price_credit, materialIds, material, stock_quantity, ...data } = req.body;
+      const { base_cost, price_cash, price_6msi, price_credit, materialIds, sizeIds, material, stock_quantity, ...data } = req.body;
       if (data.margin_percentage !== undefined) {
         const m = Number(data.margin_percentage);
         if (!Number.isFinite(m) || m < 0 || m >= 100) {
@@ -146,7 +157,11 @@ const productController = {
           });
         }
       }
-      const product = await Product.create(data, Array.isArray(materialIds) ? materialIds : []);
+      const product = await Product.create(
+        data,
+        Array.isArray(materialIds) ? materialIds : [],
+        Array.isArray(sizeIds) ? sizeIds : [],
+      );
       res.status(201).json({ data: product, message: 'Producto creado exitosamente' });
     } catch (err) { next(err); }
   },
@@ -154,7 +169,7 @@ const productController = {
   async update(req, res, next) {
     try {
       // eslint-disable-next-line no-unused-vars
-      const { base_cost, price_cash, price_6msi, price_credit, materialIds, material, stock_quantity, ...data } = req.body;
+      const { base_cost, price_cash, price_6msi, price_credit, materialIds, sizeIds, material, stock_quantity, ...data } = req.body;
       if (data.margin_percentage !== undefined) {
         const m = Number(data.margin_percentage);
         if (!Number.isFinite(m) || m < 0 || m >= 100) {
@@ -163,7 +178,12 @@ const productController = {
           });
         }
       }
-      const product = await Product.update(req.params.id, data, Array.isArray(materialIds) ? materialIds : null);
+      const product = await Product.update(
+        req.params.id,
+        data,
+        Array.isArray(materialIds) ? materialIds : null,
+        Array.isArray(sizeIds) ? sizeIds : null,
+      );
       if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
       if (data.margin_percentage !== undefined) {
         await syncMaterialPricesAndReprice(product.id);
@@ -199,6 +219,29 @@ const productController = {
       if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
       const materials = await Product.getDeclaredMaterials(req.params.id);
       res.json({ data: materials, message: 'Materiales del producto actualizados' });
+    } catch (err) { next(err); }
+  },
+
+  // ===== Tallas del producto (Docs/plan-productos-por-tamano.md — D2) =====
+
+  async getSizes(req, res, next) {
+    try {
+      const sizes = await Product.getDeclaredSizes(req.params.id);
+      res.json({ data: sizes });
+    } catch (err) { next(err); }
+  },
+
+  /** PUT /api/products/:id/sizes — body: { sizeIds: number[] }. [] = sin talla. */
+  async setSizes(req, res, next) {
+    try {
+      const { sizeIds } = req.body;
+      if (!Array.isArray(sizeIds)) {
+        return res.status(400).json({ message: 'El body debe traer "sizeIds": number[].' });
+      }
+      const product = await Product.update(req.params.id, {}, null, sizeIds);
+      if (!product) return res.status(404).json({ message: 'Producto no encontrado' });
+      const sizes = await Product.getDeclaredSizes(req.params.id);
+      res.json({ data: sizes, message: 'Tallas del producto actualizadas' });
     } catch (err) { next(err); }
   },
 
@@ -316,31 +359,45 @@ const productController = {
    */
   async getMaterialPrices(req, res, next) {
     try {
-      const declared = await Product.getDeclaredMaterials(req.params.id);
+      const [declared, declaredSizes] = await Promise.all([
+        Product.getDeclaredMaterials(req.params.id),
+        Product.getDeclaredSizes(req.params.id),
+      ]);
       if (!declared.length) return res.status(404).json({ message: 'Producto no encontrado o sin materiales declarados' });
 
       const [rows] = await pool.execute(
-        'SELECT material_id, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
+        'SELECT material_id, size_id, base_cost, price_cash, price_6msi, price_credit, price_mayoreo FROM product_material_prices WHERE product_id = ?',
         [req.params.id],
       );
-      const byMaterial = new Map(rows.map((r) => [r.material_id, r]));
+      const byCell = new Map(rows.map((r) => [`${r.material_id}:${r.size_id}`, r]));
 
-      const data = declared.filter((m) => m.isActive).map((m) => {
-        const row = byMaterial.get(m.materialId);
-        const isQuoted = !!row && row.base_cost != null;
-        return {
-          materialId: m.materialId,
-          code: m.code,
-          label: m.label,
-          estado: isQuoted ? 'cotizado' : 'no_aplica',
-          baseCost: isQuoted ? Number(row.base_cost) : null,
-          priceCash: isQuoted ? Number(row.price_cash) : null,
-          price6msi: isQuoted && row.price_6msi != null ? Number(row.price_6msi) : null,
-          priceCredit: isQuoted && row.price_credit != null ? Number(row.price_credit) : null,
-          priceMayoreo: isQuoted && row.price_mayoreo != null ? Number(row.price_mayoreo) : null,
-        };
-      });
-      res.json({ data });
+      const activeSizes = declaredSizes.filter((s) => s.isActive);
+      // Sin tallas declaradas → una celda por material con sizeId 0 / label null.
+      const sizeCells = activeSizes.length
+        ? activeSizes.map((s) => ({ sizeId: s.sizeId, sizeLabel: s.label }))
+        : [{ sizeId: 0, sizeLabel: null }];
+
+      const data = [];
+      for (const m of declared.filter((x) => x.isActive)) {
+        for (const s of sizeCells) {
+          const row = byCell.get(`${m.materialId}:${s.sizeId}`);
+          const isQuoted = !!row && row.base_cost != null;
+          data.push({
+            materialId: m.materialId,
+            code: m.code,
+            label: m.label,
+            sizeId: s.sizeId || null,
+            sizeLabel: s.sizeLabel,
+            estado: isQuoted ? 'cotizado' : 'no_aplica',
+            baseCost: isQuoted ? Number(row.base_cost) : null,
+            priceCash: isQuoted ? Number(row.price_cash) : null,
+            price6msi: isQuoted && row.price_6msi != null ? Number(row.price_6msi) : null,
+            priceCredit: isQuoted && row.price_credit != null ? Number(row.price_credit) : null,
+            priceMayoreo: isQuoted && row.price_mayoreo != null ? Number(row.price_mayoreo) : null,
+          });
+        }
+      }
+      res.json({ data, sizes: activeSizes.map((s) => ({ sizeId: s.sizeId, code: s.code, label: s.label })) });
     } catch (err) { next(err); }
   },
 
@@ -354,8 +411,9 @@ const productController = {
 
   /**
    * PUT /api/products/:id/manufacturer-costs/:manufacturerId
-   * Body: { costs: [{ materialId, cost, affectsBaseCost }] }. Sustituye al
-   * body de 3 claves fijas (D8/M14: sin retrocompatibilidad).
+   * Body: { costs: [{ materialId, sizeId?, cost, affectsBaseCost }] }.
+   * `sizeId` opcional: se omite (o 0) para productos sin talla; para productos
+   * con talla debe ser una talla declarada (D3).
    */
   async setManufacturerPrice(req, res, next) {
     try {
@@ -363,12 +421,17 @@ const productController = {
       const { costs } = req.body;
       if (!Array.isArray(costs) || !costs.length) {
         return res.status(400).json({
-          message: 'El body debe traer "costs": [{ materialId, cost, affectsBaseCost }].',
+          message: 'El body debe traer "costs": [{ materialId, sizeId?, cost, affectsBaseCost }].',
         });
       }
 
-      const declared = await Product.getDeclaredMaterials(id);
+      const [declared, declaredSizes] = await Promise.all([
+        Product.getDeclaredMaterials(id),
+        Product.getDeclaredSizes(id),
+      ]);
       const declaredIds = new Set(declared.map((m) => m.materialId));
+      const activeSizeIds = new Set(declaredSizes.filter((s) => s.isActive).map((s) => s.sizeId));
+      const productHasSizes = activeSizeIds.size > 0;
 
       const parsedCosts = [];
       let anyCost = false;
@@ -379,22 +442,34 @@ const productController = {
             message: `El material ${entry?.materialId} no está declarado para este producto (Admin → Materiales del producto).`,
           });
         }
+        const sizeId = entry?.sizeId != null ? Number(entry.sizeId) : 0;
+        if (productHasSizes) {
+          if (!activeSizeIds.has(sizeId)) {
+            return res.status(400).json({
+              message: `La talla ${entry?.sizeId ?? '(sin talla)'} no está declarada para este producto.`,
+            });
+          }
+        } else if (sizeId !== 0) {
+          return res.status(400).json({
+            message: 'Este producto no usa tallas; no envíes sizeId (o mándalo en 0).',
+          });
+        }
         const raw = entry.cost;
         if (raw === null || raw === undefined || raw === '') {
-          parsedCosts.push({ materialId, cost: null, affectsBaseCost: entry.affectsBaseCost !== false });
+          parsedCosts.push({ materialId, sizeId, cost: null, affectsBaseCost: entry.affectsBaseCost !== false });
           continue;
         }
         const value = Number(raw);
         if (!Number.isFinite(value) || value <= 0) {
           return res.status(400).json({
-            message: 'El costo debe ser mayor a 0. Deja el campo vacío/null si el fabricante no hace este mueble en ese material.',
+            message: 'El costo debe ser mayor a 0. Deja el campo vacío/null si el fabricante no hace este mueble en esa celda.',
           });
         }
-        parsedCosts.push({ materialId, cost: value, affectsBaseCost: entry.affectsBaseCost !== false });
+        parsedCosts.push({ materialId, sizeId, cost: value, affectsBaseCost: entry.affectsBaseCost !== false });
         anyCost = true;
       }
       if (!anyCost) {
-        return res.status(400).json({ message: 'Se debe capturar al menos un costo en algún material.' });
+        return res.status(400).json({ message: 'Se debe capturar al menos un costo en alguna celda.' });
       }
 
       const [[product]] = await pool.execute('SELECT id FROM products WHERE id = ?', [id]);

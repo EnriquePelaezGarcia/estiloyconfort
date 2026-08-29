@@ -128,6 +128,7 @@
                 </td>
                 <td data-label="Material">
                   {{ it.materialLabel }}
+                  @if (it.sizeLabel) { <span class="muted"> · {{ it.sizeLabel }}</span> }
                   @if (it.color) { <span class="muted"> · {{ it.color }}</span> }
                 </td>
                 <td class="num">{{ it.quantity }}</td>
@@ -540,7 +541,7 @@
           <span>{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
         </div>
         <p class="sale-ticket__item-spec">
-          {{ it.materialLabel }}@if (it.color) { · {{ it.color }} }
+          {{ it.materialLabel }}@if (it.sizeLabel) { · {{ it.sizeLabel }} }@if (it.color) { · {{ it.color }} }
         </p>
       </div>
     }

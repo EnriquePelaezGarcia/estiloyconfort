@@ -80,6 +80,9 @@ function mapItem(row) {
      * retroactivamente la utilidad histórica de líneas ya cerradas. */
     materialId: row.material_id,
     materialLabel: row.material_label,
+    /** Talla CONGELADA al crear la línea (D3/D6). null = producto sin talla. */
+    sizeId: row.size_id ?? null,
+    sizeLabel: row.size_label ?? null,
     color: row.color ?? null,
     requiresFabrication: !!row.requires_fabrication,
     /** Foto principal del producto (tabla product_images). No es congelada:
@@ -449,15 +452,44 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
     throw err;
   }
 
-  const [[materialPrices]] = await conn.execute(
-    'SELECT price_cash, price_6msi, price_mayoreo, base_cost FROM product_material_prices WHERE product_id = ? AND material_id = ?',
-    [it.productId, materialId],
+  // Talla de la línea (Docs/plan-productos-por-tamano.md — D3/D6). Se congela
+  // igual que material_id. `size_id = 0` = producto sin talla; si el producto
+  // declara tallas, la línea DEBE traer una de ellas.
+  const [declaredSizes] = await conn.execute(
+    `SELECT ps.size_id, s.label
+       FROM product_sizes ps JOIN sizes s ON s.id = ps.size_id
+      WHERE ps.product_id = ? AND ps.is_active = TRUE`,
+    [it.productId],
   );
-  // RN-03: si el producto no se cotiza en este material, vender a $0 sería
+  const productHasSizes = declaredSizes.length > 0;
+  const rawSizeId = it.sizeId != null && it.sizeId !== '' ? Number(it.sizeId) : 0;
+  let sizeId = 0;
+  let sizeLabel = null;
+  if (productHasSizes) {
+    const match = declaredSizes.find((s) => s.size_id === rawSizeId);
+    if (!match) {
+      const err = new Error(`Falta la talla de la línea "${product.name}" (Individual, Matrimonial o King).`);
+      err.statusCode = 400;
+      throw err;
+    }
+    sizeId = match.size_id;
+    sizeLabel = match.label;
+  } else if (rawSizeId !== 0) {
+    const err = new Error(`"${product.name}" no se vende por talla.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const [[materialPrices]] = await conn.execute(
+    'SELECT price_cash, price_6msi, price_mayoreo, base_cost FROM product_material_prices WHERE product_id = ? AND material_id = ? AND size_id = ?',
+    [it.productId, materialId, sizeId],
+  );
+  const cellLabel = sizeLabel ? `${declared.label} · ${sizeLabel}` : declared.label;
+  // RN-03: si el producto no se cotiza en esta celda, vender a $0 sería
   // peor que no vender — se rechaza la línea explícitamente.
   if (!materialPrices || materialPrices.base_cost == null) {
     const err = new Error(
-      `"${product.name}" no se cotiza en ${declared.label}. Elige otro material o quita el producto.`,
+      `"${product.name}" no se cotiza en ${cellLabel}. Elige otra opción o quita el producto.`,
     );
     err.statusCode = 400;
     throw err;
@@ -487,9 +519,22 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
   // Reserva de piezas (Docs/plan-reserva-de-piezas.md §4.2): la porción de
   // stock reservada por OTRO pedido nunca se ofrece como disponible. Esto es
   // ADITIVO a M15.4 — el caso "no hay stock físico, se fabrica" no cambia.
-  const stockBefore = Number(declared.stock_quantity) || 0;
+  // D5: para un producto con talla, el stock que cuenta es el de la CELDA
+  // (producto, material, talla), no el agregado de product_materials. Sin fila
+  // en product_material_size_stock → 0 → fabricación (criterio conservador,
+  // mismo patrón que el stock por color: sin bucket capturado, se fabrica).
+  let stockBefore;
+  if (productHasSizes) {
+    const [[cellStock]] = await conn.execute(
+      'SELECT stock_quantity FROM product_material_size_stock WHERE product_id = ? AND material_id = ? AND size_id = ?',
+      [product.id, materialId, sizeId],
+    );
+    stockBefore = cellStock ? Number(cellStock.stock_quantity) || 0 : 0;
+  } else {
+    stockBefore = Number(declared.stock_quantity) || 0;
+  }
   const reservedByOthers = await StockReservation.activeReservedQuantity(
-    product.id, materialId, { excludeOrderId: orderId, conn },
+    product.id, materialId, { excludeOrderId: orderId, conn, sizeId: productHasSizes ? sizeId : null },
   );
   const available = stockBefore - reservedByOthers;
 
@@ -502,7 +547,7 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
     // La diferencia estaría tomada de piezas reservadas por OTRO pedido:
     // bloqueo duro (D5), a diferencia del caso "sin stock" que sí procede.
     const [detail] = await StockReservation.listActiveByProductMaterial(
-      product.id, materialId, { excludeOrderId: orderId, conn },
+      product.id, materialId, { excludeOrderId: orderId, conn, sizeId: productHasSizes ? sizeId : null },
     );
     // RN-G10 (Docs/plan-venta-multiesquema.md): dentro de una venta partida
     // las notas se resuelven en orden, en la misma transacción, así que la
@@ -534,10 +579,17 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
   // casos de fabricación, nunca los quita. Si el par no lleva stock por color
   // (ningún bucket capturado en Inventario) esto no tiene efecto.
   if (!requiresFabrication) {
-    const [buckets] = await conn.execute(
-      'SELECT color_key, quantity FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
-      [product.id, materialId],
-    );
+    // Con talla, el bucket de color es por (producto, material, talla); sin
+    // talla, size_id es NULL en esas filas (schema_size_stock.sql §2).
+    const [buckets] = productHasSizes
+      ? await conn.execute(
+          'SELECT color_key, quantity FROM product_material_stock_colors WHERE product_id = ? AND material_id = ? AND size_id = ?',
+          [product.id, materialId, sizeId],
+        )
+      : await conn.execute(
+          'SELECT color_key, quantity FROM product_material_stock_colors WHERE product_id = ? AND material_id = ? AND size_id IS NULL',
+          [product.id, materialId],
+        );
     if (buckets.length > 0) {
       const key = (color ?? '').trim().toLowerCase();
       const bucket = buckets.find((b) => b.color_key === key);
@@ -590,6 +642,8 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
     productSku: product.sku,
     materialId,
     materialLabel: declared.label,
+    sizeId: productHasSizes ? sizeId : null,
+    sizeLabel,
     color,
     quantity: qty,
     variantSelections: it.variantSelections ?? null,
@@ -1135,12 +1189,12 @@ const Order = {
       for (const it of resolvedItems) {
         const [itemResult] = await conn.execute(
           `INSERT INTO order_items
-            (order_id, product_id, product_name, product_sku, material_id, material_label, color,
+            (order_id, product_id, product_name, product_sku, material_id, material_label, size_id, size_label, color,
              quantity, variant_selections, unit_price, subtotal, requires_fabrication)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             orderId, it.productId, it.productName, it.productSku,
-            it.materialId, it.materialLabel, it.color, it.quantity,
+            it.materialId, it.materialLabel, it.sizeId, it.sizeLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
@@ -1153,6 +1207,7 @@ const Order = {
         await applyStockDelta(conn, {
           productId: it.productId,
           materialId: it.materialId,
+          sizeId: it.sizeId,
           color: it.requiresFabrication ? null : it.color,
           delta: -it.quantity,
           reason: 'sale',
@@ -1168,6 +1223,7 @@ const Order = {
           await StockReservation.create({
             productId: it.productId,
             materialId: it.materialId,
+            sizeId: it.sizeId,
             quantity: it.reserve.quantity,
             reason: it.reserve.reason,
             note: it.reserve.note,
@@ -1569,7 +1625,7 @@ const Order = {
       // 1. Devolver al inventario el stock de los items actuales, cada uno a
       // su material_id (M4/M15) — nunca al del producto en general.
       const [oldItems] = await conn.execute(
-        'SELECT product_id, material_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
+        'SELECT product_id, material_id, size_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
       );
       for (const it of oldItems) {
         if (it.product_id != null && it.material_id != null) {
@@ -1578,6 +1634,7 @@ const Order = {
           await applyStockDelta(conn, {
             productId: it.product_id,
             materialId: it.material_id,
+            sizeId: it.size_id ?? null,
             color: it.requires_fabrication ? null : it.color,
             delta: it.quantity,
             reason: 'sale_edit',
@@ -1848,12 +1905,12 @@ const Order = {
       for (const it of resolvedItems) {
         const [itemResult] = await conn.execute(
           `INSERT INTO order_items
-            (order_id, product_id, product_name, product_sku, material_id, material_label, color,
+            (order_id, product_id, product_name, product_sku, material_id, material_label, size_id, size_label, color,
              quantity, variant_selections, unit_price, subtotal, requires_fabrication)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id, it.productId, it.productName, it.productSku,
-            it.materialId, it.materialLabel, it.color, it.quantity,
+            it.materialId, it.materialLabel, it.sizeId, it.sizeLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
           ],
@@ -1862,6 +1919,7 @@ const Order = {
         await applyStockDelta(conn, {
           productId: it.productId,
           materialId: it.materialId,
+          sizeId: it.sizeId,
           color: it.requiresFabrication ? null : it.color,
           delta: -it.quantity,
           reason: 'sale_edit',
@@ -1875,6 +1933,7 @@ const Order = {
           await StockReservation.create({
             productId: it.productId,
             materialId: it.materialId,
+            sizeId: it.sizeId,
             quantity: it.reserve.quantity,
             reason: it.reserve.reason,
             note: it.reserve.note,
@@ -2495,7 +2554,7 @@ const Order = {
 
   async remove(id, userId = null) {
     const [items] = await pool.execute(
-      'SELECT product_id, material_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
+      'SELECT product_id, material_id, size_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
     );
     const existing = await this.findById(id);
     const conn = await pool.getConnection();
@@ -2529,6 +2588,7 @@ const Order = {
           await applyStockDelta(conn, {
             productId: item.product_id,
             materialId: item.material_id,
+            sizeId: item.size_id ?? null,
             color: item.requires_fabrication ? null : item.color,
             delta: item.quantity,
             reason: 'sale_cancel',
@@ -2724,6 +2784,7 @@ const Order = {
           await applyStockDelta(conn, {
             productId: item.product_id,
             materialId: item.material_id,
+            sizeId: item.size_id ?? null,
             color: null, // fabricación: nunca toca buckets de color
             delta: pendingGood,
             reason: 'fabrication_arrival',

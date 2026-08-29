@@ -320,20 +320,29 @@
 .costs__head,
 .costs__row {
   display: grid;
-  // Fabricante + 3 materiales + "define precio".
-  grid-template-columns: minmax(9rem, 1.2fr) repeat(3, minmax(8rem, 1fr)) minmax(5rem, 0.6fr);
+  // Fabricante + N celdas (1 sin talla, 3 con talla) + "define precio".
+  // --cells lo fija el template según cuántas tallas tenga el producto.
+  --cells: 1;
+  grid-template-columns: minmax(9rem, 1.2fr) repeat(var(--cells), minmax(7.5rem, 1fr)) minmax(5rem, 0.6fr);
   gap: vars.$spacing-sm;
   align-items: center;
-  min-width: 42rem;
+  min-width: calc(14rem + var(--cells) * 8rem);
 }
 
 // Tabla de precios calculados: sin columna de "define precio".
 .costs--summary {
   .costs__head,
   .costs__row {
-    grid-template-columns: minmax(9rem, 1.2fr) repeat(3, minmax(8rem, 1fr));
-    min-width: 34rem;
+    grid-template-columns: minmax(9rem, 1.2fr) repeat(var(--cells), minmax(7.5rem, 1fr));
+    min-width: calc(9rem + var(--cells) * 8rem);
   }
+}
+
+.costs__subtitle {
+  margin: vars.$spacing-sm 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: vars.$color-text;
 }
 
 .costs__head {

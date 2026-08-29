@@ -3,11 +3,134 @@
     <span class="page-head__overline">Sitio público</span>
     <h1 class="page-head__title">Contenido</h1>
     <p class="page-head__sub">
-      Estos bloques se muestran igual en la ficha de cualquier producto, debajo
-      de "Agregar al carrito". Los detalles propios de cada producto se
-      capturan en Catálogo, al editarlo.
+      La foto principal de la portada y los bloques de texto que se muestran
+      igual en la ficha de cualquier producto, debajo de "Agregar al carrito".
+      Los detalles propios de cada producto se capturan en Catálogo, al
+      editarlo.
     </p>
   </div>
+</div>
+
+
+<!-- ===== FOTO PRINCIPAL DE HOME ===== -->
+<div class="panel">
+  <h2 class="panel__title">Foto principal de Home</h2>
+  <p class="panel__hint">
+    Es la imagen grande de hasta arriba de la portada. Con una sola foto se
+    queda fija; si subes dos o más, la portada las va pasando sola en un
+    carrusel.
+  </p>
+
+  @if (heroLoading()) {
+    <div class="state"><span class="spinner"></span> Cargando fotos…</div>
+  } @else {
+    <p class="hero-mode">
+      @if (heroMode() === 'empty') {
+        <span class="tag tag--warn">Sin fotos</span>
+        <span>Mientras no subas ninguna, la portada muestra una imagen de respaldo.</span>
+      } @else if (heroMode() === 'fixed') {
+        <span class="tag tag--ok">Imagen fija</span>
+        <span>Hay una sola foto: se muestra siempre la misma, sin movimiento.</span>
+      } @else {
+        <span class="tag tag--ok">Carrusel</span>
+        <span>{{ heroImages().length }} fotos: la portada las cambia sola cada 6 segundos.</span>
+      }
+    </p>
+
+    @if (heroImages().length) {
+      <ul class="hero-list">
+        @for (img of heroImages(); track img.id; let i = $index, isFirst = $first, isLast = $last) {
+          <li class="hero-item" [attr.aria-busy]="heroBusyId() === img.id">
+            <span class="hero-item__pos">{{ i + 1 }}</span>
+
+            <img
+              class="hero-item__img"
+              [src]="img.image_url | mediaUrl: 'thumb'"
+              [alt]="img.alt_text ?? 'Foto de la portada'"
+              loading="lazy"
+            />
+
+            <label class="hero-item__alt">
+              <span class="field__hint">Descripción de la foto</span>
+              <input
+                type="text"
+                maxlength="255"
+                placeholder="Ej. Sala amueblada por Estilo y Confort"
+                [value]="img.alt_text ?? ''"
+                (blur)="saveHeroAlt(img, $event)"
+              />
+            </label>
+
+            <div class="hero-item__actions">
+              @if (heroConfirmId() === img.id) {
+                <span class="hero-item__confirm">¿Eliminar?</span>
+                <button
+                  type="button"
+                  class="btn btn--danger btn--sm"
+                  [disabled]="heroBusyId() === img.id"
+                  (click)="removeHero(img)"
+                >
+                  Sí, eliminar
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" (click)="cancelRemoveHero()">
+                  Cancelar
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm btn--icon"
+                  title="Subir una posición"
+                  aria-label="Subir una posición"
+                  [disabled]="isFirst || heroBusyId() !== null"
+                  (click)="moveHero(img, 'up')"
+                >
+                  <span class="material-symbols-outlined">arrow_upward</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm btn--icon"
+                  title="Bajar una posición"
+                  aria-label="Bajar una posición"
+                  [disabled]="isLast || heroBusyId() !== null"
+                  (click)="moveHero(img, 'down')"
+                >
+                  <span class="material-symbols-outlined">arrow_downward</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm btn--danger"
+                  (click)="askRemoveHero(img)"
+                >
+                  Eliminar
+                </button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+
+    <label class="hero-upload" [attr.aria-busy]="heroUploading()">
+      @if (heroUploading()) {
+        <span class="spinner"></span>
+        <span>Subiendo foto…</span>
+      } @else {
+        <span class="material-symbols-outlined">add_photo_alternate</span>
+        <span>Agregar foto</span>
+      }
+      <input
+        type="file"
+        accept="image/*"
+        aria-label="Agregar foto a la portada"
+        [disabled]="heroUploading()"
+        (change)="onHeroSelected($event)"
+      />
+    </label>
+    <p class="field__hint">
+      Se recomienda una foto horizontal y ancha (mínimo 1600 px). Se optimiza sola
+      al subirla. Máximo 8 fotos.
+    </p>
+  }
 </div>
 
 @if (loading()) {

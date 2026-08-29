@@ -170,7 +170,7 @@ const getFinancesSummary = asyncHandler(async (req, res) => {
     `SELECT COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS totalCost
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
-     LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id
+     LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
      WHERE ${costConds.join(' AND ')}`,
     costParams,
   );
@@ -293,7 +293,7 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
               COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS amount
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
        WHERE ${conds.join(' AND ')}
        GROUP BY o.id ORDER BY o.order_date DESC LIMIT 300`,
       params,
@@ -312,7 +312,7 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
               COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS cost
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
        WHERE ${conds.join(' AND ')}
        GROUP BY o.id ORDER BY o.order_date DESC LIMIT 300`,
       params,
@@ -352,7 +352,7 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
               oi.quantity AS quantity, oi.unit_price AS unitPrice,
               COALESCE(oi.unit_cost, mp.base_cost) AS baseCost
        FROM order_items oi
-       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
        WHERE oi.order_id IN (${placeholders})
        ORDER BY oi.id`,
       orderIds,
@@ -402,7 +402,7 @@ const getMarginAnalysis = asyncHandler(async (req, res) => {
      FROM products p
      LEFT JOIN order_items oi ON oi.product_id = p.id
      LEFT JOIN orders o ON o.id = oi.order_id AND o.order_status <> 'cancelled'
-     LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id
+     LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
      WHERE p.is_active = TRUE
      GROUP BY p.id
      ORDER BY total_margin DESC
@@ -928,13 +928,15 @@ const getPriceList = asyncHandler(async (req, res) => {
   const { where, params } = materialListFilters(req.query);
   const [rows] = await pool.execute(
     `SELECT p.id, p.name, p.sku, c.name AS category_name, mp.material_id, mat.code, mat.label,
+            mp.size_id, sz.label AS size_label,
             mp.price_cash, mp.price_6msi, mp.price_credit
        FROM product_material_prices mp
        JOIN products p ON p.id = mp.product_id
        JOIN materials mat ON mat.id = mp.material_id
+       LEFT JOIN sizes sz ON sz.id = mp.size_id
        LEFT JOIN categories c ON c.id = p.category_id
       WHERE ${where}
-      ORDER BY p.name, mat.sort_order`,
+      ORDER BY p.name, mat.sort_order, sz.sort_order`,
     params,
   );
   const config = await PricingConfig.getMap();
@@ -949,6 +951,8 @@ const getPriceList = asyncHandler(async (req, res) => {
         materialId: r.material_id,
         materialCode: r.code,
         materialLabel: r.label,
+        sizeId: r.size_id ? r.size_id : null,
+        sizeLabel: r.size_label ?? null,
         priceCash: Number(r.price_cash),
         price6msi: r.price_6msi != null ? Number(r.price_6msi) : null,
         priceCredit: r.price_credit != null ? Number(r.price_credit) : null,

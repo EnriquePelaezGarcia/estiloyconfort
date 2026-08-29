@@ -74,8 +74,13 @@ export interface Product {
   price_mayoreo_from?: number | null;
   /** 0 = ningún material tiene costo capturado: no se muestra en público. 1 = precio exacto, sin "Desde" (M5). */
   quoted_materials?: number;
-  /** Un precio por material DECLARADO (M2), cotizado o no (ficha de producto/admin). */
+  /**
+   * Un precio por CELDA declarada: material (M2) × talla (D2). Un producto sin
+   * tallas trae una fila por material con `size_id = 0` y `size_label = null`.
+   */
   materialPrices?: MaterialPrices[];
+  /** Tallas declaradas (D2); ausente/[] = el producto no usa el eje de talla. */
+  sizes?: ProductDeclaredSizeRow[];
   stock_alert_level: number;
   is_active: boolean;
   is_featured: boolean;
@@ -88,13 +93,24 @@ export interface Product {
   updated_at: string;
 }
 
-/** Precios y existencia de un producto en un material concreto (M2/M15). */
+/** Fila cruda de `sizes` en la ficha completa del producto (Product.findById). */
+export interface ProductDeclaredSizeRow {
+  size_id: number;
+  code: string;
+  label: string;
+  sort_order: number;
+}
+
+/** Precios y existencia de un producto en una celda material × talla (M2/M15/D3). */
 export interface MaterialPrices {
   material_id: number;
   code: string;
   label: string;
   color_policy: ColorPolicy;
   fixed_color: string | null;
+  /** Talla de esta celda; `0` (y `size_label = null`) = producto sin talla. */
+  size_id: number;
+  size_label: string | null;
   /** Existencia física en bodega. Para saber qué ofrecer usa `available_quantity`. */
   stock_quantity: number;
   /** = stock_quantity − apartado por reservas activas. Lo que la ficha anuncia como disponible. */
@@ -106,47 +122,52 @@ export interface MaterialPrices {
   price_mayoreo: number | null;
 }
 
-/** El costo de un fabricante en un material concreto, con su utilidad. */
+/** El costo de un fabricante en una celda concreta (material × talla), con su utilidad. */
 export interface MaterialCost {
   cost: number | null;
-  /** true si este es el costo más alto en ESE material (RN-02). */
+  /** true si este es el costo más alto en ESA celda (RN-02). */
   isBaseCost: boolean;
-  /** false = este costo queda fuera del máximo que define el precio de venta EN ESE MATERIAL (M3). */
+  /** false = este costo queda fuera del máximo que define el precio de venta EN ESA CELDA (M3). */
   affectsBaseCost: boolean;
-  /** null = sin costo capturado en este material ("No aplica", RN-03). */
+  /** null = sin costo capturado en esta celda ("No aplica", RN-03). */
   profit: (ProfitBreakdown & { wholesale: number | null; wholesaleMarginPct: number | null }) | null;
 }
 
 /**
- * Costos de un fabricante para un producto, uno por material DECLARADO (M2):
- * no hay relación aritmética entre ellos, cada uno se captura por separado.
- * Llave = materialId (número, no string de material).
+ * Costos de un fabricante para un producto, uno por CELDA declarada:
+ * material (M2) × talla (D2). `costs[materialId][sizeId]`; `sizeId = 0` para
+ * los productos que no usan el eje de talla.
  */
 export interface ProductManufacturerPrice {
   manufacturerId: number;
   manufacturerName: string;
   isActive: boolean;
   updatedAt?: string;
-  costs: Record<number, MaterialCost>;
+  costs: Record<number, Record<number, MaterialCost>>;
 }
 
-/** Estado de precio de un material a nivel producto (sin desglose por fabricante). */
-export interface ProductMaterialPriceInfo {
-  code: string;
-  label: string;
+/** Precio derivado de una celda material × talla (sin desglose por fabricante). */
+export interface ProductPriceCell {
+  materialId: number;
+  sizeId: number;
   baseCost: number | null;
   priceCash: number | null;
   price6msi: number | null;
   priceCredit: number | null;
   priceMayoreo: number | null;
-  /** false = ningún fabricante cotiza este material (RN-03): "No aplica". */
+  /** false = ningún fabricante cotiza esta celda (RN-03): "No aplica". */
   isQuoted: boolean;
 }
 
-/** Respuesta de las rutas de costos por fabricante de un producto. Llave = materialId. */
+/** Respuesta de las rutas de costos por fabricante de un producto (D3). */
 export interface ProductManufacturerPricesResponse {
   data: ProductManufacturerPrice[];
-  materials: Record<number, ProductMaterialPriceInfo>;
+  /** Precio derivado por celda; llave = `"materialId:sizeId"`. */
+  cells: Record<string, ProductPriceCell>;
+  /** Materiales declarados, para armar las sub-tablas de costos. */
+  materials: Array<{ materialId: number; code: string; label: string }>;
+  /** Tallas declaradas; [] = el producto no usa el eje de talla. */
+  sizes: Array<{ sizeId: number; code: string; label: string }>;
   marginPercentage: number;
 }
 
@@ -188,6 +209,8 @@ export interface ProductPayload {
   is_active?: boolean;
   /** M2 — en qué materiales se ofrece; casillas marcadas al dar de alta. */
   materialIds: number[];
+  /** D2 — en qué tallas se ofrece; [] = el producto no usa el eje de talla. */
+  sizeIds: number[];
 }
 
 export interface ProductFilters {
@@ -205,6 +228,19 @@ export interface ProductFilters {
 /** Materiales declarados de un producto, con su existencia (M2 + M15). */
 export interface ProductDeclaredMaterial {
   materialId: number;
+  code: string;
+  label: string;
+  isActive: boolean;
+  stockQuantity: number;
+}
+
+/**
+ * Tallas declaradas de un producto (Docs/plan-productos-por-tamano.md — D2),
+ * con la existencia agregada de esa talla (sumando materiales). Vacío = el
+ * producto no usa el eje de talla.
+ */
+export interface ProductDeclaredSize {
+  sizeId: number;
   code: string;
   label: string;
   isActive: boolean;

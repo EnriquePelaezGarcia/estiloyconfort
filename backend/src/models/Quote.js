@@ -96,6 +96,8 @@ function mapQuoteItem(row) {
     productSku: row.product_sku ?? null,
     materialId: row.material_id,
     materialLabel: row.material_label,
+    sizeId: row.size_id ?? null,
+    sizeLabel: row.size_label ?? null,
     color: row.color ?? null,
     quantity: Number(row.quantity),
     unitPrice: Number(row.unit_price),
@@ -190,16 +192,44 @@ async function resolveQuoteLine(conn, it, paymentMethod, config) {
     throw err;
   }
 
+  // Talla de la línea (Docs/plan-productos-por-tamano.md — D3/D6), misma
+  // regla que Order.js: 0 = producto sin talla; con tallas declaradas, la
+  // línea DEBE traer una.
+  const [declaredSizes] = await conn.execute(
+    `SELECT ps.size_id, s.label FROM product_sizes ps JOIN sizes s ON s.id = ps.size_id
+      WHERE ps.product_id = ? AND ps.is_active = TRUE`,
+    [it.productId],
+  );
+  const productHasSizes = declaredSizes.length > 0;
+  const rawSizeId = it.sizeId != null && it.sizeId !== '' ? Number(it.sizeId) : 0;
+  let sizeId = 0;
+  let sizeLabel = null;
+  if (productHasSizes) {
+    const match = declaredSizes.find((s) => s.size_id === rawSizeId);
+    if (!match) {
+      const err = new Error(`Falta la talla de la línea "${product.name}".`);
+      err.statusCode = 400;
+      throw err;
+    }
+    sizeId = match.size_id;
+    sizeLabel = match.label;
+  } else if (rawSizeId !== 0) {
+    const err = new Error(`"${product.name}" no se vende por talla.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
   const [[materialPrices]] = await conn.execute(
     `SELECT price_cash, price_6msi, price_mayoreo, base_cost
-       FROM product_material_prices WHERE product_id = ? AND material_id = ?`,
-    [it.productId, materialId],
+       FROM product_material_prices WHERE product_id = ? AND material_id = ? AND size_id = ?`,
+    [it.productId, materialId, sizeId],
   );
+  const cellLabel = sizeLabel ? `${declared.label} · ${sizeLabel}` : declared.label;
   // RN-03: cotizar en $0 un producto sin costo capturado sería peor que no
   // cotizarlo — el cliente se quedaría con un precio que no vamos a honrar.
   if (!materialPrices || materialPrices.base_cost == null) {
     const err = new Error(
-      `"${product.name}" no se cotiza en ${declared.label}. Elige otro material o quita el producto.`,
+      `"${product.name}" no se cotiza en ${cellLabel}. Elige otra opción o quita el producto.`,
     );
     err.statusCode = 400;
     throw err;
@@ -253,6 +283,8 @@ async function resolveQuoteLine(conn, it, paymentMethod, config) {
     productSku: product.sku ?? null,
     materialId,
     materialLabel: declared.label,
+    sizeId: productHasSizes ? sizeId : null,
+    sizeLabel,
     color,
     quantity,
     unitPrice,
@@ -498,11 +530,11 @@ const Quote = {
         const [itemResult] = await conn.execute(
           `INSERT INTO quote_items
             (quote_id, product_id, product_name, product_sku, material_id,
-             material_label, color, quantity, unit_price, subtotal)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+             material_label, size_id, size_label, color, quantity, unit_price, subtotal)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             quoteId, it.productId, it.productName, it.productSku,
-            it.materialId, it.materialLabel, it.color, it.quantity,
+            it.materialId, it.materialLabel, it.sizeId ?? null, it.sizeLabel ?? null, it.color, it.quantity,
             it.unitPrice, it.subtotal,
           ],
         );
@@ -676,11 +708,11 @@ const Quote = {
         const [itemResult] = await conn.execute(
           `INSERT INTO quote_items
             (quote_id, product_id, product_name, product_sku, material_id,
-             material_label, color, quantity, unit_price, subtotal)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+             material_label, size_id, size_label, color, quantity, unit_price, subtotal)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id, it.productId, it.productName, it.productSku,
-            it.materialId, it.materialLabel, it.color, it.quantity,
+            it.materialId, it.materialLabel, it.sizeId ?? null, it.sizeLabel ?? null, it.color, it.quantity,
             it.unitPrice, it.subtotal,
           ],
         );

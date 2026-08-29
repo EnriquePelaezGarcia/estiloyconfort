@@ -76,7 +76,7 @@ const manufacturerController = {
     const [items] = await pool.query(
       `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
               oi.ready_quantity, oi.fabrication_note,
-              oi.material_id, oi.material_label, oi.color
+              oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        WHERE o.order_status IN (${placeholders})
@@ -107,6 +107,8 @@ const manufacturerController = {
         fabricationNote: it.fabrication_note ?? null,
         materialId: it.material_id,
         materialLabel: it.material_label,
+        sizeId: it.size_id ?? null,
+        sizeLabel: it.size_label ?? null,
         color: it.color,
       });
     }

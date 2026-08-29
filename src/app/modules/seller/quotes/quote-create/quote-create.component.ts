@@ -36,6 +36,8 @@ const MAX_EXTRA_CHARGES = 5;
 interface QuoteLine {
   product: InventoryItem;
   materialId: number;
+  /** D3/D6: talla de la línea; null = producto sin talla. */
+  sizeId: number | null;
   color: string | null;
   quantity: number;
   /** Docs/plan-descuentos.md: se regala esta línea (precio $0). */
@@ -252,7 +254,30 @@ export class QuoteCreateComponent implements OnInit {
 
   /** Precios del producto en el material de ESA línea. */
   protected lineMaterialPrice(line: QuoteLine): InventoryMaterialPrice | null {
-    return line.product.materialPrices.find((mp) => mp.materialId === line.materialId) ?? null;
+    return line.product.materialPrices.find(
+      (mp) => mp.materialId === line.materialId && (mp.sizeId ?? null) === (line.sizeId ?? null),
+    ) ?? null;
+  }
+
+  /** ¿El producto de esta línea se vende por talla? (D2) */
+  protected productUsesSizes(product: InventoryItem): boolean {
+    return product.materialPrices.some((mp) => mp.sizeId != null);
+  }
+
+  /** Materiales DISTINTOS del producto (las celdas por talla no se duplican en el <select>). */
+  protected distinctMaterialsOf(product: InventoryItem): { materialId: number; label: string; isQuoted: boolean }[] {
+    const byId = new Map<number, { materialId: number; label: string; isQuoted: boolean }>();
+    for (const mp of product.materialPrices) {
+      const e = byId.get(mp.materialId);
+      if (!e) byId.set(mp.materialId, { materialId: mp.materialId, label: mp.label, isQuoted: mp.isQuoted });
+      else if (mp.isQuoted) e.isQuoted = true;
+    }
+    return [...byId.values()];
+  }
+
+  /** Tallas de un material concreto del producto, para el <select> de talla. */
+  protected sizesForMaterial(product: InventoryItem, materialId: number): InventoryMaterialPrice[] {
+    return product.materialPrices.filter((mp) => mp.materialId === materialId && mp.sizeId != null);
   }
 
   /**
@@ -549,6 +574,9 @@ export class QuoteCreateComponent implements OnInit {
           const product = it.productId != null ? byId.get(it.productId) : undefined;
           if (!product) continue;
           const mp =
+            product.materialPrices.find(
+              (m) => m.materialId === it.materialId && (m.sizeId ?? null) === (it.sizeId ?? null) && m.isQuoted,
+            ) ??
             product.materialPrices.find((m) => m.materialId === it.materialId && m.isQuoted) ??
             product.materialPrices.find((m) => m.isQuoted);
           if (!mp) continue;
@@ -557,6 +585,7 @@ export class QuoteCreateComponent implements OnInit {
           lines.push({
             product,
             materialId: mp.materialId,
+            sizeId: mp.sizeId ?? null,
             color,
             quantity: Math.max(1, Math.trunc(it.quantity) || 1),
           });
@@ -722,6 +751,8 @@ export class QuoteCreateComponent implements OnInit {
                   materialId: it.materialId,
                   code: '',
                   label: it.materialLabel,
+                  sizeId: it.sizeId ?? null,
+                  sizeLabel: it.sizeLabel ?? null,
                   colorPolicy: 'free' as const,
                   fixedColor: null,
                   stockQuantity: 1,
@@ -736,6 +767,7 @@ export class QuoteCreateComponent implements OnInit {
               ],
             },
             materialId: it.materialId,
+            sizeId: it.sizeId ?? null,
             color: it.color ?? null,
             quantity: it.quantity,
             gift: giftedItemIds.has(it.id ?? -1),
@@ -795,10 +827,12 @@ export class QuoteCreateComponent implements OnInit {
       this.notification.error(`"${product.name}" no tiene precio en ningún material.`);
       return;
     }
-    const defaultMaterial = quoted[0];
+    const defaultCell = quoted[0];
     this.lines.update((lines) => {
       const existing = lines.find(
-        (l) => l.product.id === product.id && l.materialId === defaultMaterial.materialId,
+        (l) => l.product.id === product.id
+          && l.materialId === defaultCell.materialId
+          && (l.sizeId ?? null) === (defaultCell.sizeId ?? null),
       );
       if (existing) {
         return lines.map((l) => (l === existing ? { ...l, quantity: l.quantity + 1 } : l));
@@ -807,8 +841,9 @@ export class QuoteCreateComponent implements OnInit {
         ...lines,
         {
           product,
-          materialId: defaultMaterial.materialId,
-          color: this.initialColorFor(defaultMaterial),
+          materialId: defaultCell.materialId,
+          sizeId: defaultCell.sizeId ?? null,
+          color: this.initialColorFor(defaultCell),
           quantity: 1,
         },
       ];
@@ -836,15 +871,24 @@ export class QuoteCreateComponent implements OnInit {
     this.lines.update((lines) =>
       lines.map((l, i) => {
         if (i !== index) return l;
-        const mp = l.product.materialPrices.find((m) => m.materialId === materialId);
-        if (!mp) return { ...l, materialId };
-        // Un color incompatible con el nuevo material no se arrastra en silencio
-        // (M6 §6.2.4). Si ya traía un color libre capturado a mano, se respeta
-        // al cambiar entre dos materiales 'free' — no se pisa lo ya escrito.
+        // D3: la talla actual puede no existir en el material nuevo.
+        const cellsForMaterial = l.product.materialPrices.filter((m) => m.materialId === materialId);
+        const keepSize = l.sizeId != null && cellsForMaterial.some((m) => m.sizeId === l.sizeId)
+          ? l.sizeId
+          : (cellsForMaterial.find((m) => m.sizeId != null)?.sizeId ?? null);
+        const mp = cellsForMaterial.find((m) => (m.sizeId ?? null) === (keepSize ?? null));
+        if (!mp) return { ...l, materialId, sizeId: keepSize };
         const color = mp.colorPolicy === 'free' ? (l.color ?? this.initialColorFor(mp)) : this.initialColorFor(mp);
-        return { ...l, materialId, color };
+        return { ...l, materialId, sizeId: keepSize, color };
       }),
     );
+  }
+
+  /** Cambiar la talla reprecia SOLO esa línea (D3). */
+  protected changeLineSize(index: number, event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    const sizeId = raw ? Number(raw) : null;
+    this.lines.update((lines) => lines.map((l, i) => (i === index ? { ...l, sizeId } : l)));
   }
 
   protected changeLineColor(index: number, event: Event): void {
@@ -1003,6 +1047,7 @@ export class QuoteCreateComponent implements OnInit {
       items: this.lines().map((l) => ({
         productId: l.product.id,
         materialId: l.materialId,
+        sizeId: l.sizeId,
         color: l.color,
         quantity: l.quantity,
         gift: !!l.gift,

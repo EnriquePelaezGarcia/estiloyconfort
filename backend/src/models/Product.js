@@ -138,12 +138,30 @@ const Product = {
       'SELECT * FROM product_variants WHERE product_id = ? AND is_active = TRUE ORDER BY variant_type, variant_value',
       [id]
     );
+    // Tallas declaradas (Docs/plan-productos-por-tamano.md — D2). Vacío = el
+    // producto no usa el eje de talla y su matriz de precios vive en la celda
+    // size_id = 0 ("sin talla").
+    const [sizes] = await pool.execute(
+      `SELECT ps.size_id, s.code, s.label, s.sort_order
+         FROM product_sizes ps
+         JOIN sizes s ON s.id = ps.size_id
+        WHERE ps.product_id = ? AND ps.is_active = TRUE
+        ORDER BY s.sort_order`,
+      [id]
+    );
     // D7: la ficha de producto muestra un precio por material declarado
     // (M2). materialId sale de product_materials, no de product_material_prices,
     // para que un material declarado sin costo capturado (el hueco de M2)
     // también aparezca, con sus precios en NULL en vez de estar ausente.
+    // D7/D3: una fila por CELDA (material × talla) que tenga precio en
+    // product_material_prices. Un producto sin talla trae una fila por
+    // material con size_id = 0 y size_label NULL — idéntico a antes del eje
+    // de talla. Un producto con talla trae una fila por (material, talla).
+    // `stock_quantity`/`available_quantity` siguen siendo del par (producto,
+    // material): el desglose por talla es de Inventario (Fase 5).
     const [materialPrices] = await pool.execute(
       `SELECT pm.material_id, mat.code, mat.label, mat.color_policy, mat.fixed_color,
+              mp.size_id, sz.label AS size_label,
               pm.stock_quantity,
               mp.base_cost, mp.price_cash, mp.price_6msi, mp.price_credit, mp.price_mayoreo,
               -- Lo que la ficha pública debe anunciar como disponible: el stock
@@ -155,14 +173,15 @@ const Product = {
          JOIN materials mat ON mat.id = pm.material_id
          LEFT JOIN product_material_prices mp
                 ON mp.product_id = pm.product_id AND mp.material_id = pm.material_id
+         LEFT JOIN sizes sz ON sz.id = mp.size_id
          LEFT JOIN product_material_availability av
                 ON av.product_id = pm.product_id AND av.material_id = pm.material_id
         WHERE pm.product_id = ? AND pm.is_active = TRUE
-        ORDER BY mat.sort_order`,
+        ORDER BY mat.sort_order, sz.sort_order`,
       [id]
     );
 
-    return { ...product, images, variants, materialPrices };
+    return { ...product, images, variants, sizes, materialPrices };
   },
 
   async findBySlug(slug) {
@@ -194,7 +213,7 @@ const Product = {
    * con stock_quantity = 0; las existencias se capturan aparte, en
    * *Admin → Inventario*.
    */
-  async create(data, materialIds = []) {
+  async create(data, materialIds = [], sizeIds = []) {
     const fields = ['name','slug','sku','category_id','manufacturer_id','description', 'details_content', 'color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','margin_percentage','price_list','wholesale_min_qty',
@@ -208,6 +227,7 @@ const Product = {
         values
       );
       await syncProductMaterials(conn, result.insertId, materialIds);
+      await syncProductSizes(conn, result.insertId, sizeIds);
       await conn.commit();
       // Sin costos de fabricante todavía, las filas quedan en NULL: correcto,
       // el producto "no se cotiza" hasta que se le asigne un costo (M2).
@@ -227,13 +247,13 @@ const Product = {
    * se toca (permite updates parciales — p.ej. solo el margen — sin tener
    * que reenviar la lista de materiales cada vez).
    */
-  async update(id, data, materialIds = null) {
+  async update(id, data, materialIds = null, sizeIds = null) {
     const allowed = ['name','slug','sku','category_id','manufacturer_id','description', 'details_content', 'color',
       'dimensions_length','dimensions_width','dimensions_height','weight_volumetric',
       'availability_days','margin_percentage','price_list','wholesale_min_qty',
       'stock_alert_level','is_featured','is_active'];
     const entries = Object.entries(data).filter(([k]) => allowed.includes(k));
-    if (!entries.length && materialIds === null) return this.findById(id, { includeInactive: true });
+    if (!entries.length && materialIds === null && sizeIds === null) return this.findById(id, { includeInactive: true });
 
     const conn = await pool.getConnection();
     try {
@@ -245,6 +265,9 @@ const Product = {
       if (materialIds !== null) {
         await syncProductMaterials(conn, id, materialIds);
       }
+      if (sizeIds !== null) {
+        await syncProductSizes(conn, id, sizeIds);
+      }
       await conn.commit();
     } catch (err) {
       await conn.rollback();
@@ -252,10 +275,10 @@ const Product = {
     } finally {
       conn.release();
     }
-    // Si cambió la declaración de materiales, product_material_prices debe
-    // ganar/perder filas de inmediato (no esperar a que alguien capture un
-    // costo): un material recién desmarcado no debe seguir cotizado.
-    if (materialIds !== null) await syncMaterialPricesAndReprice(id);
+    // Si cambió la declaración de materiales o de tallas, product_material_prices
+    // debe ganar/perder celdas de inmediato: un material o una talla recién
+    // desmarcados no deben seguir cotizados.
+    if (materialIds !== null || sizeIds !== null) await syncMaterialPricesAndReprice(id);
     // includeInactive: tras desactivar (is_active = FALSE) seguimos devolviendo la fila.
     return this.findById(id, { includeInactive: true });
   },
@@ -280,6 +303,34 @@ const Product = {
       label: r.label,
       isActive: !!r.is_active,
       stockQuantity: r.stock_quantity,
+    }));
+  },
+
+  /**
+   * Tallas declaradas de un producto (Docs/plan-productos-por-tamano.md — D2),
+   * con su existencia agregada por talla (sumando materiales) para la
+   * advertencia de "esta talla tiene stock ≠ 0" antes de desmarcarla.
+   */
+  async getDeclaredSizes(id) {
+    const [rows] = await pool.execute(
+      `SELECT ps.size_id, s.code, s.label, ps.is_active,
+              COALESCE((
+                SELECT SUM(pmss.stock_quantity)
+                  FROM product_material_size_stock pmss
+                 WHERE pmss.product_id = ps.product_id AND pmss.size_id = ps.size_id
+              ), 0) AS stock_quantity
+         FROM product_sizes ps
+         JOIN sizes s ON s.id = ps.size_id
+        WHERE ps.product_id = ?
+        ORDER BY s.sort_order`,
+      [id],
+    );
+    return rows.map((r) => ({
+      sizeId: r.size_id,
+      code: r.code,
+      label: r.label,
+      isActive: !!r.is_active,
+      stockQuantity: Number(r.stock_quantity),
     }));
   },
 
@@ -405,6 +456,69 @@ async function syncProductMaterials(conn, productId, materialIds) {
       await conn.execute(
         'DELETE FROM product_materials WHERE product_id = ? AND material_id = ?',
         [productId, row.material_id],
+      );
+    }
+  }
+}
+
+/**
+ * Reemplaza la declaración de tallas de un producto (D2) dentro de una
+ * transacción. Mismo criterio conservador que syncProductMaterials:
+ *   - Talla recién marcada, sin fila previa   -> INSERT (is_active = TRUE).
+ *   - Talla ya presente                       -> is_active = TRUE.
+ *   - Talla desmarcada CON existencia          -> se conserva, is_active = FALSE.
+ *   - Talla desmarcada SIN existencia          -> DELETE + limpieza de los
+ *     costos por fabricante de ESA talla (product_manufacturer_costs no tiene
+ *     FK a product_sizes; sin este DELETE quedarían costos huérfanos que
+ *     reaparecen si la talla se vuelve a marcar).
+ */
+async function syncProductSizes(conn, productId, sizeIds) {
+  const wanted = new Set((sizeIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0));
+
+  const [existing] = await conn.execute(
+    'SELECT size_id FROM product_sizes WHERE product_id = ?',
+    [productId],
+  );
+  const existingIds = new Set(existing.map((r) => r.size_id));
+
+  for (const sizeId of wanted) {
+    if (existingIds.has(sizeId)) {
+      await conn.execute(
+        'UPDATE product_sizes SET is_active = TRUE WHERE product_id = ? AND size_id = ?',
+        [productId, sizeId],
+      );
+    } else {
+      await conn.execute(
+        'INSERT INTO product_sizes (product_id, size_id, is_active) VALUES (?, ?, TRUE)',
+        [productId, sizeId],
+      );
+    }
+  }
+
+  for (const row of existing) {
+    if (wanted.has(row.size_id)) continue;
+    const [[{ stock }]] = await conn.execute(
+      `SELECT COALESCE(SUM(stock_quantity), 0) AS stock
+         FROM product_material_size_stock WHERE product_id = ? AND size_id = ?`,
+      [productId, row.size_id],
+    );
+    if (Number(stock) !== 0) {
+      await conn.execute(
+        'UPDATE product_sizes SET is_active = FALSE WHERE product_id = ? AND size_id = ?',
+        [productId, row.size_id],
+      );
+    } else {
+      await conn.execute(
+        'DELETE FROM product_manufacturer_costs WHERE product_id = ? AND size_id = ?',
+        [productId, row.size_id],
+      );
+      await conn.execute(
+        'DELETE FROM product_material_size_stock WHERE product_id = ? AND size_id = ?',
+        [productId, row.size_id],
+      );
+      await conn.execute(
+        'DELETE FROM product_sizes WHERE product_id = ? AND size_id = ?',
+        [productId, row.size_id],
       );
     }
   }

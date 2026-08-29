@@ -1,8 +1,48 @@
 <!-- ===== HERO ===== -->
 <!-- Sin texto encima: el mensaje y el llamado a la acción viven en el bloque
-     de abajo, para que la foto se vea completa. -->
-<section class="hero">
-  <img class="hero__bg" [src]="heroImage" alt="Sala amueblada por Estilo y Confort" />
+     de abajo, para que la foto se vea completa.
+
+     Las fotos se administran en el panel (Sitio público → Contenido). Con una
+     sola queda fija; con dos o más esto mismo es un carrusel que se cruza
+     solo. Las fotos van apiladas y se cruzan con opacidad en vez de
+     desplazarse: así no hay saltos de layout arriba de todo, que es lo que
+     mide el LCP. -->
+<section
+  class="hero"
+  [attr.aria-roledescription]="heroIsCarousel() ? 'carrusel' : null"
+  [attr.aria-label]="heroIsCarousel() ? 'Fotos de la tienda' : null"
+  (mouseenter)="pauseHero()"
+  (mouseleave)="resumeHero()"
+  (focusin)="pauseHero()"
+  (focusout)="resumeHero()"
+>
+  @for (slide of heroSlides(); track slide.key; let i = $index) {
+    @if (heroIsRendered(i)) {
+      <img
+        class="hero__bg"
+        [class.hero__bg--active]="i === heroIndex()"
+        [src]="slide.src | mediaUrl"
+        [alt]="slide.alt"
+        [attr.fetchpriority]="i === 0 ? 'high' : null"
+        [attr.aria-hidden]="i === heroIndex() ? null : 'true'"
+      />
+    }
+  }
+
+  @if (heroIsCarousel()) {
+    <div class="hero__dots">
+      @for (slide of heroSlides(); track slide.key; let i = $index) {
+        <button
+          type="button"
+          class="hero__dot"
+          [class.hero__dot--active]="i === heroIndex()"
+          [attr.aria-label]="'Ver foto ' + (i + 1) + ' de ' + heroSlides().length"
+          [attr.aria-current]="i === heroIndex() ? 'true' : null"
+          (click)="goToHeroSlide(i)"
+        ></button>
+      }
+    </div>
+  }
 </section>
 
 <!-- ===== INSIGNIA DE RESEÑAS ===== -->

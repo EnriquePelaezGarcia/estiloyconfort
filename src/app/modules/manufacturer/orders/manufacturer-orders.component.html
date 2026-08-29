@@ -86,6 +86,12 @@
                   <span class="field__qty">{{ it.materialLabel }}</span>
                 </dd>
               }
+              @if (it.sizeLabel) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Talla:</span>
+                  <span class="field__qty">{{ it.sizeLabel }}</span>
+                </dd>
+              }
               @if (it.color) {
                 <dd class="field__qty-line">
                   <span class="order__status-label">Color/Acabado:</span>

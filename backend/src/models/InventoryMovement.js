@@ -47,27 +47,38 @@ const InventoryMovement = {
    * @param {number|null} [m.userId]
    */
   async recordMovement(conn, {
-    productId, materialId, color = null, delta,
+    productId, materialId, sizeId = null, color = null, delta,
     reason, sourceType = null, sourceId = null, note = null, userId = null,
   }) {
     const d = Math.trunc(Number(delta));
     if (!Number.isFinite(d) || d === 0) return;
     if (!REASONS.has(reason)) throw new Error(`Motivo de movimiento inválido: ${reason}`);
 
-    // Saldo resultante del par, leído después del UPDATE de stock (misma conn).
-    const [[bal]] = await conn.execute(
-      'SELECT stock_quantity FROM product_materials WHERE product_id = ? AND material_id = ?',
-      [productId, materialId],
-    );
+    // Saldo resultante, leído después del UPDATE de stock (misma conn): la
+    // celda de talla si aplica (D5), o el agregado del par si no.
+    let balanceAfter = null;
+    if (sizeId != null) {
+      const [[cell]] = await conn.execute(
+        'SELECT stock_quantity FROM product_material_size_stock WHERE product_id = ? AND material_id = ? AND size_id = ?',
+        [productId, materialId, sizeId],
+      );
+      balanceAfter = cell ? Number(cell.stock_quantity) : null;
+    } else {
+      const [[bal]] = await conn.execute(
+        'SELECT stock_quantity FROM product_materials WHERE product_id = ? AND material_id = ?',
+        [productId, materialId],
+      );
+      balanceAfter = bal ? Number(bal.stock_quantity) : null;
+    }
 
     await conn.execute(
       `INSERT INTO inventory_movements
-         (product_id, material_id, color, delta, balance_after, reason,
+         (product_id, material_id, size_id, color, delta, balance_after, reason,
           source_type, source_id, note, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        productId, materialId, color ? String(color).trim() : null, d,
-        bal ? Number(bal.stock_quantity) : null, reason,
+        productId, materialId, sizeId ?? null, color ? String(color).trim() : null, d,
+        balanceAfter, reason,
         sourceType, sourceId ?? null,
         note ? String(note).slice(0, 255) : null, userId ?? null,
       ],
@@ -79,8 +90,14 @@ const InventoryMovement = {
    * Devuelve el nombre de quién lo hizo y una etiqueta legible del motivo.
    * NO trae dinero: el kardex son cantidades.
    */
-  async listForPair(productId, materialId, { limit = 200 } = {}) {
+  async listForPair(productId, materialId, { limit = 200, sizeId } = {}) {
     const lim = Math.min(1000, Math.max(1, Math.trunc(Number(limit)) || 200));
+    const params = [productId, materialId];
+    let sizeClause = '';
+    if (sizeId != null) {
+      sizeClause = ' AND im.size_id = ?';
+      params.push(Number(sizeId));
+    }
     const [rows] = await pool.execute(
       `SELECT im.id, im.color, im.delta, im.balance_after, im.reason,
               im.source_type, im.source_id, im.note, im.created_at,
@@ -90,10 +107,10 @@ const InventoryMovement = {
          LEFT JOIN users u  ON u.id = im.user_id
          LEFT JOIN orders o ON im.source_type = 'order' AND o.id = im.source_id
          LEFT JOIN purchase_orders po ON im.source_type = 'purchase_order' AND po.id = im.source_id
-        WHERE im.product_id = ? AND im.material_id = ?
+        WHERE im.product_id = ? AND im.material_id = ?${sizeClause}
         ORDER BY im.created_at DESC, im.id DESC
         LIMIT ${lim}`,
-      [productId, materialId],
+      params,
     );
     return rows.map((r) => ({
       id: r.id,

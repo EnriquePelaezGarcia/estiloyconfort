@@ -9,6 +9,7 @@ import { DeliveryCommitment, DeliveryType, OrderStatus, PaymentStatus, SaleSchem
 export interface PublicTicketItem {
   productName: string;
   materialLabel: string;
+  sizeLabel?: string | null;
   color: string | null;
   quantity: number;
   unitPrice: number;

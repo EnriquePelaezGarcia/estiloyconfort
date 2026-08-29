@@ -47,12 +47,59 @@
   }
 }
 
+// Apiladas: todas ocupan el mismo lugar y solo cambia la opacidad. Con una
+// sola foto la única que hay ya es la activa, así que esto se ve idéntico a
+// como estaba antes de que el hero fuera administrable.
 .hero__bg {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center 30%;
+  opacity: 0;
+  transition: opacity 900ms ease-in-out;
+}
+
+.hero__bg--active {
+  opacity: 1;
+}
+
+// Sin transición para quien pidió menos movimiento: la foto cambia de golpe.
+@media (prefers-reduced-motion: reduce) {
+  .hero__bg { transition: none; }
+}
+
+.hero__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 1.1rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 1;
+}
+
+.hero__dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  // Las fotos son claras arriba y oscuras abajo según cuál sea, así que los
+  // puntos llevan su propia sombra para no perderse sobre ninguna.
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+
+  &:hover { transform: scale(1.15); }
+  &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+}
+
+.hero__dot--active {
+  background: #fff;
 }
 
 // ===== INSIGNIA DE RESEÑAS =====

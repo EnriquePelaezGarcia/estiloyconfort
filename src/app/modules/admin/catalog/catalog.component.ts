@@ -11,6 +11,7 @@ import { ManufacturingService } from '../../../core/services/manufacturing.servi
 import { NotificationService } from '../../../core/services/notification.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
+import { SizesStore } from '../../../core/services/sizes.store';
 import { Product, ProductImage, ProductManufacturerPrice, ProductPayload } from '../../../core/models/product.model';
 import { Manufacturer } from '../../../core/models/manufacturing.model';
 import { Category } from '../../../core/models/category.model';
@@ -66,25 +67,33 @@ interface PendingImage {
 }
 
 /**
+ * Llave de celda de la matriz de precios: `${materialId}:${sizeId}`.
+ * `sizeId = 0` = "sin talla" (producto que no usa el eje de talla, D2/D3).
+ */
+type CellKey = string;
+const CK = (materialId: number, sizeId: number): CellKey => `${materialId}:${sizeId}`;
+
+/** El centinela "sin talla": un producto sin tallas declaradas tiene una sola celda por material. */
+const NO_SIZE = 0;
+
+/**
  * Fila editable de costos por fabricante dentro del modal de producto.
- * UN costo por material DECLARADO (M2/M3): no hay relación aritmética entre
- * ellos, cada uno se captura por separado. `null` = a este fabricante no se
- * le compra este mueble EN ESE MATERIAL (RN-03).
+ * UN costo por CELDA declarada (material × talla, M2/M3/D3): no hay relación
+ * aritmética entre ellos, cada uno se captura por separado. `null` = a este
+ * fabricante no se le compra este mueble EN ESA CELDA (RN-03).
  */
 interface CostRow {
   manufacturerId: number;
   manufacturerName: string;
-  costs: Record<number, number | null>;
+  costs: Record<CellKey, number | null>;
   /**
    * false = los costos sirven para asignar y para calcular la utilidad real,
-   * pero quedan fuera del máximo que define el precio al público. Es cómo se
-   * absorbe el excedente de una compra única sin mover el precio de mostrador.
-   * Se aplica a todos los materiales de esta fila (el backend lo admite por
-   * material, pero un solo interruptor por fabricante alcanza en la práctica).
+   * pero quedan fuera del máximo que define el precio al público. Un solo
+   * interruptor por fabricante (aplica a todas sus celdas).
    */
   affectsBaseCost: boolean;
   /** Valores que tenía al abrir el modal, para saber qué cambió al guardar. */
-  originalCosts: Record<number, number | null>;
+  originalCosts: Record<CellKey, number | null>;
   originalAffectsBaseCost: boolean;
 }
 
@@ -106,6 +115,7 @@ export class CatalogComponent implements OnInit {
   private auth = inject(AuthService);
   private fb = inject(FormBuilder);
   protected materialsStore = inject(MaterialsStore);
+  protected sizesStore = inject(SizesStore);
 
   /** Solo el administrador puede crear, editar o eliminar productos.
    *  El vendedor accede al mismo catálogo en modo de solo lectura. */
@@ -126,17 +136,48 @@ export class CatalogComponent implements OnInit {
 
   /** Catálogo completo de materiales, para el paso ② (casillas del alta). */
   protected readonly allMaterials = this.materialsStore.active;
+  /** Catálogo de tallas (fijo: Individual/Matrimonial/King), para el paso ②b. */
+  protected readonly allSizes = this.sizesStore.active;
 
   /**
-   * M2: en qué materiales se ofrece el producto — casillas marcadas a mano,
-   * NUNCA deducidas de dónde hay costo capturado. Determina qué columnas
-   * aparecen en el paso ③ (costos) y qué materiales trae el payload.
+   * M2: en qué materiales se ofrece el producto — casillas marcadas a mano.
+   * D2: en qué tallas se ofrece — vacío = el producto NO usa el eje de talla.
    */
   protected selectedMaterialIds = signal<Set<number>>(new Set());
+  protected selectedSizeIds = signal<Set<number>>(new Set());
   protected selectedMaterialIdsList = computed(() => [...this.selectedMaterialIds()]);
+  protected selectedSizeIdsList = computed(() =>
+    [...this.selectedSizeIds()].sort(
+      (a, b) => (this.sizesStore.byId().get(a)?.sortOrder ?? 0) - (this.sizesStore.byId().get(b)?.sortOrder ?? 0),
+    ),
+  );
 
-  /** Material de referencia para el modo "precio final" (M5: cualquiera de los declarados). */
-  private targetMaterialId = signal<number | null>(null);
+  /** true = el producto usa el eje de talla; abajo se captura una celda por (material × talla). */
+  protected usesSizes = computed(() => this.selectedSizeIdsList().length > 0);
+
+  /** Las tallas a iterar en la matriz: las declaradas, o [0] ("sin talla"). */
+  protected sizeAxis = computed<number[]>(() => (this.usesSizes() ? this.selectedSizeIdsList() : [NO_SIZE]));
+
+  /** Todas las celdas declaradas (material × talla), como lista plana. */
+  protected cells = computed(() => {
+    const out: { materialId: number; sizeId: number; key: CellKey }[] = [];
+    for (const materialId of this.selectedMaterialIdsList()) {
+      for (const sizeId of this.sizeAxis()) out.push({ materialId, sizeId, key: CK(materialId, sizeId) });
+    }
+    return out;
+  });
+
+  /** Celdas de un material concreto (para la sub-tabla de ese material). */
+  protected cellsForMaterial(materialId: number): { sizeId: number; key: CellKey }[] {
+    return this.sizeAxis().map((sizeId) => ({ sizeId, key: CK(materialId, sizeId) }));
+  }
+
+  protected sizeLabel(sizeId: number): string {
+    return sizeId === NO_SIZE ? 'Costo' : this.sizesStore.labelOf(sizeId);
+  }
+
+  /** Celda de referencia para el modo "precio final" (M5): cualquiera de las declaradas. */
+  private targetCellKey = signal<CellKey | null>(null);
 
   protected toggleMaterial(materialId: number, checked: boolean): void {
     this.selectedMaterialIds.update((set) => {
@@ -144,118 +185,134 @@ export class CatalogComponent implements OnInit {
       if (checked) next.add(materialId); else next.delete(materialId);
       return next;
     });
-    if (checked && this.targetMaterialId() === null) this.targetMaterialId.set(materialId);
-    if (!checked && this.targetMaterialId() === materialId) {
-      const remaining = [...this.selectedMaterialIds()];
-      this.targetMaterialId.set(remaining[0] ?? null);
+    this.reconcileCostRowCells();
+    this.reconcileTargetCell();
+  }
+
+  protected toggleSize(sizeId: number, checked: boolean): void {
+    this.selectedSizeIds.update((set) => {
+      const next = new Set(set);
+      if (checked) next.add(sizeId); else next.delete(sizeId);
+      return next;
+    });
+    this.reconcileCostRowCells();
+    this.reconcileTargetCell();
+  }
+
+  /** Deja en cada fila de costos exactamente las celdas declaradas hoy (conserva las que ya tenían valor). */
+  private reconcileCostRowCells(): void {
+    const keys = this.cells().map((c) => c.key);
+    this.costRows.update((rows) =>
+      rows.map((r) => {
+        const costs: Record<CellKey, number | null> = {};
+        for (const k of keys) costs[k] = r.costs[k] ?? null;
+        return { ...r, costs };
+      }),
+    );
+  }
+
+  private reconcileTargetCell(): void {
+    const keys = this.cells().map((c) => c.key);
+    if (!keys.length) { this.targetCellKey.set(null); return; }
+    if (this.targetCellKey() === null || !keys.includes(this.targetCellKey()!)) {
+      this.targetCellKey.set(keys[0]);
     }
-    // Un fabricante nuevo en la fila de costos no aparece solo: hay que
-    // reconstruir las filas para que traigan la columna del material recién marcado.
-    this.costRows.update((rows) => rows.map((r) => ({
-      ...r,
-      costs: { ...r.costs, [materialId]: r.costs[materialId] ?? null },
-    })));
   }
 
   /**
    * El precio se puede definir de dos maneras: capturando el margen, o
    * capturando el precio de contado deseado y dejando que el sistema despeje el
-   * margen. Lo segundo es como se usa la calculadora en la práctica: se elige un
-   * precio comercial redondo y se ajusta el margen hasta aterrizar ahí.
+   * margen. Lo segundo es como se usa la calculadora en la práctica.
    */
   protected priceMode = signal<PriceMode>('margin');
 
   /**
-   * Costo base POR MATERIAL declarado (RN-02): el MÁXIMO de los costos de sus
-   * fabricantes en cada material. No se captura, se deriva. Es un criterio
-   * conservador: si un fabricante sube su precio, el de venta sube aunque se
-   * siga surtiendo con el otro, de modo que el margen nunca queda corto si
-   * toca surtir con el caro.
-   *
-   * Los costos marcados como que no definen el precio quedan fuera del máximo.
+   * Costo base POR CELDA declarada (RN-02): el MÁXIMO de los costos de sus
+   * fabricantes en cada celda. No se captura, se deriva. Los costos marcados
+   * como que no definen el precio quedan fuera del máximo.
    */
-  protected derivedBaseCosts = computed<Record<number, number | null>>(() => {
+  protected derivedBaseCosts = computed<Record<CellKey, number | null>>(() => {
     const rows = this.costRows().filter((r) => r.affectsBaseCost);
-    const result: Record<number, number | null> = {};
-    for (const materialId of this.selectedMaterialIdsList()) {
+    const result: Record<CellKey, number | null> = {};
+    for (const { key } of this.cells()) {
       const costs = rows
-        .map((r) => r.costs[materialId])
+        .map((r) => r.costs[key])
         .filter((c): c is number => c !== null && c !== undefined && c > 0);
-      result[materialId] = costs.length ? Math.max(...costs) : null;
+      result[key] = costs.length ? Math.max(...costs) : null;
     }
     return result;
   });
 
   /**
    * Margen efectivo: el capturado, o el despejado desde el precio objetivo.
-   * Uno solo para todos los materiales: es del producto, no del material.
+   * Uno solo para todas las celdas: es del producto.
    */
   protected effectiveMargin = computed(() => {
     if (this.priceMode() === 'margin') return this.marginInput();
-    const materialId = this.targetMaterialId();
-    if (materialId === null) return null;
+    const key = this.targetCellKey();
+    if (key === null) return null;
     const solved = PricingService.marginFromCashPrice(
-      this.derivedBaseCosts()[materialId],
+      this.derivedBaseCosts()[key],
       this.targetPriceInput(),
       this.pricingConfig(),
     );
     return solved?.marginPercentage ?? null;
   });
 
-  /** Precios calculados en vivo, uno por material declarado, a partir del costo base y el margen efectivo. */
-  protected computedPricesByMaterial = computed<Record<number, CalculatedPrices>>(() => {
+  /** Precios calculados en vivo, uno por celda declarada. */
+  protected computedPricesByCell = computed<Record<CellKey, CalculatedPrices>>(() => {
     const margin = this.effectiveMargin();
     const config = this.pricingConfig();
     const baseCosts = this.derivedBaseCosts();
-    const result: Record<number, CalculatedPrices> = {};
-    for (const materialId of this.selectedMaterialIdsList()) {
-      result[materialId] = PricingService.calculatePrices(baseCosts[materialId], margin, config);
+    const result: Record<CellKey, CalculatedPrices> = {};
+    for (const { key } of this.cells()) {
+      result[key] = PricingService.calculatePrices(baseCosts[key], margin, config);
     }
     return result;
   });
 
-  /** RN-10 — precio de mayoreo por material: directo sobre el costo base, con el factor de ESE material (M9). */
-  protected computedWholesaleByMaterial = computed<Record<number, number | null>>(() => {
+  /** RN-10 — precio de mayoreo por celda: directo sobre el costo base, con el factor del material (M9). */
+  protected computedWholesaleByCell = computed<Record<CellKey, number | null>>(() => {
     const config = this.pricingConfig();
     const baseCosts = this.derivedBaseCosts();
     const byId = this.materialsStore.byId();
-    const result: Record<number, number | null> = {};
-    for (const materialId of this.selectedMaterialIdsList()) {
+    const result: Record<CellKey, number | null> = {};
+    for (const { key, materialId } of this.cells()) {
       const factor = byId.get(materialId)?.wholesaleFactor ?? config.wholesale_factor_default;
-      result[materialId] = PricingService.calculateWholesalePrice(baseCosts[materialId], factor);
+      result[key] = PricingService.calculateWholesalePrice(baseCosts[key], factor);
     }
     return result;
   });
 
-  /** Plan de crédito por material, para mostrar enganche y abonos en el modal. */
-  protected computedCreditByMaterial = computed(() => {
-    const prices = this.computedPricesByMaterial();
+  /** Plan de crédito por celda, para mostrar enganche y abonos en el modal. */
+  protected computedCreditByCell = computed(() => {
+    const prices = this.computedPricesByCell();
     const config = this.pricingConfig();
-    const result: Record<number, ReturnType<typeof PricingService.calculateCredit>> = {};
-    for (const materialId of this.selectedMaterialIdsList()) {
-      result[materialId] = PricingService.calculateCredit(prices[materialId].price_cash, config);
+    const result: Record<CellKey, ReturnType<typeof PricingService.calculateCredit>> = {};
+    for (const { key } of this.cells()) {
+      result[key] = PricingService.calculateCredit(prices[key].price_cash, config);
     }
     return result;
   });
 
   /**
    * Filas de costo enriquecidas con la utilidad que deja cada fabricante en
-   * cada material. Se recalculan solas al teclear: el admin nunca captura un
+   * cada celda. Se recalculan solas al teclear: el admin nunca captura un
    * porcentaje de ganancia, solo el costo.
    */
   protected costRowsWithProfit = computed(() => {
-    const prices = this.computedPricesByMaterial();
+    const prices = this.computedPricesByCell();
     const config = this.pricingConfig();
     const baseCosts = this.derivedBaseCosts();
     return this.costRows().map((row) => {
-      const materials: Record<number, { cost: number | null; isBaseCost: boolean; profitCash: number | null }> = {};
-      for (const materialId of this.selectedMaterialIdsList()) {
-        const cost = row.costs[materialId] ?? null;
-        const isBaseCost = row.affectsBaseCost && cost !== null && cost === baseCosts[materialId];
-        const profit = cost !== null ? PricingService.profitByCost(cost, prices[materialId], config) : null;
-        materials[materialId] = { cost, isBaseCost, profitCash: profit?.cash ?? null };
+      const cellsOut: Record<CellKey, { cost: number | null; isBaseCost: boolean; profitCash: number | null }> = {};
+      for (const { key } of this.cells()) {
+        const cost = row.costs[key] ?? null;
+        const isBaseCost = row.affectsBaseCost && cost !== null && cost === baseCosts[key];
+        const profit = cost !== null ? PricingService.profitByCost(cost, prices[key], config) : null;
+        cellsOut[key] = { cost, isBaseCost, profitCash: profit?.cash ?? null };
       }
-      return { ...row, materials };
+      return { ...row, cells: cellsOut };
     });
   });
 
@@ -284,8 +341,7 @@ export class CatalogComponent implements OnInit {
 
   /**
    * SKU del producto. No se captura: al crear se deriva del nombre (iniciales) más
-   * un consecutivo por prefijo; al editar se conserva el que ya tenía, porque el
-   * código ya circula en pedidos y etiquetas.
+   * un consecutivo por prefijo; al editar se conserva el que ya tenía.
    */
   protected generatedSku = computed(() => {
     const existing = this.editing();
@@ -322,8 +378,7 @@ export class CatalogComponent implements OnInit {
     targetCashPrice: [null as number | null, [Validators.min(0)]],
     /**
      * Precio de lista ("antes") que la portada tacha junto al badge OFERTA.
-     * Vacío = el producto no está en oferta. Es el único precio de captura
-     * manual: los de venta se derivan de los costos por fabricante (M2/M14).
+     * Vacío = el producto no está en oferta.
      */
     priceList: [null as number | null, [Validators.min(0)]],
     wholesaleMinQty: [null as number | null, [Validators.min(1)]],
@@ -366,30 +421,34 @@ export class CatalogComponent implements OnInit {
 
   /** Arma una fila por fabricante activo, con los costos que ya tuviera guardados. */
   private buildCostRows(saved: ProductManufacturerPrice[] = []): CostRow[] {
-    const materialIds = this.selectedMaterialIdsList();
+    const keys = this.cells().map((c) => c.key);
     return this.manufacturers().map((m) => {
       const match = saved.find((s) => s.manufacturerId === m.id);
       // Un costo nuevo define el precio salvo que se diga lo contrario.
-      const anyMaterialAffects = materialIds.some((id) => match?.costs?.[id]?.affectsBaseCost ?? true);
-      const costs: Record<number, number | null> = {};
-      for (const materialId of materialIds) costs[materialId] = match?.costs?.[materialId]?.cost ?? null;
+      const anyCellAffects = this.cells().some(
+        ({ materialId, sizeId }) => match?.costs?.[materialId]?.[sizeId]?.affectsBaseCost ?? true,
+      );
+      const costs: Record<CellKey, number | null> = {};
+      for (const { materialId, sizeId, key } of this.cells()) {
+        costs[key] = match?.costs?.[materialId]?.[sizeId]?.cost ?? null;
+      }
       return {
         manufacturerId: m.id,
         manufacturerName: m.name,
         costs,
-        affectsBaseCost: anyMaterialAffects,
+        affectsBaseCost: anyCellAffects,
         originalCosts: { ...costs },
-        originalAffectsBaseCost: anyMaterialAffects,
+        originalAffectsBaseCost: anyCellAffects,
       };
     });
   }
 
-  protected onCostChange(manufacturerId: number, materialId: number, cost: number | null): void {
+  protected onCostChange(manufacturerId: number, key: CellKey, cost: number | null): void {
     const value = cost !== null && Number.isFinite(cost) && cost > 0 ? cost : null;
     this.costRows.update((rows) =>
       rows.map((r) =>
         r.manufacturerId === manufacturerId
-          ? { ...r, costs: { ...r.costs, [materialId]: value } }
+          ? { ...r, costs: { ...r.costs, [key]: value } }
           : r,
       ),
     );
@@ -414,9 +473,9 @@ export class CatalogComponent implements OnInit {
   protected setPriceMode(mode: PriceMode): void {
     if (mode === this.priceMode()) return;
 
-    const materialId = this.targetMaterialId();
+    const key = this.targetCellKey();
     if (mode === 'price') {
-      const currentPrice = materialId !== null ? this.computedPricesByMaterial()[materialId]?.price_cash : null;
+      const currentPrice = key !== null ? this.computedPricesByCell()[key]?.price_cash : null;
       this.priceMode.set(mode);
       this.form.patchValue({ targetCashPrice: currentPrice ?? null });
     } else {
@@ -426,13 +485,19 @@ export class CatalogComponent implements OnInit {
     }
   }
 
-  protected onTargetMaterialChange(event: Event): void {
-    const value = Number((event.target as HTMLSelectElement).value);
-    this.targetMaterialId.set(Number.isFinite(value) ? value : null);
+  protected onTargetCellChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.targetCellKey.set(value || null);
   }
 
-  protected targetMaterialIdValue(): number | null {
-    return this.targetMaterialId();
+  protected targetCellKeyValue(): CellKey | null {
+    return this.targetCellKey();
+  }
+
+  protected cellLabel(key: CellKey): string {
+    const [materialId, sizeId] = key.split(':').map(Number);
+    const mat = this.materialsStore.labelOf(materialId);
+    return sizeId === NO_SIZE ? mat : `${mat} · ${this.sizesStore.labelOf(sizeId)}`;
   }
 
   protected loadProducts(): void {
@@ -460,11 +525,9 @@ export class CatalogComponent implements OnInit {
     this.editing.set(null);
     this.productImages.set([]);
     this.pendingImages.set([]);
-    // M10: premarca los materiales del preset de la categoría (si la hubiera).
-    // Sin preset todavía integrado en este formulario, arranca vacío: el
-    // admin marca a mano las casillas del paso ②.
     this.selectedMaterialIds.set(new Set());
-    this.targetMaterialId.set(null);
+    this.selectedSizeIds.set(new Set());
+    this.targetCellKey.set(null);
     this.form.reset({
       name: '',
       categoryId: null,
@@ -490,10 +553,9 @@ export class CatalogComponent implements OnInit {
 
   /**
    * La fila que llega desde la tabla (GET /products, listado) NO trae
-   * `materialPrices`: esa lista solo se arma en `Product.findById` (backend).
-   * Sin este refetch, M2 (casillas de material) y los costos por fabricante
-   * se abrían siempre vacíos, aunque ya estuvieran guardados — el producto
-   * en edición se recarga completo antes de armar nada del formulario.
+   * `materialPrices` ni `sizes`: se arman en `Product.findById`. Sin este
+   * refetch, las casillas de material/talla y los costos por fabricante se
+   * abrían vacías aunque ya estuvieran guardadas.
    */
   protected openEdit(product: Product): void {
     this.editing.set(product);
@@ -501,7 +563,8 @@ export class CatalogComponent implements OnInit {
     this.productImages.set([]);
     this.priceMode.set('margin');
     this.selectedMaterialIds.set(new Set());
-    this.targetMaterialId.set(null);
+    this.selectedSizeIds.set(new Set());
+    this.targetCellKey.set(null);
     this.costRows.set([]);
     this.loadingCosts.set(true);
 
@@ -510,10 +573,12 @@ export class CatalogComponent implements OnInit {
         this.editing.set(full);
         this.productImages.set(full.images ?? []);
 
-        // M2: los materiales declarados llegan con el producto (materialPrices).
-        const declaredIds = (full.materialPrices ?? []).map((mp) => mp.material_id);
-        this.selectedMaterialIds.set(new Set(declaredIds));
-        this.targetMaterialId.set(declaredIds[0] ?? null);
+        // Materiales declarados = ids distintos de las celdas de precio (M2).
+        const declaredMaterialIds = [...new Set((full.materialPrices ?? []).map((mp) => mp.material_id))];
+        this.selectedMaterialIds.set(new Set(declaredMaterialIds));
+        // Tallas declaradas (D2): [] = el producto no usa el eje de talla.
+        this.selectedSizeIds.set(new Set((full.sizes ?? []).map((s) => s.size_id)));
+        this.reconcileTargetCell();
 
         this.form.reset({
           name: full.name,
@@ -535,9 +600,6 @@ export class CatalogComponent implements OnInit {
           isActive: full.is_active,
         });
 
-        // Los costos por fabricante viven en su propia tabla; se cargan aparte,
-        // ya con los materiales declarados en selectedMaterialIds (buildCostRows
-        // solo arma columnas para esos ids).
         this.costRows.set(this.buildCostRows());
         this.productService.getManufacturerPrices(full.id).subscribe({
           next: (res) => {
@@ -565,6 +627,7 @@ export class CatalogComponent implements OnInit {
     this.costRows.set([]);
     this.priceMode.set('margin');
     this.selectedMaterialIds.set(new Set());
+    this.selectedSizeIds.set(new Set());
   }
 
   protected save(): void {
@@ -580,8 +643,8 @@ export class CatalogComponent implements OnInit {
     }
 
     const baseCosts = this.derivedBaseCosts();
-    if (materialIds.every((id) => baseCosts[id] === null)) {
-      this.notification.error('Captura el costo de al menos un fabricante en algún material');
+    if (this.cells().every(({ key }) => baseCosts[key] === null)) {
+      this.notification.error('Captura el costo de al menos un fabricante en alguna celda');
       return;
     }
     const margin = this.effectiveMargin();
@@ -595,9 +658,7 @@ export class CatalogComponent implements OnInit {
     }
 
     const raw = this.form.getRawValue();
-    // Quill deja "<p><br></p>" (o vacío) cuando el editor está en blanco; sin
-    // esta normalización el campo "vacío" se guardaría como HTML fantasma y
-    // la ficha pública pintaría el panel de detalles sin nada adentro.
+    // Quill deja "<p><br></p>" (o vacío) cuando el editor está en blanco.
     const detailsHtml = raw.detailsContent?.trim();
     const payload: ProductPayload = {
       name: raw.name!.trim(),
@@ -614,14 +675,12 @@ export class CatalogComponent implements OnInit {
       availability_days: raw.availabilityDays ?? 0,
       wholesale_min_qty: raw.wholesaleMinQty ?? null,
       price_list: raw.priceList ?? null,
-      // Sin base_cost ni precios (M2/M14): son derivados de los costos por
-      // fabricante que se guardan aparte en saveCosts(); el backend los ignora
-      // si se envían. Tampoco captura existencias (M15): eso vive en Admin → Inventario.
       margin_percentage: margin,
       stock_alert_level: raw.stockAlertLevel ?? 5,
       is_featured: raw.isFeatured ?? false,
       is_active: raw.isActive ?? true,
       materialIds,
+      sizeIds: this.selectedSizeIdsList(),
     };
 
     this.saving.set(true);
@@ -640,9 +699,6 @@ export class CatalogComponent implements OnInit {
   }
 
   private onSaved(product: Product, message: string): void {
-    // Los costos por fabricante viven en su propia tabla, así que se guardan
-    // después del producto. El backend recalcula el costo base (el máximo) y
-    // reprecia, por eso al final se recarga el producto.
     this.saveCosts(product).subscribe({
       next: () => this.uploadPendingImages(product, message),
       error: () => {
@@ -654,23 +710,23 @@ export class CatalogComponent implements OnInit {
 
   /** Envía solo las filas que cambiaron; las que se vaciaron por completo se eliminan. */
   private saveCosts(product: Product) {
-    const materialIds = this.selectedMaterialIdsList();
+    const cellList = this.cells();
     const operations = this.costRows()
       .filter((row) => {
-        const costsChanged = materialIds.some((id) => row.costs[id] !== row.originalCosts[id]);
-        const hasAnyCost = materialIds.some((id) => row.costs[id] !== null && row.costs[id] !== undefined);
-        // Cambiar solo la casilla en una fila sin ningún costo no es nada que guardar.
+        const costsChanged = cellList.some(({ key }) => row.costs[key] !== row.originalCosts[key]);
+        const hasAnyCost = cellList.some(({ key }) => row.costs[key] !== null && row.costs[key] !== undefined);
         return costsChanged || (hasAnyCost && row.affectsBaseCost !== row.originalAffectsBaseCost);
       })
       .map((row) => {
-        const hasAnyCost = materialIds.some((id) => row.costs[id] !== null && row.costs[id] !== undefined);
+        const hasAnyCost = cellList.some(({ key }) => row.costs[key] !== null && row.costs[key] !== undefined);
         return hasAnyCost
           ? this.productService.setManufacturerPrice(
               product.id,
               row.manufacturerId,
-              materialIds.map((materialId) => ({
+              cellList.map(({ materialId, sizeId, key }) => ({
                 materialId,
-                cost: row.costs[materialId] ?? null,
+                sizeId,
+                cost: row.costs[key] ?? null,
                 affectsBaseCost: row.affectsBaseCost,
               })),
             )
@@ -711,8 +767,6 @@ export class CatalogComponent implements OnInit {
     this.saving.set(false);
     this.notification.success(message);
     this.closeModal();
-    // Se recarga en vez de actualizar en memoria: al guardar los costos, el
-    // backend recalcula el costo base y los precios del producto.
     this.loadProducts();
   }
 

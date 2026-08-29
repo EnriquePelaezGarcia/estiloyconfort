@@ -60,7 +60,7 @@
             <div class="qr-item__main">
               <span class="qr-item__name">{{ item.productName }}</span>
               <span class="qr-item__detail">
-                {{ item.materialLabel || 'Material por confirmar' }}
+                {{ item.materialLabel || 'Material por confirmar' }}@if (item.sizeLabel) { · {{ item.sizeLabel }} }
                 @if (item.color) { · {{ item.color }} }
                 @if (variantText(item)) { · {{ variantText(item) }} }
               </span>

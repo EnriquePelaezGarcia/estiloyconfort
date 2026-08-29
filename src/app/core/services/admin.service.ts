@@ -36,7 +36,7 @@ export interface MaterialListFilters {
   categoria?: string;
 }
 
-/** Fila de inventario por (producto, material) — M15. */
+/** Fila de inventario por celda (producto, material, talla) — M15 + D5. */
 export interface InventoryRow {
   productId: number;
   name: string;
@@ -44,6 +44,9 @@ export interface InventoryRow {
   materialId: number;
   materialCode: string;
   materialLabel: string;
+  /** D5: talla de la celda. `null` = el producto no se vende por talla. */
+  sizeId: number | null;
+  sizeLabel: string | null;
   stockQuantity: number;
   /** Reserva de piezas (Docs/plan-reserva-de-piezas.md): cuánto de stockQuantity ya está apartado, y cuánto queda libre. */
   reservedQuantity: number;
@@ -63,6 +66,8 @@ export interface InventoryRow {
 export interface InventoryUpdateItem {
   productId: number;
   materialId: number;
+  /** D5: talla de la celda a ajustar. Omitir / `null` = producto sin talla. */
+  sizeId?: number | null;
   /** Total agregado. Se ignora si `colors` trae al menos un color. */
   stockQuantity: number;
   /** A2: presente = reemplaza el desglose por color de ese par (`[]` lo borra). */
@@ -394,10 +399,16 @@ export class AdminService {
     return this.api.put<{ message: string }>('/inventory/stock', { items });
   }
 
-  /** Kardex de un par (producto, material): historial de movimientos de stock. */
-  getInventoryMovements(productId: number, materialId: number): Observable<{ data: InventoryMovementRow[] }> {
+  /** Kardex de una celda (producto, material[, talla]): historial de movimientos. */
+  getInventoryMovements(
+    productId: number,
+    materialId: number,
+    sizeId?: number | null,
+  ): Observable<{ data: InventoryMovementRow[] }> {
+    const params: Record<string, string> = sizeId ? { sizeId: String(sizeId) } : {};
     return this.api.get<{ data: InventoryMovementRow[] }>(
       `/inventory/stock/${productId}/${materialId}/movements`,
+      params,
     );
   }
 

@@ -15,6 +15,8 @@ export interface CreateQuoteRequestPayload {
   items: Array<{
     productId: number;
     materialId: number;
+    /** D3/D6: talla elegida; null = producto sin talla. */
+    sizeId?: number | null;
     variantSelections: CartVariantSelection;
     quantity: number;
   }>;
@@ -46,8 +48,11 @@ export interface QuoteRequestItem {
   productId?: number;
   /** Solo en la vista interna (para preseleccionar el material en el builder). */
   materialId?: number;
+  /** Solo en la vista interna (para preseleccionar la talla en el builder). */
+  sizeId?: number | null;
   productName: string;
   materialLabel: string | null;
+  sizeLabel?: string | null;
   color: string | null;
   /** Mapa crudo del carrito ({ "Color": "Blanco", "Tamaño": "Queen" }). */
   variantSelections: CartVariantSelection | null;
