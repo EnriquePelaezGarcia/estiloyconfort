@@ -15,6 +15,12 @@ export interface ProductVariant {
 export interface ProductImage {
   id: number;
   product_id: number;
+  /**
+   * Material que representa esta foto (Docs/plan-imagen-y-ayuda-por-material.md,
+   * Parte 2). `null` = genérica: se muestra sea cual sea el material elegido en
+   * la ficha. Con valor, solo se muestra cuando ese material está elegido.
+   */
+  material_id: number | null;
   image_url: string;
   alt_text: string;
   is_primary: boolean;

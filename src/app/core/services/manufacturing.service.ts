@@ -8,8 +8,16 @@ import {
   ManufacturerInput,
   PurchaseOrder,
   PurchaseOrderInput,
+  PurchaseOrderReceiptInput,
   PurchaseOrderStatus,
 } from '../models/manufacturing.model';
+
+/** Resultado de registrar una recepción de OC. */
+export interface PurchaseOrderReceiptResult {
+  status: PurchaseOrderStatus;
+  creditNote: { id: number; amount: number } | null;
+  warnings: string[];
+}
 
 /** Resultado de asignar (o quitar) el fabricante de un item. */
 export interface ManufacturerAssignment {
@@ -74,6 +82,29 @@ export class ManufacturingService {
     );
   }
 
+  /** Registra una recepción parcial: suma lo bueno a inventario. */
+  receivePurchaseOrder(
+    id: number,
+    input: PurchaseOrderReceiptInput,
+  ): Observable<{ data: PurchaseOrderReceiptResult; message: string }> {
+    return this.api.post<{ data: PurchaseOrderReceiptResult; message: string }>(
+      `/manufacturing/purchase-orders/${id}/receipts`,
+      input,
+    );
+  }
+
+  /** Materializa un renglón de producto nuevo como producto inactivo del catálogo. */
+  createProductFromPoItem(
+    poId: number,
+    itemId: number,
+    input: { name: string; sku?: string | null; categoryId?: number | null; materialId: number },
+  ): Observable<{ data: { productId: number; slug: string }; message: string }> {
+    return this.api.post<{ data: { productId: number; slug: string }; message: string }>(
+      `/manufacturing/purchase-orders/${poId}/items/${itemId}/create-product`,
+      input,
+    );
+  }
+
   // ── Pedidos a fábrica: items por fabricar + asignación de fabricante ──────
   getFactoryOrderItems(): Observable<{ data: FactoryOrderItemRow[] }> {
     return this.api.get<{ data: FactoryOrderItemRow[] }>('/admin/factory-order-items');
@@ -101,10 +132,22 @@ export class ManufacturingService {
     orderId: number,
     itemId: number,
     isReady: boolean,
+    readyQuantity?: number,
   ): Observable<{ message: string }> {
     return this.api.patch<{ message: string }>(
       `/manufacturer/orders/${orderId}/items/${itemId}/ready`,
-      { isReady },
+      readyQuantity != null ? { readyQuantity } : { isReady },
+    );
+  }
+
+  /** Bodega acepta piezas de una línea de fabricación (paso distinto del "listo"). */
+  warehouseReceiveItem(
+    itemId: number,
+    input: { receivedQuantity: number; condition: 'ok' | 'damaged' | 'incomplete'; note?: string | null },
+  ): Observable<{ data: { creditNote: { id: number; amount: number } | null; warnings: string[] }; message: string }> {
+    return this.api.patch<{ data: { creditNote: { id: number; amount: number } | null; warnings: string[] }; message: string }>(
+      `/admin/order-items/${itemId}/warehouse-receipt`,
+      input,
     );
   }
 

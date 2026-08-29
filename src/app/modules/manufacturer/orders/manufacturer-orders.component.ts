@@ -48,16 +48,37 @@ export class ManufacturerOrdersComponent implements OnInit {
   }
 
   protected toggleItem(order: ManufacturerOrder, itemId: number, isReady: boolean): void {
-    this.manufacturerService.markItemReady(order.id, itemId, isReady).subscribe({
+    this.sync(this.manufacturerService.markItemReady(order.id, itemId, isReady), order.id, itemId, { isReady });
+  }
+
+  /** Reporta una cantidad parcial de piezas listas para una línea. */
+  protected setReadyQuantity(order: ManufacturerOrder, itemId: number, value: string): void {
+    const qty = Math.max(0, Math.trunc(Number(value) || 0));
+    const item = order.items.find((it) => it.id === itemId);
+    if (!item || qty > item.quantity) return;
+    this.sync(
+      this.manufacturerService.markItemReady(order.id, itemId, qty >= item.quantity, qty),
+      order.id,
+      itemId,
+      { isReady: qty >= item.quantity, readyQuantity: qty },
+    );
+  }
+
+  private sync(
+    obs: ReturnType<ManufacturerService['markItemReady']>,
+    orderId: number,
+    itemId: number,
+    patch: { isReady: boolean; readyQuantity?: number },
+  ): void {
+    obs.subscribe({
       next: (res) => {
-        // Refleja el cambio local del item y el posible cambio de estado del pedido.
         this.orders.update((list) =>
           list.map((o) =>
-            o.id === order.id
+            o.id === orderId
               ? {
                   ...o,
                   order_status: res.data.orderStatus,
-                  items: o.items.map((it) => (it.id === itemId ? { ...it, isReady } : it)),
+                  items: o.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)),
                 }
               : o,
           ),

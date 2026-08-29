@@ -28,6 +28,13 @@ export class FieldHelpComponent {
   readonly text = input.required<string>();
   /** aria-label / title del botón "ⓘ". */
   readonly label = input<string>('Más información');
+  /**
+   * Borde por el que se ancla el popover. 'start' (por defecto) lo abre hacia
+   * la derecha; 'end' hacia la izquierda — para el ⓘ que queda pegado al
+   * borde derecho de su contenedor (ej. el último botón de material en la
+   * ficha, que si no empujaría el popover fuera de pantalla).
+   */
+  readonly align = input<'start' | 'end'>('start');
 
   protected open = signal(false);
   private static nextId = 0;

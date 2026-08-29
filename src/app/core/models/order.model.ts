@@ -595,6 +595,8 @@ export interface ManufacturerOrder {
     productSku: string;
     quantity: number;
     isReady: boolean;
+    readyQuantity?: number;
+    fabricationNote?: string | null;
     materialId?: number | null;
     materialLabel?: string | null;
     color?: string | null;

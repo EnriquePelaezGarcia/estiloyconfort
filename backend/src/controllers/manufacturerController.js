@@ -75,6 +75,7 @@ const manufacturerController = {
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
     const [items] = await pool.query(
       `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
+              oi.ready_quantity, oi.fabrication_note,
               oi.material_id, oi.material_label, oi.color
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
@@ -102,6 +103,8 @@ const manufacturerController = {
         productSku: it.product_sku,
         quantity: it.quantity,
         isReady: !!it.is_ready,
+        readyQuantity: Number(it.ready_quantity ?? 0),
+        fabricationNote: it.fabrication_note ?? null,
         materialId: it.material_id,
         materialLabel: it.material_label,
         color: it.color,
@@ -142,10 +145,17 @@ const manufacturerController = {
         throw ApiError.forbidden('Este item no te fue asignado');
       }
     }
+    // `readyQuantity` (parcial) tiene prioridad; si no viene, `isReady` marca
+    // o desmarca la línea completa (compat).
+    const hasQty = req.body.readyQuantity != null;
+    const readyQuantity = hasQty ? Number(req.body.readyQuantity) : null;
     const isReady = req.body.isReady !== false;
-    const order = await Order.markItemReady(orderId, itemId, isReady, req.user.id);
+    const order = await Order.markItemReady(orderId, itemId, isReady, req.user.id, readyQuantity);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
-    res.json({ data: order, message: isReady ? 'Item marcado como listo' : 'Item marcado como pendiente' });
+    res.json({
+      data: order,
+      message: hasQty ? 'Avance de fabricación actualizado' : (isReady ? 'Item marcado como listo' : 'Item marcado como pendiente'),
+    });
   }),
 
   // GET /api/manufacturer/catalog — SUS costos por material, nunca precio de

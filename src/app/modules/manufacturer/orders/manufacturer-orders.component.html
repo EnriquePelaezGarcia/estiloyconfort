@@ -40,25 +40,45 @@
             <div class="field">
               <dt class="field__label">Nombre del producto</dt>
               <dd class="field__value field__value--product">
-                <label class="field__check">
-                  <input
-                    type="checkbox"
-                    [checked]="it.isReady"
-                    (change)="toggleItem(o, it.id, ($any($event.target).checked))"
-                  />
+                @if (it.quantity <= 1) {
+                  <label class="field__check">
+                    <input
+                      type="checkbox"
+                      [checked]="it.isReady"
+                      (change)="toggleItem(o, it.id, ($any($event.target).checked))"
+                    />
+                    <span [class.field__value--done]="it.isReady">{{ it.productName }}</span>
+                  </label>
+                } @else {
                   <span [class.field__value--done]="it.isReady">{{ it.productName }}</span>
-                </label>
+                }
                 <span class="order__status-label">Estado del producto:</span>
                 @if (it.isReady) {
                   <span class="badge badge--green">Listo</span>
+                } @else if ((it.readyQuantity ?? 0) > 0) {
+                  <span class="badge badge--amber">{{ it.readyQuantity }}/{{ it.quantity }} listas</span>
                 } @else {
                   <span class="badge badge--amber">Por fabricar</span>
                 }
               </dd>
+              @if (it.fabricationNote) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Modificación:</span>
+                  <span class="field__qty">✏️ {{ it.fabricationNote }}</span>
+                </dd>
+              }
               <dd class="field__qty-line">
                 <span class="order__status-label">Piezas a fabricar:</span>
                 <span class="field__qty">{{ it.quantity }}</span>
               </dd>
+              @if (it.quantity > 1) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Piezas listas:</span>
+                  <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity ?? 0"
+                         (change)="setReadyQuantity(o, it.id, $any($event.target).value)"
+                         style="width:4.5rem" />
+                </dd>
+              }
               <!-- M4: material y color son de ESTA línea, no del pedido completo. -->
               @if (it.materialLabel) {
                 <dd class="field__qty-line">

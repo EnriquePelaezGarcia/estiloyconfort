@@ -30,6 +30,7 @@ router.get('/pricing-gaps', materialsController.getPricingGaps);
 // aquí, nunca en el alta/edición del producto.
 router.get('/inventory', inventoryController.list);
 router.put('/inventory', inventoryController.update);
+router.get('/inventory/:productId/:materialId/movements', inventoryController.movements);
 
 // Reglas de precios (configuración global)
 router.get('/pricing-config', pricingController.getConfig);
@@ -67,6 +68,8 @@ router.get('/factory-order-items', adminController.getFactoryOrderItems);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);
 // Fabricante que surte el item; al asignarlo se congela su costo.
 router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);
+// Bodega acepta piezas de fabricación (paso distinto del "listo" del fabricante).
+router.patch('/order-items/:id/warehouse-receipt', adminController.warehouseReceiveItem);
 
 // Reportes (Fase 4)
 router.get('/reports/sales', adminController.getSalesReport);

@@ -1,6 +1,8 @@
 export const environment = {
   production: false,
   apiUrl: 'http://localhost:3000/api',
+  /** Origen público del sitio (sin `/` final). Lo usan canonical, OpenGraph y el sitemap. */
+  siteUrl: 'http://localhost:4200',
   /** Número principal de la mueblería, en formato wa.me (52 + 10 dígitos). */
   whatsappNumber: '522221902631',
   /**

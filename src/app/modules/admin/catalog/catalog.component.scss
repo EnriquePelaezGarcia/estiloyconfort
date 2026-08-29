@@ -136,8 +136,9 @@
 // ===== Imágenes del producto =====
 .image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: vars.$spacing-sm;
+  align-items: start;
 }
 
 .image-card {
@@ -175,6 +176,43 @@
   &--pending {
     border-style: dashed;
     border-color: vars.$color-secondary;
+  }
+
+  // Parte 2 (plan-imagen-y-ayuda-por-material): la tarjeta lleva controles
+  // debajo de la foto, así que deja de ser un cuadrado y no recorta.
+  &--meta {
+    aspect-ratio: auto;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+
+    img {
+      aspect-ratio: 1;
+      border-radius: calc(#{vars.$radius-md} - 2px) calc(#{vars.$radius-md} - 2px) 0 0;
+    }
+
+    .image-card__overlay {
+      inset: 0 0 auto 0;
+      aspect-ratio: 1;
+    }
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px;
+
+    select,
+    input {
+      width: 100%;
+      font-size: 0.7rem;
+      padding: 2px 4px;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-sm;
+      background: vars.$color-surface;
+      color: vars.$color-text;
+    }
   }
 }
 

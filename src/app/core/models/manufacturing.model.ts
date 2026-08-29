@@ -4,8 +4,14 @@ export type PurchaseOrderStatus =
   | 'draft'
   | 'sent'
   | 'in_production'
+  | 'partially_received'
   | 'received'
   | 'cancelled';
+
+/** Estatus que el admin sí puede poner a mano (los de recepción los pone el flujo de recepción). */
+export const PURCHASE_ORDER_MANUAL_STATUSES: PurchaseOrderStatus[] = [
+  'draft', 'sent', 'in_production', 'cancelled',
+];
 
 export interface Manufacturer {
   id: number;
@@ -42,9 +48,30 @@ export interface PurchaseOrderItem {
   productSku: string | null;
   isNewProduct: boolean;
   specifications: string | null;
+  materialId?: number | null;
+  materialLabel?: string | null;
+  color?: string | null;
   quantity: number;
+  /** Solo en lectura: piezas ya recibidas y las que faltan. */
+  receivedQuantity?: number;
+  pendingQuantity?: number;
   unitCost: number;
   subtotal?: number;
+}
+
+/** Un evento de recepción de una OC. */
+export interface PurchaseOrderReceipt {
+  id: number;
+  note: string | null;
+  receivedByName: string | null;
+  createdAt: string;
+  lines: Array<{ itemId: number; quantity: number; condition: 'ok' | 'damaged' | 'incomplete'; note: string | null }>;
+}
+
+/** Payload de una recepción parcial. */
+export interface PurchaseOrderReceiptInput {
+  note?: string | null;
+  items: Array<{ itemId: number; quantity: number; condition: 'ok' | 'damaged' | 'incomplete'; note?: string | null }>;
 }
 
 export interface PurchaseOrder {
@@ -61,6 +88,7 @@ export interface PurchaseOrder {
   createdByName?: string | null;
   itemCount?: number;
   items?: PurchaseOrderItem[];
+  receipts?: PurchaseOrderReceipt[];
 }
 
 /** Payload para crear una orden de compra. */
@@ -97,6 +125,17 @@ export interface FactoryOrderItemRow {
   color: string | null;
   quantity: number;
   isReady: boolean;
+  /** Piezas que el fabricante reporta listas (parcial). */
+  readyQuantity: number;
+  /** Piezas ya aceptadas en bodega. */
+  receivedQuantity: number;
+  /** Condición de la última recepción en bodega (null = aún no se recibe). */
+  warehouseCondition: 'ok' | 'damaged' | 'incomplete' | null;
+  warehouseNote: string | null;
+  warehouseReceivedByName: string | null;
+  warehouseReceivedAt: string | null;
+  /** Descripción de la modificación a la medida de esta línea. */
+  fabricationNote: string | null;
   /** Quién marcó listo el item: distingue "el fabricante reportó" de "el admin lo recibió". */
   readyByName: string | null;
   readyAt: string | null;
@@ -142,6 +181,7 @@ export const PURCHASE_ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> =
   draft: 'Borrador',
   sent: 'Enviada',
   in_production: 'En producción',
+  partially_received: 'Recepción parcial',
   received: 'Recibida',
   cancelled: 'Cancelada',
 };
@@ -150,6 +190,7 @@ export const PURCHASE_ORDER_STATUS_TONE: Record<PurchaseOrderStatus, string> = {
   draft: 'badge--gray',
   sent: 'badge--blue',
   in_production: 'badge--amber',
+  partially_received: 'badge--amber',
   received: 'badge--green',
   cancelled: 'badge--red',
 };

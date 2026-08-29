@@ -50,9 +50,17 @@
           }
         </div>
 
-        @if (product()!.images && product()!.images!.length > 1) {
+        @if (showReferenceNote()) {
+          <p class="gallery__note">
+            <span class="material-symbols-outlined">info</span>
+            Todavía no tenemos una foto de este mueble en
+            {{ selectedMaterialPrices()?.label }} — la imagen es solo de referencia.
+          </p>
+        }
+
+        @if (galleryImages().length > 1) {
           <div class="gallery__thumbs">
-            @for (img of product()!.images!; track img.id; let i = $index) {
+            @for (img of galleryImages(); track img.id; let i = $index) {
               <button
                 type="button"
                 class="gallery__thumb"
@@ -78,20 +86,29 @@
           <div class="detail__variants">
             <p class="detail__variants-label">Material *</p>
             <div class="detail__variants-options">
-              @for (option of materialOptions(); track option.material_id) {
-                <button
-                  type="button"
-                  class="variant-btn"
-                  [class.variant-btn--active]="selectedMaterial() === option.material_id"
-                  [disabled]="!option.isQuoted"
-                  [title]="option.isQuoted ? '' : 'No disponible en ' + option.label"
-                  (click)="selectMaterial(option.material_id)"
-                >
-                  {{ option.label }}
-                  @if (!option.isQuoted) {
-                    <span class="variant-btn__extra">No disponible</span>
+              @for (option of materialOptions(); track option.material_id; let last = $last) {
+                <span class="variant-option">
+                  <button
+                    type="button"
+                    class="variant-btn"
+                    [class.variant-btn--active]="selectedMaterial() === option.material_id"
+                    [disabled]="!option.isQuoted"
+                    [title]="option.isQuoted ? '' : 'No disponible en ' + option.label"
+                    (click)="selectMaterial(option.material_id)"
+                  >
+                    {{ option.label }}
+                    @if (!option.isQuoted) {
+                      <span class="variant-btn__extra">No disponible</span>
+                    }
+                  </button>
+                  @if (materialHelp[option.code]; as help) {
+                    <app-field-help
+                      [text]="help"
+                      [label]="'Qué es ' + option.label"
+                      [align]="last ? 'end' : 'start'"
+                    />
                   }
-                </button>
+                </span>
               }
             </div>
           </div>

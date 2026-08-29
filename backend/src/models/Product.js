@@ -287,16 +287,46 @@ const Product = {
     await pool.execute('UPDATE products SET is_active = FALSE WHERE id = ?', [id]);
   },
 
-  async addImage(productId, { image_url, alt_text, is_primary, order_display }) {
+  async addImage(productId, { image_url, alt_text, is_primary, order_display, material_id = null }) {
     if (is_primary) {
       await pool.execute('UPDATE product_images SET is_primary = FALSE WHERE product_id = ?', [productId]);
     }
     const [res] = await pool.execute(
-      'INSERT INTO product_images (product_id, image_url, alt_text, is_primary, order_display) VALUES (?,?,?,?,?)',
-      [productId, image_url, alt_text || '', is_primary ? 1 : 0, order_display || 0]
+      'INSERT INTO product_images (product_id, material_id, image_url, alt_text, is_primary, order_display) VALUES (?,?,?,?,?,?)',
+      [productId, material_id ?? null, image_url, alt_text || '', is_primary ? 1 : 0, order_display || 0]
     );
     const [[image]] = await pool.execute('SELECT * FROM product_images WHERE id = ?', [res.insertId]);
     return image;
+  },
+
+  /**
+   * Actualiza los metadatos editables de una imagen (Docs/plan-imagen-y-ayuda-
+   * por-material.md, Parte 2): el material que representa y/o su texto
+   * alternativo. Solo toca los campos presentes en `patch`.
+   */
+  async setImageMeta(productId, imageId, patch) {
+    const sets = [];
+    const params = [];
+    if ('material_id' in patch) {
+      sets.push('material_id = ?');
+      params.push(patch.material_id ?? null);
+    }
+    if ('alt_text' in patch) {
+      sets.push('alt_text = ?');
+      params.push(patch.alt_text || '');
+    }
+    if (sets.length === 0) {
+      const [[image]] = await pool.execute('SELECT * FROM product_images WHERE id = ? AND product_id = ?', [imageId, productId]);
+      return image || null;
+    }
+    params.push(imageId, productId);
+    const [res] = await pool.execute(
+      `UPDATE product_images SET ${sets.join(', ')} WHERE id = ? AND product_id = ?`,
+      params,
+    );
+    if (res.affectedRows === 0) return null;
+    const [[image]] = await pool.execute('SELECT * FROM product_images WHERE id = ?', [imageId]);
+    return image || null;
   },
 
   async deleteImage(productId, imageId) {

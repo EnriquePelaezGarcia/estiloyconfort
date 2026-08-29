@@ -19,6 +19,8 @@ router.get('/purchase-orders', manufacturingController.listPurchaseOrders);
 router.post('/purchase-orders', manufacturingController.createPurchaseOrder);
 router.get('/purchase-orders/:id', manufacturingController.getPurchaseOrder);
 router.patch('/purchase-orders/:id/status', manufacturingController.updatePurchaseOrderStatus);
+router.post('/purchase-orders/:id/receipts', manufacturingController.receivePurchaseOrder);
+router.post('/purchase-orders/:poId/items/:itemId/create-product', manufacturingController.createProductFromPoItem);
 
 // Catálogo por fabricante
 router.get('/catalog', manufacturingController.catalogByManufacturer);

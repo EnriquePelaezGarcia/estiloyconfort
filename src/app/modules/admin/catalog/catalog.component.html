@@ -434,9 +434,13 @@
         </div>
 
         <p class="form-section">Imágenes del producto</p>
+        <p class="field__hint">
+          Deja «Todas» si la foto sirve para cualquier material. Normalmente
+          solo hace falta marcar la foto principal.
+        </p>
         <div class="image-grid">
           @for (img of productImages(); track img.id) {
-            <div class="image-card" [class.image-card--primary]="img.is_primary">
+            <div class="image-card image-card--meta" [class.image-card--primary]="img.is_primary">
               <img [src]="img.image_url | mediaUrl" [alt]="img.alt_text" loading="lazy" />
               <div class="image-card__overlay">
                 @if (!img.is_primary) {
@@ -462,11 +466,28 @@
                   <span class="material-symbols-outlined">delete</span>
                 </button>
               </div>
+              <div class="image-card__meta">
+                <select
+                  aria-label="Material de la imagen"
+                  (change)="setImageMaterial(img.id, $any($event.target).value)"
+                >
+                  <option value="" [selected]="img.material_id == null">Todas</option>
+                  @for (m of imageMaterialOptions(); track m.id) {
+                    <option [value]="m.id" [selected]="img.material_id === m.id">{{ m.label }}</option>
+                  }
+                </select>
+                <input
+                  type="text"
+                  placeholder="Texto alternativo"
+                  [value]="img.alt_text"
+                  (change)="setImageAlt(img.id, $any($event.target).value)"
+                />
+              </div>
             </div>
           }
 
           @for (item of pendingImages(); track $index) {
-            <div class="image-card image-card--pending">
+            <div class="image-card image-card--pending image-card--meta">
               <img [src]="item.preview" alt="Nueva imagen" />
               <div class="image-card__overlay">
                 <button
@@ -477,6 +498,23 @@
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
+              </div>
+              <div class="image-card__meta">
+                <select
+                  aria-label="Material de la imagen"
+                  (change)="setPendingMaterial($index, $any($event.target).value)"
+                >
+                  <option value="" [selected]="item.materialId == null">Todas</option>
+                  @for (m of imageMaterialOptions(); track m.id) {
+                    <option [value]="m.id" [selected]="item.materialId === m.id">{{ m.label }}</option>
+                  }
+                </select>
+                <input
+                  type="text"
+                  placeholder="Texto alternativo"
+                  [value]="item.altText"
+                  (input)="setPendingAlt($index, $any($event.target).value)"
+                />
               </div>
             </div>
           }

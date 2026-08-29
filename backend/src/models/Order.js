@@ -3,6 +3,8 @@ const { pool } = require('../config/database');
 const PricingConfig = require('./PricingConfig');
 const Quote = require('./Quote');
 const StockReservation = require('./StockReservation');
+const { applyStockDelta } = require('./Stock');
+const ManufacturerPayable = require('./ManufacturerPayable');
 const ShippingRate = require('./ShippingRate');
 const discountEngine = require('./discountEngine');
 const extraChargeEngine = require('./extraChargeEngine');
@@ -600,46 +602,9 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
   };
 }
 
-/** Descuenta (o `delta` negativo, devuelve) stock de (producto, material). Puede quedar negativo (M15.4). */
-async function adjustMaterialStock(conn, productId, materialId, delta) {
-  await conn.execute(
-    'UPDATE product_materials SET stock_quantity = stock_quantity + ? WHERE product_id = ? AND material_id = ?',
-    [delta, productId, materialId],
-  );
-}
-
-/**
- * A2 (Docs/plan-stock-por-color.md): ajusta el bucket de color de (producto,
- * material). Se llama en PARALELO a adjustMaterialStock, SOLO para líneas de
- * stock (nunca de fabricación — no hay pieza física de ese color).
- *
- * Si el par no lleva stock por color (ningún bucket capturado) NO crea nada:
- * el UPDATE no afecta filas y no se hace el INSERT. Así, un producto sin
- * desglose de color sigue comportándose como hoy.
- */
-async function adjustColorStock(conn, productId, materialId, color, delta) {
-  const trimmed = (color ?? '').trim();
-  const key = trimmed.toLowerCase();
-  if (!key) return;
-  const [res] = await conn.execute(
-    `UPDATE product_material_stock_colors SET quantity = quantity + ?
-      WHERE product_id = ? AND material_id = ? AND color_key = ?`,
-    [delta, productId, materialId, key],
-  );
-  if (res.affectedRows > 0) return;
-  // El bucket de ese color no existe. Solo lo creamos si el par YA lleva
-  // stock por color (hay otros buckets); si no, no rastreamos color aquí.
-  const [[tracks]] = await conn.execute(
-    'SELECT 1 AS x FROM product_material_stock_colors WHERE product_id = ? AND material_id = ? LIMIT 1',
-    [productId, materialId],
-  );
-  if (!tracks) return;
-  await conn.execute(
-    `INSERT INTO product_material_stock_colors (product_id, material_id, color, color_key, quantity)
-     VALUES (?, ?, ?, ?, ?)`,
-    [productId, materialId, trimmed, key, delta],
-  );
-}
+// El movimiento de stock + su registro en el kardex vive en models/Stock.js
+// (`applyStockDelta`). Order.js solo decide el `reason` y si toca el bucket de
+// color (nunca para líneas de fabricación — no hay pieza física de ese color).
 
 const Order = {
   ORDER_STATUSES,
@@ -1183,12 +1148,18 @@ const Order = {
         it.insertedItemId = itemResult.insertId;
         // M15.4: el stock siempre se descuenta de la fila (producto, material)
         // correcta, aunque quede negativo. No bloquea la venta.
-        await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
         // A2: el bucket de color solo se mueve para lo que sale de bodega —
         // una línea a fabricar no tiene pieza física de ese color todavía.
-        if (!it.requiresFabrication) {
-          await adjustColorStock(conn, it.productId, it.materialId, it.color, -it.quantity);
-        }
+        await applyStockDelta(conn, {
+          productId: it.productId,
+          materialId: it.materialId,
+          color: it.requiresFabrication ? null : it.color,
+          delta: -it.quantity,
+          reason: 'sale',
+          sourceType: 'order',
+          sourceId: orderId,
+          userId: sellerId,
+        });
 
         // Reserva de pieza (D4): nace ligada a este order_item recién creado.
         // RN-P5: en pickup no hay nada que apartar — el cliente se lleva la
@@ -1602,12 +1573,18 @@ const Order = {
       );
       for (const it of oldItems) {
         if (it.product_id != null && it.material_id != null) {
-          await adjustMaterialStock(conn, it.product_id, it.material_id, it.quantity);
           // A2: devuelve al bucket de color lo que era línea de stock (las de
           // fabricación nunca lo tocaron).
-          if (!it.requires_fabrication) {
-            await adjustColorStock(conn, it.product_id, it.material_id, it.color, it.quantity);
-          }
+          await applyStockDelta(conn, {
+            productId: it.product_id,
+            materialId: it.material_id,
+            color: it.requires_fabrication ? null : it.color,
+            delta: it.quantity,
+            reason: 'sale_edit',
+            sourceType: 'order',
+            sourceId: Number(id),
+            userId,
+          });
         }
       }
 
@@ -1882,10 +1859,16 @@ const Order = {
           ],
         );
         it.insertedItemId = itemResult.insertId;
-        await adjustMaterialStock(conn, it.productId, it.materialId, -it.quantity);
-        if (!it.requiresFabrication) {
-          await adjustColorStock(conn, it.productId, it.materialId, it.color, -it.quantity);
-        }
+        await applyStockDelta(conn, {
+          productId: it.productId,
+          materialId: it.materialId,
+          color: it.requiresFabrication ? null : it.color,
+          delta: -it.quantity,
+          reason: 'sale_edit',
+          sourceType: 'order',
+          sourceId: Number(id),
+          userId,
+        });
 
         // RN-P5: en pickup no hay nada que apartar.
         if (it.reserve && !pickupInStore) {
@@ -2419,6 +2402,34 @@ const Order = {
     if (!ORDER_STATUSES.includes(status)) throw new Error('Estado inválido');
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
+
+    // No se puede "arrastrar" un pedido a bodega/listo/entregado si todavía hay
+    // piezas de fabricación sin recibir: el stock y el kardex quedarían
+    // descuadrados. La recepción en bodega ("Pedidos a fábrica") es el camino.
+    if (['in_warehouse', 'ready', 'delivered'].includes(status) && status !== order.orderStatus) {
+      const [[{ pending, issues }]] = await pool.execute(
+        `SELECT
+           COALESCE(SUM(received_quantity < quantity), 0) AS pending,
+           COALESCE(SUM(warehouse_condition IN ('damaged','incomplete')), 0) AS issues
+         FROM order_items WHERE order_id = ? AND requires_fabrication = 1`,
+        [id],
+      );
+      if (Number(pending) > 0) {
+        const err = new Error(
+          'Recibe las piezas en bodega primero (Pedidos a fábrica) antes de mover el pedido a este estatus.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+      if (Number(issues) > 0) {
+        const err = new Error(
+          'Hay una pieza registrada como dañada/incompleta. Resuélvela con el fabricante (recíbela como "OK" cuando llegue el reemplazo) antes de avanzar el pedido.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
     await pool.execute('UPDATE orders SET order_status = ? WHERE id = ?', [status, id]);
     // §4.3: al entregar, cualquier reserva activa del pedido pasa a
     // 'fulfilled' (housekeeping, ya no cuenta en reserved_quantity_activo).
@@ -2482,7 +2493,7 @@ const Order = {
     }
   },
 
-  async remove(id) {
+  async remove(id, userId = null) {
     const [items] = await pool.execute(
       'SELECT product_id, material_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
     );
@@ -2505,13 +2516,26 @@ const Order = {
       }
 
       // Devolver stock al cancelar el pedido, cada uno a su material congelado.
+      //
+      // Se devuelve `+quantity` SIEMPRE, también para líneas de fabricación:
+      //   · cancelada antes de llegar a bodega → revierte el `-quantity` de la
+      //     venta (no hay pieza física; vuelve a 0).
+      //   · cancelada después de que bodega recibió (stock_returned_qty > 0) →
+      //     la venta hizo `-quantity` una sola vez y la llegada `+recibido`;
+      //     este `+quantity` deja el neto en "las piezas físicas que quedaron
+      //     libres". Correcto en ambos casos (ver plan, escenarios E1-E3).
       for (const item of items) {
         if (item.product_id != null && item.material_id != null) {
-          await adjustMaterialStock(conn, item.product_id, item.material_id, item.quantity);
-          // A2: y al bucket de color, si era línea de stock.
-          if (!item.requires_fabrication) {
-            await adjustColorStock(conn, item.product_id, item.material_id, item.color, item.quantity);
-          }
+          await applyStockDelta(conn, {
+            productId: item.product_id,
+            materialId: item.material_id,
+            color: item.requires_fabrication ? null : item.color,
+            delta: item.quantity,
+            reason: 'sale_cancel',
+            sourceType: 'order',
+            sourceId: Number(id),
+            userId,
+          });
         }
       }
       // §4.3: cancelar el pedido libera cualquier reserva activa ligada a él.
@@ -2526,62 +2550,225 @@ const Order = {
   },
 
   /**
-   * Marca un item como listo y, si todos lo están, el pedido pasa a 'ready'.
+   * El FABRICANTE reporta cuántas piezas de una línea tiene listas (o la
+   * marca/desmarca completa). Esto ya NO mueve el pedido a 'in_warehouse' —
+   * eso lo hace la aceptación en bodega (`warehouseReceiveItem`). Aquí solo se
+   * registra el avance del fabricante y se sella la fecha de devengo del adeudo.
    *
-   * Se registra quién lo marcó y cuándo: `is_ready` mezcla dos hechos —"el
-   * fabricante reporta que ya está" y "el admin lo da por recibido"— y esas dos
-   * columnas son lo único que permite distinguirlos. Al desmarcar vuelven a NULL.
-   *
-   * @param {number|null} userId usuario autenticado que hace el cambio
+   * @param {boolean} isReady      marca/desmarca la línea completa
+   * @param {number|null} userId
+   * @param {number|null} readyQuantity  si viene, fija la cantidad lista (parcial)
    */
-  async markItemReady(orderId, itemId, isReady = true, userId = null) {
-    // `ready_at` se limpia al desmarcar (es el estado actual del check), pero
-    // `manufacturer_delivered_at` se sella la PRIMERA vez y nunca se borra:
-    // es la fecha de devengo del adeudo con el fabricante. Sin esto, corregir
-    // un check descuadraría un corte ya pagado. El COALESCE preserva el valor
-    // original aunque se marque y desmarque diez veces.
+  async markItemReady(orderId, itemId, isReady = true, userId = null, readyQuantity = null) {
+    const [[item]] = await pool.execute(
+      'SELECT quantity FROM order_items WHERE id = ? AND order_id = ?', [itemId, orderId],
+    );
+    if (!item) return this.findById(orderId);
+
+    const qty = Number(item.quantity);
+    let readyQty;
+    if (readyQuantity != null) {
+      readyQty = Math.max(0, Math.min(qty, Math.trunc(Number(readyQuantity)) || 0));
+    } else {
+      readyQty = isReady ? qty : 0;
+    }
+    const nowReady = readyQty >= qty && qty > 0;
+    const anyReady = readyQty > 0;
+
+    // `manufacturer_delivered_at` se sella la PRIMERA vez que hay algo listo y
+    // nunca se borra: es la fecha de devengo del adeudo con el fabricante.
     await pool.execute(
       `UPDATE order_items
-          SET is_ready = ?, ready_by = ?, ready_at = ?,
+          SET ready_quantity = ?, is_ready = ?, ready_by = ?, ready_at = ?,
               manufacturer_delivered_at = IF(?, COALESCE(manufacturer_delivered_at, ?), manufacturer_delivered_at)
         WHERE id = ? AND order_id = ?`,
       [
-        isReady ? 1 : 0,
-        isReady ? userId : null,
-        isReady ? new Date() : null,
-        isReady ? 1 : 0,
+        readyQty,
+        nowReady ? 1 : 0,
+        anyReady ? userId : null,
+        anyReady ? new Date() : null,
+        anyReady ? 1 : 0,
         new Date(),
         itemId,
         orderId,
       ],
     );
-    // Plan Docs/plan-rastreo-pedido-cliente.md (Hueco 2): "todo listo" se
-    // decide SÓLO sobre las piezas a fabricar (`requires_fabrication = 1`) —
-    // las de stock nunca se marcan `is_ready` por el portal del fabricante,
-    // así que incluirlas atoraba los pedidos mixtos hasta que el admin los
-    // empujaba con el dropdown.
-    const [[{ fabTotal, fabPending }]] = await pool.execute(
-      `SELECT COUNT(*) AS fabTotal, COALESCE(SUM(is_ready = FALSE), 0) AS fabPending
-         FROM order_items WHERE order_id = ? AND requires_fabrication = 1`,
+
+    await this.recomputeFabricationStatus(orderId);
+    return this.findById(orderId);
+  },
+
+  /**
+   * Recalcula el estatus del pedido según la RECEPCIÓN EN BODEGA de sus piezas
+   * de fabricación (no el "listo" del fabricante):
+   *   fabricating → in_warehouse : todas las líneas requires_fabrication=1
+   *                                tienen received_quantity >= quantity.
+   *   in_warehouse → ready       : además el pago ya no frena la entrega y
+   *                                ninguna línea quedó dañada/incompleta.
+   *
+   * Idempotente y sin transacción propia: se llama DESPUÉS de confirmar la
+   * recepción (o desde markItemReady). Cada UPDATE tiene su guarda de estatus.
+   *
+   * @param {number} orderId
+   */
+  async recomputeFabricationStatus(orderId) {
+    const [[row]] = await pool.execute(
+      `SELECT
+         COUNT(*) AS fabTotal,
+         COALESCE(SUM(received_quantity < quantity), 0) AS fabPending,
+         COALESCE(SUM(warehouse_condition IN ('damaged','incomplete')), 0) AS issues
+       FROM order_items WHERE order_id = ? AND requires_fabrication = 1`,
       [orderId],
     );
-    if (Number(fabTotal) > 0 && Number(fabPending) === 0) {
-      // 1) fabricating → in_warehouse: el mueble ya está físicamente. NO se
-      //    revisa el pago aquí — eso lo separa el paso siguiente.
+    // Con piezas dañadas/incompletas el pedido NO avanza: sigue en
+    // 'fabricating' hasta que el fabricante reponga y bodega reciba el
+    // reemplazo como 'ok'. El rastreador del cliente lo explica (hasWarehouseIssue).
+    if (Number(row.fabTotal) === 0 || Number(row.fabPending) > 0 || Number(row.issues) > 0) return;
+
+    // 1) fabricating → in_warehouse (el mueble ya está físicamente y verificado).
+    await pool.execute(
+      "UPDATE orders SET order_status = 'in_warehouse' WHERE id = ? AND order_status = 'fabricating'",
+      [orderId],
+    );
+
+    // 2) in_warehouse → ready: además el pago ya no frena la entrega.
+    const order = await this.findById(orderId);
+    if (order?.orderStatus === 'in_warehouse' && this.paymentClearsForDelivery(order)) {
       await pool.execute(
-        "UPDATE orders SET order_status = 'in_warehouse' WHERE id = ? AND order_status = 'fabricating'",
+        "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'in_warehouse'",
         [orderId],
       );
-      // 2) in_warehouse → ready: sólo si el pago ya no frena la entrega.
-      const order = await this.findById(orderId);
-      if (order?.orderStatus === 'in_warehouse' && this.paymentClearsForDelivery(order)) {
-        await pool.execute(
-          "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'in_warehouse'",
-          [orderId],
+    }
+  },
+
+  /**
+   * BODEGA acepta piezas de una línea de fabricación (paso distinto del "listo"
+   * del fabricante). Reconcilia el stock negativo que dejó la venta
+   * (`fabrication_arrival`, +delta), registra el evento y sugiere una nota de
+   * crédito por lo que llegó dañado/incompleto.
+   *
+   * @param {number} itemId
+   * @param {object} p
+   * @param {number}  p.receivedQuantity  acumulado que se ha aceptado (no delta)
+   * @param {'ok'|'damaged'|'incomplete'} p.condition
+   * @param {string|null} [p.note]
+   * @param {number|null} [p.userId]
+   * @returns {Promise<{order:object, creditNote:{id:number,amount:number}|null, warnings:string[]}>}
+   */
+  async warehouseReceiveItem(itemId, { receivedQuantity, condition = 'ok', note = null, userId = null }) {
+    const [[item]] = await pool.execute(
+      `SELECT oi.*, o.order_number
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE oi.id = ?`,
+      [itemId],
+    );
+    if (!item) { const e = new Error('Línea de pedido no encontrada'); e.statusCode = 404; throw e; }
+    if (!item.requires_fabrication) {
+      const e = new Error('Esa línea no es de fabricación; no se recibe en bodega.'); e.statusCode = 400; throw e;
+    }
+
+    const qty = Number(item.quantity);
+    const already = Number(item.received_quantity);
+    const target = Math.trunc(Number(receivedQuantity));
+    if (!Number.isFinite(target) || target < already) {
+      const e = new Error(`La cantidad recibida debe ser al menos la ya registrada (${already}).`);
+      e.statusCode = 400; throw e;
+    }
+    if (target > qty) {
+      const e = new Error(`No puedes recibir más de ${qty} piezas en esta línea.`);
+      e.statusCode = 400; throw e;
+    }
+    const delta = target - already; // piezas físicas nuevas de ESTE evento
+    // Piezas ya aceptadas que todavía NO entraron a inventario. Clave para el
+    // caso daño→reemplazo: la recepción "dañada" subió received_quantity pero no
+    // stock_returned_qty, así que cuando llega el reemplazo "OK" hay que sumar
+    // esta diferencia aunque `delta` sea 0 (target topado en quantity).
+    const pendingGood = target - Number(item.stock_returned_qty || 0);
+    if (delta === 0 && pendingGood === 0 && condition === item.warehouse_condition) {
+      return { order: await this.findById(item.order_id), creditNote: null, warnings: [] };
+    }
+
+    const warnings = [];
+    let creditNote = null;
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      await conn.execute(
+        `UPDATE order_items
+            SET received_quantity = ?, warehouse_condition = ?, warehouse_note = ?,
+                warehouse_received_at = COALESCE(warehouse_received_at, ?), warehouse_received_by = ?
+          WHERE id = ?`,
+        [target, condition, note ? String(note).slice(0, 255) : null, new Date(), userId, itemId],
+      );
+
+      const [receipt] = await conn.execute(
+        `INSERT INTO stock_receipts (source_type, source_id, received_by, note)
+         VALUES ('order', ?, ?, ?)`,
+        [item.order_id, userId, note ? String(note).slice(0, 255) : null],
+      );
+      // Cantidad que representa este evento: si es 'ok' son las piezas que se
+      // reconcilian ahora; si es daño/faltante, las piezas físicas nuevas.
+      const eventQty = condition === 'ok' ? pendingGood : delta;
+      if (eventQty > 0) {
+        await conn.execute(
+          `INSERT INTO stock_receipt_lines (receipt_id, line_source_id, quantity, condition_flag, note)
+           VALUES (?, ?, ?, ?, ?)`,
+          [receipt.insertId, itemId, eventQty, condition, note ? String(note).slice(0, 255) : null],
         );
       }
+
+      if (condition === 'ok' && pendingGood > 0) {
+        if (item.product_id && item.material_id) {
+          // Reconciliación del negativo de M15.4: la pieza fabricada ya está.
+          await applyStockDelta(conn, {
+            productId: item.product_id,
+            materialId: item.material_id,
+            color: null, // fabricación: nunca toca buckets de color
+            delta: pendingGood,
+            reason: 'fabrication_arrival',
+            sourceType: 'order',
+            sourceId: item.order_id,
+            note: `Llegada a bodega ${item.order_number}`,
+            userId,
+          });
+          await conn.execute(
+            'UPDATE order_items SET stock_returned_qty = stock_returned_qty + ? WHERE id = ?',
+            [pendingGood, itemId],
+          );
+        } else {
+          warnings.push('La línea no tiene producto/material: no se reconcilió el stock.');
+        }
+      }
+
+      // Nota de crédito por lo dañado/incompleto de ESTE evento.
+      if (condition !== 'ok' && delta > 0 && item.manufacturer_id) {
+        const amount = delta * Number(item.unit_cost || 0);
+        if (amount > 0) {
+          const { id } = await ManufacturerPayable.addCharge({
+            manufacturerId: item.manufacturer_id,
+            sourceType: 'order',
+            sourceId: item.order_id,
+            amount: -Math.round(amount * 100) / 100,
+            concept: `Nota de crédito sugerida — daño/faltante pedido ${item.order_number}`,
+            notes: 'Generada al recibir en bodega. Revisa el monto.',
+          }, userId);
+          creditNote = { id, amount: Math.round(amount * 100) / 100 };
+        }
+      } else if (condition !== 'ok' && delta > 0) {
+        warnings.push('Piezas dañadas/incompletas, pero la línea no tiene fabricante: no se creó nota de crédito.');
+      }
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
     }
-    return this.findById(orderId);
+
+    await this.recomputeFabricationStatus(item.order_id);
+    return { order: await this.findById(item.order_id), creditNote, warnings };
   },
 
   /**

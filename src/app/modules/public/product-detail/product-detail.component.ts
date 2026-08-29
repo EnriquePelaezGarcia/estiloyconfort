@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -12,7 +13,8 @@ import { CurrencyPipe, TitleCasePipe } from '@angular/common';
 import { ProductService } from '../../../core/services/product.service';
 import { CartService } from '../../../core/services/cart.service';
 import { SiteContentService } from '../../../core/services/site-content.service';
-import { MaterialPrices, Product, ProductVariant } from '../../../core/models/product.model';
+import { SeoService } from '../../../core/services/seo.service';
+import { MaterialPrices, Product, ProductImage, ProductVariant } from '../../../core/models/product.model';
 import { SiteContent } from '../../../core/models/site-content.model';
 import { CartVariantSelection } from '../../../core/models/cart.model';
 import { PriceDisplayComponent } from '../../../shared/components/price-display/price-display.component';
@@ -20,6 +22,8 @@ import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { mediaUrl } from '../../../core/utils/media-url';
 import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 import { AccordionItemComponent } from '../../../shared/components/accordion-item/accordion-item.component';
+import { FieldHelpComponent } from '../../../shared/components/field-help/field-help.component';
+import { MATERIAL_HELP } from './material-help';
 
 @Component({
   selector: 'app-product-detail',
@@ -34,14 +38,19 @@ import { AccordionItemComponent } from '../../../shared/components/accordion-ite
     MediaUrlPipe,
     ReviewsBadgeComponent,
     AccordionItemComponent,
+    FieldHelpComponent,
   ],
 })
-export class ProductDetailComponent implements OnInit {
+export class ProductDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private productService = inject(ProductService);
   private cartService = inject(CartService);
   private siteContentService = inject(SiteContentService);
+  private seo = inject(SeoService);
+
+  /** Explicación corta por material para el ⓘ del selector (Parte 1). Clave = code. */
+  protected readonly materialHelp = MATERIAL_HELP;
 
   product = signal<Product | null>(null);
   loading = signal(true);
@@ -102,10 +111,47 @@ export class ProductDetailComponent implements OnInit {
     return this.materialOptions().find((m) => m.material_id === materialId) ?? null;
   });
 
+  /**
+   * Parte 2 (Docs/plan-imagen-y-ayuda-por-material.md): ¿hay al menos una foto
+   * PROPIA del material elegido?
+   */
+  hasOwnMaterialPhoto = computed(() => {
+    const mat = this.selectedMaterial();
+    return mat != null && (this.product()?.images ?? []).some((i) => i.material_id === mat);
+  });
+
+  /**
+   * Galería a mostrar según el material elegido:
+   *   - sin material → todas.
+   *   - con material y hay fotos suyas → las suyas + las genéricas.
+   *   - con material y NO hay fotos suyas → solo las genéricas (material_id
+   *     null); si tampoco hay genéricas, la principal. Nunca una foto
+   *     etiquetada para OTRO material (confundiría junto a la nota).
+   */
+  galleryImages = computed<ProductImage[]>(() => {
+    const imgs = this.product()?.images ?? [];
+    const mat = this.selectedMaterial();
+    if (mat == null) return imgs;
+    if (this.hasOwnMaterialPhoto()) {
+      return imgs.filter((i) => i.material_id === mat || i.material_id == null);
+    }
+    const generic = imgs.filter((i) => i.material_id == null);
+    return generic.length ? generic : imgs.filter((i) => i.is_primary);
+  });
+
+  /** Nota "imagen de referencia": material elegido, sin foto propia, pero hay algo que mostrar. */
+  showReferenceNote = computed(
+    () =>
+      this.selectedMaterial() != null &&
+      !this.hasOwnMaterialPhoto() &&
+      (this.product()?.images?.length ?? 0) > 0,
+  );
+
   activeImage = computed(() => {
+    const imgs = this.galleryImages();
     const p = this.product();
-    if (!p?.images?.length) return mediaUrl(p?.primary_image);
-    return mediaUrl(p.images[this.activeImageIndex()]?.image_url ?? p.primary_image);
+    if (!imgs.length) return mediaUrl(p?.primary_image);
+    return mediaUrl(imgs[this.activeImageIndex()]?.image_url ?? p?.primary_image);
   });
 
   variantTypes = computed(() => {
@@ -152,10 +198,15 @@ export class ProductDetailComponent implements OnInit {
       this.loading.set(true);
       this.error.set(false);
       this.selectedMaterial.set(null);
+      this.activeImageIndex.set(0);
       this.productService.getProduct(slug).subscribe({
         next: p => {
           this.product.set(p);
           this.loading.set(false);
+          // SEO (Parte 3): corre DESPUÉS del NavigationEnd, así que gana sobre
+          // el `title` estático de la ruta. En SSR el render espera a que el
+          // HTTP termine, así que el HTML servido ya trae estas etiquetas.
+          this.seo.setProduct(p);
           // `?material=<id>`: el vendedor abrió la ficha desde una línea de un
           // pedido o cotización, así que la ficha nace mostrando EL material
           // que ya eligió — no el precio de otro.
@@ -176,6 +227,10 @@ export class ProductDetailComponent implements OnInit {
     });
   }
 
+  ngOnDestroy(): void {
+    this.seo.reset();
+  }
+
   /** Regresa al pedido o cotización, que se repone desde el DraftHandoffService. */
   goBackToDraft(): void {
     const url = this.returnUrl();
@@ -187,6 +242,16 @@ export class ProductDetailComponent implements OnInit {
     const option = this.materialOptions().find((m) => m.material_id === materialId);
     if (!option?.isQuoted) return;
     this.selectedMaterial.set(materialId);
+    this.activeImageIndex.set(0);
+    // El material elegido queda en la URL: el link que comparte el cliente (o
+    // el vendedor) conserva la elección. El canonical de SEO ignora este
+    // querystring (Parte 3), así que no crea una página duplicada.
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { material: materialId },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   selectImage(index: number): void {

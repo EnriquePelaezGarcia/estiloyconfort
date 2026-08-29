@@ -20,7 +20,7 @@
       <thead>
         <tr>
           <th>Pedido</th><th>Cliente</th><th>Entrega a tienda</th><th>Producto</th><th class="num">Cantidad</th>
-          <th>Estado</th><th>Fabricante</th><th class="num">Utilidad</th>
+          <th>Fabricante reporta</th><th>Bodega</th><th>Surte</th><th class="num">Utilidad</th>
         </tr>
       </thead>
       <tbody>
@@ -45,9 +45,13 @@
               <td data-label="Producto">
                 {{ r.productName }}
                 <span class="muted"> · {{ r.productSku }}</span>
+                @if (r.color) { <span class="muted"> / {{ r.color }}</span> }
+                @if (r.fabricationNote) {
+                  <span class="specs">✏️ {{ r.fabricationNote }}</span>
+                }
               </td>
               <td data-label="Cantidad" class="num">{{ r.quantity }}</td>
-              <td data-label="Estado">
+              <td data-label="Fabricante reporta">
                 <button
                   type="button"
                   class="ready-toggle"
@@ -59,15 +63,30 @@
                   <span class="material-symbols-outlined">
                     {{ r.isReady ? 'check_circle' : 'radio_button_unchecked' }}
                   </span>
-                  {{ r.isReady ? 'Listo' : 'Pendiente' }}
+                  {{ r.isReady ? 'Listo' : (r.readyQuantity > 0 ? r.readyQuantity + '/' + r.quantity : 'Pendiente') }}
                 </button>
-                @if (r.isReady && r.readyByName) {
+                @if (r.readyByName) {
                   <span class="ready-by muted">
                     {{ r.readyByName }}@if (r.readyAt) { · {{ r.readyAt | date:'d MMM' }} }
                   </span>
                 }
               </td>
-              <td data-label="Fabricante">
+              <td data-label="Bodega">
+                @if (r.receivedQuantity >= r.quantity && r.warehouseCondition === 'ok') {
+                  <span class="badge badge--green">Recibido {{ r.receivedQuantity }}/{{ r.quantity }}</span>
+                } @else if (r.warehouseCondition === 'damaged' || r.warehouseCondition === 'incomplete') {
+                  <span class="badge badge--red">
+                    {{ r.warehouseCondition === 'damaged' ? 'Dañado' : 'Incompleto' }} ({{ r.receivedQuantity }}/{{ r.quantity }})
+                  </span>
+                } @else if (r.receivedQuantity > 0) {
+                  <span class="badge badge--amber">Parcial {{ r.receivedQuantity }}/{{ r.quantity }}</span>
+                }
+                <button type="button" class="btn btn--ghost btn--sm" (click)="openWarehouseReceipt(r)">
+                  <span class="material-symbols-outlined">move_to_inbox</span> Recibir
+                </button>
+                @if (r.warehouseNote) { <span class="muted specs">{{ r.warehouseNote }}</span> }
+              </td>
+              <td data-label="Surte">
                 @if (r.manufacturerOptions.length) {
                   <select
                     (change)="onManufacturerChange(r, $event)"
@@ -101,5 +120,49 @@
         }
       </tbody>
     </table>
+  </div>
+}
+
+<!-- ===== Modal: recepción en bodega ===== -->
+@if (receiving(); as r) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Recepción en bodega</h2>
+        <button type="button" class="icon-btn" (click)="closeWarehouseReceipt()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="strong">{{ r.orderNumber }} — {{ r.productName }}</p>
+        <p class="muted">{{ r.materialLabel }}@if (r.color) { / {{ r.color }} } · pedidas {{ r.quantity }}, ya recibidas {{ r.receivedQuantity }}</p>
+        @if (r.fabricationNote) { <p class="specs">✏️ {{ r.fabricationNote }}</p> }
+
+        <div class="field">
+          <label>Piezas recibidas (acumulado)</label>
+          <input type="number" [min]="r.receivedQuantity" [max]="r.quantity"
+                 [value]="receiptQty()" (input)="receiptQty.set(+$any($event.target).value)" />
+        </div>
+        <div class="field">
+          <label>Condición</label>
+          <select [value]="receiptCondition()" (change)="receiptCondition.set($any($event.target).value)">
+            <option value="ok">OK — entra a inventario</option>
+            <option value="damaged">Dañada — detiene el pedido + nota de crédito</option>
+            <option value="incomplete">Incompleta — detiene el pedido + nota de crédito</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nota (opcional)</label>
+          <input type="text" [value]="receiptNote()" (input)="receiptNote.set($any($event.target).value)"
+                 placeholder="Ej. rayón en la puerta izquierda" />
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeWarehouseReceipt()">Cancelar</button>
+        <button type="button" class="btn btn--primary" [disabled]="savingReceipt()" (click)="submitWarehouseReceipt()">
+          {{ savingReceipt() ? 'Guardando…' : 'Confirmar recepción' }}
+        </button>
+      </div>
+    </div>
   </div>
 }

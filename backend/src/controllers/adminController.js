@@ -680,6 +680,8 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
     `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
             o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
             oi.material_id, oi.material_label, oi.color, oi.quantity, oi.is_ready, oi.ready_at,
+            oi.ready_quantity, oi.received_quantity, oi.warehouse_condition, oi.warehouse_note,
+            oi.fabrication_note, wr.full_name AS warehouse_received_by_name, oi.warehouse_received_at,
             rb.full_name AS ready_by_name,
             oi.product_id, oi.unit_price, oi.unit_cost,
             oi.manufacturer_id, m.name AS manufacturer_name
@@ -687,6 +689,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
      JOIN orders o ON o.id = oi.order_id
      LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
      LEFT JOIN users rb ON rb.id = oi.ready_by
+     LEFT JOIN users wr ON wr.id = oi.warehouse_received_by
      WHERE o.order_status IN ('pending','fabricating') AND oi.requires_fabrication = 1
      ORDER BY o.manufacturer_due_date IS NULL, o.manufacturer_due_date ASC, o.created_at ASC`,
   );
@@ -715,6 +718,13 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         color: r.color,
         quantity: r.quantity,
         isReady: !!r.is_ready,
+        readyQuantity: Number(r.ready_quantity ?? 0),
+        receivedQuantity: Number(r.received_quantity ?? 0),
+        warehouseCondition: r.warehouse_condition ?? null,
+        warehouseNote: r.warehouse_note ?? null,
+        warehouseReceivedByName: r.warehouse_received_by_name ?? null,
+        warehouseReceivedAt: r.warehouse_received_at ?? null,
+        fabricationNote: r.fabrication_note ?? null,
         readyByName: r.ready_by_name ?? null,
         readyAt: r.ready_at ?? null,
         manufacturerId: r.manufacturer_id ?? null,
@@ -791,6 +801,28 @@ const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
       unitProfit: Number(item.unit_price) - cost,
     },
     message: 'Fabricante asignado',
+  });
+});
+
+// PATCH /api/admin/order-items/:id/warehouse-receipt
+// Bodega acepta piezas de una línea de fabricación (paso distinto del "listo"
+// del fabricante). Reconcilia el stock y sugiere nota de crédito por daño.
+const warehouseReceiveItem = asyncHandler(async (req, res) => {
+  const { receivedQuantity, condition, note } = req.body;
+  if (receivedQuantity == null || Number.isNaN(Number(receivedQuantity))) {
+    throw ApiError.badRequest('Indica cuántas piezas se recibieron (acumulado).');
+  }
+  const result = await Order.warehouseReceiveItem(Number(req.params.id), {
+    receivedQuantity: Number(receivedQuantity),
+    condition: ['ok', 'damaged', 'incomplete'].includes(condition) ? condition : 'ok',
+    note: note ?? null,
+    userId: req.user.id,
+  });
+  res.json({
+    data: result,
+    message: result.creditNote
+      ? `Recepción registrada. Nota de crédito sugerida por $${result.creditNote.amount.toFixed(2)}.`
+      : 'Recepción en bodega registrada',
   });
 });
 
@@ -1090,6 +1122,7 @@ module.exports = {
   getFactoryOrderItems,
   updateManufacturerDueDate,
   assignOrderItemManufacturer,
+  warehouseReceiveItem,
   getWeeklyList,
   getSalesReport,
   getInventoryReport,

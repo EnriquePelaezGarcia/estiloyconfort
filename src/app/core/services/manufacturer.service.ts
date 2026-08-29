@@ -52,10 +52,15 @@ export class ManufacturerService {
     return this.api.patch<{ data: Order }>(`/manufacturer/orders/${id}/start`, {});
   }
 
-  markItemReady(orderId: number, itemId: number, isReady: boolean): Observable<{ data: Order }> {
+  markItemReady(
+    orderId: number,
+    itemId: number,
+    isReady: boolean,
+    readyQuantity?: number,
+  ): Observable<{ data: Order }> {
     return this.api.patch<{ data: Order }>(
       `/manufacturer/orders/${orderId}/items/${itemId}/ready`,
-      { isReady },
+      readyQuantity != null ? { readyQuantity } : { isReady },
     );
   }
 

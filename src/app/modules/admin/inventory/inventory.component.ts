@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { AdminService, InventoryRow, InventoryUpdateItem } from '../../../core/services/admin.service';
+import { AdminService, InventoryMovementRow, InventoryRow, InventoryUpdateItem } from '../../../core/services/admin.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LabelPrintService } from '../../../core/services/label-print.service';
@@ -23,7 +24,7 @@ type StockFilter = 'all' | 'low' | 'out';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './inventory.component.html',
   styleUrl: './inventory.component.scss',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, DatePipe],
 })
 export class InventoryComponent implements OnInit {
   private adminService = inject(AdminService);
@@ -46,8 +47,9 @@ export class InventoryComponent implements OnInit {
   /** El valor de inventario es información financiera: solo para el admin. */
   protected showValue = computed(() => this.auth.userRole() === 'admin');
 
-  /** Columnas visibles de la tabla, para el colspan de la fila vacía. */
-  protected columnCount = computed(() => 7 + (this.showValue() ? 1 : 0) + (this.canManage() ? 1 : 0));
+  /** Columnas visibles de la tabla, para el colspan de la fila vacía.
+   *  La columna de acciones va SIEMPRE: "Movimientos" lo ve cualquier vendedor. */
+  protected columnCount = computed(() => 8 + (this.showValue() ? 1 : 0));
 
   protected rows = signal<InventoryRow[]>([]);
   protected loading = signal(true);
@@ -63,8 +65,14 @@ export class InventoryComponent implements OnInit {
   protected labeling = signal<InventoryRow | null>(null);
   protected printingLabels = signal(false);
 
+  /** Fila cuyo kardex se está viendo (null = modal cerrado). */
+  protected viewingMovements = signal<InventoryRow | null>(null);
+  protected movements = signal<InventoryMovementRow[]>([]);
+  protected loadingMovements = signal(false);
+
   protected form = this.fb.group({
     stockQuantity: [0, [Validators.required]],
+    note: [''],
   });
 
   /**
@@ -207,10 +215,32 @@ export class InventoryComponent implements OnInit {
       .finally(() => this.printingLabels.set(false));
   }
 
+  // ===== Kardex (movimientos de inventario) =====
+  protected openMovements(row: InventoryRow): void {
+    this.viewingMovements.set(row);
+    this.movements.set([]);
+    this.loadingMovements.set(true);
+    this.adminService.getInventoryMovements(row.productId, row.materialId).subscribe({
+      next: (res) => {
+        this.movements.set(res.data);
+        this.loadingMovements.set(false);
+      },
+      error: () => {
+        this.loadingMovements.set(false);
+        this.notification.error('No se pudo cargar el historial de movimientos');
+      },
+    });
+  }
+
+  protected closeMovements(): void {
+    this.viewingMovements.set(null);
+    this.movements.set([]);
+  }
+
   // ===== Ajuste de stock =====
   protected openAdjust(row: InventoryRow): void {
     this.adjusting.set(row);
-    this.form.reset({ stockQuantity: row.stockQuantity });
+    this.form.reset({ stockQuantity: row.stockQuantity, note: '' });
     this.colorRows.set((row.colors ?? []).map((c) => ({ ...c })));
   }
 
@@ -257,6 +287,8 @@ export class InventoryComponent implements OnInit {
     const row = this.adjusting();
     if (!row) return;
 
+    const note = (this.form.getRawValue().note ?? '').trim() || null;
+
     const cleaned = this.colorRows()
       .map((c) => ({ color: c.color.trim(), quantity: Math.trunc(Number(c.quantity) || 0) }))
       .filter((c) => c.color !== '');
@@ -276,6 +308,7 @@ export class InventoryComponent implements OnInit {
         materialId: row.materialId,
         stockQuantity: stockFallback,
         colors: cleaned,
+        note,
       });
       return;
     }
@@ -288,6 +321,7 @@ export class InventoryComponent implements OnInit {
       productId: row.productId,
       materialId: row.materialId,
       stockQuantity: this.form.getRawValue().stockQuantity ?? 0,
+      note,
     });
   }
 

@@ -89,7 +89,7 @@
           <th class="num">Disponible</th>
           <th>Estado</th>
           @if (showValue()) { <th class="num">Valor</th> }
-          @if (canManage()) { <th class="actions-col">Acciones</th> }
+          <th class="actions-col">Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -127,16 +127,19 @@
             @if (showValue()) {
               <td data-label="Valor" class="num">{{ money(row.stockValue) }}</td>
             }
-            @if (canManage()) {
-              <td data-label="Acciones" class="actions">
+            <td data-label="Acciones" class="actions">
+              <button type="button" class="icon-btn" (click)="openMovements(row)" title="Ver movimientos (kardex)">
+                <span class="material-symbols-outlined">history</span>
+              </button>
+              @if (canManage()) {
                 <button type="button" class="icon-btn" (click)="openAdjust(row)" title="Ajustar stock">
                   <span class="material-symbols-outlined">tune</span>
                 </button>
                 <button type="button" class="icon-btn" (click)="openLabels(row)" title="Imprimir etiquetas QR">
                   <span class="material-symbols-outlined">qr_code_2</span>
                 </button>
-              </td>
-            }
+              }
+            </td>
           </tr>
         } @empty {
           <tr>
@@ -234,6 +237,13 @@
           }
         </div>
 
+        <div class="field">
+          <label for="adjustNote">Motivo del ajuste <span class="muted">(opcional)</span></label>
+          <input id="adjustNote" type="text" formControlName="note" maxlength="255"
+                 placeholder="Ej. merma por humedad, conteo físico, corrección" />
+          <p class="field__hint">Queda registrado en el historial de movimientos.</p>
+        </div>
+
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="closeAdjust()">Cancelar</button>
           <button type="submit" class="btn btn--primary" [disabled]="saving()">
@@ -242,6 +252,66 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal movimientos (kardex) ===== -->
+@if (viewingMovements(); as row) {
+  <div class="modal-backdrop">
+    <div class="modal">
+      <div class="modal__head">
+        <h2>Movimientos — {{ row.name }} · {{ row.materialLabel }}</h2>
+        <button type="button" class="icon-btn" (click)="closeMovements()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal__body">
+        @if (loadingMovements()) {
+          <div class="state"><span class="spinner"></span><p>Cargando historial…</p></div>
+        } @else if (movements().length === 0) {
+          <p class="empty">Sin movimientos registrados todavía para este renglón.</p>
+        } @else {
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Motivo</th>
+                  <th class="num">Cambio</th>
+                  <th class="num">Saldo</th>
+                  <th>Documento</th>
+                  <th>Usuario</th>
+                  <th>Nota</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of movements(); track m.id) {
+                  <tr>
+                    <td data-label="Fecha">{{ m.createdAt | date:'dd/MM/yyyy HH:mm' }}</td>
+                    <td data-label="Motivo">
+                      {{ m.reasonLabel }}
+                      @if (m.color) { <span class="muted">({{ m.color }})</span> }
+                    </td>
+                    <td data-label="Cambio" class="num" [class.negative]="m.delta < 0">
+                      {{ m.delta > 0 ? '+' : '' }}{{ m.delta }}
+                    </td>
+                    <td data-label="Saldo" class="num">{{ m.balanceAfter ?? '—' }}</td>
+                    <td data-label="Documento">{{ m.documentNumber || '—' }}</td>
+                    <td data-label="Usuario" class="muted">{{ m.userName || '—' }}</td>
+                    <td data-label="Nota" class="muted">{{ m.note || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeMovements()">Cerrar</button>
+      </div>
     </div>
   </div>
 }

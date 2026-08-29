@@ -53,13 +53,22 @@
             </td>
             <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
             <td data-label="Estado">
-              <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
-                @for (s of allStatuses; track s) {
-                  <option [value]="s">{{ statusLabel(s) }}</option>
-                }
-              </select>
+              @if (o.status === 'received' || o.status === 'partially_received') {
+                <span class="badge" [class]="statusTone(o.status)">{{ statusLabel(o.status) }}</span>
+              } @else {
+                <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
+                  @for (s of manualStatuses; track s) {
+                    <option [value]="s">{{ statusLabel(s) }}</option>
+                  }
+                </select>
+              }
             </td>
             <td class="actions">
+              @if (canReceive(o)) {
+                <button type="button" class="icon-btn" (click)="openReceipt(o)" title="Registrar recepción">
+                  <span class="material-symbols-outlined">move_to_inbox</span>
+                </button>
+              }
               <button type="button" class="icon-btn" (click)="toggle(o)" aria-label="Ver items">
                 <span class="material-symbols-outlined">
                   {{ expanded() === o.id ? 'expand_less' : 'expand_more' }}
@@ -76,8 +85,9 @@
                   <table class="subtable">
                     <thead>
                       <tr>
-                        <th>Producto</th><th>SKU</th><th>Tipo</th>
-                        <th class="num">Cant.</th><th class="num">Costo unit.</th><th class="num">Subtotal</th>
+                        <th>Producto</th><th>Material</th><th>Tipo</th>
+                        <th class="num">Cant.</th><th class="num">Recibido</th>
+                        <th class="num">Costo unit.</th><th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -85,24 +95,65 @@
                         <tr>
                           <td>
                             {{ it.productName }}
+                            @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
                             @if (it.specifications) {
                               <span class="specs">{{ it.specifications }}</span>
                             }
                           </td>
-                          <td class="muted">{{ it.productSku ?? '—' }}</td>
+                          <td>
+                            {{ it.materialLabel ?? '—' }}
+                            @if (it.color) { <span class="muted"> / {{ it.color }}</span> }
+                          </td>
                           <td>
                             <span class="badge" [class]="it.isNewProduct ? 'badge--amber' : 'badge--gray'">
                               {{ it.isNewProduct ? 'Nuevo' : 'Existente' }}
                             </span>
                           </td>
                           <td class="num">{{ it.quantity }}</td>
+                          <td class="num">
+                            {{ it.receivedQuantity ?? 0 }}/{{ it.quantity }}
+                            @if ((it.pendingQuantity ?? it.quantity) > 0) {
+                              <span class="muted"> (faltan {{ it.pendingQuantity ?? it.quantity }})</span>
+                            }
+                          </td>
                           <td class="num">{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
-                          <td class="num">{{ it.subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                          <td>
+                            @if (it.isNewProduct) {
+                              <button type="button" class="btn btn--ghost btn--sm" (click)="openMaterialize(o.id, it)">
+                                <span class="material-symbols-outlined">add_box</span> Crear producto
+                              </button>
+                            }
+                          </td>
                         </tr>
                       }
                     </tbody>
                   </table>
                   @if (o.notes) { <p class="po-notes"><strong>Notas:</strong> {{ o.notes }}</p> }
+
+                  @if (expandedReceipts().length > 0) {
+                    <div class="receipts">
+                      <h4>Recepciones</h4>
+                      @for (r of expandedReceipts(); track r.id) {
+                        <p class="receipt-line">
+                          <span class="muted">{{ r.createdAt | date:'dd/MM/yyyy HH:mm' }}</span>
+                          @for (l of r.lines; track l.itemId) {
+                            <span class="badge badge--sm"
+                              [class]="l.condition === 'ok' ? 'badge--green' : 'badge--red'">
+                              {{ l.quantity }} {{ l.condition === 'ok' ? 'ok' : (l.condition === 'damaged' ? 'dañadas' : 'incompletas') }}
+                            </span>
+                          }
+                          @if (r.receivedByName) { <span class="muted"> · {{ r.receivedByName }}</span> }
+                          @if (r.note) { <span> — {{ r.note }}</span> }
+                        </p>
+                      }
+                    </div>
+                  }
+
+                  @if (canReceive(o)) {
+                    <button type="button" class="btn btn--primary btn--sm" (click)="openReceipt(o)">
+                      <span class="material-symbols-outlined">move_to_inbox</span> Registrar recepción
+                    </button>
+                  }
                 }
               </td>
             </tr>
@@ -170,6 +221,22 @@
                     }
                   </select>
                 </div>
+                <div class="grid-2">
+                  <div class="field">
+                    <label>Material</label>
+                    <select (change)="onMaterialSelected(i, $event)" [value]="item.get('materialId')?.value ?? ''">
+                      <option value="">Sin material…</option>
+                      @for (m of materialsForItem(i); track m.id) {
+                        <option [value]="m.id">{{ m.label }}</option>
+                      }
+                    </select>
+                    <p class="field__hint">Sin material la recepción no puede sumarlo a inventario.</p>
+                  </div>
+                  <div class="field">
+                    <label>Color (opcional)</label>
+                    <input type="text" formControlName="color" placeholder="Ej. Blanco" />
+                  </div>
+                </div>
               } @else {
                 <div class="grid-2">
                   <div class="field">
@@ -212,6 +279,122 @@
           <button type="button" class="btn btn--ghost" (click)="closeCreate()">Cancelar</button>
           <button type="submit" class="btn btn--primary" [disabled]="saving()">
             {{ saving() ? 'Guardando…' : 'Crear orden' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: registrar recepción ===== -->
+@if (receiving(); as po) {
+  <div class="modal-backdrop">
+    <div class="modal modal--lg">
+      <div class="modal__head">
+        <h2>Registrar recepción — {{ po.poNumber }}</h2>
+        <button type="button" class="icon-btn" (click)="closeReceipt()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        @if (receiptRows().length === 0) {
+          <p class="empty">Esta orden ya no tiene piezas pendientes de recibir.</p>
+        } @else {
+          <table class="subtable">
+            <thead>
+              <tr><th>Producto</th><th class="num">Falta</th><th class="num">Recibí</th><th>Condición</th><th>Nota</th></tr>
+            </thead>
+            <tbody>
+              @for (r of receiptRows(); track r.itemId; let i = $index) {
+                <tr>
+                  <td>{{ r.productName }}</td>
+                  <td class="num">{{ r.pending }}</td>
+                  <td class="num">
+                    <input type="number" min="0" [max]="r.pending" [value]="r.quantity"
+                           (input)="setReceiptQty(i, $any($event.target).value)" style="width:5rem" />
+                  </td>
+                  <td>
+                    <select [value]="r.condition" (change)="setReceiptCondition(i, $any($event.target).value)">
+                      <option value="ok">OK</option>
+                      <option value="damaged">Dañada</option>
+                      <option value="incomplete">Incompleta</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input type="text" [value]="r.note" (input)="setReceiptNote(i, $any($event.target).value)"
+                           placeholder="Ej. rayón en puerta" />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <p class="field__hint">
+            Lo marcado OK se suma a inventario. Lo dañado/incompleto genera una nota de crédito sugerida al fabricante.
+          </p>
+          <div class="field">
+            <label for="receiptNote">Nota de la recepción (opcional)</label>
+            <input id="receiptNote" type="text" [value]="receiptNote()"
+                   (input)="receiptNote.set($any($event.target).value)" />
+          </div>
+        }
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeReceipt()">Cancelar</button>
+        <button type="button" class="btn btn--primary" [disabled]="savingReceipt() || receiptRows().length === 0"
+                (click)="submitReceipt()">
+          {{ savingReceipt() ? 'Guardando…' : 'Registrar recepción' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: crear producto desde renglón nuevo ===== -->
+@if (materializing(); as ctx) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Crear producto en catálogo</h2>
+        <button type="button" class="icon-btn" (click)="closeMaterialize()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form class="modal__body" [formGroup]="productForm" (ngSubmit)="submitMaterialize()">
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" formControlName="name" />
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>SKU (opcional)</label>
+            <input type="text" formControlName="sku" />
+          </div>
+          <div class="field">
+            <label>Categoría</label>
+            <select formControlName="categoryId">
+              <option [ngValue]="null">Sin categoría</option>
+              @for (c of categories(); track c.id) {
+                <option [ngValue]="c.id">{{ c.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Material</label>
+          <select formControlName="materialId">
+            <option [ngValue]="null">Elige un material…</option>
+            @for (m of materialsStore.active(); track m.id) {
+              <option [ngValue]="m.id">{{ m.label }}</option>
+            }
+          </select>
+        </div>
+        <p class="field__hint">
+          El producto se crea <strong>inactivo</strong>. Complétalo en Catálogo (precio, fotos) para poder venderlo.
+        </p>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeMaterialize()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="savingProduct()">
+            {{ savingProduct() ? 'Creando…' : 'Crear producto' }}
           </button>
         </div>
       </form>

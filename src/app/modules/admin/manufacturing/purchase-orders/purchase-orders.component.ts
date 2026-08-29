@@ -10,12 +10,17 @@ import {
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderItem,
+  PurchaseOrderReceipt,
   PurchaseOrderStatus,
 } from '../../../../core/models/manufacturing.model';
 import {
+  PURCHASE_ORDER_MANUAL_STATUSES,
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUS_TONE,
 } from '../../../../core/models/manufacturing.model';
+import { MaterialsStore } from '../../../../core/services/materials.store';
+import { CategoryService } from '../../../../core/services/category.service';
+import { Category } from '../../../../core/models/category.model';
 import { PayablesService } from '../../../../core/services/payables.service';
 import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
 import { PayablePaymentStatus } from '../../../../core/models/payable.model';
@@ -43,6 +48,9 @@ export class PurchaseOrdersComponent implements OnInit {
   private payablesService = inject(PayablesService);
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
+  private categoryService = inject(CategoryService);
+  protected materialsStore = inject(MaterialsStore);
+  protected categories = signal<Category[]>([]);
 
   protected readonly paymentStatusLabels = PAYMENT_STATUS_LABELS;
   protected readonly paymentStatusTone = PAYMENT_STATUS_TONE;
@@ -63,13 +71,17 @@ export class PurchaseOrdersComponent implements OnInit {
   /** OC expandida (muestra sus items). */
   protected expanded = signal<number | null>(null);
   protected expandedItems = signal<PurchaseOrderItem[]>([]);
+  /** Eventos de recepción de la OC expandida (los trae `getPurchaseOrder`). */
+  protected expandedReceipts = signal<PurchaseOrderReceipt[]>([]);
 
   protected creating = signal(false);
   protected saving = signal(false);
 
   protected readonly allStatuses: PurchaseOrderStatus[] = [
-    'draft', 'sent', 'in_production', 'received', 'cancelled',
+    'draft', 'sent', 'in_production', 'partially_received', 'received', 'cancelled',
   ];
+  /** Los que el admin puede poner a mano en el dropdown (recepción los excluye). */
+  protected readonly manualStatuses = PURCHASE_ORDER_MANUAL_STATUSES;
 
   protected readonly statusOptions = [
     { value: '', label: 'Todos los estados' },
@@ -106,6 +118,10 @@ export class PurchaseOrdersComponent implements OnInit {
     });
     this.manufacturingService.getCatalog().subscribe({
       next: (res) => this.products.set(res.data),
+    });
+    this.categoryService.getAllAdmin().subscribe({
+      next: (cats) => this.categories.set(cats),
+      error: () => {},
     });
   }
 
@@ -170,8 +186,17 @@ export class PurchaseOrdersComponent implements OnInit {
     }
     this.expanded.set(order.id);
     this.expandedItems.set([]);
-    this.manufacturingService.getPurchaseOrder(order.id).subscribe({
-      next: (res) => this.expandedItems.set(res.data.items ?? []),
+    this.expandedReceipts.set([]);
+    this.loadExpandedDetail(order.id);
+  }
+
+  /** Trae items + eventos de recepción de una OC y los deja en los signals. */
+  private loadExpandedDetail(id: number): void {
+    this.manufacturingService.getPurchaseOrder(id).subscribe({
+      next: (res) => {
+        this.expandedItems.set(res.data.items ?? []);
+        this.expandedReceipts.set(res.data.receipts ?? []);
+      },
       error: () => this.notification.error('No se pudo cargar el detalle'),
     });
   }
@@ -184,9 +209,21 @@ export class PurchaseOrdersComponent implements OnInit {
       productName: this.fb.control<string>('', { validators: [Validators.required] }),
       productSku: this.fb.control<string>(''),
       specifications: this.fb.control<string>(''),
+      materialId: this.fb.control<number | null>(null),
+      color: this.fb.control<string>(''),
       quantity: this.fb.control<number>(1, { validators: [Validators.required, Validators.min(1)] }),
       unitCost: this.fb.control<number>(0, { validators: [Validators.min(0)] }),
     });
+  }
+
+  /** Materiales con costo capturado para el producto elegido en la línea `index`. */
+  protected materialsForItem(index: number): Array<{ id: number; label: string }> {
+    const productId = Number(this.items.at(index).get('productId')?.value) || null;
+    const product = this.products().find((p) => p.id === productId);
+    if (!product) return this.materialsStore.active().map((m) => ({ id: m.id, label: m.label }));
+    return Object.entries(product.materials)
+      .filter(([, cost]) => cost.cost !== null)
+      .map(([id, cost]) => ({ id: Number(id), label: cost.label }));
   }
 
   protected openCreate(): void {
@@ -208,20 +245,30 @@ export class PurchaseOrdersComponent implements OnInit {
     this.items.removeAt(index);
   }
 
-  /** Al elegir un producto existente, copia nombre/sku/costo base. */
+  /** Al elegir un producto existente, copia nombre/sku y el primer material cotizado. */
   protected onProductSelected(index: number, event: Event): void {
     const id = Number((event.target as HTMLSelectElement).value) || null;
     const group = this.items.at(index);
     const product = this.products().find((p) => p.id === id);
+    const firstMaterial = product
+      ? Object.entries(product.materials).find(([, c]) => c.cost !== null)
+      : undefined;
     group.patchValue({
       productId: id,
       productName: product?.name ?? '',
       productSku: product?.sku ?? '',
-      // Este formulario aún no pregunta el material de la compra; se prefiere
-      // el primer costo cotizado (en el orden del catálogo). El admin puede
-      // corregirlo a mano antes de guardar.
-      unitCost: product ? this.firstQuotedCost(product) : 0,
+      materialId: firstMaterial ? Number(firstMaterial[0]) : null,
+      unitCost: firstMaterial ? (firstMaterial[1].cost ?? 0) : 0,
     });
+  }
+
+  /** Al cambiar el material de la línea, recalcula el costo unitario sugerido. */
+  protected onMaterialSelected(index: number, event: Event): void {
+    const materialId = Number((event.target as HTMLSelectElement).value) || null;
+    const group = this.items.at(index);
+    const product = this.products().find((p) => p.id === Number(group.get('productId')?.value));
+    const cost = product && materialId ? product.materials[materialId]?.cost ?? null : null;
+    group.patchValue({ materialId, ...(cost !== null ? { unitCost: cost } : {}) });
   }
 
   private firstQuotedCost(product: ManufacturerCatalogProduct): number {
@@ -251,6 +298,8 @@ export class PurchaseOrdersComponent implements OnInit {
       productName: it.productName ?? '',
       productSku: it.productSku || null,
       specifications: it.isNewProduct ? (it.specifications || null) : null,
+      materialId: it.isNewProduct ? null : (it.materialId ?? null),
+      color: it.color?.trim() || null,
       quantity: Number(it.quantity) || 1,
       unitCost: Number(it.unitCost) || 0,
     }));
@@ -279,4 +328,152 @@ export class PurchaseOrdersComponent implements OnInit {
 
   protected statusLabel(s: PurchaseOrderStatus): string { return PURCHASE_ORDER_STATUS_LABELS[s]; }
   protected statusTone(s: PurchaseOrderStatus): string { return PURCHASE_ORDER_STATUS_TONE[s]; }
+
+  // ── Recepción de mercancía ───────────────────────────────────────────────
+  /** OC en recepción (null = modal cerrado). */
+  protected receiving = signal<PurchaseOrder | null>(null);
+  protected receiptRows = signal<
+    Array<{ itemId: number; productName: string; pending: number; quantity: number; condition: 'ok' | 'damaged' | 'incomplete'; note: string }>
+  >([]);
+  protected receiptNote = signal('');
+  protected savingReceipt = signal(false);
+
+  protected canReceive(o: PurchaseOrder): boolean {
+    return ['sent', 'in_production', 'partially_received'].includes(o.status);
+  }
+
+  protected openReceipt(o: PurchaseOrder): void {
+    this.receiving.set(o);
+    this.receiptNote.set('');
+    this.receiptRows.set([]);
+    this.manufacturingService.getPurchaseOrder(o.id).subscribe({
+      next: (res) => {
+        this.expandedItems.set(res.data.items ?? []);
+        this.expandedReceipts.set(res.data.receipts ?? []);
+        this.receiptRows.set(
+          (res.data.items ?? [])
+            .filter((it) => (it.pendingQuantity ?? it.quantity) > 0)
+            .map((it) => ({
+              itemId: it.id!,
+              productName: it.productName,
+              pending: it.pendingQuantity ?? it.quantity,
+              quantity: it.pendingQuantity ?? it.quantity,
+              condition: 'ok' as const,
+              note: '',
+            })),
+        );
+      },
+      error: () => this.notification.error('No se pudo cargar el detalle de la orden'),
+    });
+  }
+
+  protected closeReceipt(): void {
+    this.receiving.set(null);
+    this.receiptRows.set([]);
+  }
+
+  protected setReceiptQty(i: number, value: string): void {
+    const n = Math.trunc(Number(value) || 0);
+    this.receiptRows.update((rows) => rows.map((r, idx) => (idx === i ? { ...r, quantity: Math.max(0, Math.min(r.pending, n)) } : r)));
+  }
+
+  protected setReceiptCondition(i: number, value: string): void {
+    this.receiptRows.update((rows) =>
+      rows.map((r, idx) => (idx === i ? { ...r, condition: value as 'ok' | 'damaged' | 'incomplete' } : r)));
+  }
+
+  protected setReceiptNote(i: number, value: string): void {
+    this.receiptRows.update((rows) => rows.map((r, idx) => (idx === i ? { ...r, note: value } : r)));
+  }
+
+  protected submitReceipt(): void {
+    const po = this.receiving();
+    if (!po) return;
+    const items = this.receiptRows()
+      .filter((r) => r.quantity > 0)
+      .map((r) => ({ itemId: r.itemId, quantity: r.quantity, condition: r.condition, note: r.note.trim() || null }));
+    if (items.length === 0) {
+      this.notification.error('Indica cuántas piezas llegaron en al menos un renglón');
+      return;
+    }
+    this.savingReceipt.set(true);
+    this.manufacturingService.receivePurchaseOrder(po.id, { note: this.receiptNote().trim() || null, items }).subscribe({
+      next: (res) => {
+        this.savingReceipt.set(false);
+        this.notification.success(res.message);
+        (res.data.warnings ?? []).forEach((w) => this.notification.error(w));
+        if (res.data.creditNote) {
+          this.notification.success(
+            `Nota de crédito sugerida por $${res.data.creditNote.amount.toFixed(2)} en Cuentas por pagar.`,
+          );
+        }
+        this.closeReceipt();
+        this.load();
+        this.loadPayments();
+        if (this.expanded() === po.id) this.loadExpandedDetail(po.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingReceipt.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo registrar la recepción');
+      },
+    });
+  }
+
+  // ── Materializar producto nuevo ──────────────────────────────────────────
+  protected materializing = signal<{ poId: number; item: PurchaseOrderItem } | null>(null);
+  protected savingProduct = signal(false);
+  protected readonly productForm = this.fb.group({
+    name: this.fb.control<string>('', { validators: [Validators.required] }),
+    sku: this.fb.control<string>(''),
+    categoryId: this.fb.control<number | null>(null),
+    materialId: this.fb.control<number | null>(null, { validators: [Validators.required] }),
+  });
+
+  protected openMaterialize(poId: number, item: PurchaseOrderItem): void {
+    this.materializing.set({ poId, item });
+    this.productForm.reset({
+      name: item.productName,
+      sku: item.productSku ?? '',
+      categoryId: null,
+      materialId: null,
+    });
+  }
+
+  protected closeMaterialize(): void {
+    this.materializing.set(null);
+  }
+
+  protected submitMaterialize(): void {
+    const ctx = this.materializing();
+    if (!ctx || this.productForm.invalid) {
+      this.productForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.productForm.getRawValue();
+    this.savingProduct.set(true);
+    this.manufacturingService
+      .createProductFromPoItem(ctx.poId, ctx.item.id!, {
+        name: raw.name!.trim(),
+        sku: raw.sku?.trim() || null,
+        categoryId: raw.categoryId ?? null,
+        materialId: raw.materialId!,
+      })
+      .subscribe({
+        next: (res) => {
+          this.savingProduct.set(false);
+          this.notification.success(res.message);
+          this.closeMaterialize();
+          if (this.expanded() === ctx.poId) {
+            this.manufacturingService.getPurchaseOrder(ctx.poId).subscribe({
+              next: (r) => this.expandedItems.set(r.data.items ?? []),
+            });
+          }
+          this.load();
+        },
+        error: (err: { error?: { message?: string } }) => {
+          this.savingProduct.set(false);
+          this.notification.error(err?.error?.message ?? 'No se pudo crear el producto');
+        },
+      });
+  }
 }

@@ -37,11 +37,22 @@ app.use(
 
 // Middlewares globales
 app.use(corsMiddleware);
-// El límite por defecto de express.json() es 100kb: insuficiente para la
-// evidencia de entrega (foto + firma van embebidas en base64 dentro del JSON,
-// ver deliveryController.saveProof), que se guarda en columnas MEDIUMTEXT.
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+
+// Límite del cuerpo JSON. El grande (15 MB) es SOLO para la evidencia de
+// entrega (foto + firma en base64, ver deliveryController.saveProof); aplicarlo
+// a toda la API la deja expuesta a un DoS de memoria barato — miles de cuerpos
+// de 15 MB parseados en RAM. El resto de endpoints operan de sobra con 1 MB
+// (incluye el texto enriquecido de la pantalla de Contenido).
+const parseJsonSmall = express.json({ limit: '1mb' });
+const parseJsonLarge = express.json({ limit: '15mb' });
+const LARGE_BODY_PATHS = [/^\/api\/delivery\/assignments\/[^/]+\/proof$/];
+app.use((req, res, next) => {
+  const parser = LARGE_BODY_PATHS.some((re) => re.test(req.path))
+    ? parseJsonLarge
+    : parseJsonSmall;
+  return parser(req, res, next);
+});
+app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
 // Archivos estáticos (imágenes subidas)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

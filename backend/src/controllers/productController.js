@@ -8,6 +8,18 @@ const { calculatePrices, marginFromCashPrice } = require('../utils/pricingCalcul
 const { syncMaterialPricesAndReprice } = require('../utils/productPricing');
 
 /**
+ * Valida un id de material recibido para etiquetar una imagen (Parte 2 de
+ * Docs/plan-imagen-y-ayuda-por-material.md). Devuelve el id numérico si existe
+ * en `materials`, o `false` si no. Los casos vacío/null los filtra quien llama.
+ */
+async function resolveMaterialId(raw) {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) return false;
+  const [[row]] = await pool.execute('SELECT id FROM materials WHERE id = ?', [id]);
+  return row ? id : false;
+}
+
+/**
  * Arma la respuesta de costos por fabricante de un producto EN LOS
  * MATERIALES QUE DECLARA (M2, M3). Cada fabricante trae su costo por
  * material declarado y la utilidad que deja (RN-12…RN-15);
@@ -75,6 +87,23 @@ const productController = {
       // MySQL devuelve EXISTS como 0/1; el badge del catálogo espera booleano.
       result.data = result.data.map((p) => ({ ...p, in_stock: Number(p.in_stock) === 1 }));
       res.json(result);
+    } catch (err) { next(err); }
+  },
+
+  /**
+   * GET /api/products/sitemap — lista mínima para el sitemap.xml (lo arma el
+   * servidor SSR, Docs/plan-imagen-y-ayuda-por-material.md Parte 3). Solo
+   * productos activos y con slug; nada de precios ni imágenes.
+   */
+  async sitemap(req, res, next) {
+    try {
+      const [rows] = await pool.execute(
+        `SELECT slug, updated_at
+           FROM products
+          WHERE is_active = TRUE AND slug IS NOT NULL AND slug <> ''
+          ORDER BY updated_at DESC`,
+      );
+      res.json({ data: rows });
     } catch (err) { next(err); }
   },
 
@@ -181,6 +210,14 @@ const productController = {
         return res.status(400).json({ message: 'Se requiere un archivo de imagen' });
       }
 
+      let materialId = null;
+      if (req.body.material_id !== undefined && req.body.material_id !== '' && req.body.material_id !== null) {
+        materialId = await resolveMaterialId(req.body.material_id);
+        if (materialId === false) {
+          return res.status(400).json({ message: 'El material indicado para la imagen no existe.' });
+        }
+      }
+
       const [[{ cnt }]] = await pool.execute(
         'SELECT COUNT(*) AS cnt FROM product_images WHERE product_id = ?',
         [req.params.id]
@@ -199,6 +236,7 @@ const productController = {
         alt_text: req.body.alt_text || '',
         is_primary: cnt === 0,
         order_display: cnt,
+        material_id: materialId,
       });
 
       res.status(201).json({ data: image, message: 'Imagen agregada' });
@@ -226,11 +264,46 @@ const productController = {
     } catch (err) { next(err); }
   },
 
+  /**
+   * PATCH /products/:id/images/:imageId — actualiza una imagen:
+   *   - `is_primary: true`  → la marca como principal (comportamiento original).
+   *   - `material_id`       → material que representa (`''`/`null` = genérica).
+   *   - `alt_text`          → texto alternativo.
+   * Se pueden combinar. (Docs/plan-imagen-y-ayuda-por-material.md, Parte 2.)
+   */
   async setPrimaryImage(req, res, next) {
     try {
-      const image = await Product.setPrimaryImage(req.params.id, req.params.imageId);
-      if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
-      res.json({ data: image, message: 'Imagen principal actualizada' });
+      const { id, imageId } = req.params;
+      let image = null;
+
+      if (req.body.is_primary === true || req.body.is_primary === 'true') {
+        image = await Product.setPrimaryImage(id, imageId);
+        if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
+      }
+
+      const patch = {};
+      if ('material_id' in req.body) {
+        if (req.body.material_id === '' || req.body.material_id === null) {
+          patch.material_id = null;
+        } else {
+          const resolved = await resolveMaterialId(req.body.material_id);
+          if (resolved === false) {
+            return res.status(400).json({ message: 'El material indicado para la imagen no existe.' });
+          }
+          patch.material_id = resolved;
+        }
+      }
+      if ('alt_text' in req.body) patch.alt_text = req.body.alt_text;
+
+      if (Object.keys(patch).length > 0) {
+        image = await Product.setImageMeta(id, imageId, patch);
+        if (!image) return res.status(404).json({ message: 'Imagen no encontrada' });
+      }
+
+      if (!image) {
+        return res.status(400).json({ message: 'Nada que actualizar en la imagen.' });
+      }
+      res.json({ data: image, message: 'Imagen actualizada' });
     } catch (err) { next(err); }
   },
 

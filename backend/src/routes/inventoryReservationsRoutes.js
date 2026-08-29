@@ -19,5 +19,7 @@ router.patch('/reservations/:id/release', reservationsController.release);
 // lo restringe requireInventoryAdjust (admin, o vendedor con can_adjust_inventory).
 router.get('/stock', inventoryController.list);
 router.put('/stock', requireInventoryAdjust, inventoryController.update);
+// Kardex del par: cantidades, sin dinero — lo ve cualquier vendedor.
+router.get('/stock/:productId/:materialId/movements', inventoryController.movements);
 
 module.exports = router;

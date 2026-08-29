@@ -71,10 +71,15 @@ export class ProductService {
 
   // ===== Imágenes =====
 
-  uploadProductImage(productId: number, file: File, altText?: string): Observable<ProductImage> {
+  uploadProductImage(
+    productId: number,
+    file: File,
+    opts: { altText?: string; materialId?: number | null } = {},
+  ): Observable<ProductImage> {
     const fd = new FormData();
     fd.append('image', file);
-    if (altText) fd.append('alt_text', altText);
+    if (opts.altText) fd.append('alt_text', opts.altText);
+    if (opts.materialId != null) fd.append('material_id', String(opts.materialId));
     return this.api
       .postFormData<{ data: ProductImage }>(`/products/${productId}/images`, fd)
       .pipe(map(r => r.data));
@@ -87,6 +92,24 @@ export class ProductService {
   setPrimaryImage(productId: number, imageId: number): Observable<ProductImage> {
     return this.api
       .patch<{ data: ProductImage }>(`/products/${productId}/images/${imageId}`, { is_primary: true })
+      .pipe(map(r => r.data));
+  }
+
+  /**
+   * Actualiza el material que representa una imagen y/o su texto alternativo
+   * (Docs/plan-imagen-y-ayuda-por-material.md, Parte 2). `materialId: null` la
+   * vuelve genérica.
+   */
+  setImageMeta(
+    productId: number,
+    imageId: number,
+    patch: { materialId?: number | null; altText?: string },
+  ): Observable<ProductImage> {
+    const body: Record<string, unknown> = {};
+    if ('materialId' in patch) body['material_id'] = patch.materialId ?? '';
+    if ('altText' in patch) body['alt_text'] = patch.altText ?? '';
+    return this.api
+      .patch<{ data: ProductImage }>(`/products/${productId}/images/${imageId}`, body)
       .pipe(map(r => r.data));
   }
 

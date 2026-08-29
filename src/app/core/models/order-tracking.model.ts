@@ -33,6 +33,8 @@ export interface OrderTracking {
   expectedDeliveryDate: string | null;
   deliveryCommitment: DeliveryCommitment;
   hasFabricationItems: boolean;
+  /** Una pieza llegó dañada/incompleta y se está resolviendo con el fabricante. */
+  hasWarehouseIssue: boolean;
   /** `in_warehouse` y el pago aún frena la entrega → se ocultan los pasos de reparto. */
   paymentBlocksDelivery: boolean;
   /** Hubo un rebote `in_delivery → ready` en el historial. */

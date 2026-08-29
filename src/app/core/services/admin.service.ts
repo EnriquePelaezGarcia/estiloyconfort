@@ -67,6 +67,24 @@ export interface InventoryUpdateItem {
   stockQuantity: number;
   /** A2: presente = reemplaza el desglose por color de ese par (`[]` lo borra). */
   colors?: Array<{ color: string; quantity: number }>;
+  /** Motivo del ajuste; queda en el kardex (`inventory_movements.note`). */
+  note?: string | null;
+}
+
+/** Una fila del kardex de inventario de un par (producto, material). */
+export interface InventoryMovementRow {
+  id: number;
+  color: string | null;
+  delta: number;
+  balanceAfter: number | null;
+  reason: string;
+  reasonLabel: string;
+  sourceType: 'order' | 'purchase_order' | null;
+  sourceId: number | null;
+  documentNumber: string | null;
+  note: string | null;
+  userName: string | null;
+  createdAt: string;
 }
 
 /** Material declarado sin costo capturado por ningún fabricante (M2). */
@@ -374,6 +392,13 @@ export class AdminService {
 
   updateInventory(items: InventoryUpdateItem[]): Observable<{ message: string }> {
     return this.api.put<{ message: string }>('/inventory/stock', { items });
+  }
+
+  /** Kardex de un par (producto, material): historial de movimientos de stock. */
+  getInventoryMovements(productId: number, materialId: number): Observable<{ data: InventoryMovementRow[] }> {
+    return this.api.get<{ data: InventoryMovementRow[] }>(
+      `/inventory/stock/${productId}/${materialId}/movements`,
+    );
   }
 
   // ===== Reservas de inventario (Docs/plan-reserva-de-piezas.md) =====

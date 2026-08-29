@@ -2,21 +2,33 @@
  * Crea la base de datos, las tablas y un usuario admin inicial.
  * Uso: npm run db:seed
  *
- * Credenciales admin por defecto (cámbialas tras el primer login):
- *   email:    admin@estiloyconfort.com
- *   password: Admin1234
+ * La contraseña del admin NO está fija en el código: se genera aleatoria en
+ * cada corrida y se imprime UNA sola vez. Para un valor reproducible (CI,
+ * restaurar un ambiente) se puede fijar con SEED_ADMIN_PASSWORD en el .env.
+ *
+ * Si el esquema ya tiene la columna `must_change_password` (la agrega
+ * schema_password_reset.sql), el admin queda obligado a cambiarla al entrar.
  */
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const env = require('../config/environment');
 
-const ADMIN_EMAIL = 'admin@estiloyconfort.com';
-const ADMIN_PASSWORD = 'Admin1234';
+const ADMIN_EMAIL = (process.env.SEED_ADMIN_EMAIL || 'admin@estiloyconfort.com')
+  .trim()
+  .toLowerCase();
 const ADMIN_NAME = 'Administrador';
 
+/** 24 caracteres base64url sin ambigüedad de mayúsculas/minúsculas dictadas. */
+function generateAdminPassword() {
+  return crypto.randomBytes(18).toString('base64url');
+}
+
 async function run() {
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || generateAdminPassword();
+
   // Conexión sin seleccionar BD (la crea el schema). multipleStatements para el .sql.
   const connection = await mysql.createConnection({
     host: env.db.host,
@@ -49,7 +61,7 @@ async function run() {
       'SELECT id FROM roles WHERE name = ?',
       ['admin'],
     );
-    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
 
     await connection.query(
       `INSERT INTO users (email, password_hash, full_name, role_id)
@@ -57,10 +69,24 @@ async function run() {
       [ADMIN_EMAIL, passwordHash, ADMIN_NAME, adminRole.id],
     );
 
-    console.log('✅ Usuario admin creado:');
+    // Forzar el cambio en el primer login, si el esquema ya soporta la bandera.
+    // schema_password_reset.sql la agrega; en un esquema recién sembrado quizá
+    // todavía no exista, así que el fallo se ignora a propósito.
+    try {
+      await connection.query(
+        'UPDATE users SET must_change_password = TRUE WHERE email = ?',
+        [ADMIN_EMAIL],
+      );
+    } catch {
+      console.log(
+        'ℹ️  La columna must_change_password aún no existe (corre db:schema:passwords).',
+      );
+    }
+
+    console.log('\n✅ Usuario admin creado:');
     console.log(`   email:    ${ADMIN_EMAIL}`);
-    console.log(`   password: ${ADMIN_PASSWORD}`);
-    console.log('   ⚠️  Cambia esta contraseña tras el primer inicio de sesión.');
+    console.log(`   password: ${adminPassword}`);
+    console.log('   ⚠️  Cópiala ahora: no se vuelve a mostrar. Cámbiala al primer inicio de sesión.\n');
   } finally {
     await connection.end();
   }

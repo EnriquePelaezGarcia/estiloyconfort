@@ -232,7 +232,7 @@ const sellerController = {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
     if (existing.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
-    await Order.remove(req.params.id);
+    await Order.remove(req.params.id, req.user.id);
     res.json({ message: 'Pedido cancelado' });
   }),
 

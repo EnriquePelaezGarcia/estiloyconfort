@@ -60,6 +60,9 @@ function skuPrefix(name: string): string {
 interface PendingImage {
   file: File;
   preview: string;
+  /** Parte 2 (plan-imagen-y-ayuda-por-material): material que representa; null = genérica. */
+  materialId: number | null;
+  altText: string;
 }
 
 /**
@@ -687,8 +690,13 @@ export class CatalogComponent implements OnInit {
       return;
     }
 
-    from(pending.map((p) => p.file)).pipe(
-      concatMap((file) => this.productService.uploadProductImage(product.id, file)),
+    from(pending).pipe(
+      concatMap((p) =>
+        this.productService.uploadProductImage(product.id, p.file, {
+          altText: p.altText || undefined,
+          materialId: p.materialId,
+        }),
+      ),
       toArray(),
     ).subscribe({
       next: () => this.finishSave(product, message),
@@ -724,7 +732,7 @@ export class CatalogComponent implements OnInit {
       reader.onload = (e) => {
         this.pendingImages.update((list) => [
           ...list,
-          { file, preview: e.target!.result as string },
+          { file, preview: e.target!.result as string, materialId: null, altText: '' },
         ]);
       };
       reader.readAsDataURL(file);
@@ -735,6 +743,49 @@ export class CatalogComponent implements OnInit {
 
   protected removePending(index: number): void {
     this.pendingImages.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  // ===== Parte 2: material y alt text por imagen =====
+
+  /** Materiales que el producto DECLARA, para el <select> de cada imagen. */
+  protected readonly imageMaterialOptions = computed(() => {
+    const byId = this.materialsStore.byId();
+    return this.selectedMaterialIdsList()
+      .map((id) => ({ id, label: byId.get(id)?.label ?? `#${id}` }));
+  });
+
+  protected setPendingMaterial(index: number, value: string): void {
+    const materialId = value ? Number(value) : null;
+    this.pendingImages.update((list) =>
+      list.map((p, i) => (i === index ? { ...p, materialId } : p)),
+    );
+  }
+
+  protected setPendingAlt(index: number, value: string): void {
+    this.pendingImages.update((list) =>
+      list.map((p, i) => (i === index ? { ...p, altText: value } : p)),
+    );
+  }
+
+  protected setImageMaterial(imageId: number, value: string): void {
+    const product = this.editing();
+    if (!product) return;
+    const materialId = value ? Number(value) : null;
+    this.productService.setImageMeta(product.id, imageId, { materialId }).subscribe({
+      next: (img) =>
+        this.productImages.update((list) => list.map((i) => (i.id === imageId ? img : i))),
+      error: () => this.notification.error('No se pudo cambiar el material de la imagen'),
+    });
+  }
+
+  protected setImageAlt(imageId: number, value: string): void {
+    const product = this.editing();
+    if (!product) return;
+    this.productService.setImageMeta(product.id, imageId, { altText: value }).subscribe({
+      next: (img) =>
+        this.productImages.update((list) => list.map((i) => (i.id === imageId ? img : i))),
+      error: () => this.notification.error('No se pudo guardar el texto de la imagen'),
+    });
   }
 
   protected deleteImage(imageId: number): void {

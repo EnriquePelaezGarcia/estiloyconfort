@@ -52,12 +52,18 @@ module.exports = {
     const historyHas = (s) => statusSeq.includes(s);
 
     const [items] = await pool.execute(
-      `SELECT oi.product_name, oi.quantity, oi.requires_fabrication,
+      `SELECT oi.product_name, oi.quantity, oi.requires_fabrication, oi.warehouse_condition,
               (SELECT image_url FROM product_images
                 WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS image_url
          FROM order_items oi WHERE oi.order_id = ? ORDER BY oi.id`,
       [order.id],
     );
+
+    // Una pieza llegó dañada/incompleta y se está resolviendo con el fabricante.
+    // No se revela qué pieza ni el detalle: solo que hay un tema abierto.
+    const hasWarehouseIssue = items.some(
+      (it) => it.warehouse_condition === 'damaged' || it.warehouse_condition === 'incomplete',
+    ) && !['delivered', 'cancelled'].includes(order.order_status);
 
     // Un rebote in_delivery → ready en el historial = hubo un intento fallido.
     let hadFailedDeliveryAttempt = false;
@@ -97,6 +103,7 @@ module.exports = {
         expectedDeliveryDate: order.expected_delivery_date,
         deliveryCommitment: order.delivery_commitment ?? 'tentative',
         hasFabricationItems: items.some((it) => !!it.requires_fabrication),
+        hasWarehouseIssue,
         paymentBlocksDelivery,
         hadFailedDeliveryAttempt,
         isReFabricating,

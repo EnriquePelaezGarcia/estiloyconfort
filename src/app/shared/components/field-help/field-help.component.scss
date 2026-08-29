@@ -44,4 +44,11 @@
   color: vars.$color-text;
   font-size: 0.8rem;
   line-height: 1.45;
+
+  // Ancla por el borde derecho: para el ⓘ pegado al borde de su contenedor
+  // (ej. el último botón de material en la ficha).
+  &--end {
+    left: auto;
+    right: 0;
+  }
 }

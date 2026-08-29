@@ -13,6 +13,7 @@
 @if (open()) {
   <div
     class="field-help-popover"
+    [class.field-help-popover--end]="align() === 'end'"
     [id]="popoverId"
     role="tooltip"
     (click)="$event.stopPropagation()"

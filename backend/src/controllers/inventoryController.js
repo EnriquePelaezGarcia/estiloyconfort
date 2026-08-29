@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const InventoryMovement = require('../models/InventoryMovement');
 
 /**
  * Inventario por (producto, material) — M15. El stock dejó de ser un solo
@@ -107,7 +108,7 @@ const inventoryController = {
 
   /**
    * PUT /api/admin/inventory — ajuste de existencias.
-   * Body: { items: [{ productId, materialId, stockQuantity, colors? }] }.
+   * Body: { items: [{ productId, materialId, stockQuantity, colors?, note? }] }.
    *
    * - Sin `colors`: ajusta solo la cantidad agregada. Acepta NEGATIVOS
    *   (M15.4: "vendido y pendiente de fabricar" es información, no un error).
@@ -117,28 +118,39 @@ const inventoryController = {
    *   inventario simple) y usa `stockQuantity` como total.
    *
    * Rechaza pares que el producto no declare.
+   *
+   * Todo va en UNA transacción (si un item falla, no se aplica ninguno) y cada
+   * cambio del agregado deja una fila `manual_adjust` en el kardex con el
+   * `note` opcional que mande el frontend ("motivo del ajuste").
    */
   async update(req, res, next) {
+    const { items } = req.body;
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ message: 'El body debe traer "items": [{ productId, materialId, stockQuantity }].' });
+    }
+    const userId = req.user?.id ?? null;
+
+    const conn = await pool.getConnection();
     try {
-      const { items } = req.body;
-      if (!Array.isArray(items) || !items.length) {
-        return res.status(400).json({ message: 'El body debe traer "items": [{ productId, materialId, stockQuantity }].' });
-      }
+      await conn.beginTransaction();
 
       for (const it of items) {
         const productId = Number(it.productId);
         const materialId = Number(it.materialId);
         const hasColors = Array.isArray(it.colors);
+        const note = it.note ? String(it.note).slice(0, 255) : null;
 
-        const [[pair]] = await pool.execute(
-          'SELECT 1 AS x FROM product_materials WHERE product_id = ? AND material_id = ?',
+        const [[pair]] = await conn.execute(
+          'SELECT stock_quantity FROM product_materials WHERE product_id = ? AND material_id = ?',
           [productId, materialId],
         );
         if (!pair) {
+          await conn.rollback();
           return res.status(400).json({
             message: `El producto ${productId} no declara el material ${materialId}: no se puede tener existencia de un material que no ofrece.`,
           });
         }
+        const oldAggregate = Number(pair.stock_quantity);
 
         if (hasColors) {
           // Normaliza y colapsa por color_key (LOWER(TRIM)).
@@ -148,68 +160,96 @@ const inventoryController = {
             const key = color.toLowerCase();
             const qty = Math.trunc(Number(c?.quantity));
             if (!key) {
+              await conn.rollback();
               return res.status(400).json({ message: `Hay un color vacío en el desglose del producto ${productId}.` });
             }
             if (!Number.isFinite(qty)) {
+              await conn.rollback();
               return res.status(400).json({ message: `Cantidad inválida para el color "${color}" del producto ${productId}.` });
             }
             byKey.set(key, { color, quantity: (byKey.get(key)?.quantity ?? 0) + qty });
           }
 
-          const conn = await pool.getConnection();
-          try {
-            await conn.beginTransaction();
+          await conn.execute(
+            'DELETE FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
+            [productId, materialId],
+          );
+          let sum = 0;
+          for (const [key, v] of byKey) {
             await conn.execute(
-              'DELETE FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
-              [productId, materialId],
+              `INSERT INTO product_material_stock_colors (product_id, material_id, color, color_key, quantity)
+               VALUES (?, ?, ?, ?, ?)`,
+              [productId, materialId, v.color, key, v.quantity],
             );
-            let sum = 0;
-            for (const [key, v] of byKey) {
-              await conn.execute(
-                `INSERT INTO product_material_stock_colors (product_id, material_id, color, color_key, quantity)
-                 VALUES (?, ?, ?, ?, ?)`,
-                [productId, materialId, v.color, key, v.quantity],
-              );
-              sum += v.quantity;
-            }
-            // Desglose vacío -> vuelve a inventario simple con el total dado.
-            const aggregate = byKey.size > 0 ? sum : Math.trunc(Number(it.stockQuantity)) || 0;
-            await conn.execute(
-              'UPDATE product_materials SET stock_quantity = ? WHERE product_id = ? AND material_id = ?',
-              [aggregate, productId, materialId],
-            );
-            await conn.commit();
-          } catch (e) {
-            await conn.rollback();
-            throw e;
-          } finally {
-            conn.release();
+            sum += v.quantity;
           }
+          // Desglose vacío -> vuelve a inventario simple con el total dado.
+          const aggregate = byKey.size > 0 ? sum : Math.trunc(Number(it.stockQuantity)) || 0;
+          await conn.execute(
+            'UPDATE product_materials SET stock_quantity = ? WHERE product_id = ? AND material_id = ?',
+            [aggregate, productId, materialId],
+          );
+          await InventoryMovement.recordMovement(conn, {
+            productId, materialId, color: null,
+            delta: aggregate - oldAggregate,
+            reason: 'manual_adjust', note, userId,
+          });
           continue;
         }
 
         // Sin desglose por color: comportamiento clásico. Si el par YA lleva
         // desglose, no se puede tocar solo el agregado (quedaría inconsistente).
-        const [[tracks]] = await pool.execute(
+        const [[tracks]] = await conn.execute(
           'SELECT 1 AS x FROM product_material_stock_colors WHERE product_id = ? AND material_id = ? LIMIT 1',
           [productId, materialId],
         );
         if (tracks) {
+          await conn.rollback();
           return res.status(400).json({
             message: `El producto ${productId} lleva desglose por color en ese material: ajusta las cantidades por color, no el total.`,
           });
         }
         const stockQuantity = Math.trunc(Number(it.stockQuantity));
         if (!Number.isFinite(stockQuantity)) {
+          await conn.rollback();
           return res.status(400).json({ message: `stockQuantity inválido para el producto ${productId}.` });
         }
-        await pool.execute(
+        await conn.execute(
           'UPDATE product_materials SET stock_quantity = ? WHERE product_id = ? AND material_id = ?',
           [stockQuantity, productId, materialId],
         );
+        await InventoryMovement.recordMovement(conn, {
+          productId, materialId, color: null,
+          delta: stockQuantity - oldAggregate,
+          reason: 'manual_adjust', note, userId,
+        });
       }
 
+      await conn.commit();
       res.json({ message: 'Existencias actualizadas' });
+    } catch (err) {
+      await conn.rollback();
+      next(err);
+    } finally {
+      conn.release();
+    }
+  },
+
+  /**
+   * GET /api/inventory/stock/:productId/:materialId/movements — kardex del par.
+   * Lo puede ver cualquier vendedor (son cantidades, no dinero).
+   */
+  async movements(req, res, next) {
+    try {
+      const productId = Number(req.params.productId);
+      const materialId = Number(req.params.materialId);
+      if (!productId || !materialId) {
+        return res.status(400).json({ message: 'productId y materialId son obligatorios.' });
+      }
+      const data = await InventoryMovement.listForPair(productId, materialId, {
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      });
+      res.json({ data });
     } catch (err) { next(err); }
   },
 };

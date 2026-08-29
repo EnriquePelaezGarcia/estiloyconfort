@@ -35,6 +35,54 @@ export class FactoryOrdersComponent implements OnInit {
   /** Ids de pedidos con la fecha de entrega del fabricante en proceso de guardado. */
   protected savingDueDate = signal<Set<number>>(new Set());
 
+  /** Item cuyo modal de recepción en bodega está abierto. */
+  protected receiving = signal<FactoryOrderItemRow | null>(null);
+  protected receiptQty = signal(0);
+  protected receiptCondition = signal<'ok' | 'damaged' | 'incomplete'>('ok');
+  protected receiptNote = signal('');
+  protected savingReceipt = signal(false);
+
+  protected openWarehouseReceipt(r: FactoryOrderItemRow): void {
+    this.receiving.set(r);
+    this.receiptQty.set(r.quantity);
+    this.receiptCondition.set('ok');
+    this.receiptNote.set('');
+  }
+
+  protected closeWarehouseReceipt(): void {
+    this.receiving.set(null);
+  }
+
+  protected submitWarehouseReceipt(): void {
+    const r = this.receiving();
+    if (!r) return;
+    const qty = Math.trunc(this.receiptQty());
+    if (qty < r.receivedQuantity || qty > r.quantity) {
+      this.notification.error(`La cantidad debe estar entre ${r.receivedQuantity} y ${r.quantity}.`);
+      return;
+    }
+    this.savingReceipt.set(true);
+    this.manufacturingService
+      .warehouseReceiveItem(r.itemId, {
+        receivedQuantity: qty,
+        condition: this.receiptCondition(),
+        note: this.receiptNote().trim() || null,
+      })
+      .subscribe({
+        next: (res) => {
+          this.savingReceipt.set(false);
+          this.notification.success(res.message);
+          (res.data.warnings ?? []).forEach((w) => this.notification.error(w));
+          this.closeWarehouseReceipt();
+          this.load();
+        },
+        error: (err: { error?: { message?: string } }) => {
+          this.savingReceipt.set(false);
+          this.notification.error(err?.error?.message ?? 'No se pudo registrar la recepción');
+        },
+      });
+  }
+
   /** Agrupa los items planos por pedido, para que cada pedido aparezca una sola vez. */
   protected groups = computed<FactoryOrderGroup[]>(() => {
     const map = new Map<number, FactoryOrderGroup>();

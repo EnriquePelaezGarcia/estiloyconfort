@@ -11,6 +11,7 @@ router.get('/margin-for-price', authenticate, authorize('admin'), ctrl.marginFor
 
 // Rutas públicas
 router.get('/search', ctrl.search);
+router.get('/sitemap', ctrl.sitemap);
 router.get('/', ctrl.getAll);
 router.get('/:id', ctrl.getOne);
 

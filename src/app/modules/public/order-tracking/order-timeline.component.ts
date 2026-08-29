@@ -512,8 +512,8 @@ export class OrderTimelineComponent {
         label: 'En fabricación',
         shortLabel: 'Fabricación',
         icon: 'handyman',
-        subline: reFab
-          ? 'Estamos resolviendo un detalle con tu mueble, te contactamos por WhatsApp.'
+        subline: (reFab || t.hasWarehouseIssue)
+          ? 'Uno de tus muebles llegó con un detalle y lo estamos resolviendo con el fabricante; te avisamos por WhatsApp en cuanto esté listo.'
           : null,
         state,
         date: this.lastDateOf('fabricating'),
