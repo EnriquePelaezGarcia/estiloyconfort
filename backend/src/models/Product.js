@@ -338,6 +338,41 @@ const Product = {
     await pool.execute('UPDATE products SET is_active = FALSE WHERE id = ?', [id]);
   },
 
+  /**
+   * Borrado PERMANENTE, solo para productos "basura" (pruebas que nunca
+   * llegaron a venderse). Si el producto aparece en un pedido, una cotización
+   * o una orden de compra se rechaza: ahí romperíamos el historial y lo
+   * correcto es desactivarlo (`delete`). Las tablas satélite (imágenes,
+   * materiales, tallas, costos por fabricante, existencias, reservas) se van
+   * solas por `ON DELETE CASCADE`.
+   *
+   * Devuelve `{ deleted, images }`: `images` son las filas de `product_images`
+   * previas al borrado, para que el controlador limpie los archivos en disco.
+   */
+  async destroy(id) {
+    const blockedBy = [];
+    const refs = [
+      ['order_items', 'pedidos'],
+      ['quote_items', 'cotizaciones'],
+      ['purchase_order_items', 'órdenes de compra'],
+    ];
+    for (const [table, label] of refs) {
+      const [[row]] = await pool.execute(
+        `SELECT COUNT(*) AS n FROM ${table} WHERE product_id = ?`,
+        [id],
+      );
+      if (row.n > 0) blockedBy.push(label);
+    }
+    if (blockedBy.length) return { deleted: false, blockedBy, images: [] };
+
+    const [images] = await pool.execute(
+      'SELECT image_url FROM product_images WHERE product_id = ?',
+      [id],
+    );
+    const [res] = await pool.execute('DELETE FROM products WHERE id = ?', [id]);
+    return { deleted: res.affectedRows > 0, blockedBy: [], images };
+  },
+
   async addImage(productId, { image_url, alt_text, is_primary, order_display, material_id = null }) {
     if (is_primary) {
       await pool.execute('UPDATE product_images SET is_primary = FALSE WHERE product_id = ?', [productId]);

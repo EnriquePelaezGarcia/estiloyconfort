@@ -814,7 +814,8 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     try {
       localStorage.setItem(this.enRouteStorageKey, message);
     } catch { /* modo privado / SSR: el texto sólo aplica a este envío */ }
-    const phone = (a.customerPhone ?? '').replace(/\D/g, '');
+    const digits = (a.customerPhone ?? '').replace(/\D/g, '');
+    const phone = digits.length >= 10 ? digits.slice(-10) : '';
     const text = encodeURIComponent(message);
     window.open(
       phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`,

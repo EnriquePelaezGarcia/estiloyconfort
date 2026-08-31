@@ -194,8 +194,35 @@ const productController = {
 
   async remove(req, res, next) {
     try {
-      await Product.delete(req.params.id);
-      res.json({ message: 'Producto desactivado exitosamente' });
+      // `?permanent=true` borra el producto de la base (para basura de pruebas).
+      // Sin el flag se conserva el comportamiento de siempre: solo desactivar.
+      const permanent = req.query.permanent === 'true' || req.query.permanent === '1';
+      if (!permanent) {
+        await Product.delete(req.params.id);
+        return res.json({ message: 'Producto desactivado exitosamente' });
+      }
+
+      const { deleted, blockedBy, images } = await Product.destroy(req.params.id);
+      if (blockedBy.length) {
+        return res.status(409).json({
+          message: `No se puede eliminar: el producto aparece en ${blockedBy.join(', ')}. Desactívalo en su lugar.`,
+          statusCode: 409,
+        });
+      }
+      if (!deleted) return res.status(404).json({ message: 'Producto no encontrado' });
+
+      // Archivos físicos de las imágenes (best-effort), igual que en deleteImage.
+      for (const { image_url } of images) {
+        try {
+          const filename = path.basename(String(image_url).split('?')[0]);
+          const filePath = path.join(__dirname, '../../uploads/products', filename);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          const thumbPath = filePath.replace(/\.webp$/i, '-thumb.webp');
+          if (thumbPath !== filePath && fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
+        } catch (_) {}
+      }
+
+      res.json({ message: 'Producto eliminado permanentemente' });
     } catch (err) { next(err); }
   },
 

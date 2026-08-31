@@ -11,12 +11,12 @@
       </div>
       <div class="field-row">
         <div class="field" [class.field--error]="store.form.controls.customerPhone.touched && store.form.controls.customerPhone.invalid">
-          <label for="customerPhone">Teléfono *</label>
+          <label for="customerPhone">Teléfono (WhatsApp) *</label>
           <input
             id="customerPhone"
             type="tel"
             inputmode="numeric"
-            maxlength="12"
+            maxlength="22"
             formControlName="customerPhone"
             placeholder="222 123 4567"
             (input)="store.onPhoneInput($event)"

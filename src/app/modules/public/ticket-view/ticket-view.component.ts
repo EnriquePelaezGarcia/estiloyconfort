@@ -11,6 +11,7 @@ import {
 } from '../../../core/models/order-public-labels';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { formatPhoneForDisplay } from '../../../core/utils/phone';
 
 /**
  * Cómo se le nombra al cliente cada condición de venta. No se reusan los
@@ -119,6 +120,9 @@ export class TicketViewComponent implements OnInit {
   );
 
   protected readonly tentativeDeliveryNotice = TENTATIVE_DELIVERY_NOTICE;
+
+  /** Teléfono del cliente en formato "222 123 4567"; '' si no hay. */
+  protected customerPhone = computed(() => formatPhoneForDisplay(this.ticket()?.customerPhone ?? ''));
 
   protected schemeLabel(s: SaleScheme): string { return SCHEME_LABELS[s] ?? 'Contado'; }
   protected statusLabel(s: OrderStatus): string { return ORDER_STATUS_PUBLIC_LABELS[s] ?? ''; }

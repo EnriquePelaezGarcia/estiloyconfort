@@ -83,7 +83,7 @@
                   type="button"
                   class="icon-btn icon-btn--danger"
                   (click)="confirmDelete(product)"
-                  title="Desactivar"
+                  title="Eliminar o desactivar"
                 >
                   <span class="material-symbols-outlined">delete</span>
                 </button>
@@ -570,15 +570,55 @@
     <div class="modal modal--sm">
       <div class="modal__body">
         <div class="confirm-icon"><span class="material-symbols-outlined">warning</span></div>
-        <h2 class="confirm-title">Desactivar producto</h2>
-        <p class="confirm-text">
-          ¿Seguro que deseas desactivar <strong>{{ target.name }}</strong>?
-          Dejará de mostrarse en el catálogo público, pero podrás reactivarlo después.
-        </p>
+
+        @if (deleteMode() === 'permanent') {
+          <h2 class="confirm-title">Eliminar producto permanentemente</h2>
+          <p class="confirm-text">
+            Se borrará <strong>{{ target.name }}</strong> de la base de datos, junto con
+            sus imágenes, materiales, tallas y costos. <strong>Esta acción no se puede deshacer.</strong>
+            Si el producto ya aparece en pedidos o cotizaciones, no podrá eliminarse: deberás desactivarlo.
+          </p>
+        } @else {
+          <h2 class="confirm-title">Desactivar producto</h2>
+          <p class="confirm-text">
+            ¿Seguro que deseas desactivar <strong>{{ target.name }}</strong>?
+            Dejará de mostrarse en el catálogo público, pero podrás reactivarlo después.
+          </p>
+        }
+
         <div class="modal__foot">
-          <button type="button" class="btn btn--ghost" (click)="cancelDelete()">Cancelar</button>
-          <button type="button" class="btn btn--danger" (click)="executeDelete()">Desactivar</button>
+          <button type="button" class="btn btn--ghost" (click)="cancelDelete()" [disabled]="deletingBusy()">
+            Cancelar
+          </button>
+          @if (deleteMode() === 'permanent') {
+            <button
+              type="button"
+              class="btn btn--ghost"
+              (click)="setDeleteMode('deactivate')"
+              [disabled]="deletingBusy()"
+            >
+              Solo desactivar
+            </button>
+            <button type="button" class="btn btn--danger" (click)="executeDelete()" [disabled]="deletingBusy()">
+              Eliminar definitivamente
+            </button>
+          } @else {
+            <button type="button" class="btn btn--danger" (click)="executeDelete()" [disabled]="deletingBusy()">
+              Desactivar
+            </button>
+          }
         </div>
+
+        @if (deleteMode() !== 'permanent') {
+          <button
+            type="button"
+            class="confirm-link-danger"
+            (click)="setDeleteMode('permanent')"
+            [disabled]="deletingBusy()"
+          >
+            Es un producto de prueba: eliminarlo permanentemente
+          </button>
+        }
       </div>
     </div>
   </div>

@@ -20,7 +20,7 @@
       <thead>
         <tr>
           <th>Pedido</th><th>Cliente</th><th>Entrega a tienda</th><th>Producto</th><th class="num">Cantidad</th>
-          <th>Fabricante reporta</th><th>Bodega</th><th>Surte</th><th class="num">Utilidad</th>
+          <th>Fabricante reporta</th><th>Almacén</th><th>Surte</th><th class="num">Utilidad</th>
         </tr>
       </thead>
       <tbody>
@@ -45,6 +45,7 @@
               <td data-label="Producto">
                 {{ r.productName }}
                 <span class="muted"> · {{ r.productSku }}</span>
+                @if (r.sizeLabel) { <span class="muted"> · {{ r.sizeLabel }}</span> }
                 @if (r.color) { <span class="muted"> / {{ r.color }}</span> }
                 @if (r.fabricationNote) {
                   <span class="specs">✏️ {{ r.fabricationNote }}</span>
@@ -71,7 +72,7 @@
                   </span>
                 }
               </td>
-              <td data-label="Bodega">
+              <td data-label="Almacén">
                 @if (r.receivedQuantity >= r.quantity && r.warehouseCondition === 'ok') {
                   <span class="badge badge--green">Recibido {{ r.receivedQuantity }}/{{ r.quantity }}</span>
                 } @else if (r.warehouseCondition === 'damaged' || r.warehouseCondition === 'incomplete') {
@@ -128,7 +129,7 @@
   <div class="modal-backdrop">
     <div class="modal modal--sm">
       <div class="modal__head">
-        <h2>Recepción en bodega</h2>
+        <h2>Recepción en almacén</h2>
         <button type="button" class="icon-btn" (click)="closeWarehouseReceipt()" aria-label="Cerrar">
           <span class="material-symbols-outlined">close</span>
         </button>

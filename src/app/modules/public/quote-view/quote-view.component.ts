@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { QuotesService } from '../../../core/services/quotes.service';
@@ -6,6 +6,7 @@ import { PublicQuote } from '../../../core/models/quote.model';
 import { SaleScheme } from '../../../core/models/order.model';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { formatPhoneForDisplay } from '../../../core/utils/phone';
 
 /** Cómo se le nombra al cliente cada condición de venta. */
 const SCHEME_LABELS: Record<SaleScheme, string> = {
@@ -42,6 +43,9 @@ export class QuoteViewComponent implements OnInit {
 
   /** Foto de producto abierta en grande; null = lightbox cerrado. */
   protected zoomedImage = signal<string | null>(null);
+
+  /** Teléfono del cliente en formato "222 123 4567"; '' si no hay. */
+  protected customerPhone = computed(() => formatPhoneForDisplay(this.quote()?.customerPhone ?? ''));
 
   protected schemeLabel(scheme: SaleScheme): string {
     return SCHEME_LABELS[scheme] ?? 'Contado';

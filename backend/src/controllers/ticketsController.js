@@ -43,6 +43,9 @@ module.exports = {
         paymentStatus: order.paymentStatus,
         paymentMethod: order.paymentMethod,
         customerName: order.customerName,
+        // El cliente confirma en el comprobante que su teléfono quedó bien
+        // capturado — es al que se le avisa de la entrega por WhatsApp.
+        customerPhone: order.customerPhone ?? null,
         sellerName: order.sellerName,
 
         deliveryType: order.deliveryType,

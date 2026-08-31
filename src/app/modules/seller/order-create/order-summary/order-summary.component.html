@@ -295,10 +295,6 @@
         <span class="strong">{{ store.total() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
       </div>
       <div class="credit-plan__row">
-        <span>Abono inicial mínimo</span>
-        <span class="strong">$500</span>
-      </div>
-      <div class="credit-plan__row">
         <span>Plazo al precio de contado</span>
         <span class="strong">3 meses</span>
       </div>
@@ -308,8 +304,48 @@
           <span class="strong">{{ store.layawayDeadline() }}</span>
         </div>
       }
+
+      @if (!store.isEditing()) {
+        <div
+          class="field"
+          [class.field--error]="store.submitAttempted() && !store.layawayDepositValid()"
+        >
+          <label for="layawayDeposit">Abono inicial para apartar *</label>
+          <div class="deposit-input">
+            <input
+              id="layawayDeposit"
+              type="number"
+              inputmode="decimal"
+              min="500"
+              step="0.01"
+              placeholder="500.00"
+              [value]="store.layawayDeposit()"
+              (input)="store.onLayawayDepositInput($event)"
+            />
+            <select
+              aria-label="Instrumento del abono inicial"
+              [value]="store.layawayDepositMethod()"
+              (change)="store.onLayawayDepositMethodChange($event)"
+            >
+              <option value="cash">Efectivo</option>
+              <option value="transfer">Transferencia</option>
+            </select>
+          </div>
+          <p class="field__hint">
+            Mínimo {{ store.LAYAWAY_MIN_DEPOSIT | currency:'MXN':'symbol-narrow':'1.0-0' }}. Se cobra al crear el pedido.
+          </p>
+          @if (store.submitAttempted() && !store.layawayDepositValid()) {
+            <p class="field__error">
+              El apartado no se crea sin cobrar el enganche (entre
+              {{ store.LAYAWAY_MIN_DEPOSIT | currency:'MXN':'symbol-narrow':'1.0-0' }}
+              y el total del pedido).
+            </p>
+          }
+        </div>
+      }
+
       <p class="credit-plan__note">
-        El cliente abona la cantidad que desee (mínimo $500 al apartar).
+        Después del abono inicial, el cliente abona lo que desee.
         Si no liquida antes del {{ store.layawayDeadline() }}, se aplica el precio de crédito.
         El mueble se entrega hasta cubrir el pago total.
       </p>

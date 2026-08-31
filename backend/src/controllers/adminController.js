@@ -525,12 +525,14 @@ const getOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) throw ApiError.notFound('Pedido no encontrado');
   const optionsByKey = await manufacturerOptionsByProduct(
-    (order.items ?? []).map((it) => ({ productId: it.productId, materialId: it.materialId })),
+    (order.items ?? []).map((it) => ({
+      productId: it.productId, materialId: it.materialId, sizeId: it.sizeId,
+    })),
   );
   order.items = (order.items ?? []).map((it) => ({
     ...it,
     manufacturerOptions: it.requiresFabrication
-      ? optionsByKey.get(`${it.productId}:${it.materialId}`) ?? []
+      ? optionsByKey.get(`${it.productId}:${it.materialId}:${it.sizeId ?? 0}`) ?? []
       : [],
   }));
   // Docs/plan-descuentos.md: apaga el badge de "rechazado" si el admin mismo
@@ -644,11 +646,12 @@ function toDateOnly(value) {
  * Sin costo capturado no hay a quién asignar — es lo que permite congelar
  * unit_cost al asignar y saber la utilidad real de la venta.
  *
- * @param {Array<{productId:number, materialId:number}>} items
+ * @param {Array<{productId:number, materialId:number, sizeId:?number}>} items
  * @returns {Map<string, Array<{manufacturerId:number, manufacturerName:string, cost:number}>>}
- *   keyed por `${productId}:${materialId}` — el mismo producto puede aparecer
- *   en pedidos distintos con materiales distintos, y el costo/candidatos
- *   cambian por material (RN-03), no solo por producto.
+ *   keyed por `${productId}:${materialId}:${sizeId}` (sizeId 0 = producto sin
+ *   talla) — el mismo producto puede aparecer en pedidos distintos con
+ *   materiales/tallas distintos, y el costo/candidatos cambian por celda
+ *   material × talla (RN-03 + D3), no solo por producto.
  */
 async function manufacturerOptionsByProduct(items) {
   const ids = [...new Set(items.map((it) => it.productId).filter(Boolean))];
@@ -656,7 +659,7 @@ async function manufacturerOptionsByProduct(items) {
   if (!ids.length) return optionsByKey;
 
   const [costs] = await pool.query(
-    `SELECT pmc.product_id, pmc.manufacturer_id, pmc.material_id, pmc.cost, m.name
+    `SELECT pmc.product_id, pmc.manufacturer_id, pmc.material_id, pmc.size_id, pmc.cost, m.name
        FROM product_manufacturer_costs pmc
        JOIN manufacturers m ON m.id = pmc.manufacturer_id
       WHERE pmc.product_id IN (?) AND pmc.is_active = TRUE AND m.is_active = TRUE`,
@@ -664,9 +667,14 @@ async function manufacturerOptionsByProduct(items) {
   );
   for (const it of items) {
     if (!it.materialId) continue;
-    const key = `${it.productId}:${it.materialId}`;
+    // La línea trae su talla congelada (size_id 0 = producto sin talla): solo
+    // valen los fabricantes con costo en ESA celda material × talla, o el
+    // assign fallará al buscar el costo de una celda que no existe.
+    const sizeId = it.sizeId ?? 0;
+    const key = `${it.productId}:${it.materialId}:${sizeId}`;
     const list = costs
-      .filter((c) => c.product_id === it.productId && c.material_id === it.materialId)
+      .filter((c) => c.product_id === it.productId
+        && c.material_id === it.materialId && c.size_id === sizeId)
       .map((c) => ({ manufacturerId: c.manufacturer_id, manufacturerName: c.name, cost: Number(c.cost) }));
     optionsByKey.set(key, list);
   }
@@ -679,7 +687,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT oi.id AS item_id, oi.order_id, o.order_number, o.customer_name, o.order_status,
             o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
-            oi.material_id, oi.material_label, oi.color, oi.quantity, oi.is_ready, oi.ready_at,
+            oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color, oi.quantity, oi.is_ready, oi.ready_at,
             oi.ready_quantity, oi.received_quantity, oi.warehouse_condition, oi.warehouse_note,
             oi.fabrication_note, wr.full_name AS warehouse_received_by_name, oi.warehouse_received_at,
             rb.full_name AS ready_by_name,
@@ -695,7 +703,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
   );
 
   const optionsByKey = await manufacturerOptionsByProduct(
-    rows.map((r) => ({ productId: r.product_id, materialId: r.material_id })),
+    rows.map((r) => ({ productId: r.product_id, materialId: r.material_id, sizeId: r.size_id })),
   );
 
   res.json({
@@ -715,6 +723,8 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         productSku: r.product_sku,
         materialId: r.material_id,
         materialLabel: r.material_label,
+        sizeId: r.size_id ?? null,
+        sizeLabel: r.size_label ?? null,
         color: r.color,
         quantity: r.quantity,
         isReady: !!r.is_ready,
@@ -731,7 +741,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         manufacturerName: r.manufacturer_name ?? null,
         unitCost,
         unitProfit: unitCost !== null ? Number(r.unit_price) - unitCost : null,
-        manufacturerOptions: optionsByKey.get(`${r.product_id}:${r.material_id}`) ?? [],
+        manufacturerOptions: optionsByKey.get(`${r.product_id}:${r.material_id}:${r.size_id ?? 0}`) ?? [],
       };
     }),
   });
@@ -758,7 +768,9 @@ const updateManufacturerDueDate = asyncHandler(async (req, res) => {
 const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   const { manufacturerId } = req.body;
   const [[item]] = await pool.execute(
-    'SELECT id, product_id, unit_price, material_id, material_label FROM order_items WHERE id = ?', [req.params.id],
+    `SELECT id, product_id, unit_price, material_id, material_label, size_id, size_label
+       FROM order_items WHERE id = ?`,
+    [req.params.id],
   );
   if (!item) throw ApiError.notFound('Item no encontrado');
 
@@ -779,12 +791,17 @@ const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   );
   if (!manufacturer) throw ApiError.badRequest('Fabricante inválido');
 
-  // El material lo aporta la línea (congelado al crear el pedido, M4/M7): el
-  // costo tiene que ser el de ESE material, no el de otro que el fabricante
-  // cotice más barato.
-  const cost = await ProductManufacturerCost.findCost(item.product_id, manufacturerId, item.material_id);
+  // El material y la talla los aporta la línea (congelados al crear el pedido,
+  // M4/M7 + D3): el costo tiene que ser el de ESA celda material × talla
+  // (size_id 0 = producto sin talla), no el de otra que el fabricante cotice
+  // más barato.
+  const sizeId = item.size_id ?? 0;
+  const cost = await ProductManufacturerCost.findCost(
+    item.product_id, manufacturerId, item.material_id, sizeId,
+  );
   if (cost === null) {
-    throw ApiError.badRequest(`Ese fabricante no tiene costo registrado para este producto en ${item.material_label}`);
+    const cell = item.size_label ? `${item.material_label} / ${item.size_label}` : item.material_label;
+    throw ApiError.badRequest(`Ese fabricante no tiene costo registrado para este producto en ${cell}`);
   }
 
   // El costo se congela aquí: si mañana sube, este pedido conserva su utilidad real.
@@ -822,7 +839,7 @@ const warehouseReceiveItem = asyncHandler(async (req, res) => {
     data: result,
     message: result.creditNote
       ? `Recepción registrada. Nota de crédito sugerida por $${result.creditNote.amount.toFixed(2)}.`
-      : 'Recepción en bodega registrada',
+      : 'Recepción en almacén registrada',
   });
 });
 

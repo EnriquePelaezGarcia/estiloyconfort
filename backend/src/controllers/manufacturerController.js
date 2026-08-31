@@ -8,6 +8,13 @@ const { periodFromQuery } = require('../utils/periods');
 // Estados de pedido que requieren fabricación.
 const FABRICATION_STATUSES = ['pending', 'fabricating'];
 
+// Apartado: un mueble sobre pedido no se manda a fabricar hasta que el cliente
+// deja el enganche ($500 = orders.down_payment). Se filtra en las consultas del
+// fabricante para que no aparezca en su carga de trabajo antes del depósito.
+// (`down_payment` sólo es NOT NULL en apartado/crédito; el OR corta antes.)
+const LAYAWAY_DEPOSIT_GATE =
+  "AND (o.payment_method <> 'layaway' OR o.payment_amount + 1e-6 >= o.down_payment)";
+
 /**
  * Fabricante (fila en `manufacturers`) que representa este login, o null si
  * todavía no se le ligó ninguno. `req.user` solo trae { id, role }, por eso se
@@ -48,6 +55,7 @@ const manufacturerController = {
        WHERE o.order_status IN (${placeholders})
          AND oi.requires_fabrication = 1
          AND oi.manufacturer_id = ?
+         ${LAYAWAY_DEPOSIT_GATE}
        GROUP BY oi.product_id, oi.product_name, oi.product_sku
        ORDER BY oi.product_name`,
       [...FABRICATION_STATUSES, manufacturerId],
@@ -82,6 +90,7 @@ const manufacturerController = {
        WHERE o.order_status IN (${placeholders})
          AND oi.requires_fabrication = 1
          AND oi.manufacturer_id = ?
+         ${LAYAWAY_DEPOSIT_GATE}
        ORDER BY oi.id`,
       [...FABRICATION_STATUSES, manufacturerId],
     );
@@ -205,6 +214,14 @@ const manufacturerController = {
         [req.params.id, manufacturerId],
       );
       if (!owns) throw ApiError.forbidden('Este pedido no te fue asignado');
+    }
+    const [[dep]] = await pool.execute(
+      'SELECT payment_method, payment_amount, down_payment FROM orders WHERE id = ?',
+      [req.params.id],
+    );
+    if (dep && dep.payment_method === 'layaway'
+      && Number(dep.payment_amount) + 1e-6 < Number(dep.down_payment)) {
+      throw ApiError.badRequest('El apartado aún no cubre el enganche: no se puede mandar a fabricar.');
     }
     const order = await Order.updateStatus(req.params.id, 'fabricating');
     if (!order) throw ApiError.notFound('Pedido no encontrado');

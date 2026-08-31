@@ -70,6 +70,14 @@ export class ProductService {
     return this.api.delete<void>(`/products/${id}`);
   }
 
+  /**
+   * Borrado permanente (para productos de prueba). El backend lo rechaza con
+   * 409 si el producto ya aparece en pedidos, cotizaciones u órdenes de compra.
+   */
+  deleteProductPermanent(id: number): Observable<void> {
+    return this.api.delete<void>(`/products/${id}?permanent=true`);
+  }
+
   // ===== Imágenes =====
 
   uploadProductImage(

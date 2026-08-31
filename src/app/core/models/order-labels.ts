@@ -11,7 +11,7 @@ import {
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'Pendiente',
   fabricating: 'En fabricación',
-  in_warehouse: 'En bodega',
+  in_warehouse: 'En almacén',
   ready: 'Listo',
   in_delivery: 'En reparto',
   delivered: 'Entregado',

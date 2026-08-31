@@ -332,6 +332,12 @@ export class CatalogComponent implements OnInit {
 
   protected editing = signal<Product | null | undefined>(undefined);
   protected deleting = signal<Product | null>(null);
+  /**
+   * 'deactivate' = ocultar del catálogo, reversible (lo normal).
+   * 'permanent'  = borrar de la base, para productos de prueba ("basura").
+   */
+  protected deleteMode = signal<'deactivate' | 'permanent'>('deactivate');
+  protected deletingBusy = signal(false);
 
   protected productImages = signal<ProductImage[]>([]);
   protected pendingImages = signal<PendingImage[]>([]);
@@ -877,26 +883,60 @@ export class CatalogComponent implements OnInit {
   // ===== Eliminar =====
   protected confirmDelete(product: Product): void {
     this.deleting.set(product);
+    this.deleteMode.set('deactivate');
+  }
+
+  protected setDeleteMode(mode: 'deactivate' | 'permanent'): void {
+    this.deleteMode.set(mode);
   }
 
   protected cancelDelete(): void {
     this.deleting.set(null);
+    this.deleteMode.set('deactivate');
   }
 
   protected executeDelete(): void {
     const product = this.deleting();
     if (!product) return;
+
+    if (this.deleteMode() === 'permanent') {
+      this.executePermanentDelete(product);
+      return;
+    }
+
+    this.deletingBusy.set(true);
     this.productService.deleteProduct(product.id).subscribe({
       next: () => {
         this.products.update((list) =>
           list.map((p) => (p.id === product.id ? { ...p, is_active: false } : p)),
         );
         this.notification.success('Producto desactivado');
-        this.deleting.set(null);
+        this.deletingBusy.set(false);
+        this.cancelDelete();
       },
       error: (err: { error?: { message?: string } }) => {
+        this.notification.error(err?.error?.message ?? 'No se pudo desactivar');
+        this.deletingBusy.set(false);
+        this.cancelDelete();
+      },
+    });
+  }
+
+  private executePermanentDelete(product: Product): void {
+    this.deletingBusy.set(true);
+    this.productService.deleteProductPermanent(product.id).subscribe({
+      next: () => {
+        this.products.update((list) => list.filter((p) => p.id !== product.id));
+        this.notification.success('Producto eliminado permanentemente');
+        this.deletingBusy.set(false);
+        this.cancelDelete();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        // 409: el producto ya se usó en pedidos/cotizaciones; el backend
+        // devuelve el motivo. Se mantiene abierto el modal para desactivar.
         this.notification.error(err?.error?.message ?? 'No se pudo eliminar');
-        this.deleting.set(null);
+        this.deletingBusy.set(false);
+        this.deleteMode.set('deactivate');
       },
     });
   }

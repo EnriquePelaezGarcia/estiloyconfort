@@ -20,6 +20,9 @@
         <div class="quote-sheet__for">
           <span class="quote-sheet__label">Para</span>
           <span class="quote-sheet__customer">{{ q.customerName }}</span>
+          @if (customerPhone()) {
+            <span class="quote-sheet__phone">Tel. {{ customerPhone() }}</span>
+          }
           @if (q.sellerName) {
             <span class="quote-sheet__seller">Atendido por {{ q.sellerName }}</span>
           }

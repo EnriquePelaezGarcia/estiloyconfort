@@ -531,7 +531,7 @@ export class OrderTimelineComponent {
       else state = 'future';
       steps.push({
         label: this.warehouseLabel(t),
-        shortLabel: 'Bodega',
+        shortLabel: 'Almacén',
         icon: 'inventory_2',
         subline: state === 'future' ? null : this.warehouseSubline(t),
         state,
@@ -585,9 +585,9 @@ export class OrderTimelineComponent {
   });
 
   private warehouseLabel(t: OrderTracking): string {
-    if (t.paymentMethodScheme === 'layaway') return 'Apartado en bodega';
-    if (t.paymentMethodScheme === 'store_credit') return 'Reservado en bodega';
-    return 'En bodega';
+    if (t.paymentMethodScheme === 'layaway') return 'Apartado en almacén';
+    if (t.paymentMethodScheme === 'store_credit') return 'Reservado en almacén';
+    return 'En almacén';
   }
 
   private warehouseSubline(t: OrderTracking): string {

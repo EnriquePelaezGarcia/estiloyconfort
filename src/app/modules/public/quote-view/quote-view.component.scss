@@ -45,6 +45,11 @@
     color: vars.$color-text;
   }
 
+  &__phone {
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+  }
+
   &__seller {
     font-size: 0.78rem;
     color: vars.$color-text-secondary;

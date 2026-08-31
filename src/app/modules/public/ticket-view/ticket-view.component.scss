@@ -115,12 +115,25 @@ $hairline: rgba(61, 43, 94, 0.12);
     color: rgba(252, 249, 248, 0.45);
   }
 
+  // Rótulo del folio: deja claro que el número de abajo es el número de pedido,
+  // el dato que el cliente cita para cualquier aclaración o garantía.
+  &__label {
+    margin: 0.85rem 0 0;
+    font-family: vars.$font-body;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(252, 249, 248, 0.7);
+  }
+
   // El folio es dato duro: monoespaciado para que se lea número por número
   // cuando el cliente lo dicta por teléfono.
   &__folio {
-    margin: 0.25rem 0 0;
+    margin: 0.15rem 0 0;
     font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
+    font-size: 1rem;
+    font-weight: 700;
     letter-spacing: 0.08em;
     color: $porcelain;
   }
@@ -142,6 +155,13 @@ $hairline: rgba(61, 43, 94, 0.12);
     font-weight: 400;
     line-height: 1.25;
     color: $text-primary;
+  }
+
+  &__phone {
+    margin: 0.15rem 0 0;
+    font-family: vars.$font-body;
+    font-size: 0.85rem;
+    color: $text-secondary;
   }
 
   &__status {
@@ -545,6 +565,7 @@ $hairline: rgba(61, 43, 94, 0.12);
   // enorme y es la otra mitad de por qué se iba a dos páginas.
   .party { margin-bottom: 4mm; padding-bottom: 3mm; border-bottom: 1px solid rgba($lavender, 0.35); }
   .party__name { font-size: 13pt; }
+  .party__phone { font-size: 9pt; }
   .party__status { font-size: 9pt; }
 
   .lines { margin-bottom: 4mm; }

@@ -271,6 +271,16 @@
   }
 }
 
+// Apartado: el abono inicial (monto + instrumento) en una sola fila, dentro
+// del panel del plan de apartado.
+.deposit-input {
+  display: flex;
+  gap: 0.4rem;
+
+  input { flex: 1 1 auto; min-width: 0; }
+  select { flex: 0 0 9.5rem; }
+}
+
 // Referencia contra contado del crédito: peso tipográfico menor que el total,
 // para que nunca compita con el número que se cobra.
 .cash-equivalent {

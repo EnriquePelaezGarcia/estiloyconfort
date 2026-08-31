@@ -32,6 +32,7 @@
         />
         <span class="ornament ornament--dark">✦</span>
         <p class="crest__overline">Comprobante de compra</p>
+        <p class="crest__label">Número de pedido</p>
         <p class="crest__folio">{{ t.orderNumber }}</p>
       </header>
 
@@ -41,6 +42,9 @@
           <div class="party__block">
             <p class="label-overline">Cliente</p>
             <p class="party__name">{{ t.customerName }}</p>
+            @if (customerPhone()) {
+              <p class="party__phone">Tel. {{ customerPhone() }}</p>
+            }
           </div>
           <div class="party__block party__block--end">
             <p class="label-overline">Estado</p>

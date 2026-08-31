@@ -20,7 +20,7 @@ const REASON_LABELS = {
   sale_cancel: 'Cancelación de venta',
   sale_edit: 'Edición de pedido',
   po_receipt: 'Recepción de orden de compra',
-  fabrication_arrival: 'Llegada de fabricación a bodega',
+  fabrication_arrival: 'Llegada de fabricación a almacén',
   manual_adjust: 'Ajuste manual',
   initial: 'Existencia inicial',
 };

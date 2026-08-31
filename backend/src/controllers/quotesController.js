@@ -184,6 +184,9 @@ const quotesController = {
       data: {
         quoteNumber: quote.quoteNumber,
         customerName: quote.customerName,
+        // El cliente verifica en la cotización que su teléfono de contacto
+        // quedó bien capturado.
+        customerPhone: quote.customerPhone ?? null,
         sellerName: quote.sellerName,
         paymentMethod: quote.paymentMethod,
         shippingPostalCode: quote.shippingPostalCode,

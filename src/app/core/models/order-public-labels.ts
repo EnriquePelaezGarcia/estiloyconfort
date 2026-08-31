@@ -19,7 +19,7 @@ export const TENTATIVE_DELIVERY_NOTICE =
 export const ORDER_STATUS_PUBLIC_LABELS: Record<OrderStatus, string> = {
   pending: 'En preparación',
   fabricating: 'En fabricación',
-  in_warehouse: 'En bodega',
+  in_warehouse: 'En almacén',
   ready: 'Listo para entrega',
   in_delivery: 'En camino',
   delivered: 'Entregado',

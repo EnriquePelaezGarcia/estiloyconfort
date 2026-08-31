@@ -76,7 +76,7 @@ export class SellerOrdersComponent implements OnInit {
     { value: '', label: 'Todos los estados' },
     { value: 'pending', label: 'Pendiente' },
     { value: 'fabricating', label: 'En fabricación' },
-    { value: 'in_warehouse', label: 'En bodega' },
+    { value: 'in_warehouse', label: 'En almacén' },
     { value: 'ready', label: 'Listo' },
     { value: 'in_delivery', label: 'En reparto' },
     { value: 'delivered', label: 'Entregado' },

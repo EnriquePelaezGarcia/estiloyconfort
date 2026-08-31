@@ -1348,6 +1348,30 @@ const Order = {
         }
       }
 
+      // Apartado (caso UAT): el enganche mínimo de $500 se cobra AL crear el
+      // pedido, en esta misma transacción — no se puede apartar un mueble sin
+      // dejar depósito. En este punto `orders.total_amount` ya es el definitivo
+      // (envío, armado, descuentos y cargos extra ya sumados/restados).
+      // El resto de esquemas puede registrar aquí un abono inicial opcional
+      // (p. ej. el pago inicial del crédito en tienda).
+      const initialPayment = Math.round((Number(data.initialPayment) || 0) * 100) / 100;
+      if (paymentMethod === 'layaway' && initialPayment < LAYAWAY_MIN_DEPOSIT) {
+        const err = new Error(
+          `El apartado requiere un abono inicial de al menos $${LAYAWAY_MIN_DEPOSIT} para crear el pedido.`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+      if (initialPayment > 0 && ['layaway', 'store_credit'].includes(paymentMethod)) {
+        const Payment = require('./Payment');
+        await Payment.applyToOrder(conn, {
+          orderId,
+          lines: [{ amount: initialPayment, paymentMethod: data.initialPaymentMethod || 'cash' }],
+          collectedById: sellerId,
+          notes: 'Abono inicial al crear el pedido',
+        });
+      }
+
       return orderId;
   },
 
@@ -1473,6 +1497,10 @@ const Order = {
           shippingPostalCode: carriesShipping ? data.shippingPostalCode : null,
           assemblyService: carriesShipping ? data.assemblyService : false,
           assemblyFloors: carriesShipping ? data.assemblyFloors : 0,
+          // El abono inicial (apartado/crédito) es POR NOTA, no del grupo: cada
+          // nota lo declara en su propio `saleGroups[i]`. No se hereda de `data`.
+          initialPayment: g.initialPayment ?? null,
+          initialPaymentMethod: g.initialPaymentMethod ?? null,
           // D12: las cotizaciones quedan fuera de alcance de la venta partida v1.
           fromQuoteId: null,
         };
@@ -2475,7 +2503,7 @@ const Order = {
       );
       if (Number(pending) > 0) {
         const err = new Error(
-          'Recibe las piezas en bodega primero (Pedidos a fábrica) antes de mover el pedido a este estatus.',
+          'Recibe las piezas en almacén primero (Pedidos a fábrica) antes de mover el pedido a este estatus.',
         );
         err.statusCode = 400;
         throw err;
@@ -2514,7 +2542,7 @@ const Order = {
     // reparto. 'in_warehouse' significa que falta el enganche/liquidación.
     if (order.orderStatus !== 'ready') {
       const err = new Error(
-        'El pedido debe estar "Listo para entrega" (mueble en bodega y pago mínimo cubierto) antes de asignar repartidor.',
+        'El pedido debe estar "Listo para entrega" (mueble en almacén y pago mínimo cubierto) antes de asignar repartidor.',
       );
       err.statusCode = 400;
       throw err;
@@ -2724,7 +2752,7 @@ const Order = {
     );
     if (!item) { const e = new Error('Línea de pedido no encontrada'); e.statusCode = 404; throw e; }
     if (!item.requires_fabrication) {
-      const e = new Error('Esa línea no es de fabricación; no se recibe en bodega.'); e.statusCode = 400; throw e;
+      const e = new Error('Esa línea no es de fabricación; no se recibe en almacén.'); e.statusCode = 400; throw e;
     }
 
     const qty = Number(item.quantity);
@@ -2790,7 +2818,7 @@ const Order = {
             reason: 'fabrication_arrival',
             sourceType: 'order',
             sourceId: item.order_id,
-            note: `Llegada a bodega ${item.order_number}`,
+            note: `Llegada a almacén ${item.order_number}`,
             userId,
           });
           await conn.execute(
@@ -2812,7 +2840,7 @@ const Order = {
             sourceId: item.order_id,
             amount: -Math.round(amount * 100) / 100,
             concept: `Nota de crédito sugerida — daño/faltante pedido ${item.order_number}`,
-            notes: 'Generada al recibir en bodega. Revisa el monto.',
+            notes: 'Generada al recibir en almacén. Revisa el monto.',
           }, userId);
           creditNote = { id, amount: Math.round(amount * 100) / 100 };
         }

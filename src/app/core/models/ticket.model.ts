@@ -32,6 +32,8 @@ export interface PublicTicket {
   paymentStatus: PaymentStatus;
   paymentMethod: SaleScheme;
   customerName: string;
+  /** Teléfono de contacto del cliente, para que confirme que quedó bien capturado. */
+  customerPhone: string | null;
   sellerName: string | null;
 
   deliveryType: DeliveryType;

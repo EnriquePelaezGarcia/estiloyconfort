@@ -67,7 +67,12 @@ export class TicketsService {
       `Rastrea tu pedido:\n${trackUrl}`,
     );
 
-    const phone = (info.customerPhone ?? '').replace(/\D/g, '');
+    // Normaliza como el resto del proyecto (requestWhatsappUrl / whatsappUrl):
+    // se queda con los últimos 10 dígitos, así un teléfono guardado con lada,
+    // `+52` o espacios igual resuelve al chat directo en vez de caer al
+    // selector de contactos de WhatsApp.
+    const digits = (info.customerPhone ?? '').replace(/\D/g, '');
+    const phone = digits.length >= 10 ? digits.slice(-10) : '';
     return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 }

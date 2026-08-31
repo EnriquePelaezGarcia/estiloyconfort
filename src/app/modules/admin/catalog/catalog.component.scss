@@ -301,6 +301,28 @@
   font-size: 0.9rem;
 }
 
+// Enlace discreto para escalar de "desactivar" a "eliminar permanentemente".
+.confirm-link-danger {
+  display: block;
+  margin: vars.$spacing-md auto 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: vars.$color-error;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    opacity: 0.8;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 // ===== Costos por fabricante =====
 .costs__hint,
 .costs__empty {

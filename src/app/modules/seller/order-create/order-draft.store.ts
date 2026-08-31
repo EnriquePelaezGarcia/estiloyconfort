@@ -82,6 +82,8 @@ export interface OrderDraftSnapshot {
   shippingCp: string;
   shippingQuote: ShippingQuote | null;
   manualShippingCost: number | null;
+  layawayDeposit: number | null;
+  layawayDepositMethod: 'cash' | 'transfer';
   existingDiscounts: OrderDiscount[];
   discountAmount: number | null;
   discountReasonCategory: DiscountReasonCategory | null;
@@ -639,6 +641,28 @@ export class OrderDraftStore {
     return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
   });
 
+  /**
+   * Apartado: el enganche mínimo que hay que cobrar AL crear el pedido. No se
+   * puede apartar un mueble sin dejar depósito (caso UAT) — el backend aplica
+   * la misma regla, esta es la primera defensa.
+   */
+  readonly LAYAWAY_MIN_DEPOSIT = 500;
+  /** Monto del abono inicial del apartado (arranca en el mínimo, editable). */
+  readonly layawayDeposit = signal<number | null>(null);
+  /** Instrumento del abono inicial: efectivo o transferencia (igual que los abonos). */
+  readonly layawayDepositMethod = signal<'cash' | 'transfer'>('cash');
+  /**
+   * ¿El abono inicial del apartado es válido? Sólo aplica al CREAR un apartado
+   * (al editar, los abonos ya viven en el pedido). Entre el mínimo y el total.
+   */
+  readonly layawayDepositValid = computed(() => {
+    if (!this.isLayaway() || this.isEditing()) return true;
+    const d = this.layawayDeposit();
+    return d != null
+      && d + 1e-6 >= this.LAYAWAY_MIN_DEPOSIT
+      && d <= this.grandTotal() + 1e-6;
+  });
+
   /** Parámetros del crédito en tienda (interés, inicial, semanas). */
   private creditConfig = signal<PricingConfigMap>({ ...DEFAULT_PRICING_CONFIG });
 
@@ -698,7 +722,8 @@ export class OrderDraftStore {
     () => this.submitAttempted()
       && (this.form.invalid
         || (!this.isPickup() && this.shippingCp().length !== 5)
-        || (this.needsManualShipping() && this.manualShippingCost() === null)),
+        || (this.needsManualShipping() && this.manualShippingCost() === null)
+        || !this.layawayDepositValid()),
   );
 
   /** Último paso que falló una validación al intentar guardar; null si no hay error pendiente. */
@@ -779,6 +804,8 @@ export class OrderDraftStore {
     this.shippingCp.set(snap.shippingCp);
     this.shippingQuote.set(snap.shippingQuote);
     this.manualShippingCost.set(snap.manualShippingCost);
+    this.layawayDeposit.set(snap.layawayDeposit);
+    this.layawayDepositMethod.set(snap.layawayDepositMethod);
     this.existingDiscounts.set(snap.existingDiscounts);
     this.discountAmount.set(snap.discountAmount);
     this.discountReasonCategory.set(snap.discountReasonCategory);
@@ -801,6 +828,8 @@ export class OrderDraftStore {
       shippingCp: this.shippingCp(),
       shippingQuote: this.shippingQuote(),
       manualShippingCost: this.manualShippingCost(),
+      layawayDeposit: this.layawayDeposit(),
+      layawayDepositMethod: this.layawayDepositMethod(),
       existingDiscounts: this.existingDiscounts(),
       discountAmount: this.discountAmount(),
       discountReasonCategory: this.discountReasonCategory(),
@@ -841,6 +870,18 @@ export class OrderDraftStore {
     this.form.controls.pickupInStore.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe((pickup) => this.applyPickupMode(!!pickup));
+
+    // Apartado: al elegir el esquema, el abono inicial arranca en el mínimo
+    // ($500) para que el vendedor sólo lo suba si el cliente deja más. Al
+    // cambiar a otro esquema o entrar en modo edición se limpia.
+    effect(() => {
+      const wantsDeposit = this.isLayaway() && !this.isEditing();
+      if (wantsDeposit && this.layawayDeposit() == null) {
+        this.layawayDeposit.set(this.LAYAWAY_MIN_DEPOSIT);
+      } else if (!wantsDeposit && this.layawayDeposit() != null) {
+        this.layawayDeposit.set(null);
+      }
+    });
 
     // §11.1: precarga sugerencias de color para cada material que aparezca en
     // el carrito (agregar producto, cambiar material, cargar cotización/pedido para editar).
@@ -1267,6 +1308,19 @@ export class OrderDraftStore {
     this.manualShippingCost.set(raw === '' || Number.isNaN(value) || value < 0 ? null : value);
   }
 
+  /** Apartado: captura del abono inicial (vacío o negativo → null, para que el guard lo marque). */
+  onLayawayDepositInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const value = Number(raw);
+    this.layawayDeposit.set(raw === '' || Number.isNaN(value) || value < 0 ? null : value);
+  }
+
+  /** Apartado: instrumento del abono inicial (efectivo o transferencia). */
+  onLayawayDepositMethodChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.layawayDepositMethod.set(value === 'transfer' ? 'transfer' : 'cash');
+  }
+
   /** ¿Se puede modificar (cantidad/quitar/material) esta línea del carrito? */
   canEditLine(line: CartLine): boolean {
     return !this.isRestrictedEdit() || !this.lineRequiresFabrication(line);
@@ -1559,6 +1613,19 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
+    // Apartado: no se crea el pedido sin cobrar el enganche (mínimo $500, tope
+    // el total). El backend aplica la misma regla en la transacción del INSERT.
+    if (!this.layawayDepositValid()) {
+      const d = this.layawayDeposit();
+      this.notification.error(
+        d != null && d > this.grandTotal()
+          ? 'El abono inicial no puede superar el total del pedido.'
+          : `El apartado requiere un abono inicial de al menos $${this.LAYAWAY_MIN_DEPOSIT} para crear el pedido.`,
+      );
+      this._lastInvalidStep.set(2);
+      this.goToStep(2);
+      return;
+    }
     // Docs/plan-descuentos.md: solo se valida si se está capturando uno
     // NUEVO — si ya hay uno guardado (`activeMoneyDiscount`), el campo está
     // bloqueado y no hay nada que revisar aquí.
@@ -1598,6 +1665,10 @@ export class OrderDraftStore {
       // evita que el pedido guardado y lo que vio el vendedor difieran.
       pickupInStore: pickup,
       paymentMethod: raw.paymentMethod!,
+      // Apartado: el enganche se cobra junto con el alta del pedido. En edición
+      // no aplica (los abonos ya existen); sólo se manda al crear un apartado.
+      initialPayment: !this.isEditing() && this.isLayaway() ? this.layawayDeposit() : null,
+      initialPaymentMethod: !this.isEditing() && this.isLayaway() ? this.layawayDepositMethod() : null,
       ...this.deliverySchedulePayload(raw),
       shippingCost: pickup ? null : this.shippingCost() || null,
       shippingPostalCode: pickup ? null : this.shippingCp() || null,

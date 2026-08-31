@@ -111,6 +111,8 @@ export interface PublicQuote {
   /** Folio legible (`COT-0011`) para que el cliente lo cite en el chat. */
   quoteNumber: string;
   customerName: string;
+  /** Teléfono de contacto del cliente, para que confirme que quedó bien capturado. */
+  customerPhone?: string | null;
   sellerName?: string | null;
   paymentMethod: SaleScheme;
   shippingPostalCode?: string | null;

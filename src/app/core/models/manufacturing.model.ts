@@ -122,6 +122,9 @@ export interface FactoryOrderItemRow {
   /** Material y color de la línea (M4/M7) — ya no del pedido completo. */
   materialId: number;
   materialLabel: string;
+  /** Talla de la línea (D3) — null = producto sin eje de talla. */
+  sizeId: number | null;
+  sizeLabel: string | null;
   color: string | null;
   quantity: number;
   isReady: boolean;
