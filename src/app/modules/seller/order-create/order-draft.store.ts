@@ -82,8 +82,8 @@ export interface OrderDraftSnapshot {
   shippingCp: string;
   shippingQuote: ShippingQuote | null;
   manualShippingCost: number | null;
-  layawayDeposit: number | null;
-  layawayDepositMethod: 'cash' | 'transfer';
+  initialDeposit: number | null;
+  initialDepositMethod: 'cash' | 'transfer';
   existingDiscounts: OrderDiscount[];
   discountAmount: number | null;
   discountReasonCategory: DiscountReasonCategory | null;
@@ -271,7 +271,7 @@ export class OrderDraftStore {
    * el vendedor ya haya ajustado a mano.
    */
   private syncFabricationDeliverySchedule(wasFabricationRequired: boolean): void {
-    if (wasFabricationRequired || !this.hasFabricationLines()) return;
+    if (wasFabricationRequired || !this.orderHasFabrication()) return;
 
     // RN-P1: si el carrito deja de estar completo en tienda, "recoge en
     // tienda" deja de ser posible — el cliente no puede llevarse hoy un mueble
@@ -279,7 +279,7 @@ export class OrderDraftStore {
     if (this.form.controls.pickupInStore.value) {
       this.form.controls.pickupInStore.setValue(false);
       this.notification.info(
-        'Se desactivó "Recoge en tienda": el pedido ahora incluye piezas sobre pedido o agotadas.',
+        'Se desactivó "Recoge en tienda": el pedido ahora incluye piezas sobre pedido o con modificaciones.',
       );
     }
 
@@ -292,7 +292,8 @@ export class OrderDraftStore {
       deliveryWindowEnd: '',
     });
     this.notification.info(
-      'Este pedido tiene piezas agotadas o sobre pedido: se sugirió fecha de entrega a 15 días hábiles. Puedes ajustarla.',
+      'Este pedido tiene piezas agotadas, un color especial o una modificación: la entrega se '
+      + 'estimó a ~15 días hábiles. Puedes ajustar la fecha.',
     );
   }
 
@@ -304,7 +305,7 @@ export class OrderDraftStore {
   readonly deliveryAssignmentBlocked = computed(() => {
     // RN-P2: un pedido que el cliente se lleva de la tienda no tiene ruta.
     if (this.isPickup()) return true;
-    if (!this.hasFabricationLines()) return false;
+    if (!this.orderHasFabrication()) return false;
     const status = this.orderStatus();
     return status !== 'ready' && status !== 'in_delivery' && status !== 'delivered';
   });
@@ -389,6 +390,18 @@ export class OrderDraftStore {
       (sum, l) => sum + (l.extraCharges ?? []).reduce((s, ec) => s + ec.amount, 0), 0,
     ),
   );
+
+  /**
+   * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-FAB1 — el pedido
+   * "tiene fabricación" (dispara el estimado de ~15 días y el anticipo) si hay
+   * líneas sobre pedido/agotadas, o algún cargo extra por modificación, o notas
+   * para el fabricante. Espejo de `orderHasFabrication()` del backend.
+   */
+  readonly orderHasFabrication = computed(
+    () => this.hasFabricationLines()
+      || this.extraChargesCount() > 0
+      || (this.notasFabricanteSig() ?? '').trim().length > 0,
+  );
   /**
    * Total de los productos ya con el tratamiento del esquema: en Crédito
    * Tienda lleva el interés (es lo que el backend guarda como total_amount);
@@ -454,6 +467,10 @@ export class OrderDraftStore {
   private expectedDeliveryDateSig = toSignal(this.form.controls.expectedDeliveryDate.valueChanges, {
     initialValue: this.form.controls.expectedDeliveryDate.value,
   });
+  /** Notas para el fabricante — RN-FAB1: si trae texto, el pedido "tiene fabricación". */
+  private notasFabricanteSig = toSignal(this.form.controls.notasFabricante.valueChanges, {
+    initialValue: this.form.controls.notasFabricante.value,
+  });
 
   /**
    * Docs/plan-aprobaciones-admin.md §11.3 — aviso NO bloqueante: cuántas
@@ -477,7 +494,7 @@ export class OrderDraftStore {
    * RN-P1: solo se puede recoger lo que YA está en tienda. Un mueble sobre
    * pedido o agotado no se lo puede llevar nadie hoy.
    */
-  readonly pickupAllowed = computed(() => !this.hasFabricationLines());
+  readonly pickupAllowed = computed(() => !this.orderHasFabrication());
 
   /** Entrega comprometida: cumpleaños/XV. Fecha y horario dejan de ser opcionales. */
   readonly isExactDelivery = computed(() => this.commitmentSig() === 'exact');
@@ -488,6 +505,9 @@ export class OrderDraftStore {
   readonly deliveryPeople = signal<DeliveryPerson[]>([]);
   /** Repartidor ya asignado al entrar en modo edición, para no re-asignar sin cambios. */
   private initialDeliveryPersonId: number | null = null;
+
+  /** ¿Las notas para el fabricante ya tenían texto? (para detectar la transición vacío→texto). */
+  private notasFabricanteHadText = false;
 
   /** Tarifas vigentes del servicio de armado (el servidor recalcula al guardar). */
   readonly assemblyRates = signal<AssemblyRates | null>(null);
@@ -642,24 +662,45 @@ export class OrderDraftStore {
   });
 
   /**
-   * Apartado: el enganche mínimo que hay que cobrar AL crear el pedido. No se
-   * puede apartar un mueble sin dejar depósito (caso UAT) — el backend aplica
-   * la misma regla, esta es la primera defensa.
+   * Anticipo mínimo que hay que cobrar AL crear el pedido. El backend aplica la
+   * misma regla; esta es la primera defensa.
+   *   - Apartado: no se aparta un mueble sin dejar depósito (caso UAT).
+   *   - RN-ANT1 (Docs/plan-anticipo-fabricacion-por-modificacion.md):
+   *     contado/MSI/mayoreo CON fabricación → anticipo mínimo $500.
    */
-  readonly LAYAWAY_MIN_DEPOSIT = 500;
-  /** Monto del abono inicial del apartado (arranca en el mínimo, editable). */
-  readonly layawayDeposit = signal<number | null>(null);
+  readonly INITIAL_DEPOSIT_MIN = 500;
+  /** Monto del abono/anticipo inicial (arranca en el mínimo, editable hacia arriba). */
+  readonly initialDeposit = signal<number | null>(null);
   /** Instrumento del abono inicial: efectivo o transferencia (igual que los abonos). */
-  readonly layawayDepositMethod = signal<'cash' | 'transfer'>('cash');
+  readonly initialDepositMethod = signal<'cash' | 'transfer'>('cash');
+
+  /** RN-CRE1: un mueble a crédito en tienda no puede llevar cargo extra por modificación. */
+  readonly creditBlockedByExtraCharge = computed(
+    () => this.isCredit() && this.extraChargesCount() > 0,
+  );
+
   /**
-   * ¿El abono inicial del apartado es válido? Sólo aplica al CREAR un apartado
-   * (al editar, los abonos ya viven en el pedido). Entre el mínimo y el total.
+   * ¿Este pedido debe cobrar un anticipo al crearse? (nunca al editar — los
+   * abonos ya viven en el pedido). Apartado siempre; contado/MSI/mayoreo solo
+   * si el pedido tiene fabricación (RN-ANT1).
    */
-  readonly layawayDepositValid = computed(() => {
-    if (!this.isLayaway() || this.isEditing()) return true;
-    const d = this.layawayDeposit();
+  readonly needsInitialDeposit = computed(() => {
+    if (this.isEditing()) return false;
+    if (this.isLayaway()) return true;
+    const scheme = this.paymentMethodSig();
+    return this.orderHasFabrication()
+      && (scheme === 'cash' || scheme === 'msi' || scheme === 'wholesale');
+  });
+
+  /**
+   * ¿El anticipo capturado es válido? Solo aplica cuando `needsInitialDeposit()`.
+   * Entre el mínimo ($500) y el total del pedido.
+   */
+  readonly initialDepositValid = computed(() => {
+    if (!this.needsInitialDeposit()) return true;
+    const d = this.initialDeposit();
     return d != null
-      && d + 1e-6 >= this.LAYAWAY_MIN_DEPOSIT
+      && d + 1e-6 >= this.INITIAL_DEPOSIT_MIN
       && d <= this.grandTotal() + 1e-6;
   });
 
@@ -723,7 +764,7 @@ export class OrderDraftStore {
       && (this.form.invalid
         || (!this.isPickup() && this.shippingCp().length !== 5)
         || (this.needsManualShipping() && this.manualShippingCost() === null)
-        || !this.layawayDepositValid()),
+        || !this.initialDepositValid()),
   );
 
   /** Último paso que falló una validación al intentar guardar; null si no hay error pendiente. */
@@ -804,8 +845,8 @@ export class OrderDraftStore {
     this.shippingCp.set(snap.shippingCp);
     this.shippingQuote.set(snap.shippingQuote);
     this.manualShippingCost.set(snap.manualShippingCost);
-    this.layawayDeposit.set(snap.layawayDeposit);
-    this.layawayDepositMethod.set(snap.layawayDepositMethod);
+    this.initialDeposit.set(snap.initialDeposit);
+    this.initialDepositMethod.set(snap.initialDepositMethod);
     this.existingDiscounts.set(snap.existingDiscounts);
     this.discountAmount.set(snap.discountAmount);
     this.discountReasonCategory.set(snap.discountReasonCategory);
@@ -828,8 +869,8 @@ export class OrderDraftStore {
       shippingCp: this.shippingCp(),
       shippingQuote: this.shippingQuote(),
       manualShippingCost: this.manualShippingCost(),
-      layawayDeposit: this.layawayDeposit(),
-      layawayDepositMethod: this.layawayDepositMethod(),
+      initialDeposit: this.initialDeposit(),
+      initialDepositMethod: this.initialDepositMethod(),
       existingDiscounts: this.existingDiscounts(),
       discountAmount: this.discountAmount(),
       discountReasonCategory: this.discountReasonCategory(),
@@ -871,15 +912,32 @@ export class OrderDraftStore {
       .pipe(takeUntilDestroyed())
       .subscribe((pickup) => this.applyPickupMode(!!pickup));
 
-    // Apartado: al elegir el esquema, el abono inicial arranca en el mínimo
-    // ($500) para que el vendedor sólo lo suba si el cliente deja más. Al
-    // cambiar a otro esquema o entrar en modo edición se limpia.
+    // RN-FAB1/RN-FAB3: escribir notas para el fabricante vuelve el pedido
+    // "sobre pedido" — reprograma la entrega a ~15 días. Solo en la transición
+    // vacío→con-texto y con carrito ya armado (evita dispararse en la carga).
+    this.form.controls.notasFabricante.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((v) => {
+        const nowHasText = (v ?? '').trim().length > 0;
+        if (nowHasText === this.notasFabricanteHadText || !this.lines().length) {
+          this.notasFabricanteHadText = nowHasText;
+          return;
+        }
+        this.notasFabricanteHadText = nowHasText;
+        this.syncFabricationDeliverySchedule(
+          this.hasFabricationLines() || this.extraChargesCount() > 0,
+        );
+      });
+
+    // El anticipo arranca en el mínimo ($500) para que el vendedor solo lo suba
+    // si el cliente deja más. Al dejar de aplicar (cambio de esquema, se quita
+    // la fabricación, o modo edición) se limpia.
     effect(() => {
-      const wantsDeposit = this.isLayaway() && !this.isEditing();
-      if (wantsDeposit && this.layawayDeposit() == null) {
-        this.layawayDeposit.set(this.LAYAWAY_MIN_DEPOSIT);
-      } else if (!wantsDeposit && this.layawayDeposit() != null) {
-        this.layawayDeposit.set(null);
+      const wantsDeposit = this.needsInitialDeposit();
+      if (wantsDeposit && this.initialDeposit() == null) {
+        this.initialDeposit.set(this.INITIAL_DEPOSIT_MIN);
+      } else if (!wantsDeposit && this.initialDeposit() != null) {
+        this.initialDeposit.set(null);
       }
     });
 
@@ -1309,16 +1367,16 @@ export class OrderDraftStore {
   }
 
   /** Apartado: captura del abono inicial (vacío o negativo → null, para que el guard lo marque). */
-  onLayawayDepositInput(event: Event): void {
+  onInitialDepositInput(event: Event): void {
     const raw = (event.target as HTMLInputElement).value;
     const value = Number(raw);
-    this.layawayDeposit.set(raw === '' || Number.isNaN(value) || value < 0 ? null : value);
+    this.initialDeposit.set(raw === '' || Number.isNaN(value) || value < 0 ? null : value);
   }
 
   /** Apartado: instrumento del abono inicial (efectivo o transferencia). */
-  onLayawayDepositMethodChange(event: Event): void {
+  onInitialDepositMethodChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
-    this.layawayDepositMethod.set(value === 'transfer' ? 'transfer' : 'cash');
+    this.initialDepositMethod.set(value === 'transfer' ? 'transfer' : 'cash');
   }
 
   /** ¿Se puede modificar (cantidad/quitar/material) esta línea del carrito? */
@@ -1340,7 +1398,7 @@ export class OrderDraftStore {
     }
     // La celda por defecto es la primera cotizada (material × talla, D3).
     const defaultCell = quoted[0];
-    const wasFabricationRequired = this.hasFabricationLines();
+    const wasFabricationRequired = this.orderHasFabrication();
     this.lines.update((lines) => {
       const existing = lines.find(
         (l) => l.product.id === product.id
@@ -1385,7 +1443,7 @@ export class OrderDraftStore {
   /** Cambia el material de ESA línea (M4): solo esa línea reprecia, no el resto del pedido. */
   changeLineMaterial(index: number, event: Event): void {
     const materialId = Number((event.target as HTMLSelectElement).value);
-    const wasFabricationRequired = this.hasFabricationLines();
+    const wasFabricationRequired = this.orderHasFabrication();
     this.lines.update((lines) =>
       lines.map((l, i) => {
         if (i !== index) return l;
@@ -1409,7 +1467,7 @@ export class OrderDraftStore {
   changeLineSize(index: number, event: Event): void {
     const raw = (event.target as HTMLSelectElement).value;
     const sizeId = raw ? Number(raw) : null;
-    const wasFabricationRequired = this.hasFabricationLines();
+    const wasFabricationRequired = this.orderHasFabrication();
     this.lines.update((lines) =>
       lines.map((l, i) => (i === index ? { ...l, sizeId } : l)),
     );
@@ -1418,7 +1476,10 @@ export class OrderDraftStore {
 
   changeLineColor(index: number, event: Event): void {
     const color = (event.target as HTMLInputElement).value;
+    const wasFabricationRequired = this.orderHasFabrication();
     this.lines.update((lines) => lines.map((l, i) => (i === index ? { ...l, color } : l)));
+    // Un color sin piezas en bodega vuelve la línea "sobre pedido" (A2).
+    this.syncFabricationDeliverySchedule(wasFabricationRequired);
   }
 
   changeQty(index: number, delta: number): void {
@@ -1459,9 +1520,21 @@ export class OrderDraftStore {
       );
       return false;
     }
+    // RN-CRE1: un mueble a crédito en tienda no admite cargos extra por
+    // modificación (un cambio de color sí — no toca el precio).
+    if (this.isCredit()) {
+      this.notification.info(
+        'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+        + 'Cambia la condición de venta para agregar el cargo.',
+      );
+      return false;
+    }
+    const wasFabricationRequired = this.orderHasFabrication();
     this.lines.update((lines) =>
       lines.map((l, i) => (i === lineIndex ? { ...l, extraCharges: [...(l.extraCharges ?? []), charge] } : l)),
     );
+    // RN-FAB1/RN-FAB3: la modificación vuelve el pedido "sobre pedido".
+    this.syncFabricationDeliverySchedule(wasFabricationRequired);
     return true;
   }
 
@@ -1613,14 +1686,27 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
-    // Apartado: no se crea el pedido sin cobrar el enganche (mínimo $500, tope
-    // el total). El backend aplica la misma regla en la transacción del INSERT.
-    if (!this.layawayDepositValid()) {
-      const d = this.layawayDeposit();
-      this.notification.error(
+    // RN-CRE1: crédito en tienda no admite cargos extra por modificación.
+    if (this.creditBlockedByExtraCharge()) {
+      this.notification.info(
+        'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+        + 'Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.',
+      );
+      this._lastInvalidStep.set(1);
+      this.goToStep(1);
+      return;
+    }
+    // RN-ANT1 / apartado: no se crea el pedido sin cobrar el anticipo (mínimo
+    // $500, tope el total). El backend aplica la misma regla en el INSERT.
+    if (!this.initialDepositValid()) {
+      const d = this.initialDeposit();
+      this.notification.info(
         d != null && d > this.grandTotal()
-          ? 'El abono inicial no puede superar el total del pedido.'
-          : `El apartado requiere un abono inicial de al menos $${this.LAYAWAY_MIN_DEPOSIT} para crear el pedido.`,
+          ? 'El anticipo no puede superar el total del pedido.'
+          : (this.isLayaway()
+            ? `El apartado requiere un abono inicial de al menos $${this.INITIAL_DEPOSIT_MIN} para crear el pedido.`
+            : 'Este pedido incluye muebles sobre pedido o con modificaciones. Se requiere un anticipo de '
+              + `al menos $${this.INITIAL_DEPOSIT_MIN} para levantarlo y que el fabricante empiece.`),
       );
       this._lastInvalidStep.set(2);
       this.goToStep(2);
@@ -1667,8 +1753,8 @@ export class OrderDraftStore {
       paymentMethod: raw.paymentMethod!,
       // Apartado: el enganche se cobra junto con el alta del pedido. En edición
       // no aplica (los abonos ya existen); sólo se manda al crear un apartado.
-      initialPayment: !this.isEditing() && this.isLayaway() ? this.layawayDeposit() : null,
-      initialPaymentMethod: !this.isEditing() && this.isLayaway() ? this.layawayDepositMethod() : null,
+      initialPayment: this.needsInitialDeposit() ? this.initialDeposit() : null,
+      initialPaymentMethod: this.needsInitialDeposit() ? this.initialDepositMethod() : null,
       ...this.deliverySchedulePayload(raw),
       shippingCost: pickup ? null : this.shippingCost() || null,
       shippingPostalCode: pickup ? null : this.shippingCp() || null,
@@ -1754,6 +1840,17 @@ export class OrderDraftStore {
 
   private pendingPayload: CreateOrderRequest | null = null;
 
+  /**
+   * RN-MSG2 (Docs/plan-anticipo-fabricacion-por-modificacion.md): un rechazo por
+   * regla de negocio (400 con mensaje) se muestra tal cual y como AVISO (azul),
+   * no como error rojo — para que el vendedor/admin no lo lea como una falla.
+   */
+  private notifyApiError(err: { status?: number; error?: { message?: string } }, fallback: string): void {
+    const message = err?.error?.message;
+    if (err?.status === 400 && message) this.notification.info(message);
+    else this.notification.error(message ?? fallback);
+  }
+
   private savePayload(payload: CreateOrderRequest): void {
     const detailBase = this.router.url.startsWith('/admin') ? '/admin/punto-venta' : '/vendedor/pedidos';
     const editId = this.editId();
@@ -1768,9 +1865,9 @@ export class OrderDraftStore {
             this.router.navigate([detailBase, res.data.id]);
           });
         },
-        error: (err: { error?: { message?: string } }) => {
+        error: (err: { status?: number; error?: { message?: string } }) => {
           this.saving.set(false);
-          this.notification.error(err?.error?.message ?? 'No se pudo actualizar el pedido');
+          this.notifyApiError(err, 'No se pudo actualizar el pedido');
         },
       });
       return;
@@ -1784,9 +1881,9 @@ export class OrderDraftStore {
           this.router.navigate([detailBase, res.data.id]);
         });
       },
-      error: (err: { error?: { message?: string } }) => {
+      error: (err: { status?: number; error?: { message?: string } }) => {
         this.saving.set(false);
-        this.notification.error(err?.error?.message ?? 'No se pudo crear el pedido');
+        this.notifyApiError(err, 'No se pudo crear el pedido');
       },
     });
   }

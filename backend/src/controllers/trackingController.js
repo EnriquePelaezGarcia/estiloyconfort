@@ -83,6 +83,8 @@ module.exports = {
       paymentAmount: order.payment_amount,
       downPayment: order.down_payment,
       totalAmount: order.total_amount,
+      // RN-ANT5: contado/MSI/mayoreo con fabricación necesita el anticipo de $500.
+      hasFabrication: items.some((it) => it.requires_fabrication),
     });
     const paymentBlocksDelivery = order.order_status === 'in_warehouse' && !clearsPayment;
 

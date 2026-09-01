@@ -9,6 +9,9 @@ $porcelain: #fcf9f8;
 $text-secondary: #625d5a;
 $lavender: #c9b8e8;
 $hairline: rgba(61, 43, 94, 0.12);
+// Cabecera: el mismo morado del footer del sitio (.footer, #2a1d42), antes
+// ink casi negro.
+$crest-bg: #2a1d42;
 
 .track-page {
   padding: vars.$spacing-xl vars.$spacing-md vars.$spacing-2xl;
@@ -30,7 +33,7 @@ $hairline: rgba(61, 43, 94, 0.12);
 
 .crest {
   padding: vars.$spacing-xl vars.$spacing-lg vars.$spacing-lg;
-  background: $ink;
+  background: $crest-bg;
   color: #fff;
   text-align: center;
 }

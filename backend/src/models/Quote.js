@@ -493,6 +493,17 @@ const Quote = {
       }));
       const extraChargesTotal = normalizedExtraCharges.reduce((s, r) => s + r.amount, 0);
 
+      // RN-CRE1 (Docs/plan-anticipo-fabricacion-por-modificacion.md): un mueble
+      // con cargo extra por modificación no se puede cotizar a crédito en tienda.
+      if (p.paymentMethod === 'store_credit' && normalizedExtraCharges.length > 0) {
+        const err = new Error(
+          'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+          + 'Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
       const totalAmount = Math.max(
         0, Math.round((p.totalAmount + extraChargesTotal - moneyDiscountAmount) * 100) / 100,
       );
@@ -674,6 +685,16 @@ const Quote = {
         itemIndex: Number(ec.itemIndex),
       }));
       const extraChargesTotal = normalizedExtraCharges.reduce((s, r) => s + r.amount, 0);
+
+      // RN-CRE1: un mueble con cargo extra por modificación no se cotiza a crédito.
+      if (p.paymentMethod === 'store_credit' && normalizedExtraCharges.length > 0) {
+        const err = new Error(
+          'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+          + 'Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
 
       const totalAmount = Math.max(
         0, Math.round((p.totalAmount + extraChargesTotal - moneyDiscountAmount) * 100) / 100,
@@ -950,6 +971,16 @@ const Quote = {
     if (!existing) { const err = new Error('Cotización no encontrada'); err.statusCode = 404; throw err; }
     if (existing.status === 'converted') {
       const err = new Error('Esta cotización ya se convirtió en pedido y no se puede editar');
+      err.statusCode = 400;
+      throw err;
+    }
+    // RN-CRE1 (Docs/plan-anticipo-fabricacion-por-modificacion.md): crédito en
+    // tienda no admite cargos extra por modificación.
+    if (existing.paymentMethod === 'store_credit') {
+      const err = new Error(
+        'Esta cotización es a crédito en tienda y los muebles con cargos extra por modificación no se '
+        + 'pueden vender a crédito. Cambia la condición de venta para agregar el cargo.',
+      );
       err.statusCode = 400;
       throw err;
     }

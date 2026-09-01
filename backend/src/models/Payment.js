@@ -160,6 +160,8 @@ const Payment = {
       paymentAmount: paidNum,
       downPayment: cur.down_payment,
       totalAmount: cur.total_amount,
+      // RN-ANT5: contado/MSI/mayoreo con fabricación necesita el anticipo de $500.
+      hasFabrication: Number(fabAgg.fab) > 0,
     });
     // Stepwise: cada transición es su propio UPDATE, para que la Parte B
     // (triggers de historial) registre 'in_warehouse' y 'ready' por separado.

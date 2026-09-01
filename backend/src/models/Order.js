@@ -10,6 +10,7 @@ const discountEngine = require('./discountEngine');
 const extraChargeEngine = require('./extraChargeEngine');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
+const { addBusinessDays } = require('../utils/businessDays');
 
 const ORDER_STATUSES = ['pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery', 'delivered', 'cancelled'];
 
@@ -148,6 +149,20 @@ function hasPendingFabrication(items, orderStatus) {
     && orderStatus !== 'in_delivery' && orderStatus !== 'delivered';
 }
 
+/**
+ * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-FAB1 — un pedido
+ * "tiene fabricación" (dispara el estimado de ~15 días hábiles y el anticipo
+ * obligatorio) si cualquiera es cierta:
+ *   1. alguna línea la requiere por stock/color (`resolveOrderLine`),
+ *   2. alguna línea lleva un cargo extra por modificación (RN-FAB2), o
+ *   3. el pedido trae notas para el fabricante (D2: por pedido, no marca líneas).
+ */
+function orderHasFabrication(resolvedItems, hasExtraCharges, notasFabricante) {
+  return (resolvedItems ?? []).some((it) => it.requiresFabrication)
+    || !!hasExtraCharges
+    || String(notasFabricante ?? '').trim() !== '';
+}
+
 /** Campos que forman el bloque de entrega; son interdependientes (§3.2). */
 const DELIVERY_SCHEDULE_KEYS = [
   'expectedDeliveryDate', 'deliveryCommitment',
@@ -220,7 +235,8 @@ async function normalizeDeliverySchedule(data, executor = pool, blockExact = fal
   }
   if (commitment === 'exact' && blockExact) {
     throw badRequest(
-      'No se puede comprometer fecha y horario exactos: el pedido tiene piezas agotadas o sobre pedido pendientes de fabricar.',
+      'No se puede comprometer fecha y horario exactos: el pedido tiene piezas agotadas, '
+      + 'sobre pedido o con modificaciones pendientes de fabricar. Déjalo como entrega tentativa.',
     );
   }
 
@@ -689,7 +705,14 @@ const Order = {
     if (order?.paymentMethod === 'layaway') {
       return paid + 1e-6 >= (Number(order.totalAmount) || 0);
     }
-    // cash / msi / wholesale (y cualquier otro): se cobra contra entrega.
+    // RN-ANT5 (Docs/plan-anticipo-fabricacion-por-modificacion.md): contado/MSI/
+    // mayoreo con fabricación no libera la entrega ni el arranque de fábrica
+    // hasta cubrir el anticipo de $500. `hasFabrication` = hay líneas
+    // `requires_fabrication = 1` (nivel línea, no las notas del fabricante).
+    if (order?.hasFabrication) {
+      return paid + 1e-6 >= LAYAWAY_MIN_DEPOSIT;
+    }
+    // cash / msi / wholesale sin fabricación: se cobra contra entrega.
     return true;
   },
 
@@ -1056,6 +1079,38 @@ const Order = {
       }
       totalAmount += extraChargesTotal;
 
+      const hasExtraCharges = quoteExtraChargesToCopy.length > 0 || normalizedExtraCharges.length > 0;
+
+      // RN-CRE1 (Docs/plan-anticipo-fabricacion-por-modificacion.md): un mueble
+      // con cargo extra por modificación no se puede vender a crédito en tienda
+      // (un cambio de color sí — no toca el precio).
+      if (paymentMethod === 'store_credit' && hasExtraCharges) {
+        const err = new Error(
+          'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+          + 'Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // RN-FAB2: la línea con cargo extra se fabrica sobre pedido. Se marca
+      // ANTES del INSERT de order_items y del cálculo de la fecha de entrega.
+      for (const ec of normalizedExtraCharges) {
+        const it = Number.isInteger(ec.itemIndex) ? resolvedItems[ec.itemIndex] : null;
+        if (it) it.requiresFabrication = true;
+      }
+      for (const ec of quoteExtraChargesToCopy) {
+        const it = resolvedItems.find(
+          (r) => r.productId === ec.product_id && r.materialId === ec.material_id,
+        );
+        if (it) it.requiresFabrication = true;
+      }
+
+      // RN-FAB1 + RN-FAB3: ¿este pedido dispara el estimado de 15 días y el
+      // anticipo obligatorio? (cargo extra o notas del fabricante, además del
+      // caso de stock/color que ya marcaba `resolveOrderLine`).
+      const orderFab = orderHasFabrication(resolvedItems, hasExtraCharges, data.notasFabricante);
+
       /**
        * Descuento en dinero (Docs/plan-descuentos.md, RN-D1/RN-D3): si el
        * pedido nace de una cotización ya cotizada con descuento, ese
@@ -1120,9 +1175,16 @@ const Order = {
             deliveryWindowEnd: null,
             deliverySlotId: null,
           }
-        : await normalizeDeliverySchedule(
-            data, conn, resolvedItems.some((it) => it.requiresFabrication),
-          );
+        : await normalizeDeliverySchedule(data, conn, orderFab);
+
+      // RN-FAB3: red de seguridad — si el pedido tiene fabricación y llegó sin
+      // fecha estimada (el front normalmente la manda a ~15 días hábiles), se
+      // sella aquí para que nunca quede "por definir".
+      if (orderFab && !schedule.expectedDeliveryDate && !pickupInStore) {
+        schedule.expectedDeliveryDate = addBusinessDays(new Date(), Number(config.fabrication_days) || 15)
+          .toISOString().slice(0, 10);
+        schedule.deliveryCommitment = 'tentative';
+      }
 
       // Pedido 100% stock (ninguna pieza a fabricar) que además no es pickup:
       // el mueble ya está físicamente en la tienda. Si el esquema no frena la
@@ -1348,13 +1410,18 @@ const Order = {
         }
       }
 
-      // Apartado (caso UAT): el enganche mínimo de $500 se cobra AL crear el
-      // pedido, en esta misma transacción — no se puede apartar un mueble sin
-      // dejar depósito. En este punto `orders.total_amount` ya es el definitivo
+      // Anticipo / abono inicial que se cobra AL crear el pedido, en esta misma
+      // transacción — así no queda un pedido levantado sin depósito si algo
+      // falla después. En este punto `orders.total_amount` ya es el definitivo
       // (envío, armado, descuentos y cargos extra ya sumados/restados).
-      // El resto de esquemas puede registrar aquí un abono inicial opcional
-      // (p. ej. el pago inicial del crédito en tienda).
+      //   - Apartado: enganche mínimo de $500 (caso UAT).
+      //   - RN-ANT1: contado/MSI/mayoreo CON fabricación (stock, color, cargo
+      //     extra o notas) → anticipo mínimo de $500, editable solo hacia arriba.
+      //   - Crédito en tienda: pago inicial del plan (opcional aquí).
       const initialPayment = Math.round((Number(data.initialPayment) || 0) * 100) / 100;
+      const CASH_LIKE_SCHEMES = ['cash', 'msi', 'wholesale'];
+      const anticipoRequired = orderFab && CASH_LIKE_SCHEMES.includes(paymentMethod);
+
       if (paymentMethod === 'layaway' && initialPayment < LAYAWAY_MIN_DEPOSIT) {
         const err = new Error(
           `El apartado requiere un abono inicial de al menos $${LAYAWAY_MIN_DEPOSIT} para crear el pedido.`,
@@ -1362,13 +1429,30 @@ const Order = {
         err.statusCode = 400;
         throw err;
       }
-      if (initialPayment > 0 && ['layaway', 'store_credit'].includes(paymentMethod)) {
+      if (anticipoRequired) {
+        if (initialPayment + 1e-6 < LAYAWAY_MIN_DEPOSIT) {
+          const err = new Error(
+            'Este pedido incluye muebles sobre pedido o con modificaciones. Se requiere un anticipo de '
+            + `al menos $${LAYAWAY_MIN_DEPOSIT} para levantarlo y que el fabricante empiece. `
+            + 'Captúralo en el resumen del pedido.',
+          );
+          err.statusCode = 400;
+          throw err;
+        }
+        if (initialPayment - 1e-6 > totalAmount) {
+          const err = new Error('El anticipo no puede superar el total del pedido.');
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+      if (initialPayment > 0
+          && (['layaway', 'store_credit'].includes(paymentMethod) || anticipoRequired)) {
         const Payment = require('./Payment');
         await Payment.applyToOrder(conn, {
           orderId,
           lines: [{ amount: initialPayment, paymentMethod: data.initialPaymentMethod || 'cash' }],
           collectedById: sellerId,
-          notes: 'Abono inicial al crear el pedido',
+          notes: anticipoRequired ? 'Anticipo por fabricación al crear el pedido' : 'Abono inicial al crear el pedido',
         });
       }
 
@@ -1570,9 +1654,12 @@ const Order = {
       for (const k of DELIVERY_SCHEDULE_KEYS) {
         merged[k] = data[k] !== undefined ? data[k] : existing[k];
       }
-      schedule = await normalizeDeliverySchedule(
-        merged, pool, hasPendingFabrication(existing.items, existing.orderStatus),
-      );
+      // RN-FAB3: las notas del fabricante también fuerzan entrega tentativa
+      // (los cargos extra ya viven como `requires_fabrication = 1` en la línea).
+      const blockExact = hasPendingFabrication(existing.items, existing.orderStatus)
+        || (String(existing.notasFabricante ?? '').trim() !== ''
+          && !['in_warehouse', 'ready', 'in_delivery', 'delivered'].includes(existing.orderStatus));
+      schedule = await normalizeDeliverySchedule(merged, pool, blockExact);
       sets.push(
         'expected_delivery_date = ?', 'delivery_commitment = ?',
         'delivery_window_start = ?', 'delivery_window_end = ?', 'delivery_slot_id = ?',
@@ -1836,6 +1923,32 @@ const Order = {
       }
       totalAmount += extraChargesTotal;
 
+      // RN-CRE1: crédito en tienda no admite cargos extra por modificación
+      // (un cambio de color sí — no toca el precio). Cuenta el arreglo nuevo o,
+      // si la edición no toca el carrito, los que ya estaban activos.
+      const activeExtraChargeCount = replacesExtraCharges
+        ? normalizedExtraCharges.length
+        : (await extraChargeEngine.findActive('order', id, conn)).length;
+      const hasExtraCharges = activeExtraChargeCount > 0;
+      if (paymentMethod === 'store_credit' && hasExtraCharges) {
+        const err = new Error(
+          'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+          + 'Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // RN-FAB2: la línea con cargo extra (del arreglo nuevo) se fabrica sobre
+      // pedido. Solo cuando la edición reemplaza los cargos — ahí viene el
+      // `itemIndex` que liga cada cargo a su línea.
+      if (replacesExtraCharges) {
+        for (const ec of normalizedExtraCharges) {
+          const it = Number.isInteger(ec.itemIndex) ? resolvedItems[ec.itemIndex] : null;
+          if (it) it.requiresFabrication = true;
+        }
+      }
+
       // Servicio de armado: si la edición lo modifica se recalcula con las
       // tarifas vigentes; si no viene en la edición se conserva el snapshot.
       let assemblyService = !!existing.assemblyService;
@@ -1904,9 +2017,14 @@ const Order = {
           mergedSchedule[k] = data[k] !== undefined ? data[k] : existing[k];
         }
         // Se valida contra los items NUEVOS de esta edición, no los viejos.
-        schedule = await normalizeDeliverySchedule(
-          mergedSchedule, conn, hasPendingFabrication(resolvedItems, existing.orderStatus),
-        );
+        // RN-FAB1/RN-FAB3: además del stock/color, un cargo extra o las notas
+        // del fabricante fuerzan entrega tentativa (mientras el pedido no haya
+        // llegado ya a bodega/listo).
+        const notasFabEff = data.notasFabricante !== undefined
+          ? data.notasFabricante : existing.notasFabricante;
+        const blockExact = orderHasFabrication(resolvedItems, hasExtraCharges, notasFabEff)
+          && !['in_warehouse', 'ready', 'in_delivery', 'delivered'].includes(existing.orderStatus);
+        schedule = await normalizeDeliverySchedule(mergedSchedule, conn, blockExact);
       }
       await logDeliveryChange(conn, id, existing, schedule, data.rescheduleReason, userId);
 
@@ -2331,6 +2449,16 @@ const Order = {
       err.statusCode = 400;
       throw err;
     }
+    // RN-CRE1 (Docs/plan-anticipo-fabricacion-por-modificacion.md): crédito en
+    // tienda no admite cargos extra por modificación.
+    if (existing.paymentMethod === 'store_credit') {
+      const err = new Error(
+        'Este pedido es a crédito en tienda y los muebles con cargos extra por modificación no se '
+        + 'pueden vender a crédito. Cambia la condición de venta para agregar el cargo.',
+      );
+      err.statusCode = 400;
+      throw err;
+    }
     if (itemId != null && !(existing.items ?? []).some((it) => it.id === Number(itemId))) {
       const err = new Error('La línea indicada no pertenece a este pedido');
       err.statusCode = 400;
@@ -2340,12 +2468,37 @@ const Order = {
     const normalized = extraChargeEngine.normalizeExtraChargeInput({ label, amount });
     const status = requestedByRole === 'admin' ? 'approved' : 'pending';
 
+    // RN-FAB3 (D6): agregar la modificación reprograma la entrega a ~15 días
+    // hábiles si el pedido no ha salido a reparto y la fecha estimada quedaba
+    // antes. No se exige anticipo retroactivo. (El estatus del pedido no se
+    // revierte aquí — si ya estaba 'ready', el admin decide qué hacer.)
+    let rescheduleDate = null;
+    if (!['in_delivery', 'delivered', 'cancelled'].includes(existing.orderStatus)) {
+      const eta = addBusinessDays(new Date(), 15).toISOString().slice(0, 10);
+      const current = existing.expectedDeliveryDate
+        ? String(existing.expectedDeliveryDate).slice(0, 10) : null;
+      if (!current || current < eta) rescheduleDate = eta;
+    }
+
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await extraChargeEngine.assertMaxActive('order', id, conn);
       const newTotal = Math.round((Number(existing.totalAmount) + normalized.amount) * 100) / 100;
       await conn.execute('UPDATE orders SET total_amount = ? WHERE id = ?', [newTotal, id]);
+      // RN-FAB2: la línea de la modificación se fabrica sobre pedido.
+      if (itemId != null) {
+        await conn.execute(
+          'UPDATE order_items SET requires_fabrication = 1 WHERE id = ? AND order_id = ?',
+          [Number(itemId), id],
+        );
+      }
+      if (rescheduleDate) {
+        await conn.execute(
+          "UPDATE orders SET expected_delivery_date = ?, delivery_commitment = 'tentative' WHERE id = ?",
+          [rescheduleDate, id],
+        );
+      }
       await extraChargeEngine.insert('order', conn, id, {
         itemId: itemId ?? null,
         label: normalized.label,
@@ -2719,9 +2872,12 @@ const Order = {
       [orderId],
     );
 
-    // 2) in_warehouse → ready: además el pago ya no frena la entrega.
+    // 2) in_warehouse → ready: además el pago ya no frena la entrega. Aquí el
+    // pedido siempre tiene líneas de fabricación (row.fabTotal > 0), así que
+    // RN-ANT5 aplica: contado/MSI/mayoreo necesita cubrir el anticipo de $500.
     const order = await this.findById(orderId);
-    if (order?.orderStatus === 'in_warehouse' && this.paymentClearsForDelivery(order)) {
+    if (order?.orderStatus === 'in_warehouse'
+        && this.paymentClearsForDelivery({ ...order, hasFabrication: true })) {
       await pool.execute(
         "UPDATE orders SET order_status = 'ready' WHERE id = ? AND order_status = 'in_warehouse'",
         [orderId],

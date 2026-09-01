@@ -372,13 +372,14 @@ export interface CreateOrderRequest {
   pickupInStore?: boolean;
   paymentMethod: SaleScheme;
   /**
-   * Abono inicial que se cobra al crear el pedido, en la misma transacción del
-   * INSERT. Obligatorio para `layaway` (mínimo $500 — no se aparta un mueble
-   * sin depósito); opcional para `store_credit` (pago inicial del plan). El
-   * backend lo ignora en el resto de esquemas.
+   * Abono / anticipo inicial que se cobra al crear el pedido, en la misma
+   * transacción del INSERT. Obligatorio (mínimo $500) para `layaway` y —
+   * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-ANT1 — para
+   * `cash`/`msi`/`wholesale` cuando el pedido tiene fabricación (stock, color,
+   * cargo extra o notas del fabricante). Opcional para `store_credit`.
    */
   initialPayment?: number | null;
-  /** Instrumento del abono inicial: sólo efectivo o transferencia (apartado/crédito). */
+  /** Instrumento del abono inicial: sólo efectivo o transferencia. */
   initialPaymentMethod?: 'cash' | 'transfer' | null;
   expectedDeliveryDate?: string | null;
   /** 'exact' exige fecha y ventana horaria; el backend rechaza lo contrario. */

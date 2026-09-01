@@ -917,11 +917,27 @@ export class QuoteCreateComponent implements OnInit {
     this.openExtraChargeLine.update((current) => (current === index ? null : index));
   }
 
+  /**
+   * RN-CRE1 (Docs/plan-anticipo-fabricacion-por-modificacion.md): un mueble a
+   * crédito en tienda no puede llevar cargo extra por modificación.
+   */
+  protected creditBlockedByExtraCharge = computed(
+    () => this.isCredit() && this.extraChargesCount() > 0,
+  );
+
   /** Docs/plan-aprobaciones-admin.md RN-EC1: tope de 5 — el servidor es la defensa real. */
   protected addExtraCharge(index: number, charge: { label: string; amount: number }): void {
     if (this.extraChargesCount() >= MAX_EXTRA_CHARGES) {
       this.notification.error(
         `Ya hay ${MAX_EXTRA_CHARGES} cargos extra en esta cotización (el máximo). Quita alguno antes de agregar otro.`,
+      );
+      return;
+    }
+    // RN-CRE1: crédito en tienda no admite cargos extra por modificación.
+    if (this.isCredit()) {
+      this.notification.info(
+        'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+        + 'Cambia la condición de venta para agregar el cargo.',
       );
       return;
     }
@@ -971,6 +987,14 @@ export class QuoteCreateComponent implements OnInit {
     }
     if (this.lines().length === 0) {
       this.notification.error('Agrega al menos un producto a la cotización');
+      return null;
+    }
+    // RN-CRE1: crédito en tienda no admite cargos extra por modificación.
+    if (this.creditBlockedByExtraCharge()) {
+      this.notification.info(
+        'Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda. '
+        + 'Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.',
+      );
       return null;
     }
     if (this.hasUnquotedLines()) {
@@ -1055,6 +1079,16 @@ export class QuoteCreateComponent implements OnInit {
     };
   }
 
+  /**
+   * RN-MSG2: un rechazo por regla de negocio (400 con mensaje) se muestra tal
+   * cual y como AVISO (azul), no como error rojo.
+   */
+  private notifyApiError(err: { status?: number; error?: { message?: string } }, fallback: string): void {
+    const message = err?.error?.message;
+    if (err?.status === 400 && message) this.notification.info(message);
+    else this.notification.error(message ?? fallback);
+  }
+
   protected submit(): void {
     const payload = this.buildValidatedPayload();
     if (!payload) return;
@@ -1075,10 +1109,10 @@ export class QuoteCreateComponent implements OnInit {
           this.notification.success('Cotización creada');
         }
       },
-      error: (err: { error?: { message?: string } }) => {
+      error: (err: { status?: number; error?: { message?: string } }) => {
         this.saving.set(false);
-        this.notification.error(
-          err?.error?.message ?? (editingId ? 'No se pudo actualizar la cotización' : 'No se pudo crear la cotización'),
+        this.notifyApiError(
+          err, editingId ? 'No se pudo actualizar la cotización' : 'No se pudo crear la cotización',
         );
       },
     });
@@ -1112,15 +1146,15 @@ export class QuoteCreateComponent implements OnInit {
         }
         this.quotesService.confirm(editingId).subscribe({
           next: openPos,
-          error: (err: { error?: { message?: string } }) => {
+          error: (err: { status?: number; error?: { message?: string } }) => {
             this.saving.set(false);
-            this.notification.error(err?.error?.message ?? 'No se pudo confirmar la cotización');
+            this.notifyApiError(err, 'No se pudo confirmar la cotización');
           },
         });
       },
-      error: (err: { error?: { message?: string } }) => {
+      error: (err: { status?: number; error?: { message?: string } }) => {
         this.saving.set(false);
-        this.notification.error(err?.error?.message ?? 'No se pudo guardar la cotización');
+        this.notifyApiError(err, 'No se pudo guardar la cotización');
       },
     });
   }

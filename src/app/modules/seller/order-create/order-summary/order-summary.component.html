@@ -308,36 +308,36 @@
       @if (!store.isEditing()) {
         <div
           class="field"
-          [class.field--error]="store.submitAttempted() && !store.layawayDepositValid()"
+          [class.field--error]="store.submitAttempted() && !store.initialDepositValid()"
         >
-          <label for="layawayDeposit">Abono inicial para apartar *</label>
+          <label for="initialDeposit">Abono inicial para apartar *</label>
           <div class="deposit-input">
             <input
-              id="layawayDeposit"
+              id="initialDeposit"
               type="number"
               inputmode="decimal"
               min="500"
               step="0.01"
               placeholder="500.00"
-              [value]="store.layawayDeposit()"
-              (input)="store.onLayawayDepositInput($event)"
+              [value]="store.initialDeposit()"
+              (input)="store.onInitialDepositInput($event)"
             />
             <select
               aria-label="Instrumento del abono inicial"
-              [value]="store.layawayDepositMethod()"
-              (change)="store.onLayawayDepositMethodChange($event)"
+              [value]="store.initialDepositMethod()"
+              (change)="store.onInitialDepositMethodChange($event)"
             >
               <option value="cash">Efectivo</option>
               <option value="transfer">Transferencia</option>
             </select>
           </div>
           <p class="field__hint">
-            Mínimo {{ store.LAYAWAY_MIN_DEPOSIT | currency:'MXN':'symbol-narrow':'1.0-0' }}. Se cobra al crear el pedido.
+            Mínimo {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}. Se cobra al crear el pedido.
           </p>
-          @if (store.submitAttempted() && !store.layawayDepositValid()) {
+          @if (store.submitAttempted() && !store.initialDepositValid()) {
             <p class="field__error">
               El apartado no se crea sin cobrar el enganche (entre
-              {{ store.LAYAWAY_MIN_DEPOSIT | currency:'MXN':'symbol-narrow':'1.0-0' }}
+              {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}
               y el total del pedido).
             </p>
           }
@@ -350,6 +350,54 @@
         El mueble se entrega hasta cubrir el pago total.
       </p>
     </div>
+  }
+
+  <!-- RN-ANT1: anticipo obligatorio cuando el pedido tiene fabricación (contado/MSI/mayoreo). -->
+  @if (store.needsInitialDeposit() && !store.isLayaway()) {
+    <div
+      class="field"
+      [class.field--error]="store.submitAttempted() && !store.initialDepositValid()"
+    >
+      <label for="fabricationDeposit">Anticipo por fabricación *</label>
+      <div class="deposit-input">
+        <input
+          id="fabricationDeposit"
+          type="number"
+          inputmode="decimal"
+          min="500"
+          step="0.01"
+          placeholder="500.00"
+          [value]="store.initialDeposit()"
+          (input)="store.onInitialDepositInput($event)"
+        />
+        <select
+          aria-label="Instrumento del anticipo"
+          [value]="store.initialDepositMethod()"
+          (change)="store.onInitialDepositMethodChange($event)"
+        >
+          <option value="cash">Efectivo</option>
+          <option value="transfer">Transferencia</option>
+        </select>
+      </div>
+      <p class="field__hint">
+        Este pedido tiene muebles sobre pedido o con modificaciones. Mínimo
+        {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}, se cobra al crear
+        el pedido para que el fabricante empiece.
+      </p>
+      @if (store.submitAttempted() && !store.initialDepositValid()) {
+        <p class="field__error">
+          Sin anticipo (entre {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}
+          y el total) no se levanta el pedido.
+        </p>
+      }
+    </div>
+  }
+
+  @if (store.creditBlockedByExtraCharge()) {
+    <p class="field__error">
+      Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda.
+      Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.
+    </p>
   }
 
   @if (store.isCredit()) {
@@ -388,7 +436,12 @@
     }
   }
 
-  <button type="button" class="btn btn--primary btn--block btn--lg" [disabled]="store.saving()" (click)="submit()">
+  <button
+    type="button"
+    class="btn btn--primary btn--block btn--lg"
+    [disabled]="store.saving() || store.creditBlockedByExtraCharge()"
+    (click)="submit()"
+  >
     @if (store.saving()) {
       <span class="spinner spinner--sm"></span> {{ store.isEditing() ? 'Guardando…' : 'Creando…' }}
     } @else {

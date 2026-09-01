@@ -702,7 +702,17 @@
             </button>
           </div>
         } @else {
-          <button type="submit" class="btn btn--primary btn--block btn--lg" [disabled]="saving()">
+          @if (creditBlockedByExtraCharge()) {
+            <p class="field__error">
+              Los muebles con cargos extra por modificación no se pueden vender a crédito en tienda.
+              Quita el cargo extra o cambia la condición de venta. Un cambio de color sí se permite a crédito.
+            </p>
+          }
+          <button
+            type="submit"
+            class="btn btn--primary btn--block btn--lg"
+            [disabled]="saving() || creditBlockedByExtraCharge()"
+          >
             @if (saving()) {
               <span class="spinner spinner--sm"></span> {{ isEditing() ? 'Guardando…' : 'Creando…' }}
             } @else if (isEditing()) {

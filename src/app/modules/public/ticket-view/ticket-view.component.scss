@@ -5,8 +5,9 @@
 // mobile-first y pinta su propio fondo: no hereda el shell del panel.
 //
 // Sistema aplicado (.interface-design/system.md): profundidad solo con bordes,
-// ink #1e1521 en la cabecera, porcelain de página, lavanda como único acento,
-// ritmo overline → título, y Playfair reservado a los números editoriales.
+// #2a1d42 en la cabecera y el pie (el mismo morado del footer del sitio),
+// porcelain de página, lavanda como único acento, ritmo overline → título, y
+// Playfair reservado a los números editoriales.
 
 $ink: #1e1521;
 $depth: #2a1d42;
@@ -19,6 +20,9 @@ $text-secondary: #625d5a;
 $text-tertiary: #8c8480;
 $lavender: #c9b8e8;
 $hairline: rgba(61, 43, 94, 0.12);
+// Cabecera: el mismo morado del footer del sitio (.footer, #2a1d42 = $depth).
+// Antes era ink casi negro y "se veía muy negro".
+$crest-bg: $depth;
 
 .ticket-page {
   min-height: 100vh;
@@ -92,10 +96,10 @@ $hairline: rgba(61, 43, 94, 0.12);
   color: $brand-light;
 }
 
-// ===== Cabecera: bloque ink con el logo negativo =====
+// ===== Cabecera: bloque morado con el logo negativo =====
 .crest {
   padding: vars.$spacing-xl vars.$spacing-lg vars.$spacing-lg;
-  background: $ink;
+  background: $crest-bg;
   text-align: center;
 
   &__logo {
