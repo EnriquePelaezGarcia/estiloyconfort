@@ -9,6 +9,7 @@ const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
 const Refund = require('../models/Refund');
+const refImages = require('../utils/orderRefImages');
 const { calculateCredit, profitByCost, wholesaleProfit } = require('../utils/pricingCalculator');
 
 /**
@@ -747,7 +748,8 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
             o.expected_delivery_date, o.manufacturer_due_date, oi.product_name, oi.product_sku,
             oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color, oi.quantity, oi.is_ready, oi.ready_at,
             oi.ready_quantity, oi.received_quantity, oi.warehouse_condition, oi.warehouse_note,
-            oi.fabrication_note, wr.full_name AS warehouse_received_by_name, oi.warehouse_received_at,
+            oi.fabrication_note, oi.fabrication_ref_images, oi.is_custom_modification,
+            wr.full_name AS warehouse_received_by_name, oi.warehouse_received_at,
             rb.full_name AS ready_by_name,
             oi.product_id, oi.unit_price, oi.unit_cost,
             oi.manufacturer_id, m.name AS manufacturer_name
@@ -798,7 +800,9 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         warehouseNote: r.warehouse_note ?? null,
         warehouseReceivedByName: r.warehouse_received_by_name ?? null,
         warehouseReceivedAt: r.warehouse_received_at ?? null,
+        isCustomModification: !!r.is_custom_modification,
         fabricationNote: r.fabrication_note ?? null,
+        fabricationRefImages: refImages.parse(r.fabrication_ref_images),
         readyByName: r.ready_by_name ?? null,
         readyAt: r.ready_at ?? null,
         manufacturerId: r.manufacturer_id ?? null,

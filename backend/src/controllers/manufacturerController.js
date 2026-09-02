@@ -5,6 +5,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { pool } = require('../config/database');
 const { periodFromQuery } = require('../utils/periods');
+const refImages = require('../utils/orderRefImages');
 
 // Estados de pedido que requieren fabricación.
 const FABRICATION_STATUSES = ['pending', 'fabricating'];
@@ -88,7 +89,8 @@ const manufacturerController = {
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
     const [items] = await pool.query(
       `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
-              oi.ready_quantity, oi.fabrication_note,
+              oi.ready_quantity, oi.fabrication_note, oi.fabrication_ref_images,
+              oi.is_custom_modification,
               oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
@@ -104,7 +106,7 @@ const manufacturerController = {
     const orderIds = [...new Set(items.map((it) => it.order_id))];
     const [orders] = await pool.query(
       `SELECT id, order_number, customer_name, order_status, expected_delivery_date,
-              manufacturer_due_date, created_at, notas_fabricante, notas_fabricante_imagenes
+              manufacturer_due_date, created_at
        FROM orders WHERE id IN (?)
        ORDER BY manufacturer_due_date IS NULL, manufacturer_due_date ASC, created_at ASC`,
       [orderIds],
@@ -121,9 +123,6 @@ const manufacturerController = {
       const acc = accByOrder.get(o.id);
       return [o.id, {
         ...o,
-        notas_fabricante_imagenes: Array.isArray(o.notas_fabricante_imagenes)
-          ? o.notas_fabricante_imagenes
-          : [],
         acceptance: {
           status: acc?.status ?? 'pending',
           rejectReason: acc?.reject_reason ?? null,
@@ -139,7 +138,11 @@ const manufacturerController = {
         quantity: it.quantity,
         isReady: !!it.is_ready,
         readyQuantity: Number(it.ready_quantity ?? 0),
+        // Docs/plan-fabricacion-y-notas-por-linea.md: la instrucción y las
+        // fotos del fabricante ahora son por línea, no por pedido.
+        isCustomModification: !!it.is_custom_modification,
         fabricationNote: it.fabrication_note ?? null,
+        fabricationRefImages: refImages.parse(it.fabrication_ref_images),
         materialId: it.material_id,
         materialLabel: it.material_label,
         sizeId: it.size_id ?? null,

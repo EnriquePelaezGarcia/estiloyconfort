@@ -110,8 +110,9 @@ const sellerController = {
   // POST /api/seller/orders/manufacturer-ref-images
   // Sube UNA foto de referencia del mueble a fabricar. El pedido todavía no
   // existe (se está capturando en el POS): esto solo deja el archivo en disco y
-  // devuelve su ruta relativa; el POS la manda luego en `notasFabricanteImagenes`
-  // al crear/editar el pedido. `processOrderRefImage` ya la reescaló a WebP.
+  // devuelve su ruta relativa; el POS la asocia luego a la línea marcada como
+  // modificación (`items[].modification.images`). `processOrderRefImage` ya la
+  // reescaló a WebP.
   uploadManufacturerRefImage: asyncHandler(async (req, res) => {
     if (!req.file || !req.file.filename) {
       throw ApiError.badRequest('Se requiere un archivo de imagen');

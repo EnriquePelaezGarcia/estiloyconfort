@@ -30,7 +30,8 @@ function mapDelivery(row) {
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
     // M4: el material y el color ya no son del pedido, son de cada línea —
     // ver `items[].materialLabel` / `items[].color` (findById los agrega).
-    notasFabricante: row.notas_fabricante ?? null,
+    // Docs/plan-fabricacion-y-notas-por-linea.md: las notas del fabricante
+    // también son por línea ahora — ver `items[].fabricationNote`.
     notasPedido: row.notas_pedido ?? null,
     instruccionesEntrega: row.instrucciones_entrega ?? null,
     /**
@@ -50,7 +51,7 @@ const BASE_SELECT = `
          o.delivery_address_lat, o.delivery_address_lng, o.google_maps_url, o.payment_status,
          o.payment_method, o.total_amount, o.payment_amount,
          o.assembly_service, o.assembly_floors, o.assembly_cost,
-         o.notas_fabricante, o.notas_pedido, o.instrucciones_entrega,
+         o.notas_pedido, o.instrucciones_entrega,
          o.expected_delivery_date, o.delivery_commitment,
          o.delivery_window_start, o.delivery_window_end
   FROM deliveries dv
@@ -84,6 +85,7 @@ const Delivery = {
     const [items] = await pool.execute(
       `SELECT oi.id, oi.product_name, oi.product_sku, oi.quantity, oi.variant_selections,
               oi.material_label, oi.size_label, oi.color,
+              oi.is_custom_modification, oi.fabrication_note,
               (SELECT image_url FROM product_images
                  WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
        FROM order_items oi WHERE oi.order_id = ?`,
@@ -98,6 +100,10 @@ const Delivery = {
       materialLabel: it.material_label,
       sizeLabel: it.size_label ?? null,
       color: it.color,
+      // Docs/plan-fabricacion-y-notas-por-linea.md: si el mueble se fabricó con
+      // una modificación, el repartidor debe verlo para revisarlo contra la nota.
+      isCustomModification: !!it.is_custom_modification,
+      fabricationNote: it.fabrication_note ?? null,
       // Foto principal VIGENTE del producto (tabla product_images) — para que
       // el repartidor vea qué mueble lleva. Ruta relativa: el front la resuelve
       // con el pipe `mediaUrl`.
