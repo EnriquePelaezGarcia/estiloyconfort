@@ -89,6 +89,12 @@ function mapItem(row) {
     sizeLabel: row.size_label ?? null,
     color: row.color ?? null,
     requiresFabrication: !!row.requires_fabrication,
+    /** Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó esta
+     * línea como modificación (se fabrica sobre pedido) + su instrucción y
+     * fotos para el fabricante, congeladas al crear la línea. */
+    isCustomModification: !!row.is_custom_modification,
+    fabricationNote: row.fabrication_note ?? null,
+    fabricationRefImages: refImages.parse(row.fabrication_ref_images),
     /** Foto principal del producto (tabla product_images). No es congelada:
      * si el catálogo cambia la foto, el pedido muestra la vigente. */
     imageUrl: row.primary_image ?? null,
@@ -153,17 +159,38 @@ function hasPendingFabrication(items, orderStatus) {
 }
 
 /**
- * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-FAB1 — un pedido
- * "tiene fabricación" (dispara el estimado de ~15 días hábiles y el anticipo
- * obligatorio) si cualquiera es cierta:
+ * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-FAB1 +
+ * Docs/plan-fabricacion-y-notas-por-linea.md — un pedido "tiene fabricación"
+ * (dispara el estimado de ~15 días hábiles y el anticipo obligatorio) si
+ * cualquiera es cierta:
  *   1. alguna línea la requiere por stock/color (`resolveOrderLine`),
- *   2. alguna línea lleva un cargo extra por modificación (RN-FAB2), o
- *   3. el pedido trae notas para el fabricante (D2: por pedido, no marca líneas).
+ *   2. alguna línea está marcada como modificación por el vendedor
+ *      (`is_custom_modification` → `resolveOrderLine` ya la deja
+ *      `requiresFabrication = 1`), o
+ *   3. alguna línea lleva un cargo extra por modificación (RN-FAB2).
+ * Las notas para el fabricante ya NO son a nivel pedido: viven en cada línea
+ * y una nota implica que esa línea está marcada como modificación.
  */
-function orderHasFabrication(resolvedItems, hasExtraCharges, notasFabricante) {
+function orderHasFabrication(resolvedItems, hasExtraCharges) {
   return (resolvedItems ?? []).some((it) => it.requiresFabrication)
-    || !!hasExtraCharges
-    || String(notasFabricante ?? '').trim() !== '';
+    || !!hasExtraCharges;
+}
+
+/**
+ * Docs/plan-fabricacion-y-notas-por-linea.md — normaliza el bloque de
+ * modificación que el POS manda por línea (`items[].modification`):
+ *   - `null` / ausente  → el vendedor NO marcó "lleva modificación".
+ *   - `{ note?, images? }` → sí la marcó; `note` e `images` son opcionales.
+ * El objeto presente (aunque venga vacío) YA significa "se fabrica sobre
+ * pedido"; la nota y las fotos solo lo ilustran para el fabricante.
+ */
+function normalizeLineModification(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const note = typeof raw.note === 'string' ? raw.note.trim().slice(0, 500) : '';
+  const imageList = refImages.parse(
+    refImages.normalize(Array.isArray(raw.images) ? raw.images : [], { keep: true }),
+  );
+  return { note: note || null, images: imageList };
 }
 
 /** Campos que forman el bloque de entrega; son interdependientes (§3.2). */
@@ -393,6 +420,9 @@ function mapOrder(row) {
     assemblyService: !!row.assembly_service,
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
+    // DEPRECADO (Docs/plan-fabricacion-y-notas-por-linea.md): las notas y las
+    // imágenes del fabricante pasaron a `order_items` (mapItem). Estas columnas
+    // ya no se escriben; se exponen solo para pedidos históricos.
     notasFabricante: row.notas_fabricante ?? null,
     notasFabricanteImagenes: refImages.parse(row.notas_fabricante_imagenes),
     notasPedido: row.notas_pedido ?? null,
@@ -617,6 +647,13 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
     }
   }
 
+  // Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó ESTA línea
+  // como "lleva modificación" en el POS. Se fabrica sobre pedido aunque haya
+  // stock del color pedido — la fábrica construye la pieza modificada desde
+  // cero y la de bodega se queda. Monótono: solo AGREGA fabricación.
+  const modification = normalizeLineModification(it.modification);
+  if (modification) requiresFabrication = true;
+
   // Reserva de esta misma línea (D4/D8): opcional, cantidad parcial o total
   // respecto a `qty`. Nunca aplica sobre algo que se va a fabricar (D6,
   // fuera de alcance — no hay pieza física que reservar todavía).
@@ -670,6 +707,9 @@ async function resolveOrderLine(conn, it, paymentMethod, config, orderId = null,
     unitPrice,
     subtotal,
     requiresFabrication,
+    isCustomModification: !!modification,
+    fabricationNote: modification?.note ?? null,
+    fabricationRefImages: modification?.images ?? [],
     reserve,
     isGift,
     normalUnitPrice,
@@ -1114,9 +1154,10 @@ const Order = {
       }
 
       // RN-FAB1 + RN-FAB3: ¿este pedido dispara el estimado de 15 días y el
-      // anticipo obligatorio? (cargo extra o notas del fabricante, además del
-      // caso de stock/color que ya marcaba `resolveOrderLine`).
-      const orderFab = orderHasFabrication(resolvedItems, hasExtraCharges, data.notasFabricante);
+      // anticipo obligatorio? (cargo extra, o alguna línea marcada como
+      // modificación / sin stock — todo eso ya deja `requiresFabrication` en
+      // la línea vía `resolveOrderLine` y el loop de cargos extra de arriba).
+      const orderFab = orderHasFabrication(resolvedItems, hasExtraCharges);
 
       /**
        * Descuento en dinero (Docs/plan-descuentos.md, RN-D1/RN-D3): si el
@@ -1201,6 +1242,10 @@ const Order = {
       const stockOnlyOrder = !pickupInStore
         && resolvedItems.every((it) => !it.requiresFabrication);
 
+      // Docs/plan-fabricacion-y-notas-por-linea.md: las notas y las imágenes de
+      // referencia para el fabricante ya no son de pedido — viven en cada
+      // `order_item`. Las columnas `orders.notas_fabricante*` se conservan en la
+      // BD (pedidos históricos) pero ya no se escriben.
       const [result] = await conn.execute(
         `INSERT INTO orders
           (order_number, seller_id, customer_name, customer_email, customer_phone,
@@ -1212,9 +1257,9 @@ const Order = {
            shipping_cost_status, shipping_cost_requested, shipping_cost_reviewed_by,
            shipping_cost_reviewed_at, shipping_cost_review_note,
            assembly_service, assembly_floors, assembly_cost,
-           notas_fabricante, notas_fabricante_imagenes, notas_pedido, instrucciones_entrega,
+           notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -1231,11 +1276,6 @@ const Order = {
           shippingCostStatus, shippingCostRequested, shippingCostReviewedBy,
           shippingCostReviewedAt, shippingCostReviewNote,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
-          data.notasFabricante ?? null,
-          refImages.normalize(data.notasFabricanteImagenes, {
-            notasFabricante: data.notasFabricante,
-            pickupInStore,
-          }) ?? null,
           data.notasPedido ?? null,
           data.instruccionesEntrega ?? null,
           cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks,
@@ -1264,13 +1304,18 @@ const Order = {
         const [itemResult] = await conn.execute(
           `INSERT INTO order_items
             (order_id, product_id, product_name, product_sku, material_id, material_label, size_id, size_label, color,
-             quantity, variant_selections, unit_price, subtotal, requires_fabrication)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             quantity, variant_selections, unit_price, subtotal, requires_fabrication,
+             is_custom_modification, fabrication_note, fabrication_ref_images)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             orderId, it.productId, it.productName, it.productSku,
             it.materialId, it.materialLabel, it.sizeId, it.sizeLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
+            it.isCustomModification ? 1 : 0,
+            it.fabricationNote ?? null,
+            it.fabricationRefImages && it.fabricationRefImages.length
+              ? JSON.stringify(it.fabricationRefImages) : null,
           ],
         );
         it.insertedItemId = itemResult.insertId;
@@ -1631,13 +1676,16 @@ const Order = {
     // arrastra totales (envío, armado) y estado del pedido (D8), y esta ruta
     // no recalcula nada. El cambio de modo va siempre por `updateWithItems`,
     // que es lo que manda el POS. Un PATCH suelto del flag se ignora.
+    // notasFabricante ya no entra: las notas del fabricante son por línea
+    // (Docs/plan-fabricacion-y-notas-por-linea.md) y solo se editan vía
+    // updateWithItems, que es lo que manda el POS.
     const allowed = {
       customerName: 'customer_name', customerEmail: 'customer_email',
       customerPhone: 'customer_phone', deliveryAddress: 'delivery_address',
       googleMapsUrl: 'google_maps_url',
       deliveryType: 'delivery_type', paymentMethod: 'payment_method',
       notes: 'notes',
-      notasFabricante: 'notas_fabricante', notasPedido: 'notas_pedido',
+      notasPedido: 'notas_pedido',
       instruccionesEntrega: 'instrucciones_entrega',
     };
     const sets = [];
@@ -1666,11 +1714,10 @@ const Order = {
       for (const k of DELIVERY_SCHEDULE_KEYS) {
         merged[k] = data[k] !== undefined ? data[k] : existing[k];
       }
-      // RN-FAB3: las notas del fabricante también fuerzan entrega tentativa
-      // (los cargos extra ya viven como `requires_fabrication = 1` en la línea).
-      const blockExact = hasPendingFabrication(existing.items, existing.orderStatus)
-        || (String(existing.notasFabricante ?? '').trim() !== ''
-          && !['in_warehouse', 'ready', 'in_delivery', 'delivered'].includes(existing.orderStatus));
+      // Toda fabricación pendiente (sin stock, color, cargo extra o
+      // modificación marcada) ya vive como `requires_fabrication = 1` en la
+      // línea y la detecta hasPendingFabrication.
+      const blockExact = hasPendingFabrication(existing.items, existing.orderStatus);
       schedule = await normalizeDeliverySchedule(merged, pool, blockExact);
       sets.push(
         'expected_delivery_date = ?', 'delivery_commitment = ?',
@@ -1753,6 +1800,7 @@ const Order = {
       // su material_id (M4/M15) — nunca al del producto en general.
       const [oldItems] = await conn.execute(
         `SELECT product_id, material_id, size_id, quantity, color, requires_fabrication,
+                fabrication_ref_images,
                 manufacturer_id, unit_cost, ready_quantity, is_ready, ready_by, ready_at,
                 received_quantity, warehouse_received_at, warehouse_received_by,
                 warehouse_condition, warehouse_note, stock_returned_qty, manufacturer_delivered_at
@@ -2027,6 +2075,28 @@ const Order = {
         }
       }
 
+      // Decisión 3 (Docs/plan-fabricacion-y-notas-por-linea.md): meter una
+      // modificación NUEVA a un pedido que YA salió de fabricación deja el
+      // estatus incoherente y puede tener entrega/repartidor programados. Se
+      // rechaza; el admin tiene la vía explícita de regresarlo a fabricación.
+      // En 'pending'/'fabricating' la modificación entra sin problema.
+      if (['in_warehouse', 'ready', 'in_delivery', 'delivered'].includes(existing.orderStatus)) {
+        const wasFabByCell = new Map();
+        for (const ro of oldItems) {
+          wasFabByCell.set(`${ro.product_id}:${ro.material_id}:${ro.size_id ?? 0}`, !!ro.requires_fabrication);
+        }
+        const introducesNewFabrication = resolvedItems.some((it) => it.isCustomModification
+          && !wasFabByCell.get(`${it.productId}:${it.materialId}:${it.sizeId ?? 0}`));
+        if (introducesNewFabrication) {
+          const err = new Error(
+            'Este pedido ya está en almacén o más adelante. Para mandar un mueble a modificación, '
+            + 'pide al admin que lo regrese a fabricación.',
+          );
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
       // Servicio de armado: si la edición lo modifica se recalcula con las
       // tarifas vigentes; si no viene en la edición se conserva el snapshot.
       let assemblyService = !!existing.assemblyService;
@@ -2095,12 +2165,10 @@ const Order = {
           mergedSchedule[k] = data[k] !== undefined ? data[k] : existing[k];
         }
         // Se valida contra los items NUEVOS de esta edición, no los viejos.
-        // RN-FAB1/RN-FAB3: además del stock/color, un cargo extra o las notas
-        // del fabricante fuerzan entrega tentativa (mientras el pedido no haya
-        // llegado ya a bodega/listo).
-        const notasFabEff = data.notasFabricante !== undefined
-          ? data.notasFabricante : existing.notasFabricante;
-        const blockExact = orderHasFabrication(resolvedItems, hasExtraCharges, notasFabEff)
+        // RN-FAB1/RN-FAB3: stock/color, cargo extra o modificación marcada
+        // fuerzan entrega tentativa (mientras el pedido no haya llegado ya a
+        // bodega/listo). Todo eso ya vive como `requiresFabrication` en la línea.
+        const blockExact = orderHasFabrication(resolvedItems, hasExtraCharges)
           && !['in_warehouse', 'ready', 'in_delivery', 'delivered'].includes(existing.orderStatus);
         schedule = await normalizeDeliverySchedule(mergedSchedule, conn, blockExact);
       }
@@ -2154,16 +2222,21 @@ const Order = {
         const [itemResult] = await conn.execute(
           `INSERT INTO order_items
             (order_id, product_id, product_name, product_sku, material_id, material_label, size_id, size_label, color,
-             quantity, variant_selections, unit_price, subtotal, requires_fabrication, manufacturer_id, unit_cost,
+             quantity, variant_selections, unit_price, subtotal, requires_fabrication,
+             is_custom_modification, fabrication_note, fabrication_ref_images, manufacturer_id, unit_cost,
              ready_quantity, is_ready, ready_by, ready_at, manufacturer_delivered_at,
              received_quantity, stock_returned_qty, warehouse_received_at, warehouse_received_by,
              warehouse_condition, warehouse_note)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id, it.productId, it.productName, it.productSku,
             it.materialId, it.materialLabel, it.sizeId, it.sizeLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
+            it.isCustomModification ? 1 : 0,
+            it.fabricationNote ?? null,
+            it.fabricationRefImages && it.fabricationRefImages.length
+              ? JSON.stringify(it.fabricationRefImages) : null,
             carriedManufacturerId, carriedUnitCost,
             keptReadyQty, keptIsReady ? 1 : 0,
             keptReadyQty > 0 ? (carried?.readyBy ?? null) : null,
@@ -2277,22 +2350,16 @@ const Order = {
       const paid = Number(existing.paymentAmount) || 0;
       const paymentStatus = paid >= totalAmount && totalAmount > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
 
-      // Imágenes de referencia del fabricante: se guardan sólo si el pedido
-      // queda con notas para el fabricante y no es pickup (mismo criterio que el
-      // pickup usa para descartar las notas). `undefined` = no se mandaron en
-      // este PATCH → se conserva lo que había.
-      const notasFabricanteEff = data.notasFabricante !== undefined
-        ? data.notasFabricante : existing.notasFabricante;
-      // Si no vienen en el PATCH se reenvía lo que ya tenía el pedido, para que
-      // `normalize` vuelva a aplicar la regla "sin notas / pickup → se descartan".
-      const refImagesInput = data.notasFabricanteImagenes !== undefined
-        ? data.notasFabricanteImagenes
-        : (existing.notasFabricanteImagenes ?? []);
-      const refImagesValue = refImages.normalize(refImagesInput, {
-        notasFabricante: notasFabricanteEff,
-        pickupInStore,
-      }) ?? null;
-      const refImagesAfter = refImages.parse(refImagesValue);
+      // Imágenes de referencia del fabricante: ahora viven por línea
+      // (order_items.fabrication_ref_images, escritas en el INSERT de arriba).
+      // Aquí solo se calcula qué archivos quedaron huérfanos tras recomponer
+      // las líneas, para borrarlos del disco después de la transacción.
+      const refImagesBefore = [
+        ...new Set(oldItems.flatMap((ro) => refImages.parse(ro.fabrication_ref_images))),
+      ];
+      const refImagesAfter = [
+        ...new Set(resolvedItems.flatMap((it) => it.fabricationRefImages ?? [])),
+      ];
 
       // 6. Actualizar la cabecera del pedido.
       await conn.execute(
@@ -2307,7 +2374,7 @@ const Order = {
            shipping_cost_status = ?, shipping_cost_requested = ?, shipping_cost_reviewed_by = ?,
            shipping_cost_reviewed_at = ?, shipping_cost_review_note = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
-           notas_fabricante = ?, notas_fabricante_imagenes = ?, notas_pedido = ?, instrucciones_entrega = ?,
+           notas_pedido = ?, instrucciones_entrega = ?,
            cash_total = ?, down_payment = ?,
            weekly_payment = ?, last_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
@@ -2327,8 +2394,6 @@ const Order = {
           shippingCostStatus, shippingCostRequested, shippingCostReviewedBy,
           shippingCostReviewedAt, shippingCostReviewNote,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
-          data.notasFabricante !== undefined ? data.notasFabricante : existing.notasFabricante,
-          refImagesValue,
           data.notasPedido !== undefined ? data.notasPedido : existing.notasPedido,
           data.instruccionesEntrega !== undefined ? data.instruccionesEntrega : existing.instruccionesEntrega,
           cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks, layawayDeadline,
@@ -2366,12 +2431,10 @@ const Order = {
       // in_warehouse/ready. Idempotente y solo avanza — nunca regresa.
       await this.recomputeFabricationStatus(id);
 
-      // Fotos de referencia que se quitaron en esta edición: se borran del
-      // disco (best-effort, ya fuera de la transacción) para no dejar basura en
-      // `uploads/order-refs/`.
-      refImages.unlinkFiles(
-        refImages.removed(existing.notasFabricanteImagenes ?? [], refImagesAfter),
-      );
+      // Fotos de referencia que quedaron sin ninguna línea que las use tras
+      // recomponer el pedido: se borran del disco (best-effort, ya fuera de la
+      // transacción) para no dejar basura en `uploads/order-refs/`.
+      refImages.unlinkFiles(refImages.removed(refImagesBefore, refImagesAfter));
 
       return this.findById(id);
     } catch (err) {

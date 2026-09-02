@@ -2,13 +2,14 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Imágenes de referencia para el fabricante (Docs/plan-imagen-referencia-fabricante).
+ * Imágenes de referencia para el fabricante
+ * (Docs/plan-imagen-referencia-fabricante + Docs/plan-fabricacion-y-notas-por-linea).
  *
  * Se suben una a una a `POST /api/seller/orders/manufacturer-ref-images`, que
  * las reescala a WebP en `uploads/order-refs/` (igual que las de producto) y
- * devuelve su ruta relativa. El POS junta esas rutas en un arreglo y lo manda
- * en `notasFabricanteImagenes` al crear/editar el pedido; aquí se validan y se
- * guardan como JSON en `orders.notas_fabricante_imagenes`.
+ * devuelve su ruta relativa. El POS junta esas rutas por LÍNEA del pedido y las
+ * manda en `items[].modification.images`; aquí se validan y se guardan como
+ * JSON en `order_items.fabrication_ref_images`.
  */
 
 const MAX_IMAGES = 5;
@@ -24,17 +25,19 @@ function badRequest(message) {
 
 /**
  * Normaliza lo que manda el POS a lo que se guarda en la columna JSON:
- *   - `null` si es "recoge en tienda", si no hay notas para el fabricante, o si
- *     no quedó ninguna imagen (una imagen sin nota no ilustra ninguna
- *     modificación — mismo criterio con el que el pickup descarta las notas).
+ *   - `null` si la línea no lleva modificación (`keep === false`) o si no quedó
+ *     ninguna imagen — una foto solo tiene sentido junto a una modificación.
  *   - una cadena JSON (`'["/uploads/order-refs/..."]'`) con hasta 5 rutas.
  *
+ * `keep` = la línea legítimamente puede llevar fotos de referencia (está
+ * marcada como modificación y no es "recoge en tienda"). Lo decide el caller.
+ *
  * `raw === undefined` significa "no lo mandaron" (PATCH parcial): devuelve
- * `undefined` para que el caller conserve lo que ya tenía el pedido.
+ * `undefined` para que el caller conserve lo que ya tenía la línea.
  */
-function normalize(raw, { notasFabricante, pickupInStore }) {
+function normalize(raw, { keep }) {
   if (raw === undefined) return undefined;
-  if (pickupInStore || String(notasFabricante ?? '').trim() === '') return null;
+  if (!keep) return null;
   if (raw === null) return null;
   if (!Array.isArray(raw)) {
     throw badRequest('Las imágenes de referencia para el fabricante deben venir en una lista.');
