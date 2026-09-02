@@ -692,6 +692,12 @@ export class OrderDraftStore {
   readonly initialDeposit = signal<number | null>(null);
   /** Instrumento del abono inicial: efectivo o transferencia (igual que los abonos). */
   readonly initialDepositMethod = signal<'cash' | 'transfer'>('cash');
+  /**
+   * ¿El pedido ya necesitaba anticipo en el ciclo anterior del effect? Sirve
+   * para sembrar el mínimo una sola vez (al aparecer el campo) y no cada vez
+   * que el vendedor lo deja vacío para teclear otro monto.
+   */
+  private hadInitialDepositNeed = false;
 
   /** RN-CRE1: un mueble a crédito en tienda no puede llevar cargo extra por modificación. */
   readonly creditBlockedByExtraCharge = computed(
@@ -866,6 +872,9 @@ export class OrderDraftStore {
     this.manualShippingCost.set(snap.manualShippingCost);
     this.initialDeposit.set(snap.initialDeposit);
     this.initialDepositMethod.set(snap.initialDepositMethod);
+    // El borrador ya traía su anticipo capturado (o vacío a propósito): que el
+    // effect no lo reponga al mínimo al reponer el estado.
+    this.hadInitialDepositNeed = this.needsInitialDeposit();
     this.existingDiscounts.set(snap.existingDiscounts);
     this.discountAmount.set(snap.discountAmount);
     this.discountReasonCategory.set(snap.discountReasonCategory);
@@ -948,14 +957,18 @@ export class OrderDraftStore {
         );
       });
 
-    // El anticipo arranca en el mínimo ($500) para que el vendedor solo lo suba
-    // si el cliente deja más. Al dejar de aplicar (cambio de esquema, se quita
-    // la fabricación, o modo edición) se limpia.
+    // El anticipo se SIEMBRA en el mínimo ($500) solo cuando el campo aparece
+    // (transición "no aplica" → "aplica"). A partir de ahí el vendedor lo edita
+    // libremente: si lo deja vacío para teclear otro monto, se queda vacío y el
+    // guard de "Crear pedido" lo marca — antes un effect lo reponía a $500 en
+    // cuanto quedaba vacío y no dejaba escribir sin usar las flechas.
     effect(() => {
       const wantsDeposit = this.needsInitialDeposit();
-      if (wantsDeposit && this.initialDeposit() == null) {
+      const hadDeposit = this.hadInitialDepositNeed;
+      this.hadInitialDepositNeed = wantsDeposit;
+      if (wantsDeposit && !hadDeposit && this.initialDeposit() == null) {
         this.initialDeposit.set(this.INITIAL_DEPOSIT_MIN);
-      } else if (!wantsDeposit && this.initialDeposit() != null) {
+      } else if (!wantsDeposit && hadDeposit) {
         this.initialDeposit.set(null);
       }
     });
