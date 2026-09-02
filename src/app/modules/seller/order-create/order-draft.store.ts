@@ -698,6 +698,12 @@ export class OrderDraftStore {
    * que el vendedor lo deja vacío para teclear otro monto.
    */
   private hadInitialDepositNeed = false;
+  /**
+   * RN-ANT: modal de cobro del anticipo. Abierto = el vendedor ya pulsó
+   * "Cobrar anticipo y crear pedido" y falta que confirme el cobro (ese cobro
+   * es lo que crea el pedido).
+   */
+  readonly anticipoModalOpen = signal(false);
 
   /** RN-CRE1: un mueble a crédito en tienda no puede llevar cargo extra por modificación. */
   readonly creditBlockedByExtraCharge = computed(
@@ -788,8 +794,7 @@ export class OrderDraftStore {
     () => this.submitAttempted()
       && (this.form.invalid
         || (!this.isPickup() && this.shippingCp().length !== 5)
-        || (this.needsManualShipping() && this.manualShippingCost() === null)
-        || !this.initialDepositValid()),
+        || (this.needsManualShipping() && this.manualShippingCost() === null)),
   );
 
   /** Último paso que falló una validación al intentar guardar; null si no hay error pendiente. */
@@ -1656,6 +1661,9 @@ export class OrderDraftStore {
 
   /** Navega entre pasos preservando ?edit / ?fromQuote. */
   goToStep(step: 1 | 2): void {
+    // El modal de cobro vive en el resumen del paso 2: si se sale del paso,
+    // se cierra para que no reaparezca colgado al volver.
+    this.anticipoModalOpen.set(false);
     this.router.navigate([], {
       queryParams: { paso: step === 1 ? 'venta' : 'entrega' },
       queryParamsHandling: 'merge',
@@ -1729,22 +1737,10 @@ export class OrderDraftStore {
       this.goToStep(1);
       return;
     }
-    // RN-ANT1 / apartado: no se crea el pedido sin cobrar el anticipo (mínimo
-    // $500, tope el total). El backend aplica la misma regla en el INSERT.
-    if (!this.initialDepositValid()) {
-      const d = this.initialDeposit();
-      this.notification.info(
-        d != null && d > this.grandTotal()
-          ? 'El anticipo no puede superar el total del pedido.'
-          : (this.isLayaway()
-            ? `El apartado requiere un abono inicial de al menos $${this.INITIAL_DEPOSIT_MIN} para crear el pedido.`
-            : 'Este pedido incluye muebles sobre pedido o con modificaciones. Se requiere un anticipo de '
-              + `al menos $${this.INITIAL_DEPOSIT_MIN} para levantarlo y que el fabricante empiece.`),
-      );
-      this._lastInvalidStep.set(2);
-      this.goToStep(2);
-      return;
-    }
+    // RN-ANT1 / apartado: el anticipo ya no se captura inline. Cuando el pedido
+    // lo necesita, `trySubmit` no guarda: abre el modal de cobro más abajo, y
+    // ese modal (`confirmAnticipoAndCreate`) es el que valida el monto y crea
+    // el pedido. El backend aplica la misma regla del mínimo en el INSERT.
     // Docs/plan-descuentos.md: solo se valida si se está capturando uno
     // NUEVO — si ya hay uno guardado (`activeMoneyDiscount`), el campo está
     // bloqueado y no hay nada que revisar aquí.
@@ -1859,7 +1855,50 @@ export class OrderDraftStore {
       return;
     }
 
+    // RN-ANT: cuando el pedido lleva anticipo (fabricación en contado/MSI/mayoreo
+    // o apartado), no se crea aquí — se abre el modal de cobro y ese modal, al
+    // registrar el pago con éxito, es lo que crea el pedido.
+    if (this.needsInitialDeposit()) {
+      this.pendingPayload = payload;
+      this.anticipoModalOpen.set(true);
+      return;
+    }
+
     this.savePayload(payload);
+  }
+
+  /** Cierra el modal de cobro del anticipo sin crear el pedido. */
+  cancelAnticipo(): void {
+    this.anticipoModalOpen.set(false);
+  }
+
+  /**
+   * Confirmar el cobro del anticipo desde el modal: valida el monto (mínimo
+   * $500, tope el total) y, si pasa, crea el pedido con el anticipo en la misma
+   * transacción. Si el backend lo rechaza, el modal se queda abierto
+   * (`savePayload` apaga `saving` y muestra el aviso) para reintentar o ajustar.
+   */
+  confirmAnticipoAndCreate(): void {
+    if (!this.initialDepositValid()) {
+      const d = this.initialDeposit();
+      this.notification.info(
+        d != null && d > this.grandTotal()
+          ? 'El anticipo no puede superar el total del pedido.'
+          : (this.isLayaway()
+            ? `El apartado requiere un abono inicial de al menos $${this.INITIAL_DEPOSIT_MIN}.`
+            : `El anticipo por fabricación no puede ser menor a $${this.INITIAL_DEPOSIT_MIN}.`),
+      );
+      return;
+    }
+    if (!this.pendingPayload) return;
+    // El payload se armó al abrir el modal; refrescar el monto/instrumento por
+    // si el vendedor los cambió dentro del modal antes de confirmar.
+    this.pendingPayload = {
+      ...this.pendingPayload,
+      initialPayment: this.initialDeposit(),
+      initialPaymentMethod: this.initialDepositMethod(),
+    };
+    this.savePayload(this.pendingPayload);
   }
 
   removedNames(summary: ChangeSummary): string {
