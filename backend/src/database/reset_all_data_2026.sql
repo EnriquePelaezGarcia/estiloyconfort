@@ -2,6 +2,8 @@
 -- reset_all_data_2026.sql — purga TOTAL de datos transaccionales y de catálogo.
 --
 -- SOLO para Local (desarrollo) y Preproducción. **NO correr en Producción.**
+-- Trae una guarda: si detecta la centinela `_environment_lock` = 'production',
+-- aborta sin tocar nada (ver env_lock_production.sql).
 --
 -- Deja la base "virgen" para empezar a cargar el catálogo real: se conservan
 -- únicamente los parámetros indispensables del negocio.
@@ -16,6 +18,31 @@
 -- Sin `USE`: run-schema.js selecciona la base con DB_NAME.
 -- Ejecutar: node src/database/run-schema.js reset_all_data_2026.sql
 -- =====================================================================
+
+-- ── GUARDA ANTI-PRODUCCIÓN ────────────────────────────────────────────────
+-- Local, preproducción y producción usan el MISMO nombre de base
+-- (`estilo_confort`), así que no sirve una lista blanca por nombre. En su lugar,
+-- la base de PRODUCCIÓN tiene una tabla-centinela `_environment_lock` con la
+-- fila 'production'. Si existe, este script ABORTA con error ANTES de tocar un
+-- solo dato. Local y preproducción no tienen esa fila.
+--
+-- Cómo se detiene: si es producción, se ejecuta un SELECT contra una tabla
+-- inexistente cuyo nombre ES el mensaje de error; MySQL corta ahí y ningún
+-- TRUNCATE llega a correr.
+SET @lock_tabla := (
+  SELECT COUNT(*) FROM information_schema.tables
+   WHERE table_schema = DATABASE() AND table_name = '_environment_lock'
+);
+SET @sql := IF(@lock_tabla = 0,
+  'SET @es_produccion := 0',
+  'SET @es_produccion := (SELECT COUNT(*) FROM _environment_lock WHERE environment = ''production'')');
+PREPARE _chk FROM @sql; EXECUTE _chk; DEALLOCATE PREPARE _chk;
+
+SET @sql := IF(@es_produccion = 0,
+  'DO 0',
+  'SELECT 1 FROM `ABORTADO_ESTA_ES_LA_BASE_DE_PRODUCCION_NO_SE_LIMPIA`');
+PREPARE _guard FROM @sql; EXECUTE _guard; DEALLOCATE PREPARE _guard;
+-- ─────────────────────────────────────────────────────────────────────────
 
 SET FOREIGN_KEY_CHECKS = 0;
 
