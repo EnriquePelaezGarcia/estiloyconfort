@@ -454,6 +454,36 @@ Rama `development`, sin desplegar. Diferencias respecto al plan original:
 Verificación: 22/22 asserts del script de creación + 7/7 del gate/RN-EC6 + 26/26
 `node --test` + `ng build` verde. Los scripts limpian sus datos de prueba.
 
+## 7.2 Revisión de UX del anticipo (2-sep-2026 — worktree `anticipo-en-pago`, sin desplegar)
+
+Hallazgo de uso: (a) el campo inline del anticipo reponía el mínimo ($500) en
+cuanto se dejaba vacío, así que no se podía teclear otro monto sin las flechas;
+(b) capturar el anticipo en el paso *Entrega* y caer luego en el detalle del
+pedido —sin ticket y con el botón de cobro— se sentía como un pedido a medias.
+
+Decisiones (VoBo de Enrique): el cobro pasa a ser un **modal explícito** que es
+lo que crea el pedido; aplica **también al apartado**; el arreglo del campo va
+como commit chico aparte.
+
+- **`7994c0d` fix(pos):** el mínimo se siembra **una sola vez**, en la transición
+  "no aplica → aplica" (nuevo `hadInitialDepositNeed`). Si el vendedor deja el
+  campo vacío, se queda vacío y el guard de crear lo marca. Sin cambio de reglas.
+- **`3464714` feat(pos):** se quitan los dos campos inline (apartado y
+  fabricación) del `order-summary`; quedan como aviso. El botón final dice
+  **"Cobrar anticipo y crear pedido"** / **"Cobrar abono inicial y crear pedido"**
+  y abre un modal (`anticipoModalOpen`) con monto editable (mín. $500, tope el
+  total), efectivo/transferencia y **"Registrar pago y crear pedido"**.
+  `trySubmit()` ya no guarda cuando `needsInitialDeposit()`: abre el modal, y
+  `confirmAnticipoAndCreate()` valida el monto y llama a `savePayload`. Si el
+  backend rechaza (400), el modal se queda abierto para reintentar; no se crea
+  nada. `goToStep()` cierra el modal; se quitó el anticipo de `step2Incomplete`.
+- **Backend: sin cambios.** `createOne` ya registra el anticipo en la misma
+  transacción del INSERT (RN-ANT2) y aplica el mínimo (RN-ANT1) — el modal es
+  solo la relocalización del punto de captura.
+
+Verificación: `ng build` verde (3×). Falta prueba manual en navegador y decidir
+merge a `development`.
+
 ## 8. Fuera de alcance (explícito)
 
 - Reversión automática de `requires_fabrication` / fecha cuando se rechaza el único cargo

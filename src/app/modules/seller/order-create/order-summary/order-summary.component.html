@@ -306,42 +306,11 @@
       }
 
       @if (!store.isEditing()) {
-        <div
-          class="field"
-          [class.field--error]="store.submitAttempted() && !store.initialDepositValid()"
-        >
-          <label for="initialDeposit">Abono inicial para apartar *</label>
-          <div class="deposit-input">
-            <input
-              id="initialDeposit"
-              type="number"
-              inputmode="decimal"
-              min="500"
-              step="0.01"
-              placeholder="500.00"
-              [value]="store.initialDeposit()"
-              (input)="store.onInitialDepositInput($event)"
-            />
-            <select
-              aria-label="Instrumento del abono inicial"
-              [value]="store.initialDepositMethod()"
-              (change)="store.onInitialDepositMethodChange($event)"
-            >
-              <option value="cash">Efectivo</option>
-              <option value="transfer">Transferencia</option>
-            </select>
-          </div>
-          <p class="field__hint">
-            Mínimo {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}. Se cobra al crear el pedido.
-          </p>
-          @if (store.submitAttempted() && !store.initialDepositValid()) {
-            <p class="field__error">
-              El apartado no se crea sin cobrar el enganche (entre
-              {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}
-              y el total del pedido).
-            </p>
-          }
-        </div>
+        <p class="field__hint">
+          Al confirmar, se cobra el abono inicial para apartar (mínimo
+          {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}) y con ese
+          cobro se crea el pedido.
+        </p>
       }
 
       <p class="credit-plan__note">
@@ -352,45 +321,15 @@
     </div>
   }
 
-  <!-- RN-ANT1: anticipo obligatorio cuando el pedido tiene fabricación (contado/MSI/mayoreo). -->
+  <!-- RN-ANT1: el anticipo por fabricación se cobra en el modal (botón de abajo)
+       y ese cobro es lo que crea el pedido. Aquí solo se anticipa la regla. -->
   @if (store.needsInitialDeposit() && !store.isLayaway()) {
-    <div
-      class="field"
-      [class.field--error]="store.submitAttempted() && !store.initialDepositValid()"
-    >
-      <label for="fabricationDeposit">Anticipo por fabricación *</label>
-      <div class="deposit-input">
-        <input
-          id="fabricationDeposit"
-          type="number"
-          inputmode="decimal"
-          min="500"
-          step="0.01"
-          placeholder="500.00"
-          [value]="store.initialDeposit()"
-          (input)="store.onInitialDepositInput($event)"
-        />
-        <select
-          aria-label="Instrumento del anticipo"
-          [value]="store.initialDepositMethod()"
-          (change)="store.onInitialDepositMethodChange($event)"
-        >
-          <option value="cash">Efectivo</option>
-          <option value="transfer">Transferencia</option>
-        </select>
-      </div>
-      <p class="field__hint">
-        Este pedido tiene muebles sobre pedido o con modificaciones. Mínimo
-        {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}, se cobra al crear
-        el pedido para que el fabricante empiece.
-      </p>
-      @if (store.submitAttempted() && !store.initialDepositValid()) {
-        <p class="field__error">
-          Sin anticipo (entre {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}
-          y el total) no se levanta el pedido.
-        </p>
-      }
-    </div>
+    <p class="field__hint">
+      <span class="material-symbols-outlined">payments</span>
+      Este pedido tiene muebles sobre pedido o con modificaciones: al confirmar se
+      cobra un anticipo (mínimo {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }})
+      y con ese cobro se crea el pedido para que el fabricante empiece.
+    </p>
   }
 
   @if (store.creditBlockedByExtraCharge()) {
@@ -446,7 +385,89 @@
       <span class="spinner spinner--sm"></span> {{ store.isEditing() ? 'Guardando…' : 'Creando…' }}
     } @else {
       <span class="material-symbols-outlined">check_circle</span>
-      {{ store.isEditing() ? 'Guardar cambios' : 'Crear pedido' }}
+      @if (store.isEditing()) {
+        Guardar cambios
+      } @else if (store.needsInitialDeposit()) {
+        {{ store.isLayaway() ? 'Cobrar abono inicial y crear pedido' : 'Cobrar anticipo y crear pedido' }}
+      } @else {
+        Crear pedido
+      }
     }
   </button>
 </div>
+
+<!-- ===== Modal: cobrar el anticipo (RN-ANT) — este cobro crea el pedido ===== -->
+@if (store.anticipoModalOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>{{ store.isLayaway() ? 'Cobrar abono inicial' : 'Cobrar anticipo por fabricación' }}</h2>
+        <button type="button" class="icon-btn" (click)="store.cancelAnticipo()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="credit-plan__row credit-plan__row--highlight">
+          <span>Total del pedido</span>
+          <span class="strong">{{ store.grandTotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+        </div>
+
+        <div
+          class="field"
+          [class.field--error]="!store.initialDepositValid()"
+        >
+          <label for="anticipoAmount">Monto a cobrar *</label>
+          <div class="deposit-input">
+            <input
+              id="anticipoAmount"
+              type="number"
+              inputmode="decimal"
+              min="500"
+              step="0.01"
+              placeholder="500.00"
+              [value]="store.initialDeposit()"
+              (input)="store.onInitialDepositInput($event)"
+            />
+            <select
+              aria-label="Instrumento del cobro"
+              [value]="store.initialDepositMethod()"
+              (change)="store.onInitialDepositMethodChange($event)"
+            >
+              <option value="cash">Efectivo</option>
+              <option value="transfer">Transferencia</option>
+            </select>
+          </div>
+          <p class="field__hint">
+            Mínimo {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }},
+            máximo el total del pedido.
+            {{ store.isLayaway()
+              ? 'El resto lo abona el cliente después.'
+              : 'Con este cobro el fabricante puede empezar.' }}
+          </p>
+          @if (!store.initialDepositValid()) {
+            <p class="field__error">
+              El monto debe estar entre
+              {{ store.INITIAL_DEPOSIT_MIN | currency:'MXN':'symbol-narrow':'1.0-0' }}
+              y el total del pedido.
+            </p>
+          }
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="store.cancelAnticipo()">Cancelar</button>
+        <button
+          type="button"
+          class="btn btn--success"
+          [disabled]="store.saving() || !store.initialDepositValid()"
+          (click)="store.confirmAnticipoAndCreate()"
+        >
+          @if (store.saving()) {
+            <span class="spinner spinner--sm"></span> Cobrando…
+          } @else {
+            Registrar pago y crear pedido
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
