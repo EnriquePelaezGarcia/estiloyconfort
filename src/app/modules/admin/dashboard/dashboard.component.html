@@ -128,24 +128,26 @@
         <h2 class="card__title">Alertas de stock</h2>
       </div>
       @if (s.lowStockProducts.length) {
-        <table class="mini-table">
-          <thead>
-            <tr><th>Producto</th><th>SKU</th><th class="num">Stock</th></tr>
-          </thead>
-          <tbody>
-            @for (p of s.lowStockProducts; track p.id) {
-              <tr>
-                <td>{{ p.name }}</td>
-                <td class="muted">{{ p.sku }}</td>
-                <td class="num">
-                  <span class="stock-badge" [class.stock-badge--out]="p.stock_quantity === 0">
-                    {{ p.stock_quantity }} / {{ p.stock_alert_level }}
-                  </span>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="mini-table-wrap">
+          <table class="mini-table">
+            <thead>
+              <tr><th>Producto</th><th>SKU</th><th class="num">Stock</th></tr>
+            </thead>
+            <tbody>
+              @for (p of s.lowStockProducts; track p.id) {
+                <tr>
+                  <td>{{ p.name }}</td>
+                  <td class="muted">{{ p.sku }}</td>
+                  <td class="num">
+                    <span class="stock-badge" [class.stock-badge--out]="p.stock_quantity === 0">
+                      {{ p.stock_quantity }} / {{ p.stock_alert_level }}
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       } @else {
         <p class="empty">Sin alertas de stock 🎉</p>
       }
@@ -158,21 +160,23 @@
       <h2 class="card__title">Productos recientes</h2>
     </div>
     @if (s.recentProducts.length) {
-      <table class="mini-table">
-        <thead>
-          <tr><th>Producto</th><th>Categoría</th><th class="num">Precio</th><th class="num">Stock</th></tr>
-        </thead>
-        <tbody>
-          @for (p of s.recentProducts; track p.id) {
-            <tr>
-              <td>{{ p.name }}</td>
-              <td class="muted">{{ p.category_name ?? '—' }}</td>
-              <td class="num">{{ p.price_cash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
-              <td class="num">{{ p.stock_quantity }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <div class="mini-table-wrap">
+        <table class="mini-table">
+          <thead>
+            <tr><th>Producto</th><th>Categoría</th><th class="num">Precio</th><th class="num">Stock</th></tr>
+          </thead>
+          <tbody>
+            @for (p of s.recentProducts; track p.id) {
+              <tr>
+                <td>{{ p.name }}</td>
+                <td class="muted">{{ p.category_name ?? '—' }}</td>
+                <td class="num">{{ p.price_cash | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                <td class="num">{{ p.stock_quantity }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     } @else {
       <p class="empty">Aún no hay productos.</p>
     }

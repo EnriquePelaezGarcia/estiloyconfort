@@ -431,3 +431,17 @@
     padding-top: vars.$spacing-sm;
   }
 }
+
+// ─── Móvil ────────────────────────────────────────────────────────────────────
+// La tarjeta lleva 1.5rem de padding lateral: en un teléfono deja las 3
+// columnas de importes (Total / Pagado / Saldo) en ~90px y el valor con
+// moneda se desborda. Se aprieta el padding y se baja un punto la cifra.
+@media (max-width: vars.$bp-tablet) {
+  .client-card {
+    padding: vars.$spacing-md;
+  }
+
+  .amount-col__value {
+    font-size: 0.9rem;
+  }
+}

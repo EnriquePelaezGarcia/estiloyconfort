@@ -1,4 +1,5 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -15,6 +16,7 @@ import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-
 import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
 import { availableOf, colorMismatch, reservationsTooltip } from '../../../core/utils/stock-availability';
 import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
+import { isSupportedImageFile, toUploadableImage } from '../../../core/utils/image-file';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
   DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, OrderDiscount, OrderItem,
@@ -471,6 +473,23 @@ export class OrderDraftStore {
   private notasFabricanteSig = toSignal(this.form.controls.notasFabricante.valueChanges, {
     initialValue: this.form.controls.notasFabricante.value,
   });
+
+  // ===== Imágenes de referencia para el fabricante =====
+  // (Docs/plan-imagen-referencia-fabricante) Hasta 5 fotos del mueble a fabricar
+  // cuando hay una modificación. Se suben una a una al subirlas; aquí solo se
+  // guardan sus rutas relativas, que viajan en el payload al crear/editar.
+  static readonly MAX_REF_IMAGES = 5;
+  readonly maxRefImages = OrderDraftStore.MAX_REF_IMAGES;
+  readonly notasFabricanteImagenes = signal<string[]>([]);
+  readonly uploadingRefImage = signal(false);
+  /** El bloque solo se muestra si "Notas para el Fabricante" tiene texto. */
+  readonly hasManufacturerNotes = computed(
+    () => (this.notasFabricanteSig() ?? '').trim().length > 0,
+  );
+  readonly canAddRefImage = computed(
+    () => this.notasFabricanteImagenes().length < OrderDraftStore.MAX_REF_IMAGES
+      && !this.uploadingRefImage(),
+  );
 
   /**
    * Docs/plan-aprobaciones-admin.md §11.3 — aviso NO bloqueante: cuántas
@@ -1123,6 +1142,7 @@ export class OrderDraftStore {
           deliveryPersonId: data.deliveryPersonId ?? null,
         });
         this.initialDeliveryPersonId = data.deliveryPersonId ?? null;
+        this.notasFabricanteImagenes.set(data.notasFabricanteImagenes ?? []);
         // Docs/plan-descuentos.md: descuentos ya guardados de este pedido —
         // el de dinero (si sigue activo) bloquea la captura; los de producto
         // se usan abajo para marcar sus líneas como regaladas.
@@ -1765,6 +1785,11 @@ export class OrderDraftStore {
       // ni repartidor que navegue): se mandan vacíos para que un pedido que
       // venía de domicilio no conserve notas que ya nadie puede ver ni editar.
       notasFabricante: pickup ? null : raw.notasFabricante?.trim() || null,
+      // Las fotos de referencia solo tienen sentido con una nota (una
+      // modificación que ilustrar); sin nota o en pickup se descartan, igual
+      // que el backend.
+      notasFabricanteImagenes:
+        pickup || !raw.notasFabricante?.trim() ? [] : this.notasFabricanteImagenes(),
       notasPedido: pickup ? null : raw.notasPedido?.trim() || null,
       instruccionesEntrega: pickup ? null : raw.instruccionesEntrega?.trim() || null,
       googleMapsUrl: pickup ? null : raw.googleMapsUrl || null,
@@ -1839,6 +1864,49 @@ export class OrderDraftStore {
   }
 
   private pendingPayload: CreateOrderRequest | null = null;
+
+  // ===== Imágenes de referencia para el fabricante =====
+
+  /**
+   * Sube las imágenes elegidas (una a una) y guarda sus rutas. Ignora lo que
+   * pase de 5, avisa de los formatos no soportados y convierte HEIC/HEIF antes
+   * de subir. El `<input>` se limpia en el componente.
+   */
+  async addRefImages(files: FileList | File[]): Promise<void> {
+    const picked = Array.from(files);
+    if (!picked.length) return;
+
+    const room = OrderDraftStore.MAX_REF_IMAGES - this.notasFabricanteImagenes().length;
+    if (room <= 0) {
+      this.notification.info(`Solo se permiten ${OrderDraftStore.MAX_REF_IMAGES} imágenes de referencia.`);
+      return;
+    }
+    const unsupported = picked.filter((f) => !isSupportedImageFile(f));
+    if (unsupported.length) {
+      this.notification.error('Solo se aceptan imágenes. Se omitieron los demás archivos.');
+    }
+    const queue = picked.filter((f) => isSupportedImageFile(f)).slice(0, room);
+    if (!queue.length) return;
+
+    this.uploadingRefImage.set(true);
+    try {
+      for (const file of queue) {
+        try {
+          const uploadable = await toUploadableImage(file);
+          const res = await firstValueFrom(this.sellerService.uploadManufacturerRefImage(uploadable));
+          this.notasFabricanteImagenes.update((list) => [...list, res.data.url]);
+        } catch {
+          this.notification.error(`No se pudo subir "${file.name}".`);
+        }
+      }
+    } finally {
+      this.uploadingRefImage.set(false);
+    }
+  }
+
+  removeRefImage(url: string): void {
+    this.notasFabricanteImagenes.update((list) => list.filter((u) => u !== url));
+  }
 
   /**
    * RN-MSG2 (Docs/plan-anticipo-fabricacion-por-modificacion.md): un rechazo por

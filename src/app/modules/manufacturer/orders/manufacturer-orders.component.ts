@@ -4,13 +4,14 @@ import { ManufacturerService } from '../../../core/services/manufacturer.service
 import { NotificationService } from '../../../core/services/notification.service';
 import { ManufacturerOrder, OrderStatus } from '../../../core/models/order.model';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../../../core/models/order-labels';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
 @Component({
   selector: 'app-manufacturer-orders',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-orders.component.html',
   styleUrl: './manufacturer-orders.component.scss',
-  imports: [DatePipe],
+  imports: [DatePipe, MediaUrlPipe],
 })
 export class ManufacturerOrdersComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -19,8 +20,22 @@ export class ManufacturerOrdersComponent implements OnInit {
   protected orders = signal<ManufacturerOrder[]>([]);
   protected loading = signal(true);
 
+  /** Ids de pedidos con una acción de aceptación/rechazo en curso. */
+  protected working = signal<Set<number>>(new Set());
+  /** Pedido cuyo modal de rechazo está abierto (null = cerrado). */
+  protected rejectingOrder = signal<ManufacturerOrder | null>(null);
+  protected rejectReason = signal('');
+
   ngOnInit(): void {
     this.load();
+  }
+
+  private setWorking(id: number, on: boolean): void {
+    this.working.update((s) => {
+      const next = new Set(s);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
   }
 
   private load(): void {
@@ -43,7 +58,56 @@ export class ManufacturerOrdersComponent implements OnInit {
         this.notification.success('Pedido marcado en fabricación');
         this.load();
       },
-      error: () => this.notification.error('No se pudo actualizar el pedido'),
+      error: (err: { error?: { message?: string } }) =>
+        this.notification.error(err?.error?.message ?? 'No se pudo actualizar el pedido'),
+    });
+  }
+
+  // ── Aceptación del pedido (D1/D2) ────────────────────────────────────────
+  protected acceptOrder(order: ManufacturerOrder): void {
+    this.setWorking(order.id, true);
+    this.manufacturerService.acceptOrder(order.id).subscribe({
+      next: (res) => {
+        this.setWorking(order.id, false);
+        this.notification.success(res.message);
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.setWorking(order.id, false);
+        this.notification.error(err?.error?.message ?? 'No se pudo aceptar el pedido');
+      },
+    });
+  }
+
+  protected openReject(order: ManufacturerOrder): void {
+    this.rejectingOrder.set(order);
+    this.rejectReason.set('');
+  }
+
+  protected closeReject(): void {
+    this.rejectingOrder.set(null);
+  }
+
+  protected submitReject(): void {
+    const order = this.rejectingOrder();
+    const reason = this.rejectReason().trim();
+    if (!order) return;
+    if (!reason) {
+      this.notification.error('Escribe el motivo del rechazo');
+      return;
+    }
+    this.setWorking(order.id, true);
+    this.manufacturerService.rejectOrder(order.id, reason).subscribe({
+      next: (res) => {
+        this.setWorking(order.id, false);
+        this.closeReject();
+        this.notification.success(res.message);
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.setWorking(order.id, false);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el pedido');
+      },
     });
   }
 

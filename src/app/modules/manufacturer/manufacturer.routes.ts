@@ -23,6 +23,14 @@ export const manufacturerRoutes: Routes = [
         title: 'Pedidos a fabricar - Fabricante',
       },
       {
+        path: 'notificaciones',
+        loadComponent: () =>
+          import('../../shared/components/notifications-page/notifications-page.component').then(
+            (m) => m.NotificationsPageComponent,
+          ),
+        title: 'Notificaciones - Fabricante',
+      },
+      {
         path: 'historial',
         loadComponent: () =>
           import('./history/manufacturer-history.component').then(

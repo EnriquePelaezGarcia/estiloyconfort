@@ -141,8 +141,12 @@ export class FactoryOrdersComponent implements OnInit {
 
     this.manufacturingService.assignOrderItemManufacturer(row.itemId, manufacturerId).subscribe({
       next: (res) => {
+        // Al (re)asignar, el fabricante debe volver a aceptar el pedido.
+        const acceptance = res.data.manufacturerId
+          ? { acceptanceStatus: 'pending' as const, acceptanceRejectReason: null }
+          : { acceptanceStatus: null, acceptanceRejectReason: null };
         this.rows.update((rows) =>
-          rows.map((r) => (r.itemId === row.itemId ? { ...r, ...res.data } : r)),
+          rows.map((r) => (r.itemId === row.itemId ? { ...r, ...res.data, ...acceptance } : r)),
         );
         release();
         this.notification.success(res.message);

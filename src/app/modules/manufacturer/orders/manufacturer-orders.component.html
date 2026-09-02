@@ -21,6 +21,45 @@
           <span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span>
         </div>
 
+        @if (o.acceptance?.status === 'pending') {
+          <div class="accept-banner accept-banner--pending">
+            <span class="material-symbols-outlined">notification_important</span>
+            <div class="accept-banner__text">
+              <strong>Revisa y acepta este pedido</strong>
+              <span>Confirma la medida, el material y el color antes de empezar. No puedes iniciar la fabricación hasta aceptarlo.</span>
+            </div>
+            <div class="accept-banner__actions">
+              <button type="button" class="btn btn--primary btn--sm"
+                      [disabled]="working().has(o.id)" (click)="acceptOrder(o)">
+                Aceptar pedido
+              </button>
+              <button type="button" class="btn btn--ghost btn--sm"
+                      [disabled]="working().has(o.id)" (click)="openReject(o)">
+                Rechazar
+              </button>
+            </div>
+          </div>
+        } @else if (o.acceptance?.status === 'rejected') {
+          <div class="accept-banner accept-banner--rejected">
+            <span class="material-symbols-outlined">cancel</span>
+            <div class="accept-banner__text">
+              <strong>Rechazaste este pedido</strong>
+              <span>Motivo: {{ o.acceptance?.rejectReason }}. La tienda ya fue avisada.</span>
+            </div>
+            <div class="accept-banner__actions">
+              <button type="button" class="btn btn--ghost btn--sm"
+                      [disabled]="working().has(o.id)" (click)="acceptOrder(o)">
+                Aceptar de todos modos
+              </button>
+            </div>
+          </div>
+        } @else if (o.acceptance?.status === 'accepted') {
+          <div class="accept-banner accept-banner--ok">
+            <span class="material-symbols-outlined">check_circle</span>
+            <span>Aceptaste este pedido.</span>
+          </div>
+        }
+
         <div class="order__due-date">
           <span class="order__status-label">Fecha de entrega a la tienda:</span>
           @if (o.manufacturer_due_date) {
@@ -107,14 +146,67 @@
               <dd class="field__value">{{ o.notas_fabricante }}</dd>
             </div>
           }
+
+          @if (o.notas_fabricante_imagenes?.length) {
+            <div class="field">
+              <dt class="field__label">Imágenes de referencia</dt>
+              <dd class="field__value">
+                <ul class="ref-images">
+                  @for (img of o.notas_fabricante_imagenes; track img) {
+                    <li>
+                      <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                        <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble a fabricar" />
+                      </a>
+                    </li>
+                  }
+                </ul>
+              </dd>
+            </div>
+          }
         </dl>
 
         @if (o.order_status === 'pending') {
-          <button type="button" class="btn btn--ghost order__start" (click)="startFabrication(o)">
+          <button
+            type="button"
+            class="btn btn--ghost order__start"
+            [disabled]="o.acceptance?.status !== 'accepted'"
+            [title]="o.acceptance?.status !== 'accepted' ? 'Acepta el pedido primero' : ''"
+            (click)="startFabrication(o)"
+          >
             <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación
           </button>
         }
       </article>
     }
+  </div>
+}
+
+<!-- ===== Modal: rechazar pedido ===== -->
+@if (rejectingOrder(); as o) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Rechazar el pedido {{ o.order_number }}</h2>
+        <button type="button" class="icon-btn" (click)="closeReject()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="muted">La tienda recibirá un aviso con tu motivo y reasignará el pedido.</p>
+        <div class="field">
+          <label>Motivo del rechazo *</label>
+          <textarea rows="3" [value]="rejectReason()"
+                    (input)="rejectReason.set($any($event.target).value)"
+                    placeholder="Ej. no fabrico esa medida / no tengo ese material"></textarea>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeReject()">Cancelar</button>
+        <button type="button" class="btn btn--danger"
+                [disabled]="working().has(o.id)" (click)="submitReject()">
+          Rechazar pedido
+        </button>
+      </div>
+    </div>
   </div>
 }

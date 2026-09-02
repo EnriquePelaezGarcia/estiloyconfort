@@ -508,3 +508,25 @@ $ticket-font: 'Courier New', monospace;
   &__change { color: vars.$color-text; font-weight: 600; }
   &__reason { color: vars.$color-text-secondary; }
 }
+
+// Miniaturas de las imágenes de referencia para el fabricante.
+.ref-images {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+
+  &__btn {
+    padding: 0;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: none;
+    cursor: pointer;
+    line-height: 0;
+    overflow: hidden;
+
+    img { width: 72px; height: 72px; object-fit: cover; display: block; }
+  }
+}

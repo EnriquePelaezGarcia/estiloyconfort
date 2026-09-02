@@ -72,6 +72,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: vars.$spacing-md;
+
+  // En el modal, sobre teléfono, 3 columnas dejan cada importe en ~100px y el
+  // valor con moneda se parte feo: se apilan.
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .price-preview__item {

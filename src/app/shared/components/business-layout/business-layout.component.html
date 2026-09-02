@@ -48,12 +48,15 @@
         <span class="material-symbols-outlined">menu</span>
       </button>
 
-      <div class="topbar__user">
-        <div class="topbar__user-info">
-          <span class="topbar__user-name">{{ userName() }}</span>
-          <span class="topbar__user-email">{{ userEmail() }}</span>
+      <div class="topbar__actions">
+        <ng-content select="[topbarActions]" />
+        <div class="topbar__user">
+          <div class="topbar__user-info">
+            <span class="topbar__user-name">{{ userName() }}</span>
+            <span class="topbar__user-email">{{ userEmail() }}</span>
+          </div>
+          <span class="topbar__avatar material-symbols-outlined">account_circle</span>
         </div>
-        <span class="topbar__avatar material-symbols-outlined">account_circle</span>
       </div>
     </header>
 

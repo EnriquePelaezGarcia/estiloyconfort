@@ -201,20 +201,29 @@ export class OrderDetailComponent implements OnInit {
   protected downPaymentCovered = computed(() => this.downPaymentRemaining() <= 0);
 
   /**
-   * pending → editable libre. fabricating/ready → editable solo si tiene al
-   * menos un item de stock (los de fabricación no admiten cambio). El resto
-   * de estados no se pueden editar. Mismas reglas para vendedor y admin (D5).
+   * pending / fabricating / in_warehouse / ready → editable (incluidas las
+   * líneas de fabricación: el fabricante se re-notifica y vuelve a aceptar,
+   * Docs/plan-fabricante-notificaciones-y-aceptacion.md D3). in_delivery /
+   * delivered / cancelled → no. Mismas reglas para vendedor y admin.
    */
   protected canEdit = computed(() => {
     const o = this.order();
     if (!o) return false;
     if (this.pickupGrace()) return true;
-    if (o.orderStatus === 'pending') return true;
-    if (o.orderStatus === 'fabricating' || o.orderStatus === 'in_warehouse' || o.orderStatus === 'ready') {
-      return (o.items ?? []).some((it) => !it.requiresFabrication);
-    }
-    return false;
+    return ['pending', 'fabricating', 'in_warehouse', 'ready'].includes(o.orderStatus);
   });
+
+  /** Aviso al editar un pedido que ya está en proceso (no 'pending'). */
+  protected editWarnsManufacturer = computed(() => {
+    const o = this.order();
+    return !!o
+      && o.orderStatus !== 'pending'
+      && !this.pickupGrace()
+      && (o.items ?? []).some((it) => it.requiresFabrication);
+  });
+
+  /** Estado de aceptación del/los fabricante(s) del pedido (chip del detalle). */
+  protected manufacturerAcceptance = computed(() => this.order()?.manufacturerAcceptance ?? []);
 
   /**
    * Ventana de gracia del "recoge en tienda" (Docs/plan-recoge-en-tienda.md

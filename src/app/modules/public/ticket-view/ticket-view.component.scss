@@ -4,10 +4,14 @@
 // celular, de pie y a media conversación con el vendedor. Por eso la hoja es
 // mobile-first y pinta su propio fondo: no hereda el shell del panel.
 //
-// Sistema aplicado (.interface-design/system.md): profundidad solo con bordes,
-// #2a1d42 en la cabecera y el pie (el mismo morado del footer del sitio),
-// porcelain de página, lavanda como único acento, ritmo overline → título, y
-// Playfair reservado a los números editoriales.
+// TIPOGRAFÍA HOMOLOGADA (pantalla + PDF de "Guardar comprobante"):
+//   · Una sola familia: vars.$font-body (Inter). Se declara una vez en
+//     .ticket-page y todo lo demás la hereda — no hay serif ni monoespaciado
+//     sueltos. La jerarquía se construye SOLO con tamaño, peso y color.
+//   · La escala de pantalla vive en los $fs-* de abajo; la de papel, en los
+//     $fp-* (puntos), y el @media print sólo reescala — nunca cambia de fuente.
+//   · Números de dinero y folios: peso 700/800 + font-variant-numeric:
+//     tabular-nums para que las cifras queden en columna y se lean de un golpe.
 
 $ink: #1e1521;
 $depth: #2a1d42;
@@ -20,9 +24,29 @@ $text-secondary: #625d5a;
 $text-tertiary: #8c8480;
 $lavender: #c9b8e8;
 $hairline: rgba(61, 43, 94, 0.12);
-// Cabecera: el mismo morado del footer del sitio (.footer, #2a1d42 = $depth).
-// Antes era ink casi negro y "se veía muy negro".
 $crest-bg: $depth;
+
+// ===== Escala tipográfica — PANTALLA =====
+$fs-fine:    0.7rem;    // legal, notas al pie, tag
+$fs-label:   0.6875rem; // overlines y rótulos en mayúsculas
+$fs-meta:    0.78rem;   // datos secundarios (spec, teléfono, plan, historial)
+$fs-body:    0.875rem;  // valores y renglones que el cliente lee
+$fs-name:    1rem;      // nombre de producto, "Gracias por tu compra"
+$fs-title:   1.125rem;  // nombre del cliente, títulos de estado
+$fs-num-sm:  1.375rem;  // folio del pedido
+$fs-num-md:  1.625rem;  // Total
+$fs-num-lg:  2.5rem;    // Saldo pendiente (número protagonista)
+
+// ===== Escala tipográfica — PAPEL / PDF (puntos) =====
+$fp-fine:    7pt;
+$fp-label:   7pt;
+$fp-meta:    8pt;
+$fp-body:    9pt;
+$fp-name:    10pt;
+$fp-title:   12pt;
+$fp-num-sm:  15pt;
+$fp-num-md:  16pt;
+$fp-num-lg:  18pt;
 
 .ticket-page {
   min-height: 100vh;
@@ -31,6 +55,8 @@ $crest-bg: $depth;
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  // Única declaración de fuente del comprobante: todo hereda de aquí.
+  font-family: vars.$font-body;
 }
 
 .sheet {
@@ -60,16 +86,14 @@ $crest-bg: $depth;
 
   &__thanks {
     margin: 0;
-    font-family: vars.$font-brand;
-    font-size: 1.125rem;
-    font-weight: 400;
+    font-size: $fs-name;
+    font-weight: 600;
     color: $porcelain;
   }
 
   &__legal {
     margin: 0.375rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.72rem;
+    font-size: $fs-fine;
     line-height: 1.6;
     color: rgba(252, 249, 248, 0.45);
   }
@@ -85,61 +109,57 @@ $crest-bg: $depth;
   &--dark { color: rgba($lavender, 0.35); }
 }
 
-// ===== Overline: precede a todo título =====
-.label-overline {
+// ===== Rótulo en mayúsculas — precede a todo bloque =====
+// Estilo único para TODOS los overlines del comprobante (cabecera incluida):
+// sólo cambia el color según el fondo.
+%overline {
   margin: 0;
-  font-family: vars.$font-body;
-  font-size: 0.6875rem;
+  font-size: $fs-label;
   font-weight: 600;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.label-overline {
+  @extend %overline;
   color: $brand-light;
 }
 
-// ===== Cabecera: bloque morado con el logo negativo =====
+// ===== Cabecera: bloque morado compacto =====
+// Sin logo ni ornamento (la marca vive en el pie): la cabecera se quedó solo
+// con el rótulo y el folio, que es el dato que el cliente cita o teclea.
 .crest {
-  padding: vars.$spacing-xl vars.$spacing-lg vars.$spacing-lg;
+  padding: 1.15rem vars.$spacing-lg 1.15rem;
   background: $crest-bg;
   text-align: center;
 
-  &__logo {
-    width: 100%;
-    max-width: 230px;
-    height: auto;
-    margin: 0 auto vars.$spacing-md;
-  }
-
   &__overline {
-    margin: 0.75rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: rgba(252, 249, 248, 0.45);
+    @extend %overline;
+    color: rgba(252, 249, 248, 0.6);
   }
 
   // Rótulo del folio: deja claro que el número de abajo es el número de pedido,
   // el dato que el cliente cita para cualquier aclaración o garantía.
   &__label {
-    margin: 0.85rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: rgba(252, 249, 248, 0.7);
+    @extend %overline;
+    margin-top: 0.6rem;
+    color: rgba(252, 249, 248, 0.8);
   }
 
-  // El folio es dato duro: monoespaciado para que se lea número por número
-  // cuando el cliente lo dicta por teléfono.
+  // El folio: misma fuente que todo lo demás, pero peso 700 + tabular-nums +
+  // tracking para que se lea dígito por dígito cuando el cliente lo dicta.
   &__folio {
-    margin: 0.15rem 0 0;
-    font-family: 'Courier New', monospace;
-    font-size: 1rem;
+    display: inline-block;
+    margin: 0.4rem 0 0;
+    padding: 0.22rem 0.7rem;
+    border: 1px solid rgba($lavender, 0.45);
+    border-radius: 6px;
+    background: rgba($lavender, 0.12);
+    font-size: $fs-num-sm;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    color: $porcelain;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
   }
 }
 
@@ -154,25 +174,22 @@ $crest-bg: $depth;
 
   &__name {
     margin: 0.25rem 0 0;
-    font-family: vars.$font-brand;
-    font-size: 1.25rem;
-    font-weight: 400;
+    font-size: $fs-title;
+    font-weight: 700;
     line-height: 1.25;
     color: $text-primary;
   }
 
   &__phone {
     margin: 0.15rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.85rem;
+    font-size: 0.8125rem;
     color: $text-secondary;
   }
 
   &__status {
     margin: 0.25rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: 0.8125rem;
+    font-weight: 600;
     color: $brand-mid;
   }
 }
@@ -219,21 +236,17 @@ $crest-bg: $depth;
 
   &__main { min-width: 0; }
 
-  // Manrope para nombres de producto: Playfair es de la tienda, Manrope del
-  // producto. Esa jerarquía es estructural en la marca.
   &__name {
     margin: 0;
-    font-family: vars.$font-headline;
-    font-size: 1rem;
-    font-weight: 500;
+    font-size: $fs-name;
+    font-weight: 600;
     line-height: 1.35;
     color: $text-primary;
   }
 
   &__spec {
     margin: 0.2rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.78rem;
+    font-size: $fs-meta;
     line-height: 1.5;
     color: $text-tertiary;
   }
@@ -241,9 +254,8 @@ $crest-bg: $depth;
   &__amount {
     margin: 0;
     flex-shrink: 0;
-    font-family: vars.$font-body;
-    font-size: 0.95rem;
-    font-weight: 500;
+    font-size: $fs-body;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: $text-primary;
   }
@@ -259,8 +271,7 @@ $crest-bg: $depth;
     display: flex;
     justify-content: space-between;
     gap: vars.$spacing-md;
-    font-family: vars.$font-body;
-    font-size: 0.875rem;
+    font-size: $fs-body;
     color: $text-secondary;
 
     span:last-child { font-variant-numeric: tabular-nums; }
@@ -273,7 +284,6 @@ $crest-bg: $depth;
       border-radius: 4px;
       background: color-mix(in srgb, $lavender 12%, white);
       align-items: baseline;
-      font-size: 0.9375rem;
       font-weight: 600;
       color: $text-primary;
     }
@@ -281,14 +291,10 @@ $crest-bg: $depth;
     &--paid { color: $text-tertiary; }
   }
 
-  // Sans-serif extra-bold en vez de Playfair: es el formato que ya usan
-  // recibos, apps bancarias y checkouts (Stripe, PayPal, Amazon) para el
-  // monto que hay que leer de un vistazo — mucho más legible que un serif
-  // editorial a cualquier peso. Tabular-nums (heredado de .totals__row)
-  // mantiene los dígitos alineados en columna.
+  // Monto que hay que leer de un vistazo: mismo Inter que todo, peso 800 y
+  // tabular-nums (heredado de .totals__row) para alinear los dígitos.
   &__grand {
-    font-family: vars.$font-body;
-    font-size: 1.625rem;
+    font-size: $fs-num-md;
     font-weight: 800;
     letter-spacing: -0.01em;
     color: $brand-mid;
@@ -298,8 +304,7 @@ $crest-bg: $depth;
   // Total, para que no se lea como un segundo monto a pagar.
   .cash-equivalent {
     margin: -0.25rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.8rem;
+    font-size: $fs-meta;
     color: $text-tertiary;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -315,13 +320,10 @@ $crest-bg: $depth;
   background: $linen-warm;
   text-align: center;
 
-  // Sans-serif extra-bold: el formato estándar de "monto a pagar" en
-  // recibos y checkouts — Playfair (editorial, nunca pasa de 600 y nunca es
-  // el peso que un número necesita) se reserva para el nombre de la tienda.
+  // El número protagonista del comprobante: el más grande y pesado de todos.
   &__amount {
     margin: 0.5rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 2.5rem;
+    font-size: $fs-num-lg;
     font-weight: 800;
     line-height: 1.1;
     letter-spacing: -0.02em;
@@ -331,12 +333,11 @@ $crest-bg: $depth;
 
   &__plan {
     margin: 0.5rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.82rem;
+    font-size: $fs-meta;
     line-height: 1.6;
     color: $text-secondary;
 
-    strong { color: $text-primary; }
+    strong { color: $text-primary; font-weight: 600; }
   }
 
   // Liquidado: se afirma, no se muestra un "$0.00" mudo.
@@ -347,7 +348,6 @@ $crest-bg: $depth;
 
   &__paid {
     margin: 0;
-    font-family: vars.$font-body;
     font-size: 1.5rem;
     font-weight: 800;
     color: vars.$color-success;
@@ -368,8 +368,8 @@ $crest-bg: $depth;
 
   &__value {
     margin: 0.25rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.875rem;
+    font-size: $fs-body;
+    font-weight: 500;
     line-height: 1.5;
     color: $text-primary;
     white-space: pre-line;
@@ -379,8 +379,7 @@ $crest-bg: $depth;
   // mismo texto que en el ticket térmico, en tono discreto de nota al pie.
   &__notice {
     margin: 0.375rem 0 0;
-    font-family: vars.$font-body;
-    font-size: 0.72rem;
+    font-size: $fs-fine;
     line-height: 1.6;
     color: $text-tertiary;
   }
@@ -409,8 +408,7 @@ $crest-bg: $depth;
   display: flex;
   justify-content: space-between;
   padding: 0.4rem 0;
-  font-family: vars.$font-body;
-  font-size: 0.82rem;
+  font-size: $fs-meta;
   color: $text-secondary;
 
   & + .history__row { border-top: 1px solid $hairline; }
@@ -429,7 +427,6 @@ $crest-bg: $depth;
   border: 1px solid vars.$color-success;
   border-radius: 2px;
   background: vars.$color-success;
-  font-family: vars.$font-body;
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -455,16 +452,14 @@ $crest-bg: $depth;
 // ===== Estados vacíos =====
 .state-title {
   margin: 0.5rem 0 0.75rem;
-  font-family: vars.$font-brand;
-  font-size: 1.5rem;
-  font-weight: 400;
+  font-size: $fs-title;
+  font-weight: 700;
   color: $text-primary;
 }
 
 .state-text {
   margin: 0;
-  font-family: vars.$font-body;
-  font-size: 0.9rem;
+  font-size: $fs-body;
   line-height: 1.7;
   color: $text-secondary;
 }
@@ -480,9 +475,8 @@ $crest-bg: $depth;
 // WhatsApp y verse en pantalla. Por eso se conservan los bloques oscuros de
 // cabecera y pie aunque "gasten tinta" — la tinta es imaginaria aquí.
 //
-// El objetivo es que quepa en UNA hoja. Antes se iba a dos porque el contenido
-// seguía siendo una sola columna estirada a todo lo ancho: el doble de largo
-// de lo necesario, y sin control de cortes los bloques se partían a la mitad.
+// El objetivo es que quepa en UNA hoja. La fuente NO cambia aquí: sólo se
+// reescala a los $fp-* (puntos) para que en una hoja no se vea enorme.
 @media print {
   @page {
     // Sin `size`: Carta (279mm) es más corta que A4 (297mm), así que se maqueta
@@ -503,9 +497,9 @@ $crest-bg: $depth;
   }
 
   // Los fondos solo sobreviven al PDF si se fuerza la impresión de color;
-  // sin esto el logo blanco caería sobre papel blanco (cabecera), y los
-  // chips de Total/Saldo pendiente se imprimirían sin su fondo — que es
-  // justo lo que los hace fáciles de encontrar de un vistazo.
+  // sin esto la cabecera morada saldría en blanco (y con ella el rótulo y el
+  // folio en negativo), y los chips de Total/Saldo pendiente se imprimirían
+  // sin su fondo — que es justo lo que los hace fáciles de encontrar.
   .crest,
   .sheet__foot,
   .totals__row--grand,
@@ -517,14 +511,16 @@ $crest-bg: $depth;
   // La cabecera se achica: a todo lo ancho de una hoja ocupa vertical que le
   // hace falta al contenido.
   .crest {
-    padding: 6mm 8mm 5mm;
+    padding: 4mm 8mm 4mm;
 
-    &__logo { max-width: 42mm; margin-bottom: 2mm; }
+    &__overline { font-size: $fp-label; margin-top: 0; }
+    &__label { font-size: $fp-label; margin-top: 2.5mm; }
+    &__folio { font-size: $fp-num-sm; margin-top: 1.5mm; padding: 1mm 3mm; }
   }
 
   .sheet__foot { padding: 4mm; }
-  .sheet__thanks { font-size: 11pt; }
-  .sheet__legal { font-size: 7pt; }
+  .sheet__thanks { font-size: $fp-name; }
+  .sheet__legal { font-size: $fp-fine; }
 
   // ===== Las dos columnas =====
   // .party no está dentro de ningún envoltorio: es hijo directo del body y
@@ -536,7 +532,7 @@ $crest-bg: $depth;
     align-items: flex-start;
     gap: 0 8mm;
     padding: 6mm 8mm;
-    font-size: 9pt;
+    font-size: $fp-body;
   }
 
   .party { flex: 0 0 100%; }
@@ -565,32 +561,31 @@ $crest-bg: $depth;
   .fact { break-inside: avoid; }
 
   // ===== Escala tipográfica de papel =====
-  // La de pantalla está pensada para un celular en la mano; en una hoja se ve
-  // enorme y es la otra mitad de por qué se iba a dos páginas.
   .party { margin-bottom: 4mm; padding-bottom: 3mm; border-bottom: 1px solid rgba($lavender, 0.35); }
-  .party__name { font-size: 13pt; }
-  .party__phone { font-size: 9pt; }
-  .party__status { font-size: 9pt; }
+  .party__name { font-size: $fp-title; }
+  .party__phone { font-size: $fp-body; }
+  .party__status { font-size: $fp-body; }
 
   .lines { margin-bottom: 4mm; }
   .line { padding: 1.5mm 0; }
   .line__thumb { width: 11mm; height: 11mm; }
-  .line__name { font-size: 9.5pt; }
-  .line__spec { font-size: 7.5pt; }
-  .line__amount { font-size: 9.5pt; }
+  .line__name { font-size: $fp-name; }
+  .line__spec { font-size: $fp-meta; }
+  .line__amount { font-size: $fp-name; }
 
-  .totals__row { font-size: 9pt; }
+  .totals__row { font-size: $fp-body; }
   .totals__row--grand { padding: 2mm 3mm; margin-top: 1.5mm; }
-  .totals__grand { font-size: 15pt; }
+  .totals__grand { font-size: $fp-num-md; }
+  .cash-equivalent { font-size: $fp-meta; }
 
   .balance {
     margin-top: 0;
     margin-bottom: 4mm;
     padding: 4mm;
 
-    &__amount { font-size: 17pt; }
-    &__paid { font-size: 13pt; }
-    &__plan { font-size: 8pt; }
+    &__amount { font-size: $fp-num-lg; }
+    &__paid { font-size: 14pt; }
+    &__plan { font-size: $fp-meta; }
   }
 
   // En una columna angosta los datos van en lista vertical, no en rejilla de 2.
@@ -599,9 +594,10 @@ $crest-bg: $depth;
     gap: 2.5mm;
     margin-bottom: 4mm;
   }
-  .fact__value { font-size: 8.5pt; }
+  .fact__value { font-size: $fp-body; }
+  .fact__notice { font-size: $fp-fine; }
 
-  .history__row { font-size: 8pt; padding: 1mm 0; }
+  .history__row { font-size: $fp-meta; padding: 1mm 0; }
 
-  .label-overline { font-size: 7pt; }
+  .label-overline { font-size: $fp-label; }
 }

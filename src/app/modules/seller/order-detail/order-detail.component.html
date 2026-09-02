@@ -43,8 +43,6 @@
         <button type="button" class="btn btn--ghost" (click)="onEditClick()">
           <span class="material-symbols-outlined">edit</span> Editar pedido
         </button>
-      } @else if (o.orderStatus === 'fabricating' || o.orderStatus === 'in_warehouse' || o.orderStatus === 'ready') {
-        <span class="muted">Mueble en fabricación sobre pedido — no admite cambios</span>
       }
       @if (canRemoveAssembly()) {
         <button type="button" class="btn btn--ghost" (click)="assemblyModalOpen.set(true)">
@@ -77,6 +75,25 @@
         El cliente se llevó el mueble y quedan
         {{ (o.totalAmount - o.paymentAmount) | currency:'MXN':'symbol-narrow':'1.2-2' }}
         sin registrar. Registra el pago abajo.
+      </span>
+    </div>
+  }
+
+  @if (isAdmin && manufacturerAcceptance().length > 0) {
+    <div class="banner no-print"
+         [class.banner--error]="manufacturerAcceptance()[0].status === 'rejected'">
+      <span class="material-symbols-outlined">factory</span>
+      <span>
+        @for (a of manufacturerAcceptance(); track a.manufacturerId) {
+          <span class="acceptance-line">
+            <strong>{{ a.manufacturerName }}:</strong>
+            @switch (a.status) {
+              @case ('accepted') { aceptó el pedido ✓ }
+              @case ('rejected') { <span class="strong">rechazó el pedido</span> — {{ a.rejectReason }} }
+              @default { pendiente de aceptar }
+            }
+          </span>
+        }
       </span>
     </div>
   }
@@ -445,6 +462,27 @@
         }
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
         @if (o.notasFabricante) { <div class="no-print"><dt>Notas fabricante</dt><dd>{{ o.notasFabricante }}</dd></div> }
+        @if (o.notasFabricanteImagenes?.length) {
+          <div class="no-print">
+            <dt>Imágenes de referencia</dt>
+            <dd>
+              <ul class="ref-images">
+                @for (img of o.notasFabricanteImagenes; track img) {
+                  <li>
+                    <button
+                      type="button"
+                      class="ref-images__btn"
+                      title="Ver imagen de referencia"
+                      (click)="zoomedImage.set(img)"
+                    >
+                      <img [src]="img | mediaUrl:'thumb'" alt="Referencia para el fabricante" />
+                    </button>
+                  </li>
+                }
+              </ul>
+            </dd>
+          </div>
+        }
         @if (o.notasPedido) { <div><dt>Notas del pedido</dt><dd>{{ o.notasPedido }}</dd></div> }
         @if (o.instruccionesEntrega) { <div class="no-print"><dt>Instrucciones de entrega</dt><dd>{{ o.instruccionesEntrega }}</dd></div> }
         @if (o.notes) { <div><dt>Notas</dt><dd>{{ o.notes }}</dd></div> }
@@ -820,6 +858,12 @@
       <div class="modal__body">
         <h2 class="panel__title">¿Continuar con el cambio?</h2>
         <p class="muted">Este pedido ya está cobrado/en proceso.</p>
+        @if (editWarnsManufacturer()) {
+          <p class="muted">
+            Tiene muebles sobre pedido: el fabricante recibirá un aviso y tendrá que
+            volver a aceptar el pedido antes de seguir fabricando.
+          </p>
+        }
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="editConfirmOpen.set(false)">No</button>
           <button type="button" class="btn btn--primary" (click)="confirmEdit()">Sí, continuar</button>

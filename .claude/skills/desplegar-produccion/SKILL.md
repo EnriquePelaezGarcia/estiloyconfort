@@ -192,6 +192,11 @@ corras un archivo cuyo efecto ya esté en la base.
    - `schema_delivery_capacity.sql`
    - `schema_assembly_base_fix.sql` (repetible)
    - `schema_quote_requests.sql` (repetible) → `quote_requests` + `quote_request_items`
+   - `schema_order_manufacturer_ref_images.sql` (repetible, guarda de
+     `information_schema`) → `orders.notas_fabricante_imagenes` (JSON). Imágenes de
+     referencia para el fabricante en el POS (rama `development`, 1-sep-2026). Sin
+     backfill: los pedidos viejos quedan con `NULL`. El endpoint de subida escribe
+     en `uploads/order-refs/` — no necesita nada de esquema aparte de esta columna.
 2. **NO repetibles** — `ALTER TABLE ADD COLUMN` sin guarda; correrlos dos veces
    falla a la mitad. Verifica en la auditoría que la columna NO exista antes:
    - `schema_aprobaciones.sql` → `order_discounts.original_amount`,

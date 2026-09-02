@@ -3,6 +3,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const Order = require('../models/Order');
 const ProductManufacturerCost = require('../models/ProductManufacturerCost');
+const ManufacturerAcceptance = require('../models/ManufacturerAcceptance');
+const Notification = require('../models/Notification');
 const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
@@ -535,6 +537,9 @@ const getOrder = asyncHandler(async (req, res) => {
       ? optionsByKey.get(`${it.productId}:${it.materialId}:${it.sizeId ?? 0}`) ?? []
       : [],
   }));
+  // Docs/plan-fabricante-notificaciones-y-aceptacion.md: estado de aceptación
+  // del/los fabricante(s) del pedido, para el chip del detalle.
+  order.manufacturerAcceptance = await ManufacturerAcceptance.forOrder(order.id);
   // Docs/plan-descuentos.md: apaga el badge de "rechazado" si el admin mismo
   // había pedido un descuento que otro admin rechazó (caso raro, mismo trato).
   await discountEngine.acknowledgeRejected('order', order.id, req.user.id);
@@ -705,10 +710,16 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
   const optionsByKey = await manufacturerOptionsByProduct(
     rows.map((r) => ({ productId: r.product_id, materialId: r.material_id, sizeId: r.size_id })),
   );
+  // Aceptación del fabricante por pedido (D1): `Map<orderId, row[]>`.
+  const acceptanceByOrder = await ManufacturerAcceptance.forOrders(
+    [...new Set(rows.map((r) => r.order_id))],
+  );
 
   res.json({
     data: rows.map((r) => {
       const unitCost = r.unit_cost != null ? Number(r.unit_cost) : null;
+      const acc = (acceptanceByOrder.get(r.order_id) ?? [])
+        .find((a) => a.manufacturerId === r.manufacturer_id) ?? null;
       return {
         itemId: r.item_id,
         orderId: r.order_id,
@@ -739,12 +750,22 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         readyAt: r.ready_at ?? null,
         manufacturerId: r.manufacturer_id ?? null,
         manufacturerName: r.manufacturer_name ?? null,
+        acceptanceStatus: r.manufacturer_id ? (acc?.status ?? 'pending') : null,
+        acceptanceRejectReason: acc?.rejectReason ?? null,
         unitCost,
         unitProfit: unitCost !== null ? Number(r.unit_price) - unitCost : null,
         manufacturerOptions: optionsByKey.get(`${r.product_id}:${r.material_id}:${r.size_id ?? 0}`) ?? [],
       };
     }),
   });
+});
+
+// GET /api/admin/manufacturer-alerts/count — rechazos de fabricante sin resolver
+// (Docs/plan-fabricante-notificaciones-y-aceptacion.md). Alimenta el badge del
+// nav "Fabricante". Un rechazo se "resuelve" al reasignar el fabricante de la
+// línea (assignOrderItemManufacturer retira la fila) o al re-aceptar.
+const manufacturerAlertsCount = asyncHandler(async (req, res) => {
+  res.json({ data: { count: await ManufacturerAcceptance.openRejectionCount() } });
 });
 
 // PATCH /api/admin/orders/:id/manufacturer-due-date — fecha en la que el fabricante
@@ -768,8 +789,10 @@ const updateManufacturerDueDate = asyncHandler(async (req, res) => {
 const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
   const { manufacturerId } = req.body;
   const [[item]] = await pool.execute(
-    `SELECT id, product_id, unit_price, material_id, material_label, size_id, size_label
-       FROM order_items WHERE id = ?`,
+    `SELECT oi.id, oi.order_id, oi.product_id, oi.unit_price, oi.material_id, oi.material_label,
+            oi.size_id, oi.size_label, oi.manufacturer_id AS prev_manufacturer_id, o.order_number
+       FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE oi.id = ?`,
     [req.params.id],
   );
   if (!item) throw ApiError.notFound('Item no encontrado');
@@ -779,6 +802,10 @@ const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
       'UPDATE order_items SET manufacturer_id = NULL, unit_cost = NULL WHERE id = ?',
       [req.params.id],
     );
+    // Si ese fabricante ya no tiene líneas en el pedido, se retira su aceptación.
+    if (item.prev_manufacturer_id) {
+      await ManufacturerAcceptance.pruneIfUnused(pool, item.order_id, item.prev_manufacturer_id);
+    }
     return res.json({
       data: { manufacturerId: null, manufacturerName: null, unitCost: null, unitProfit: null },
       message: 'Fabricante quitado',
@@ -809,6 +836,24 @@ const assignOrderItemManufacturer = asyncHandler(async (req, res) => {
     'UPDATE order_items SET manufacturer_id = ?, unit_cost = ? WHERE id = ?',
     [manufacturer.id, cost, req.params.id],
   );
+
+  // Docs/plan-fabricante-notificaciones-y-aceptacion.md: el fabricante debe
+  // enterarse y aceptar. Si cambió de fabricante, se limpia la aceptación del
+  // anterior. Si es el mismo, no se re-notifica.
+  if (item.prev_manufacturer_id !== manufacturer.id) {
+    if (item.prev_manufacturer_id) {
+      await ManufacturerAcceptance.pruneIfUnused(pool, item.order_id, item.prev_manufacturer_id);
+    }
+    await ManufacturerAcceptance.ensure(pool, item.order_id, manufacturer.id);
+    await Notification.create({
+      audience: 'manufacturer',
+      manufacturerId: manufacturer.id,
+      type: 'order_assigned',
+      title: `Nuevo pedido para fabricar: ${item.order_number}`,
+      body: 'Revísalo y acéptalo para poder empezar la fabricación.',
+      orderId: item.order_id,
+    });
+  }
 
   res.json({
     data: {
@@ -1141,6 +1186,7 @@ module.exports = {
   rejectOrderShipping,
   getDeliveryPeople,
   getFactoryOrderItems,
+  manufacturerAlertsCount,
   updateManufacturerDueDate,
   assignOrderItemManufacturer,
   warehouseReceiveItem,

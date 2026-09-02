@@ -11,6 +11,9 @@ const extraChargeEngine = require('./extraChargeEngine');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { PICKUP_PAYMENT_METHODS } = require('../utils/pickup');
 const { addBusinessDays } = require('../utils/businessDays');
+const ManufacturerAcceptance = require('./ManufacturerAcceptance');
+const Notification = require('./Notification');
+const refImages = require('../utils/orderRefImages');
 
 const ORDER_STATUSES = ['pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery', 'delivered', 'cancelled'];
 
@@ -391,6 +394,7 @@ function mapOrder(row) {
     assemblyFloors: row.assembly_floors != null ? Number(row.assembly_floors) : 0,
     assemblyCost: row.assembly_cost != null ? Number(row.assembly_cost) : 0,
     notasFabricante: row.notas_fabricante ?? null,
+    notasFabricanteImagenes: refImages.parse(row.notas_fabricante_imagenes),
     notasPedido: row.notas_pedido ?? null,
     instruccionesEntrega: row.instrucciones_entrega ?? null,
     cashTotal: row.cash_total != null ? Number(row.cash_total) : null,
@@ -1205,9 +1209,9 @@ const Order = {
            shipping_cost_status, shipping_cost_requested, shipping_cost_reviewed_by,
            shipping_cost_reviewed_at, shipping_cost_review_note,
            assembly_service, assembly_floors, assembly_cost,
-           notas_fabricante, notas_pedido, instrucciones_entrega,
+           notas_fabricante, notas_fabricante_imagenes, notas_pedido, instrucciones_entrega,
            cash_total, down_payment, weekly_payment, last_payment, credit_weeks, layaway_deadline, notes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderNumber, sellerId, data.customerName, data.customerEmail ?? null,
           data.customerPhone ?? null, data.deliveryAddress ?? null,
@@ -1224,7 +1228,12 @@ const Order = {
           shippingCostStatus, shippingCostRequested, shippingCostReviewedBy,
           shippingCostReviewedAt, shippingCostReviewNote,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
-          data.notasFabricante ?? null, data.notasPedido ?? null,
+          data.notasFabricante ?? null,
+          refImages.normalize(data.notasFabricanteImagenes, {
+            notasFabricante: data.notasFabricante,
+            pickupInStore,
+          }) ?? null,
+          data.notasPedido ?? null,
           data.instruccionesEntrega ?? null,
           cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks,
           layawayDeadline, data.notes ?? null,
@@ -1740,18 +1749,61 @@ const Order = {
       // 1. Devolver al inventario el stock de los items actuales, cada uno a
       // su material_id (M4/M15) — nunca al del producto en general.
       const [oldItems] = await conn.execute(
-        'SELECT product_id, material_id, size_id, quantity, color, requires_fabrication FROM order_items WHERE order_id = ?', [id],
+        `SELECT product_id, material_id, size_id, quantity, color, requires_fabrication,
+                manufacturer_id, unit_cost, ready_quantity, is_ready, ready_by, ready_at,
+                received_quantity, warehouse_received_at, warehouse_received_by,
+                warehouse_condition, warehouse_note, stock_returned_qty, manufacturer_delivered_at
+           FROM order_items WHERE order_id = ?`,
+        [id],
       );
+      // Docs/plan-fabricante-notificaciones-y-aceptacion.md: `updateWithItems`
+      // borra y re-inserta las líneas — sin esto se perdería `manufacturer_id`
+      // y `unit_cost` en cada edición. Se emparejan vieja→nueva por
+      // (producto, material, talla) y la nueva hereda ambos.
+      const carryByCell = new Map();
+      for (const it of oldItems) {
+        const hasFabProgress = Number(it.received_quantity) > 0
+          || Number(it.ready_quantity) > 0 || it.manufacturer_delivered_at != null;
+        if (it.manufacturer_id == null && !hasFabProgress) continue;
+        const key = `${it.product_id}:${it.material_id}:${it.size_id ?? 0}`;
+        if (!carryByCell.has(key)) carryByCell.set(key, []);
+        carryByCell.get(key).push({
+          manufacturerId: it.manufacturer_id,
+          unitCost: it.unit_cost,
+          // Avance de fabricación / recepción en bodega que NO debe perderse al
+          // recomponer las líneas (D3): el fabricante ya entregó o bodega ya
+          // aceptó piezas, y esas piezas ya están (o van a estar) en inventario.
+          requiresFabrication: !!it.requires_fabrication,
+          hasProgress: hasFabProgress,
+          readyQuantity: Number(it.ready_quantity) || 0,
+          readyBy: it.ready_by,
+          readyAt: it.ready_at,
+          receivedQuantity: Number(it.received_quantity) || 0,
+          warehouseReceivedAt: it.warehouse_received_at,
+          warehouseReceivedBy: it.warehouse_received_by,
+          warehouseCondition: it.warehouse_condition,
+          warehouseNote: it.warehouse_note,
+          stockReturnedQty: Number(it.stock_returned_qty) || 0,
+          manufacturerDeliveredAt: it.manufacturer_delivered_at,
+        });
+      }
+      const manufacturersBefore = [
+        ...new Set(oldItems.filter((it) => it.manufacturer_id != null).map((it) => it.manufacturer_id)),
+      ];
       for (const it of oldItems) {
         if (it.product_id != null && it.material_id != null) {
           // A2: devuelve al bucket de color lo que era línea de stock (las de
           // fabricación nunca lo tocaron).
+          // Solo se devuelve lo que la venta descontó y la llegada a bodega
+          // todavía NO repuso: las piezas ya recibidas (`stock_returned_qty`)
+          // se quedan en inventario — pertenezcan o no a las líneas nuevas.
+          const restoreQty = Number(it.quantity) - (Number(it.stock_returned_qty) || 0);
           await applyStockDelta(conn, {
             productId: it.product_id,
             materialId: it.material_id,
             sizeId: it.size_id ?? null,
             color: it.requires_fabrication ? null : it.color,
-            delta: it.quantity,
+            delta: restoreQty,
             reason: 'sale_edit',
             sourceType: 'order',
             sourceId: Number(id),
@@ -1807,6 +1859,29 @@ const Order = {
         const resolved = await resolveOrderLine(conn, it, paymentMethod, config, id);
         total += resolved.subtotal;
         resolvedItems.push(resolved);
+      }
+
+      // Una línea de fabricación con piezas YA aceptadas por bodega no se puede
+      // recomponer: al borrar y reinsertar las líneas se perdería el avance de
+      // recepción y el stock se descuadraría (doble conteo si se vuelve a
+      // recibir). El resto del pedido (datos del cliente, otras líneas) sí se
+      // edita mientras esa línea se reenvíe idéntica (producto/material/talla/
+      // cantidad). Para cambiarla, se cancela el pedido y se levanta uno nuevo.
+      for (const ro of oldItems) {
+        if (Number(ro.received_quantity) <= 0) continue;
+        const stillThere = resolvedItems.some((ri) => ri.productId === ro.product_id
+          && ri.materialId === ro.material_id
+          && (ri.sizeId ?? 0) === (ro.size_id ?? 0)
+          && ri.quantity === Number(ro.quantity));
+        if (!stillThere) {
+          const err = new Error(
+            'Este pedido ya tiene piezas de fabricación recibidas en almacén: no se puede cambiar '
+            + 'el producto, material, talla ni la cantidad de esas líneas. Si necesitas modificarlo, '
+            + 'cancela el pedido y genera uno nuevo.',
+          );
+          err.statusCode = 400;
+          throw err;
+        }
       }
 
       // RN-P1, igual que en create: solo se recoge en tienda lo que ya está
@@ -2049,25 +2124,64 @@ const Order = {
       // misma transacción, aunque no conserva el `created_at` original.
       await conn.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
       for (const it of resolvedItems) {
+        // Hereda el fabricante y el costo congelado de la línea vieja equivalente.
+        const carryKey = `${it.productId}:${it.materialId}:${it.sizeId ?? 0}`;
+        const carried = carryByCell.get(carryKey)?.shift() ?? null;
+
+        // Si la línea vieja equivalente ya tenía avance de fabricación (el
+        // fabricante entregó, o bodega aceptó piezas), la nueva SIGUE siendo de
+        // fabricación aunque el stock devuelto arriba la haga parecer surtible:
+        // esas piezas son el avance de ESTA línea, no stock libre.
+        const carriedHasProgress = !!carried && carried.hasProgress;
+        if (carriedHasProgress) it.requiresFabrication = true;
+        const isFab = it.requiresFabrication;
+
+        const carriedManufacturerId = carried && isFab ? carried.manufacturerId : null;
+        const carriedUnitCost = carried && isFab ? carried.unitCost : null;
+        it.__carriedManufacturerId = carriedManufacturerId;
+
+        // Avance conservado, acotado a la nueva cantidad (el guard de arriba ya
+        // impide reducir una línea con piezas RECIBIDAS; esto cubre el caso de
+        // solo "listo del fabricante" sin recepción, que sí admite otra cantidad).
+        const keptReadyQty = carriedHasProgress ? Math.min(carried.readyQuantity, it.quantity) : 0;
+        const keptReceived = carriedHasProgress ? Math.min(carried.receivedQuantity, it.quantity) : 0;
+        const keptReturned = carriedHasProgress ? Math.min(carried.stockReturnedQty, it.quantity) : 0;
+        const keptIsReady = keptReadyQty >= it.quantity && it.quantity > 0;
+
         const [itemResult] = await conn.execute(
           `INSERT INTO order_items
             (order_id, product_id, product_name, product_sku, material_id, material_label, size_id, size_label, color,
-             quantity, variant_selections, unit_price, subtotal, requires_fabrication)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             quantity, variant_selections, unit_price, subtotal, requires_fabrication, manufacturer_id, unit_cost,
+             ready_quantity, is_ready, ready_by, ready_at, manufacturer_delivered_at,
+             received_quantity, stock_returned_qty, warehouse_received_at, warehouse_received_by,
+             warehouse_condition, warehouse_note)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id, it.productId, it.productName, it.productSku,
             it.materialId, it.materialLabel, it.sizeId, it.sizeLabel, it.color, it.quantity,
             it.variantSelections ? JSON.stringify(it.variantSelections) : null,
             it.unitPrice, it.subtotal, it.requiresFabrication ? 1 : 0,
+            carriedManufacturerId, carriedUnitCost,
+            keptReadyQty, keptIsReady ? 1 : 0,
+            keptReadyQty > 0 ? (carried?.readyBy ?? null) : null,
+            keptReadyQty > 0 ? (carried?.readyAt ?? null) : null,
+            carriedHasProgress ? (carried?.manufacturerDeliveredAt ?? null) : null,
+            keptReceived, keptReturned,
+            keptReceived > 0 ? (carried?.warehouseReceivedAt ?? null) : null,
+            keptReceived > 0 ? (carried?.warehouseReceivedBy ?? null) : null,
+            keptReceived > 0 ? (carried?.warehouseCondition ?? null) : null,
+            keptReceived > 0 ? (carried?.warehouseNote ?? null) : null,
           ],
         );
         it.insertedItemId = itemResult.insertId;
+        // Las piezas ya recibidas (`keptReturned`) no se devolvieron al stock
+        // arriba, así que aquí solo se descuenta lo que todavía falta surtir.
         await applyStockDelta(conn, {
           productId: it.productId,
           materialId: it.materialId,
           sizeId: it.sizeId,
           color: it.requiresFabrication ? null : it.color,
-          delta: -it.quantity,
+          delta: -(it.quantity - keptReturned),
           reason: 'sale_edit',
           sourceType: 'order',
           sourceId: Number(id),
@@ -2087,6 +2201,33 @@ const Order = {
             orderId: id,
             orderItemId: itemResult.insertId,
             createdBy: userId ?? existing.sellerId,
+          }, conn);
+        }
+      }
+
+      // 4.a Aceptación del fabricante (Docs/plan-fabricante-notificaciones-y-
+      // aceptacion.md D1): editar el pedido regresa la aceptación a 'pending' y
+      // avisa a cada fabricante con líneas en el pedido. En 'pending' solo se
+      // asegura la fila (el fabricante aún no había arrancado nada).
+      const manufacturersNow = [
+        ...new Set(resolvedItems.map((it) => it.__carriedManufacturerId).filter(Boolean)),
+      ];
+      for (const mId of manufacturersNow) await ManufacturerAcceptance.ensure(conn, id, mId);
+      // fabricantes que quedaron sin líneas tras la edición → se retira su fila.
+      for (const mId of manufacturersBefore) {
+        if (!manufacturersNow.includes(mId)) await ManufacturerAcceptance.pruneIfUnused(conn, id, mId);
+      }
+      if (['fabricating', 'in_warehouse', 'ready'].includes(existing.orderStatus)) {
+        const affected = await ManufacturerAcceptance.resetForOrder(conn, id);
+        const toNotify = new Set([...manufacturersNow, ...affected]);
+        for (const mId of toNotify) {
+          await Notification.create({
+            audience: 'manufacturer',
+            manufacturerId: mId,
+            type: 'order_changed',
+            title: `Cambió un pedido que fabricas: ${existing.orderNumber}`,
+            body: 'El vendedor o el admin editó el pedido. Revísalo y vuelve a aceptarlo.',
+            orderId: id,
           }, conn);
         }
       }
@@ -2133,6 +2274,23 @@ const Order = {
       const paid = Number(existing.paymentAmount) || 0;
       const paymentStatus = paid >= totalAmount && totalAmount > 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
 
+      // Imágenes de referencia del fabricante: se guardan sólo si el pedido
+      // queda con notas para el fabricante y no es pickup (mismo criterio que el
+      // pickup usa para descartar las notas). `undefined` = no se mandaron en
+      // este PATCH → se conserva lo que había.
+      const notasFabricanteEff = data.notasFabricante !== undefined
+        ? data.notasFabricante : existing.notasFabricante;
+      // Si no vienen en el PATCH se reenvía lo que ya tenía el pedido, para que
+      // `normalize` vuelva a aplicar la regla "sin notas / pickup → se descartan".
+      const refImagesInput = data.notasFabricanteImagenes !== undefined
+        ? data.notasFabricanteImagenes
+        : (existing.notasFabricanteImagenes ?? []);
+      const refImagesValue = refImages.normalize(refImagesInput, {
+        notasFabricante: notasFabricanteEff,
+        pickupInStore,
+      }) ?? null;
+      const refImagesAfter = refImages.parse(refImagesValue);
+
       // 6. Actualizar la cabecera del pedido.
       await conn.execute(
         `UPDATE orders SET
@@ -2146,7 +2304,7 @@ const Order = {
            shipping_cost_status = ?, shipping_cost_requested = ?, shipping_cost_reviewed_by = ?,
            shipping_cost_reviewed_at = ?, shipping_cost_review_note = ?,
            assembly_service = ?, assembly_floors = ?, assembly_cost = ?,
-           notas_fabricante = ?, notas_pedido = ?, instrucciones_entrega = ?,
+           notas_fabricante = ?, notas_fabricante_imagenes = ?, notas_pedido = ?, instrucciones_entrega = ?,
            cash_total = ?, down_payment = ?,
            weekly_payment = ?, last_payment = ?, credit_weeks = ?, layaway_deadline = ?
          WHERE id = ?`,
@@ -2167,6 +2325,7 @@ const Order = {
           shippingCostReviewedAt, shippingCostReviewNote,
           assemblyService ? 1 : 0, assemblyFloors, assemblyCost,
           data.notasFabricante !== undefined ? data.notasFabricante : existing.notasFabricante,
+          refImagesValue,
           data.notasPedido !== undefined ? data.notasPedido : existing.notasPedido,
           data.instruccionesEntrega !== undefined ? data.instruccionesEntrega : existing.instruccionesEntrega,
           cashTotal, downPayment, weeklyPayment, lastPayment, creditWeeks, layawayDeadline,
@@ -2198,6 +2357,19 @@ const Order = {
       }
 
       await conn.commit();
+
+      // Si la edición dejó todas las piezas de fabricación ya recibidas (p. ej.
+      // quitó la única línea que faltaba), el pedido debe avanzar a
+      // in_warehouse/ready. Idempotente y solo avanza — nunca regresa.
+      await this.recomputeFabricationStatus(id);
+
+      // Fotos de referencia que se quitaron en esta edición: se borran del
+      // disco (best-effort, ya fuera de la transacción) para no dejar basura en
+      // `uploads/order-refs/`.
+      refImages.unlinkFiles(
+        refImages.removed(existing.notasFabricanteImagenes ?? [], refImagesAfter),
+      );
+
       return this.findById(id);
     } catch (err) {
       await conn.rollback();

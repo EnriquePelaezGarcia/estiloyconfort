@@ -2,7 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { ManufacturerOrder, ManufacturerOwnCatalogItem, Order, WeeklyListRow } from '../models/order.model';
+import {
+  ManufacturerOrder, ManufacturerOwnCatalogItem, Order, WeeklyListRow,
+} from '../models/order.model';
 import {
   PayableDocumentDetail,
   PayableDocumentsResponse,
@@ -51,6 +53,19 @@ export class ManufacturerService {
   startFabrication(id: number): Observable<{ data: Order }> {
     return this.api.patch<{ data: Order }>(`/manufacturer/orders/${id}/start`, {});
   }
+
+  /** D1: aceptar el pedido antes de poder iniciar la fabricación. */
+  acceptOrder(id: number): Observable<{ data: Order; message: string }> {
+    return this.api.post<{ data: Order; message: string }>(`/manufacturer/orders/${id}/accept`, {});
+  }
+
+  /** D2: rechazar con motivo — avisa a la tienda. */
+  rejectOrder(id: number, reason: string): Observable<{ data: Order; message: string }> {
+    return this.api.post<{ data: Order; message: string }>(`/manufacturer/orders/${id}/reject`, { reason });
+  }
+
+  // Notificaciones in-app: ver `NotificationCenterStore` (compartido con admin
+  // y vendedor; endpoint por rol).
 
   markItemReady(
     orderId: number,

@@ -22,6 +22,20 @@ function slugify(text) {
     .replace(/^-+|-+$/g, '') || 'producto';
 }
 
+/**
+ * ¿El renglón de la OC es de un producto que se vende por talla pero no la
+ * trae? En ese caso la recepción NO puede sumar a inventario sin descuadrar el
+ * agregado por talla (`product_materials.stock_quantity` = SUMA de las celdas).
+ */
+async function productIsSizedWithoutSize(conn, poItem) {
+  if (poItem.size_id != null) return false;
+  const [rows] = await conn.execute(
+    'SELECT 1 FROM product_sizes WHERE product_id = ? AND is_active = TRUE LIMIT 1',
+    [poItem.product_id],
+  );
+  return rows.length > 0;
+}
+
 // Genera un consecutivo OC-000001 a partir del total de órdenes de compra.
 async function generatePoNumber() {
   const [[{ n }]] = await pool.execute('SELECT COUNT(*) AS n FROM purchase_orders');
@@ -245,6 +259,10 @@ const manufacturingController = {
         // El inventario es por (producto, material): sin material_id la
         // recepción no sabe a qué renglón de existencias sumar.
         materialId: it.materialId ? Number(it.materialId) : null,
+        // Talla del renglón (D5). null = producto sin talla. Si el producto se
+        // vende por talla y no se captura aquí, la recepción no podrá sumar a
+        // inventario (avisa) para no descuadrar el agregado por talla.
+        sizeId: it.sizeId != null && it.sizeId !== '' ? Number(it.sizeId) : null,
         color: (it.color ?? '').trim() || null,
         quantity,
         unitCost,
@@ -268,10 +286,10 @@ const manufacturingController = {
         await conn.execute(
           `INSERT INTO purchase_order_items
              (purchase_order_id, product_id, product_name, product_sku, is_new_product,
-              specifications, material_id, color, quantity, unit_cost, subtotal)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              specifications, material_id, size_id, color, quantity, unit_cost, subtotal)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [poId, it.productId, it.productName, it.productSku, it.isNewProduct ? 1 : 0,
-            it.specifications, it.materialId, it.color, it.quantity, it.unitCost, it.subtotal],
+            it.specifications, it.materialId, it.sizeId, it.color, it.quantity, it.unitCost, it.subtotal],
         );
       }
       await conn.commit();
@@ -386,10 +404,25 @@ const manufacturingController = {
         );
 
         if (p.condition === 'ok') {
-          if (p.item.product_id && p.item.material_id) {
+          if (!p.item.product_id || !p.item.material_id) {
+            warnings.push(
+              `"${p.item.product_name}" se registró pero NO se sumó a inventario: `
+              + `${p.item.product_id ? 'falta el material' : 'primero crea el producto en el catálogo'}.`,
+            );
+          } else if (await productIsSizedWithoutSize(conn, p.item)) {
+            // Un producto por talla lleva el stock en la celda
+            // (producto, material, talla). Sumarlo solo al agregado lo
+            // descuadraría (y el siguiente ajuste manual por talla lo borra al
+            // recalcular). Se registra la recepción, no el stock.
+            warnings.push(
+              `"${p.item.product_name}" se vende por talla y este renglón no la trae: la recepción `
+              + 'quedó registrada pero NO se sumó a inventario. Captura las piezas por talla en Inventario.',
+            );
+          } else {
             await applyStockDelta(conn, {
               productId: p.item.product_id,
               materialId: p.item.material_id,
+              sizeId: p.item.size_id ?? null,
               color: p.item.color,
               delta: p.qty,
               reason: 'po_receipt',
@@ -398,11 +431,6 @@ const manufacturingController = {
               note: p.item.material_label ? `Recepción ${po.po_number}` : null,
               userId: req.user.id,
             });
-          } else {
-            warnings.push(
-              `"${p.item.product_name}" se registró pero NO se sumó a inventario: `
-              + `${p.item.product_id ? 'falta el material' : 'primero crea el producto en el catálogo'}.`,
-            );
           }
         } else {
           // Dañado / incompleto: no entra a inventario; suma a la nota de crédito.

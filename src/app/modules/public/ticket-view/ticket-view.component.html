@@ -20,17 +20,10 @@
 } @else if (ticket(); as t) {
   <div class="ticket-page">
     <article class="sheet">
-      <!-- Cabecera en morado #2a1d42 (el del footer del sitio): el logo
-           negativo es el que corresponde sobre fondo oscuro. -->
+      <!-- Cabecera compacta en morado #2a1d42: sin logo ni ornamento, solo el
+           rótulo y el folio — que es el dato que el cliente usa. La marca ya
+           está en el pie. -->
       <header class="crest">
-        <img
-          class="crest__logo"
-          src="/branding/logo-negativo.png"
-          alt="Mueblería Estilo y Confort"
-          width="1516"
-          height="444"
-        />
-        <span class="ornament ornament--dark">✦</span>
         <p class="crest__overline">Comprobante de compra</p>
         <p class="crest__label">Número de pedido</p>
         <p class="crest__folio">{{ t.orderNumber }}</p>

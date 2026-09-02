@@ -76,6 +76,14 @@ export const sellerRoutes: Routes = [
         title: 'Detalle de pedido - Vendedor',
       },
       {
+        path: 'notificaciones',
+        loadComponent: () =>
+          import('../../shared/components/notifications-page/notifications-page.component').then(
+            (m) => m.NotificationsPageComponent,
+          ),
+        title: 'Notificaciones - Vendedor',
+      },
+      {
         path: 'clientes-credito',
         loadComponent: () =>
           import('./credit-clients/credit-clients.component').then(

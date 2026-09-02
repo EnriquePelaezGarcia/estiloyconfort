@@ -87,8 +87,13 @@ module.exports = {
   productImages: uploader(),
   categoryImages: uploader(),
   heroImages: uploader(),
+  orderRefImages: uploader(),
   processProductImage: processImage('products', { thumb: true }),
   processCategoryImage: processImage('categories', { thumb: true }),
+  // Fotos de referencia del mueble a fabricar (POS → notas del fabricante). Se
+  // pintan chicas en la tarjeta del fabricante y en el detalle del pedido, por
+  // eso 1200 px basta y se genera miniatura.
+  processOrderRefImage: processImage('order-refs', { maxWidth: 1200, quality: 80, thumb: true }),
   // El hero se pinta a todo el ancho, por eso 2000 px y no los 1600 de
   // catálogo: abajo de eso se ve suave en pantallas grandes. No se sube más
   // porque esta foto es el LCP de la portada y cada KB se nota al abrir.

@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const ManufacturerPayable = require('../models/ManufacturerPayable');
+const ManufacturerAcceptance = require('../models/ManufacturerAcceptance');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { pool } = require('../config/database');
@@ -103,12 +104,33 @@ const manufacturerController = {
     const orderIds = [...new Set(items.map((it) => it.order_id))];
     const [orders] = await pool.query(
       `SELECT id, order_number, customer_name, order_status, expected_delivery_date,
-              manufacturer_due_date, created_at, notas_fabricante
+              manufacturer_due_date, created_at, notas_fabricante, notas_fabricante_imagenes
        FROM orders WHERE id IN (?)
        ORDER BY manufacturer_due_date IS NULL, manufacturer_due_date ASC, created_at ASC`,
       [orderIds],
     );
-    const byOrder = new Map(orders.map((o) => [o.id, { ...o, items: [] }]));
+    // Estado de aceptación de ESTE fabricante por pedido (D1).
+    const [accRows] = await pool.query(
+      `SELECT order_id, status, reject_reason FROM order_manufacturer_acceptance
+        WHERE manufacturer_id = ? AND order_id IN (?)`,
+      [manufacturerId, orderIds],
+    );
+    const accByOrder = new Map(accRows.map((r) => [r.order_id, r]));
+
+    const byOrder = new Map(orders.map((o) => {
+      const acc = accByOrder.get(o.id);
+      return [o.id, {
+        ...o,
+        notas_fabricante_imagenes: Array.isArray(o.notas_fabricante_imagenes)
+          ? o.notas_fabricante_imagenes
+          : [],
+        acceptance: {
+          status: acc?.status ?? 'pending',
+          rejectReason: acc?.reject_reason ?? null,
+        },
+        items: [],
+      }];
+    }));
     for (const it of items) {
       byOrder.get(it.order_id)?.items.push({
         id: it.id,
@@ -210,14 +232,40 @@ const manufacturerController = {
 
   // PATCH /api/manufacturer/orders/:id/start — mover de 'pending' a 'fabricating'
   startFabrication: asyncHandler(async (req, res) => {
+    const orderId = Number(req.params.id);
     if (req.user.role === 'manufacturer') {
       const manufacturerId = await manufacturerIdOf(req.user.id);
       if (!manufacturerId) throw ApiError.forbidden('Tu usuario no tiene un fabricante asignado');
       const [[owns]] = await pool.execute(
         'SELECT 1 FROM order_items WHERE order_id = ? AND manufacturer_id = ? LIMIT 1',
-        [req.params.id, manufacturerId],
+        [orderId, manufacturerId],
       );
       if (!owns) throw ApiError.forbidden('Este pedido no te fue asignado');
+      // D1: hay que aceptar el pedido antes de arrancar la fabricación.
+      const acc = await ManufacturerAcceptance.statusFor(orderId, manufacturerId);
+      if (!acc || acc.status !== 'accepted') {
+        throw ApiError.badRequest(
+          acc && acc.status === 'rejected'
+            ? 'Rechazaste este pedido. Contacta a la tienda para revisarlo.'
+            : 'Primero acepta el pedido para poder iniciar la fabricación.',
+        );
+      }
+    } else {
+      // El admin arranca por un fabricante que no usa el sistema: se da por
+      // aceptado a su nombre para que el estado quede consistente.
+      const [rows] = await pool.execute(
+        'SELECT DISTINCT manufacturer_id FROM order_items WHERE order_id = ? AND manufacturer_id IS NOT NULL',
+        [orderId],
+      );
+      for (const r of rows) {
+        await ManufacturerAcceptance.ensure(pool, orderId, r.manufacturer_id);
+        await pool.execute(
+          `UPDATE order_manufacturer_acceptance
+              SET status = 'accepted', reviewed_by = ?, reviewed_at = NOW(), reject_reason = NULL
+            WHERE order_id = ? AND manufacturer_id = ? AND status <> 'accepted'`,
+          [req.user.id, orderId, r.manufacturer_id],
+        );
+      }
     }
     const [[dep]] = await pool.execute(
       'SELECT payment_method, payment_amount, down_payment FROM orders WHERE id = ?',
@@ -239,6 +287,57 @@ const manufacturerController = {
     if (!order) throw ApiError.notFound('Pedido no encontrado');
     res.json({ data: order, message: 'Pedido en fabricación' });
   }),
+
+  // ─── ACEPTACIÓN DEL PEDIDO (D1/D2) ─────────────────────────────────────────
+  // Resuelve el fabricante del token (o exige owns si es admin actuando).
+  _manufacturerForRequest: async (req, orderId) => {
+    if (req.user.role === 'manufacturer') {
+      const manufacturerId = await manufacturerIdOf(req.user.id);
+      if (!manufacturerId) throw ApiError.forbidden('Tu usuario no tiene un fabricante asignado');
+      const [[owns]] = await pool.execute(
+        'SELECT 1 FROM order_items WHERE order_id = ? AND manufacturer_id = ? LIMIT 1',
+        [orderId, manufacturerId],
+      );
+      if (!owns) throw ApiError.forbidden('Este pedido no te fue asignado');
+      return manufacturerId;
+    }
+    // admin: acepta/rechaza a nombre del único fabricante del pedido, o del que venga en el body.
+    const [rows] = await pool.execute(
+      'SELECT DISTINCT manufacturer_id FROM order_items WHERE order_id = ? AND manufacturer_id IS NOT NULL',
+      [orderId],
+    );
+    if (!rows.length) throw ApiError.badRequest('Este pedido no tiene fabricante asignado');
+    const bodyId = Number(req.body.manufacturerId) || null;
+    if (bodyId) {
+      if (!rows.some((r) => r.manufacturer_id === bodyId)) {
+        throw ApiError.badRequest('Ese fabricante no tiene líneas en este pedido');
+      }
+      return bodyId;
+    }
+    if (rows.length > 1) throw ApiError.badRequest('El pedido tiene varios fabricantes: indica manufacturerId');
+    return rows[0].manufacturer_id;
+  },
+
+  // POST /api/manufacturer/orders/:id/accept
+  acceptOrder: asyncHandler(async (req, res) => {
+    const orderId = Number(req.params.id);
+    const manufacturerId = await manufacturerController._manufacturerForRequest(req, orderId);
+    await ManufacturerAcceptance.accept(orderId, manufacturerId, req.user.id);
+    const order = await Order.findById(orderId);
+    res.json({ data: order, message: 'Pedido aceptado' });
+  }),
+
+  // POST /api/manufacturer/orders/:id/reject  { reason }
+  rejectOrder: asyncHandler(async (req, res) => {
+    const orderId = Number(req.params.id);
+    const manufacturerId = await manufacturerController._manufacturerForRequest(req, orderId);
+    await ManufacturerAcceptance.reject(orderId, manufacturerId, req.user.id, req.body.reason);
+    const order = await Order.findById(orderId);
+    res.json({ data: order, message: 'Pedido rechazado. Se avisó a la tienda.' });
+  }),
+
+  // Notificaciones in-app: ver `notificationsController` (compartido con
+  // admin y vendedor). Las rutas /manufacturer/notifications* lo usan.
 
   // ─── HISTORIAL Y PAGOS ─────────────────────────────────────────────────────
 

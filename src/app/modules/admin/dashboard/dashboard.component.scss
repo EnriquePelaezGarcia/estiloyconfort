@@ -236,6 +236,12 @@
 }
 
 // ===== Mini table =====
+// En móvil la tarjeta ocupa todo el ancho; si la tabla no cabe, scrollea
+// dentro de su contenedor en vez de desbordar la página.
+.mini-table-wrap {
+  overflow-x: auto;
+}
+
 .mini-table {
   width: 100%;
   border-collapse: collapse;

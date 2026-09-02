@@ -3,21 +3,24 @@ import {
   BusinessLayoutComponent,
   BusinessNavItem,
 } from '../../../shared/components/business-layout/business-layout.component';
+import { NotificationBellComponent } from '../../../shared/components/notification-bell/notification-bell.component';
 import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
 import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
+import { NotificationCenterStore } from '../../../core/services/notification-center.store';
 
 @Component({
   selector: 'app-seller-layout',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './seller-layout.component.html',
   styleUrl: './seller-layout.component.scss',
-  imports: [BusinessLayoutComponent],
+  imports: [BusinessLayoutComponent, NotificationBellComponent],
 })
 export class SellerLayoutComponent implements OnInit {
   private scheduleService = inject(DeliveryScheduleService);
   private discountsService = inject(DiscountsService);
   private quoteRequestsService = inject(QuoteRequestsService);
+  private notifications = inject(NotificationCenterStore);
 
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Resumen', icon: 'dashboard', route: 'resumen' },
@@ -38,6 +41,13 @@ export class SellerLayoutComponent implements OnInit {
     },
     { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo' },
     { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos' },
+    {
+      label: 'Notificaciones',
+      icon: 'notifications',
+      route: 'notificaciones',
+      // El fabricante avisa aquí al aceptar/rechazar un pedido del vendedor.
+      badge: () => this.notifications.unreadCount(),
+    },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
     {
@@ -56,5 +66,6 @@ export class SellerLayoutComponent implements OnInit {
     this.scheduleService.refreshCounts().subscribe({ error: () => {} });
     this.discountsService.refreshMyRejectedCount().subscribe({ error: () => {} });
     this.quoteRequestsService.refreshPendingCount().subscribe({ error: () => {} });
+    this.notifications.startPolling();
   }
 }

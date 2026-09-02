@@ -2,9 +2,11 @@ const { Router } = require('express');
 const sellerController = require('../controllers/sellerController');
 const creditClientsController = require('../controllers/creditClientsController');
 const adminController = require('../controllers/adminController');
+const notificationsController = require('../controllers/notificationsController');
 const ticketsController = require('../controllers/ticketsController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
+const { orderRefImages, processOrderRefImage } = require('../middleware/upload');
 
 const router = Router();
 
@@ -12,6 +14,13 @@ const router = Router();
 router.use(authenticate, authorize('seller', 'admin'));
 
 router.get('/dashboard', sellerController.dashboard);
+
+// Notificaciones in-app del vendedor (campana + página). Controlador compartido.
+// El fabricante avisa aquí cuando acepta/rechaza un pedido del vendedor.
+router.get('/notifications/unread-count', notificationsController.unreadCount);
+router.get('/notifications', notificationsController.list);
+router.patch('/notifications/read-all', notificationsController.markAllRead);
+router.patch('/notifications/:id/read', notificationsController.markRead);
 router.get('/inventory', sellerController.inventory);
 router.get('/credit-config', sellerController.creditConfig);
 router.get('/assembly-rates', sellerController.assemblyRates);
@@ -21,6 +30,12 @@ router.post('/credit-quote', sellerController.creditQuote);
 router.get('/orders', sellerController.list);
 router.get('/orders/:id', sellerController.getOne);
 router.post('/orders', sellerController.create);
+router.post(
+  '/orders/manufacturer-ref-images',
+  orderRefImages.single('image'),
+  processOrderRefImage,
+  sellerController.uploadManufacturerRefImage,
+);
 router.post('/orders/split', sellerController.createSplit);
 router.patch('/orders/:id', sellerController.update);
 router.delete('/orders/:id', sellerController.remove);

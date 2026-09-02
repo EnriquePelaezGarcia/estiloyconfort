@@ -42,6 +42,20 @@ export class SellerService {
     return this.api.patch<{ data: Order }>(`/seller/orders/${id}`, payload);
   }
 
+  /**
+   * Sube UNA foto de referencia para el fabricante. El pedido todavía no existe
+   * (se está capturando en el POS): devuelve la ruta relativa ya reescalada a
+   * WebP, que luego viaja en `notasFabricanteImagenes` al crear/editar.
+   */
+  uploadManufacturerRefImage(file: File | Blob): Observable<{ data: { url: string } }> {
+    const fd = new FormData();
+    fd.append('image', file);
+    return this.api.postFormData<{ data: { url: string } }>(
+      '/seller/orders/manufacturer-ref-images',
+      fd,
+    );
+  }
+
   cancelOrder(id: number): Observable<{ message: string }> {
     return this.api.delete<{ message: string }>(`/seller/orders/${id}`);
   }

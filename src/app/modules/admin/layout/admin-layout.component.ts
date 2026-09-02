@@ -6,6 +6,9 @@ import { DeliveryScheduleService } from '../../../core/services/delivery-schedul
 import { DiscountsService } from '../../../core/services/discounts.service';
 import { ApprovalsService } from '../../../core/services/approvals.service';
 import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
+import { ManufacturerAlertsService } from '../../../core/services/manufacturer-alerts.service';
+import { NotificationCenterStore } from '../../../core/services/notification-center.store';
+import { NotificationBellComponent } from '../../../shared/components/notification-bell/notification-bell.component';
 
 interface NavItem {
   label: string;
@@ -24,7 +27,7 @@ interface NavItem {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin-layout.component.html',
   styleUrl: './admin-layout.component.scss',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, NotificationBellComponent],
 })
 export class AdminLayoutComponent implements OnInit {
   protected auth = inject(AuthService);
@@ -33,6 +36,8 @@ export class AdminLayoutComponent implements OnInit {
   private discountsService = inject(DiscountsService);
   private approvalsService = inject(ApprovalsService);
   private quoteRequestsService = inject(QuoteRequestsService);
+  private manufacturerAlerts = inject(ManufacturerAlertsService);
+  private notifications = inject(NotificationCenterStore);
 
   protected sidebarOpen = signal(false);
 
@@ -41,6 +46,12 @@ export class AdminLayoutComponent implements OnInit {
 
   private readonly allNavItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
+    {
+      label: 'Notificaciones',
+      icon: 'notifications',
+      route: 'notificaciones',
+      badge: () => this.notifications.unreadCount(),
+    },
     { label: 'Usuarios', icon: 'group', route: 'usuarios' },
     { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
     { label: 'Categorías', icon: 'category', route: 'categorias' },
@@ -94,7 +105,13 @@ export class AdminLayoutComponent implements OnInit {
       // Exactas vencidas + hoy + mañana (Docs/plan-fecha-hora-entrega.md §6.4).
       badge: () => this.scheduleService.counts()?.badge ?? 0,
     },
-    { label: 'Fabricante', icon: 'factory', route: 'fabricante' },
+    {
+      label: 'Fabricante',
+      icon: 'factory',
+      route: 'fabricante',
+      // Rechazos de fabricante sin resolver (Docs/plan-fabricante-notificaciones-y-aceptacion.md).
+      badge: () => this.manufacturerAlerts.rejectedCount(),
+    },
     { label: 'Reportes', icon: 'summarize', route: 'reportes' },
   ];
 
@@ -114,6 +131,8 @@ export class AdminLayoutComponent implements OnInit {
     this.discountsService.refreshPendingCounts().subscribe({ error: () => {} });
     this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
     this.quoteRequestsService.refreshPendingCount().subscribe({ error: () => {} });
+    this.manufacturerAlerts.refresh().subscribe({ error: () => {} });
+    this.notifications.startPolling();
   }
 
   protected toggleSidebar(): void {

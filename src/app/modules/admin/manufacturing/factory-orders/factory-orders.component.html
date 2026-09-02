@@ -107,6 +107,15 @@
                     para poder asignarlo.
                   </span>
                 }
+                @if (r.manufacturerId && r.acceptanceStatus) {
+                  <span class="accept-chip" [class]="'accept-chip--' + r.acceptanceStatus">
+                    @switch (r.acceptanceStatus) {
+                      @case ('accepted') { Aceptado por el fabricante }
+                      @case ('rejected') { Rechazado: {{ r.acceptanceRejectReason }} }
+                      @default { Pendiente de aceptar }
+                    }
+                  </span>
+                }
               </td>
               <td data-label="Utilidad" class="num">
                 @if (r.unitProfit !== null) {

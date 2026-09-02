@@ -1,0 +1,38 @@
+<div class="section-head">
+  <h1>Notificaciones</h1>
+  @if (items().length > 0) {
+    <button type="button" class="btn btn--ghost btn--sm" (click)="markAllRead()">
+      <span class="material-symbols-outlined">done_all</span> Marcar todas como leídas
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando…</p></div>
+} @else if (items().length === 0) {
+  <div class="state">
+    <span class="material-symbols-outlined" style="font-size:2.5rem">notifications_off</span>
+    <p>No tienes notificaciones.</p>
+  </div>
+} @else {
+  <ul class="notif-list">
+    @for (n of items(); track n.id) {
+      <li>
+        <button
+          type="button"
+          class="notif"
+          [class.notif--unread]="!n.read"
+          (click)="open(n)"
+        >
+          <span class="notif__icon material-symbols-outlined">{{ iconFor(n.type) }}</span>
+          <span class="notif__text">
+            <span class="notif__title">{{ n.title }}</span>
+            @if (n.body) { <span class="notif__body">{{ n.body }}</span> }
+            <span class="notif__date">{{ n.createdAt | date:'d MMM y, HH:mm' }}</span>
+          </span>
+          @if (n.orderId) { <span class="material-symbols-outlined notif__go">chevron_right</span> }
+        </button>
+      </li>
+    }
+  </ul>
+}

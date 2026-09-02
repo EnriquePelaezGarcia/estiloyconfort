@@ -4,6 +4,7 @@ const approvalsController = require('../controllers/approvalsController');
 const pricingController = require('../controllers/pricingController');
 const materialsController = require('../controllers/materialsController');
 const inventoryController = require('../controllers/inventoryController');
+const notificationsController = require('../controllers/notificationsController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -65,6 +66,13 @@ router.get('/approvals', approvalsController.getApprovals);
 router.get('/approvals/pending-count', approvalsController.getApprovalsPendingCount);
 router.get('/delivery-people', adminController.getDeliveryPeople);
 router.get('/factory-order-items', adminController.getFactoryOrderItems);
+router.get('/manufacturer-alerts/count', adminController.manufacturerAlertsCount);
+
+// Notificaciones in-app del admin (campana + página). Controlador compartido.
+router.get('/notifications/unread-count', notificationsController.unreadCount);
+router.get('/notifications', notificationsController.list);
+router.patch('/notifications/read-all', notificationsController.markAllRead);
+router.patch('/notifications/:id/read', notificationsController.markRead);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);
 // Fabricante que surte el item; al asignarlo se congela su costo.
 router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);

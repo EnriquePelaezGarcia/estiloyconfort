@@ -75,23 +75,25 @@
             @if (r.items.length === 0) {
               <p class="empty">Sin productos registrados.</p>
             } @else {
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Producto</th><th>SKU</th><th class="num">Cant.</th><th class="num">Precio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (it of r.items; track $index) {
+              <div class="table-wrap">
+                <table class="table table--cards">
+                  <thead>
                     <tr>
-                      <td>{{ it.productName }}</td>
-                      <td class="muted">{{ it.productSku }}</td>
-                      <td class="num">{{ it.quantity }}</td>
-                      <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                      <th>Producto</th><th>SKU</th><th class="num">Cant.</th><th class="num">Precio</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    @for (it of r.items; track $index) {
+                      <tr>
+                        <td data-label="Producto">{{ it.productName }}</td>
+                        <td class="muted" data-label="SKU">{{ it.productSku }}</td>
+                        <td class="num" data-label="Cant.">{{ it.quantity }}</td>
+                        <td class="num" data-label="Precio">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             }
           </div>
         }

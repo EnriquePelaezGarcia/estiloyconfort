@@ -92,3 +92,16 @@
     }
   }
 }
+
+.accept-chip {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+
+  &--accepted { background: rgba(46, 125, 50, 0.14); color: #2e7d32; }
+  &--pending  { background: rgba(198, 156, 44, 0.18); color: #8a6d1d; }
+  &--rejected { background: rgba(179, 0, 25, 0.1); color: #b30019; }
+}

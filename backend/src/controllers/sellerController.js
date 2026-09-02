@@ -11,88 +11,33 @@ const { isValidCustomerPhone } = require('../utils/validators');
 const { pool } = require('../config/database');
 
 /**
- * Valida el cambio de producto en un pedido ya cobrado (no 'pending'):
- * solo permite intercambiar items de stock por otros de stock. Los items
- * de fabricación deben llegar intactos (mismo producto y cantidad) en
- * `newItems`, o se rechaza con 400. Devuelve la línea de bitácora a
- * concatenar en `notes` (o null si no hubo cambio de producto).
+ * Rastro en `notes` cuando se edita un pedido que ya no está 'pending'
+ * (Docs/plan-fabricante-notificaciones-y-aceptacion.md D3). Ya no se restringe
+ * a "stock por stock": el fabricante se re-notifica y vuelve a aceptar. Compara
+ * los items ANTES (con nombre) contra los DESPUÉS y devuelve la línea de
+ * bitácora, o null si el carrito no cambió de productos.
  */
-async function validateStockOnlyChange(existing, newItems, userId) {
-  const oldFabrication = (existing.items ?? []).filter((it) => it.requiresFabrication);
-  const oldStock = (existing.items ?? []).filter((it) => !it.requiresFabrication);
-  const fabricationProductIds = new Set(oldFabrication.map((it) => it.productId));
+async function summarizeItemChange(oldItems, newItems, orderStatus, userId) {
+  const oldByProduct = new Map();
+  for (const it of oldItems ?? []) oldByProduct.set(it.productId, it);
+  const newByProduct = new Map();
+  for (const it of newItems ?? []) newByProduct.set(Number(it.productId), it);
 
-  for (const of_ of oldFabrication) {
-    const intact = newItems.some(
-      (ni) => Number(ni.productId) === of_.productId && Number(ni.quantity) === of_.quantity,
-    );
-    if (!intact) {
-      const err = new Error('Los muebles en fabricación no se pueden cambiar');
-      err.statusCode = 400;
-      throw err;
-    }
+  const removed = [...oldByProduct.values()].filter((oi) => !newByProduct.has(oi.productId));
+  const addedIds = [...newByProduct.keys()].filter((pid) => !oldByProduct.has(pid));
+  if (!removed.length && !addedIds.length) return null;
+
+  let addedNames = '—';
+  if (addedIds.length) {
+    const [rows] = await pool.query('SELECT id, name FROM products WHERE id IN (?)', [addedIds]);
+    const nameById = new Map(rows.map((r) => [r.id, r.name]));
+    addedNames = addedIds.map((pid) => `"${nameById.get(pid) ?? pid}"`).join(', ');
   }
-
-  const productNames = new Map();
-  for (const ni of newItems) {
-    if (fabricationProductIds.has(Number(ni.productId))) continue;
-    if (ni.requiresFabrication) {
-      const err = new Error('Solo se pueden agregar muebles de stock a un pedido ya cobrado');
-      err.statusCode = 400;
-      throw err;
-    }
-    // M15: el stock es por (producto, material) — la línea trae su propio
-    // material, ya no hay un stock_quantity único del producto.
-    const [[product]] = await pool.execute(
-      `SELECT p.name, pm.stock_quantity
-         FROM products p
-         LEFT JOIN product_materials pm ON pm.product_id = p.id AND pm.material_id = ?
-        WHERE p.id = ?`,
-      [ni.materialId, ni.productId],
-    );
-    if (!product || Number(product.stock_quantity) < Number(ni.quantity)) {
-      const err = new Error('No hay stock suficiente para el producto/material seleccionado');
-      err.statusCode = 400;
-      throw err;
-    }
-    // A2 (Docs/plan-stock-por-color.md): si ese (producto, material) lleva
-    // desglose por color, el color pedido tiene que tener piezas — si no, la
-    // línea es de fabricación y no cabe en un pedido ya cobrado.
-    const [colorBuckets] = await pool.execute(
-      'SELECT color_key, quantity FROM product_material_stock_colors WHERE product_id = ? AND material_id = ?',
-      [ni.productId, ni.materialId],
-    );
-    if (colorBuckets.length > 0) {
-      const key = String(ni.color ?? '').trim().toLowerCase();
-      const bucket = colorBuckets.find((b) => b.color_key === key);
-      if (Number(ni.quantity) > (bucket ? Number(bucket.quantity) : 0)) {
-        const err = new Error(
-          `No hay existencia de "${product.name}" en ese color: la pieza se fabrica y no se puede agregar a un pedido ya cobrado.`,
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-    }
-    productNames.set(Number(ni.productId), product.name);
-  }
-
-  const removedStock = oldStock.filter(
-    (oi) => !newItems.some((ni) => Number(ni.productId) === oi.productId),
-  );
-  const addedStock = newItems.filter(
-    (ni) =>
-      !fabricationProductIds.has(Number(ni.productId)) &&
-      !oldStock.some((oi) => oi.productId === Number(ni.productId)),
-  );
-  if (!removedStock.length && !addedStock.length) return null;
-
+  const removedNames = removed.map((it) => `"${it.productName}"`).join(', ') || '—';
   const [[user]] = await pool.execute('SELECT full_name FROM users WHERE id = ?', [userId]);
-  const oldNames = removedStock.map((it) => `"${it.productName}"`).join(', ') || '—';
-  const newNames = addedStock
-    .map((it) => `"${productNames.get(Number(it.productId)) ?? it.productId}"`)
-    .join(', ') || '—';
   const stamp = new Date().toISOString().slice(0, 10);
-  return `[${stamp}] Cambio de producto: ${oldNames} → ${newNames} por ${user?.full_name ?? 'usuario'}`;
+  return `[${stamp}] Edición del pedido (${orderStatus}) por ${user?.full_name ?? 'usuario'}: `
+    + `${removedNames} → ${addedNames}`;
 }
 
 /**
@@ -161,6 +106,18 @@ const sellerController = {
     res.status(201).json({ data: order, message: 'Pedido creado exitosamente' });
   }),
 
+  // POST /api/seller/orders/manufacturer-ref-images
+  // Sube UNA foto de referencia del mueble a fabricar. El pedido todavía no
+  // existe (se está capturando en el POS): esto solo deja el archivo en disco y
+  // devuelve su ruta relativa; el POS la manda luego en `notasFabricanteImagenes`
+  // al crear/editar el pedido. `processOrderRefImage` ya la reescaló a WebP.
+  uploadManufacturerRefImage: asyncHandler(async (req, res) => {
+    if (!req.file || !req.file.filename) {
+      throw ApiError.badRequest('Se requiere un archivo de imagen');
+    }
+    res.status(201).json({ data: { url: `/uploads/order-refs/${req.file.filename}` } });
+  }),
+
   // POST /api/seller/orders/split — venta partida (Docs/plan-venta-multiesquema.md
   // §7.2). No toca /orders: la venta de un solo esquema sigue su camino de
   // siempre, byte por byte.
@@ -177,9 +134,11 @@ const sellerController = {
   }),
 
   // PATCH /api/seller/orders/:id
-  // 'pending' se edita libre. 'fabricating'/'ready' solo permiten cambiar
-  // items de stock por otros de stock (los de fabricación deben llegar
-  // intactos). 'in_delivery'/'delivered'/'cancelled' no se editan.
+  // 'pending' se edita libre. 'fabricating'/'in_warehouse'/'ready' también se
+  // editan (incluidas las líneas de fabricación): el fabricante se re-notifica
+  // y vuelve a aceptar (Docs/plan-fabricante-notificaciones-y-aceptacion.md D3).
+  // 'in_delivery'/'delivered'/'cancelled' no se editan. El admin puede editar
+  // el pedido de cualquier vendedor.
   //
   // Excepción: un "recoge en tienda" del mismo día se edita como si fuera
   // 'pending' (Docs/plan-recoge-en-tienda.md D7). Nace en 'delivered', así que
@@ -187,21 +146,24 @@ const sellerController = {
   update: asyncHandler(async (req, res) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
-    if (existing.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
+    if (req.user.role !== 'admin' && existing.sellerId !== req.user.id) {
+      throw ApiError.forbidden('Este pedido no te pertenece');
+    }
 
     const pickupGrace = isPickupWithinGrace(existing);
     if (!pickupGrace && ['in_delivery', 'delivered', 'cancelled'].includes(existing.orderStatus)) {
-      throw ApiError.badRequest('No se puede editar un pedido en esta etapa');
+      throw ApiError.badRequest(
+        'No se puede editar un pedido que ya salió a entrega, se entregó o se canceló.',
+      );
     }
 
-    // Dentro de la ventana, el pickup se trata como 'pending': si se le
-    // aplicara "solo stock por stock" el vendedor no podría corregir lo que
-    // acaba de capturar, que es justo para lo que existe la ventana.
     const editsFreely = existing.orderStatus === 'pending' || pickupGrace;
 
     let bitacora = null;
     if (!editsFreely && Array.isArray(req.body.items)) {
-      bitacora = await validateStockOnlyChange(existing, req.body.items, req.user.id);
+      bitacora = await summarizeItemChange(
+        existing.items, req.body.items, existing.orderStatus, req.user.id,
+      );
     }
 
     const dataToSave = { ...req.body };

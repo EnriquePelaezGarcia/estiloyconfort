@@ -145,6 +145,12 @@ export interface FactoryOrderItemRow {
   /** Fabricante al que se le compra la pieza. */
   manufacturerId: number | null;
   manufacturerName: string | null;
+  /**
+   * Docs/plan-fabricante-notificaciones-y-aceptacion.md — aceptación del
+   * fabricante sobre el pedido (null si la línea no tiene fabricante).
+   */
+  acceptanceStatus: 'pending' | 'accepted' | 'rejected' | null;
+  acceptanceRejectReason: string | null;
   /** Costo congelado al asignar el fabricante. */
   unitCost: number | null;
   /** Utilidad unitaria = precio de venta − costo congelado. */

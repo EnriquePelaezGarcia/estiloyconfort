@@ -1,0 +1,51 @@
+<div class="bell">
+  <button
+    type="button"
+    class="bell__btn"
+    [class.bell__btn--active]="open()"
+    (click)="toggle()"
+    aria-label="Notificaciones"
+  >
+    <span class="material-symbols-outlined">notifications</span>
+    @if (store.unreadCount() > 0) {
+      <span class="bell__dot">{{ store.unreadCount() > 9 ? '9+' : store.unreadCount() }}</span>
+    }
+  </button>
+
+  @if (open()) {
+    <div class="bell__backdrop" (click)="close()"></div>
+    <div class="bell__panel" role="menu">
+      <header class="bell__head">
+        <span class="strong">Notificaciones</span>
+        <button type="button" class="bell__link" (click)="markAllRead()">Marcar todas</button>
+      </header>
+
+      @if (loading()) {
+        <p class="bell__empty">Cargando…</p>
+      } @else if (items().length === 0) {
+        <p class="bell__empty">No tienes notificaciones.</p>
+      } @else {
+        <ul class="bell__list">
+          @for (n of items().slice(0, 8); track n.id) {
+            <li>
+              <button
+                type="button"
+                class="bell__item"
+                [class.bell__item--unread]="!n.read"
+                (click)="openNotification(n)"
+              >
+                <span class="bell__item-title">{{ n.title }}</span>
+                @if (n.body) { <span class="bell__item-body">{{ n.body }}</span> }
+                <span class="bell__item-date">{{ n.createdAt | date:'d MMM, HH:mm' }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+
+      <footer class="bell__foot">
+        <button type="button" class="bell__link" (click)="seeAll()">Ver todas</button>
+      </footer>
+    </div>
+  }
+</div>

@@ -31,6 +31,14 @@ export const adminRoutes: Routes = [
         title: 'Dashboard - Panel Admin',
       },
       {
+        path: 'notificaciones',
+        loadComponent: () =>
+          import('../../shared/components/notifications-page/notifications-page.component').then(
+            (m) => m.NotificationsPageComponent,
+          ),
+        title: 'Notificaciones - Panel Admin',
+      },
+      {
         path: 'usuarios',
         loadComponent: () =>
           import('./users/users.component').then((m) => m.UsersComponent),

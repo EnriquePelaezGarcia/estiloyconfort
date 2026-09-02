@@ -330,6 +330,12 @@ export interface Order {
   assemblyCost?: number;
   /** Especificaciones para quien surte o almacena el producto terminado. */
   notasFabricante?: string | null;
+  /**
+   * Fotos de referencia del mueble a fabricar (rutas relativas a
+   * `uploads/order-refs/`). Solo se conservan si el pedido lleva
+   * `notasFabricante` y no es "recoge en tienda". Máximo 5.
+   */
+  notasFabricanteImagenes?: string[];
   /** Notas del pedido; se imprimen en el ticket del cliente. */
   notasPedido?: string | null;
   /** Referencias de fachada, navegación y horarios para el repartidor. */
@@ -347,6 +353,34 @@ export interface Order {
   discounts?: OrderDiscount[];
   /** Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno. */
   extraCharges?: OrderExtraCharge[];
+  /**
+   * Docs/plan-fabricante-notificaciones-y-aceptacion.md — estado de aceptación
+   * del/los fabricante(s) del pedido (solo en el detalle de admin).
+   */
+  manufacturerAcceptance?: ManufacturerAcceptanceRow[];
+}
+
+export type ManufacturerAcceptanceStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface ManufacturerAcceptanceRow {
+  manufacturerId: number;
+  manufacturerName: string | null;
+  status: ManufacturerAcceptanceStatus;
+  rejectReason: string | null;
+  reviewedAt: string | null;
+}
+
+/** Notificación in-app (portal fabricante / admin / vendedor). */
+export interface AppNotification {
+  id: number;
+  audience: 'manufacturer' | 'admin' | 'seller';
+  type: string;
+  title: string;
+  body: string | null;
+  orderId: number | null;
+  orderNumber: string | null;
+  read: boolean;
+  createdAt: string;
 }
 
 export interface Paginated<T> {
@@ -394,6 +428,12 @@ export interface CreateOrderRequest {
   assemblyService?: boolean;
   assemblyFloors?: number;
   notasFabricante?: string | null;
+  /**
+   * Rutas relativas de las fotos de referencia ya subidas
+   * (`POST /seller/orders/manufacturer-ref-images`). Máximo 5; el backend las
+   * descarta si el pedido queda sin `notasFabricante` o es "recoge en tienda".
+   */
+  notasFabricanteImagenes?: string[] | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
   /**
@@ -626,6 +666,16 @@ export interface ManufacturerOrder {
   manufacturer_due_date: string | null;
   created_at: string;
   notas_fabricante?: string | null;
+  /** Fotos de referencia del mueble a fabricar (rutas relativas). */
+  notas_fabricante_imagenes?: string[];
+  /**
+   * Docs/plan-fabricante-notificaciones-y-aceptacion.md — aceptación de ESTE
+   * fabricante sobre el pedido. `pending` = hay que revisarlo y aceptarlo.
+   */
+  acceptance?: {
+    status: ManufacturerAcceptanceStatus;
+    rejectReason: string | null;
+  };
   /** M4: material y color son por línea (item), ya no del pedido. */
   items: Array<{
     id: number;

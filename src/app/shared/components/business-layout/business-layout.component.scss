@@ -232,11 +232,17 @@ $sidebar-width: 264px;
   }
 }
 
-.topbar__user {
+.topbar__actions {
   display: flex;
   align-items: center;
   gap: vars.$spacing-sm;
   margin-left: auto;
+}
+
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
 }
 
 .topbar__user-info {
