@@ -125,6 +125,14 @@ export interface OrderItem {
   color?: string | null;
   /** TRUE si el mueble se fabrica sobre pedido; se DERIVA del stock de (producto, material) al crear la línea (M15.4), no se captura a mano. */
   requiresFabrication?: boolean;
+  /**
+   * Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó ESTA línea
+   * como "lleva modificación" en el POS — se fabrica sobre pedido aunque haya
+   * stock. La instrucción y las fotos para el fabricante, congeladas por línea.
+   */
+  isCustomModification?: boolean;
+  fabricationNote?: string | null;
+  fabricationRefImages?: string[];
   /** Foto principal vigente del producto (tabla product_images); null si no tiene. No es congelada. */
   imageUrl?: string | null;
   /** Slug vigente del producto, para abrir su ficha pública (/producto/:slug). */
@@ -350,13 +358,13 @@ export interface Order {
   assemblyFloors?: number;
   /** Costo del armado cobrado en el pedido (snapshot de la tarifa vigente). */
   assemblyCost?: number;
-  /** Especificaciones para quien surte o almacena el producto terminado. */
-  notasFabricante?: string | null;
   /**
-   * Fotos de referencia del mueble a fabricar (rutas relativas a
-   * `uploads/order-refs/`). Solo se conservan si el pedido lleva
-   * `notasFabricante` y no es "recoge en tienda". Máximo 5.
+   * DEPRECADO (Docs/plan-fabricacion-y-notas-por-linea.md): la instrucción y
+   * las fotos del fabricante pasaron a cada línea (`OrderItem.fabricationNote`
+   * / `fabricationRefImages`). Estos campos solo llegan con valor en pedidos
+   * históricos.
    */
+  notasFabricante?: string | null;
   notasFabricanteImagenes?: string[];
   /** Notas del pedido; se imprimen en el ticket del cliente. */
   notasPedido?: string | null;
@@ -451,13 +459,6 @@ export interface CreateOrderRequest {
   /** El servidor calcula el costo del armado con las tarifas vigentes; solo se envía flag + pisos. */
   assemblyService?: boolean;
   assemblyFloors?: number;
-  notasFabricante?: string | null;
-  /**
-   * Rutas relativas de las fotos de referencia ya subidas
-   * (`POST /seller/orders/manufacturer-ref-images`). Máximo 5; el backend las
-   * descarta si el pedido queda sin `notasFabricante` o es "recoge en tienda".
-   */
-  notasFabricanteImagenes?: string[] | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
   /**
@@ -507,6 +508,16 @@ export interface CreateOrderRequest {
     } | null;
     /** Docs/plan-descuentos.md: regala esta línea (precio $0, sigue descontando stock). */
     gift?: boolean;
+    /**
+     * Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó esta línea
+     * como "lleva modificación". Objeto presente (aunque vacío) = se fabrica
+     * sobre pedido; `note` e `images` (rutas ya subidas, máx. 5) lo ilustran.
+     * `null`/ausente = línea normal.
+     */
+    modification?: {
+      note?: string | null;
+      images?: string[];
+    } | null;
   }>;
 }
 
@@ -609,7 +620,6 @@ export interface DeliveryAssignment {
   assemblyService?: boolean;
   assemblyFloors?: number;
   assemblyCost?: number;
-  notasFabricante?: string | null;
   notasPedido?: string | null;
   instruccionesEntrega?: string | null;
   /**
@@ -629,6 +639,12 @@ export interface DeliveryAssignment {
     materialLabel?: string | null;
     sizeLabel?: string | null;
     color?: string | null;
+    /**
+     * Docs/plan-fabricacion-y-notas-por-linea.md: si el mueble se fabricó con
+     * una modificación, el repartidor la revisa contra esta nota.
+     */
+    isCustomModification?: boolean;
+    fabricationNote?: string | null;
     /** Foto principal vigente del producto (ruta relativa, resolver con `mediaUrl`). */
     imageUrl?: string | null;
   }>;
@@ -689,9 +705,6 @@ export interface ManufacturerOrder {
   /** Fecha en la que el fabricante debe entregar el pedido a la tienda/bodega. */
   manufacturer_due_date: string | null;
   created_at: string;
-  notas_fabricante?: string | null;
-  /** Fotos de referencia del mueble a fabricar (rutas relativas). */
-  notas_fabricante_imagenes?: string[];
   /**
    * Docs/plan-fabricante-notificaciones-y-aceptacion.md — aceptación de ESTE
    * fabricante sobre el pedido. `pending` = hay que revisarlo y aceptarlo.
@@ -708,7 +721,13 @@ export interface ManufacturerOrder {
     quantity: number;
     isReady: boolean;
     readyQuantity?: number;
+    /**
+     * Docs/plan-fabricacion-y-notas-por-linea.md: la instrucción y las fotos
+     * del fabricante ahora son por línea.
+     */
+    isCustomModification?: boolean;
     fabricationNote?: string | null;
+    fabricationRefImages?: string[];
     materialId?: number | null;
     materialLabel?: string | null;
     sizeId?: number | null;

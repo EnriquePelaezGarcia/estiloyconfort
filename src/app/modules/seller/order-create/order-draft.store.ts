@@ -63,6 +63,12 @@ export interface CartLine {
    * D5: captura discreta, solo se ve si el vendedor la busca.
    */
   extraCharges?: { label: string; amount: number }[];
+  /**
+   * Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó ESTA línea
+   * como "lleva modificación". Presente (aunque `note` vacío y `images` sin
+   * fotos) = se fabrica sobre pedido. `null` = línea normal.
+   */
+  modification?: { note: string; images: string[] } | null;
 }
 
 /**
@@ -185,6 +191,9 @@ export class OrderDraftStore {
    * otro pedido ya no cuenta como disponible para uno nuevo.
    */
   lineRequiresFabrication(line: CartLine): boolean {
+    // Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó esta línea
+    // como modificación → se fabrica sobre pedido aunque haya stock.
+    if (line.modification) return true;
     const mp = this.lineMaterialPrice(line);
     if (!mp || availableOf(mp) <= 0) return true;
     // A2 (Docs/plan-stock-por-color.md): hay piezas, pero de otro color.
@@ -394,15 +403,14 @@ export class OrderDraftStore {
   );
 
   /**
-   * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-FAB1 — el pedido
-   * "tiene fabricación" (dispara el estimado de ~15 días y el anticipo) si hay
-   * líneas sobre pedido/agotadas, o algún cargo extra por modificación, o notas
-   * para el fabricante. Espejo de `orderHasFabrication()` del backend.
+   * Docs/plan-anticipo-fabricacion-por-modificacion.md RN-FAB1 +
+   * Docs/plan-fabricacion-y-notas-por-linea.md — el pedido "tiene fabricación"
+   * (dispara el estimado de ~15 días y el anticipo) si hay líneas sobre
+   * pedido/agotadas, marcadas como modificación, o algún cargo extra. Espejo
+   * de `orderHasFabrication()` del backend.
    */
   readonly orderHasFabrication = computed(
-    () => this.hasFabricationLines()
-      || this.extraChargesCount() > 0
-      || (this.notasFabricanteSig() ?? '').trim().length > 0,
+    () => this.hasFabricationLines() || this.extraChargesCount() > 0,
   );
   /**
    * Total de los productos ya con el tratamiento del esquema: en Crédito
@@ -449,7 +457,6 @@ export class OrderDraftStore {
     deliverySlotChoice: [''],
     deliveryWindowStart: [''],
     deliveryWindowEnd: [''],
-    notasFabricante: [''],
     notasPedido: [''],
     instruccionesEntrega: [''],
     deliveryPersonId: [null as number | null],
@@ -469,27 +476,16 @@ export class OrderDraftStore {
   private expectedDeliveryDateSig = toSignal(this.form.controls.expectedDeliveryDate.valueChanges, {
     initialValue: this.form.controls.expectedDeliveryDate.value,
   });
-  /** Notas para el fabricante — RN-FAB1: si trae texto, el pedido "tiene fabricación". */
-  private notasFabricanteSig = toSignal(this.form.controls.notasFabricante.valueChanges, {
-    initialValue: this.form.controls.notasFabricante.value,
-  });
 
-  // ===== Imágenes de referencia para el fabricante =====
-  // (Docs/plan-imagen-referencia-fabricante) Hasta 5 fotos del mueble a fabricar
-  // cuando hay una modificación. Se suben una a una al subirlas; aquí solo se
-  // guardan sus rutas relativas, que viajan en el payload al crear/editar.
+  // ===== Modificación por línea (Docs/plan-fabricacion-y-notas-por-linea.md) =====
+  // El vendedor marca en el carrito qué mueble "lleva modificación": esa línea
+  // se fabrica sobre pedido y lleva su propia instrucción + hasta 5 fotos de
+  // referencia para el fabricante. Las fotos se suben una a una; aquí solo
+  // viajan sus rutas relativas dentro de `line.modification.images`.
   static readonly MAX_REF_IMAGES = 5;
   readonly maxRefImages = OrderDraftStore.MAX_REF_IMAGES;
-  readonly notasFabricanteImagenes = signal<string[]>([]);
-  readonly uploadingRefImage = signal(false);
-  /** El bloque solo se muestra si "Notas para el Fabricante" tiene texto. */
-  readonly hasManufacturerNotes = computed(
-    () => (this.notasFabricanteSig() ?? '').trim().length > 0,
-  );
-  readonly canAddRefImage = computed(
-    () => this.notasFabricanteImagenes().length < OrderDraftStore.MAX_REF_IMAGES
-      && !this.uploadingRefImage(),
-  );
+  /** Índice de la línea cuya foto se está subiendo (-1 = ninguna). */
+  readonly uploadingModificationLine = signal(-1);
 
   /**
    * Docs/plan-aprobaciones-admin.md §11.3 — aviso NO bloqueante: cuántas
@@ -524,9 +520,6 @@ export class OrderDraftStore {
   readonly deliveryPeople = signal<DeliveryPerson[]>([]);
   /** Repartidor ya asignado al entrar en modo edición, para no re-asignar sin cambios. */
   private initialDeliveryPersonId: number | null = null;
-
-  /** ¿Las notas para el fabricante ya tenían texto? (para detectar la transición vacío→texto). */
-  private notasFabricanteHadText = false;
 
   /** Tarifas vigentes del servicio de armado (el servidor recalcula al guardar). */
   readonly assemblyRates = signal<AssemblyRates | null>(null);
@@ -931,23 +924,6 @@ export class OrderDraftStore {
       .pipe(takeUntilDestroyed())
       .subscribe((pickup) => this.applyPickupMode(!!pickup));
 
-    // RN-FAB1/RN-FAB3: escribir notas para el fabricante vuelve el pedido
-    // "sobre pedido" — reprograma la entrega a ~15 días. Solo en la transición
-    // vacío→con-texto y con carrito ya armado (evita dispararse en la carga).
-    this.form.controls.notasFabricante.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe((v) => {
-        const nowHasText = (v ?? '').trim().length > 0;
-        if (nowHasText === this.notasFabricanteHadText || !this.lines().length) {
-          this.notasFabricanteHadText = nowHasText;
-          return;
-        }
-        this.notasFabricanteHadText = nowHasText;
-        this.syncFabricationDeliverySchedule(
-          this.hasFabricationLines() || this.extraChargesCount() > 0,
-        );
-      });
-
     // El anticipo arranca en el mínimo ($500) para que el vendedor solo lo suba
     // si el cliente deja más. Al dejar de aplicar (cambio de esquema, se quita
     // la fabricación, o modo edición) se limpia.
@@ -1136,13 +1112,11 @@ export class OrderDraftStore {
           deliveryWindowEnd: data.deliveryWindowEnd
             ? String(data.deliveryWindowEnd).slice(0, 5)
             : '',
-          notasFabricante: data.notasFabricante ?? '',
           notasPedido: data.notasPedido ?? '',
           instruccionesEntrega: data.instruccionesEntrega ?? '',
           deliveryPersonId: data.deliveryPersonId ?? null,
         });
         this.initialDeliveryPersonId = data.deliveryPersonId ?? null;
-        this.notasFabricanteImagenes.set(data.notasFabricanteImagenes ?? []);
         // Docs/plan-descuentos.md: descuentos ya guardados de este pedido —
         // el de dinero (si sigue activo) bloquea la captura; los de producto
         // se usan abajo para marcar sus líneas como regaladas.
@@ -1217,6 +1191,15 @@ export class OrderDraftStore {
               : null,
             gift: giftedItemIds.has(it.id ?? -1),
             extraCharges: extraChargesByItemId.get(it.id ?? -1) ?? [],
+            // Docs/plan-fabricacion-y-notas-por-linea.md: reconstruye la
+            // modificación marcada para que el check y su nota/fotos
+            // sobrevivan la edición.
+            modification: it.isCustomModification
+              ? {
+                  note: it.fabricationNote ?? '',
+                  images: it.fabricationRefImages ?? [],
+                }
+              : null,
           })),
         );
       },
@@ -1781,15 +1764,8 @@ export class OrderDraftStore {
       // El servidor calcula el costo del armado con las tarifas vigentes.
       assemblyService: !pickup && !!raw.assemblyService,
       assemblyFloors: pickup ? 0 : this.assemblyFloorsValue(),
-      // En pickup estos campos no se muestran (no hay fabricante que instruir
-      // ni repartidor que navegue): se mandan vacíos para que un pedido que
-      // venía de domicilio no conserve notas que ya nadie puede ver ni editar.
-      notasFabricante: pickup ? null : raw.notasFabricante?.trim() || null,
-      // Las fotos de referencia solo tienen sentido con una nota (una
-      // modificación que ilustrar); sin nota o en pickup se descartan, igual
-      // que el backend.
-      notasFabricanteImagenes:
-        pickup || !raw.notasFabricante?.trim() ? [] : this.notasFabricanteImagenes(),
+      // Docs/plan-fabricacion-y-notas-por-linea.md: las notas del fabricante ya
+      // no son de pedido — van por línea en `items[].modification`.
       notasPedido: pickup ? null : raw.notasPedido?.trim() || null,
       instruccionesEntrega: pickup ? null : raw.instruccionesEntrega?.trim() || null,
       googleMapsUrl: pickup ? null : raw.googleMapsUrl || null,
@@ -1836,6 +1812,12 @@ export class OrderDraftStore {
           : null,
         // Docs/plan-descuentos.md: regala esta línea (precio $0).
         gift: !!l.gift,
+        // Docs/plan-fabricacion-y-notas-por-linea.md: si el vendedor marcó
+        // "lleva modificación" se manda el bloque (aunque sin nota ni fotos);
+        // en pickup no aplica — nadie fabrica lo que se llevan hoy.
+        modification: l.modification && !pickup
+          ? { note: l.modification.note.trim() || null, images: l.modification.images }
+          : null,
       })),
     };
 
@@ -1865,47 +1847,76 @@ export class OrderDraftStore {
 
   private pendingPayload: CreateOrderRequest | null = null;
 
-  // ===== Imágenes de referencia para el fabricante =====
+  // ===== Modificación por línea (Docs/plan-fabricacion-y-notas-por-linea.md) =====
+
+  /** Marca / desmarca "lleva modificación" en la línea; reprograma la entrega. */
+  toggleModification(index: number, on: boolean): void {
+    const wasFabricationRequired = this.orderHasFabrication();
+    this.lines.update((lines) =>
+      lines.map((l, i) => {
+        if (i !== index) return l;
+        return { ...l, modification: on ? { note: l.modification?.note ?? '', images: l.modification?.images ?? [] } : null };
+      }),
+    );
+    this.syncFabricationDeliverySchedule(wasFabricationRequired);
+  }
+
+  setModificationNote(index: number, note: string): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index && l.modification
+        ? { ...l, modification: { ...l.modification, note } }
+        : l)),
+    );
+  }
 
   /**
-   * Sube las imágenes elegidas (una a una) y guarda sus rutas. Ignora lo que
-   * pase de 5, avisa de los formatos no soportados y convierte HEIC/HEIF antes
-   * de subir. El `<input>` se limpia en el componente.
+   * Sube las fotos elegidas para la línea `index` (una a una). Ignora lo que
+   * pase de 5, avisa de formatos no soportados y convierte HEIC/HEIF antes de
+   * subir. El `<input>` se limpia en el componente.
    */
-  async addRefImages(files: FileList | File[]): Promise<void> {
+  async addModificationImages(index: number, files: FileList | File[]): Promise<void> {
+    const line = this.lines()[index];
+    if (!line?.modification) return;
     const picked = Array.from(files);
     if (!picked.length) return;
 
-    const room = OrderDraftStore.MAX_REF_IMAGES - this.notasFabricanteImagenes().length;
+    const room = OrderDraftStore.MAX_REF_IMAGES - line.modification.images.length;
     if (room <= 0) {
-      this.notification.info(`Solo se permiten ${OrderDraftStore.MAX_REF_IMAGES} imágenes de referencia.`);
+      this.notification.info(`Solo se permiten ${OrderDraftStore.MAX_REF_IMAGES} imágenes por mueble.`);
       return;
     }
-    const unsupported = picked.filter((f) => !isSupportedImageFile(f));
-    if (unsupported.length) {
+    if (picked.some((f) => !isSupportedImageFile(f))) {
       this.notification.error('Solo se aceptan imágenes. Se omitieron los demás archivos.');
     }
     const queue = picked.filter((f) => isSupportedImageFile(f)).slice(0, room);
     if (!queue.length) return;
 
-    this.uploadingRefImage.set(true);
+    this.uploadingModificationLine.set(index);
     try {
       for (const file of queue) {
         try {
           const uploadable = await toUploadableImage(file);
           const res = await firstValueFrom(this.sellerService.uploadManufacturerRefImage(uploadable));
-          this.notasFabricanteImagenes.update((list) => [...list, res.data.url]);
+          this.lines.update((lines) =>
+            lines.map((l, i) => (i === index && l.modification
+              ? { ...l, modification: { ...l.modification, images: [...l.modification.images, res.data.url] } }
+              : l)),
+          );
         } catch {
           this.notification.error(`No se pudo subir "${file.name}".`);
         }
       }
     } finally {
-      this.uploadingRefImage.set(false);
+      this.uploadingModificationLine.set(-1);
     }
   }
 
-  removeRefImage(url: string): void {
-    this.notasFabricanteImagenes.update((list) => list.filter((u) => u !== url));
+  removeModificationImage(index: number, url: string): void {
+    this.lines.update((lines) =>
+      lines.map((l, i) => (i === index && l.modification
+        ? { ...l, modification: { ...l.modification, images: l.modification.images.filter((u) => u !== url) } }
+        : l)),
+    );
   }
 
   /**

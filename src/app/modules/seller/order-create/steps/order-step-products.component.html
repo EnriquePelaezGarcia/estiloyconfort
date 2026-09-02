@@ -223,6 +223,64 @@
                 </div>
               }
             }
+
+            <!-- Docs/plan-fabricacion-y-notas-por-linea.md: marcar este mueble
+                 como modificación lo manda a fabricación sobre pedido con su
+                 propia instrucción + fotos para el fabricante. -->
+            <label class="cart-line__mod-toggle">
+              <input
+                type="checkbox"
+                [checked]="!!l.modification"
+                [disabled]="!store.canEditLine(l)"
+                (change)="store.toggleModification(i, $any($event.target).checked)"
+              />
+              Este mueble lleva modificación (se fabrica sobre pedido)
+            </label>
+            @if (l.modification; as mod) {
+              <div class="cart-line__mod-form">
+                <textarea
+                  class="cart-line__mod-note"
+                  rows="2"
+                  placeholder="Instrucción para el fabricante: color, medidas, sin llantas…"
+                  [value]="mod.note"
+                  (input)="store.setModificationNote(i, $any($event.target).value)"
+                ></textarea>
+                <div class="cart-line__mod-images">
+                  <label
+                    class="cart-line__mod-add"
+                    [class.cart-line__mod-add--disabled]="mod.images.length >= store.maxRefImages || store.uploadingModificationLine() === i"
+                  >
+                    <span class="material-symbols-outlined">add_photo_alternate</span>
+                    {{ store.uploadingModificationLine() === i ? 'Subiendo…' : 'Agregar foto' }}
+                    <input
+                      type="file"
+                      accept="image/*,.heic,.heif"
+                      multiple
+                      hidden
+                      [disabled]="mod.images.length >= store.maxRefImages || store.uploadingModificationLine() === i"
+                      (change)="onModificationImagesPicked(i, $event)"
+                    />
+                  </label>
+                  @if (mod.images.length) {
+                    <ul class="cart-line__mod-grid">
+                      @for (img of mod.images; track img) {
+                        <li class="cart-line__mod-thumb">
+                          <img [src]="img | mediaUrl:'thumb'" alt="Foto de referencia del mueble" width="48" height="48" />
+                          <button
+                            type="button"
+                            aria-label="Quitar foto"
+                            (click)="store.removeModificationImage(i, img)"
+                          >
+                            <span class="material-symbols-outlined">close</span>
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  <span class="cart-line__mod-hint">Hasta {{ store.maxRefImages }} fotos (opcional).</span>
+                </div>
+              </div>
+            }
           </div>
           <div class="qty">
             <button type="button" class="icon-btn" [disabled]="!store.canEditLine(l)" (click)="store.changeQty(i, -1)" aria-label="Quitar uno">

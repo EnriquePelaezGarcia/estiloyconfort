@@ -317,61 +317,15 @@
     </div>
 
     <!--
-      Recoge en tienda: no hay fabricante al que instruir ni repartidor que lea
-      notas, y el cliente se lleva el mueble revisado en el momento.
+      Las instrucciones para el fabricante son POR MUEBLE
+      (Docs/plan-fabricacion-y-notas-por-linea.md): se capturan en el carrito,
+      marcando la línea como "lleva modificación". Aquí solo quedan las notas
+      del pedido, que se imprimen en el ticket.
+      Recoge en tienda: el cliente se lleva el mueble revisado en el momento.
     -->
     @if (!store.isPickup()) {
     <div class="panel">
       <h2 class="panel__title">Notas</h2>
-      <div class="field">
-        <label for="notasFabricante">Notas para el Fabricante</label>
-        <textarea
-          id="notasFabricante"
-          formControlName="notasFabricante"
-          placeholder="Ej. Solicitar repuestos de herrajes, detalles de empaque especial..."
-        ></textarea>
-
-        @if (store.hasManufacturerNotes()) {
-          <div class="ref-images">
-            <div class="ref-images__head">
-              <span class="ref-images__hint">
-                Imágenes de referencia del mueble (opcional). Útil cuando hay una modificación.
-                Hasta {{ store.maxRefImages }}.
-              </span>
-              <label class="ref-images__add" [class.ref-images__add--disabled]="!store.canAddRefImage()">
-                <span class="material-symbols-outlined">add_photo_alternate</span>
-                {{ store.uploadingRefImage() ? 'Subiendo…' : 'Agregar imagen' }}
-                <input
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  multiple
-                  hidden
-                  [disabled]="!store.canAddRefImage()"
-                  (change)="onRefImagesPicked($event)"
-                />
-              </label>
-            </div>
-
-            @if (store.notasFabricanteImagenes().length) {
-              <ul class="ref-images__grid">
-                @for (img of store.notasFabricanteImagenes(); track img) {
-                  <li class="ref-images__item">
-                    <img [src]="img | mediaUrl:'thumb'" alt="Imagen de referencia para el fabricante" />
-                    <button
-                      type="button"
-                      class="ref-images__remove"
-                      aria-label="Quitar imagen"
-                      (click)="store.removeRefImage(img)"
-                    >
-                      <span class="material-symbols-outlined">close</span>
-                    </button>
-                  </li>
-                }
-              </ul>
-            }
-          </div>
-        }
-      </div>
       <div class="field">
         <label for="notasPedido">Notas del Pedido</label>
         <textarea

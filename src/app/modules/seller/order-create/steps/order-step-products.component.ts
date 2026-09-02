@@ -17,4 +17,11 @@ import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 })
 export class OrderStepProductsComponent {
   protected store = inject(OrderDraftStore);
+
+  /** `<input type="file">` de las fotos de referencia de la línea `index`. */
+  protected onModificationImagesPicked(index: number, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files?.length) void this.store.addModificationImages(index, input.files);
+    input.value = '';
+  }
 }

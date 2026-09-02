@@ -140,8 +140,13 @@ export interface FactoryOrderItemRow {
   warehouseNote: string | null;
   warehouseReceivedByName: string | null;
   warehouseReceivedAt: string | null;
-  /** Descripción de la modificación a la medida de esta línea. */
+  /**
+   * Docs/plan-fabricacion-y-notas-por-linea.md: el vendedor marcó esta línea
+   * como modificación + su instrucción y fotos de referencia para el fabricante.
+   */
+  isCustomModification: boolean;
   fabricationNote: string | null;
+  fabricationRefImages: string[];
   /** Quién marcó listo el item: distingue "el fabricante reportó" de "el admin lo recibió". */
   readyByName: string | null;
   readyAt: string | null;
