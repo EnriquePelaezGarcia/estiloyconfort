@@ -3350,3 +3350,5 @@ const Order = {
 };
 
 module.exports = Order;
+// Funciones puras expuestas para pruebas unitarias sin BD (test/orderFabrication.test.js).
+module.exports._internals = { orderHasFabrication, normalizeLineModification };

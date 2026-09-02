@@ -1,7 +1,10 @@
 /**
  * Normalización de las imágenes de referencia para el fabricante
- * (Docs/plan-imagen-referencia-fabricante). Funciones puras, sin base de datos,
- * igual que pricing.test.js. Ejecutar: npm test
+ * (Docs/plan-imagen-referencia-fabricante + Docs/plan-fabricacion-y-notas-por-linea).
+ * Funciones puras, sin base de datos, igual que pricing.test.js. Ejecutar: npm test
+ *
+ * Nueva firma: normalize(raw, { keep }) — `keep` lo decide el caller
+ * (línea marcada como modificación y no pickup).
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,51 +14,35 @@ const A = '/uploads/order-refs/1700000000000-abc.webp';
 const B = '/uploads/order-refs/1700000000001-def.webp';
 
 test('undefined = "no se mandó" → conserva lo que había', () => {
-  assert.equal(
-    refImages.normalize(undefined, { notasFabricante: 'cambiar patas', pickupInStore: false }),
-    undefined,
-  );
+  assert.equal(refImages.normalize(undefined, { keep: true }), undefined);
 });
 
-test('sin notas para el fabricante se descartan', () => {
-  assert.equal(
-    refImages.normalize([A], { notasFabricante: '   ', pickupInStore: false }),
-    null,
-  );
+test('keep=false (línea no es modificación) → se descartan', () => {
+  assert.equal(refImages.normalize([A], { keep: false }), null);
 });
 
-test('recoge en tienda se descartan', () => {
+test('keep=true se guardan como JSON, sin duplicados', () => {
   assert.equal(
-    refImages.normalize([A], { notasFabricante: 'nota', pickupInStore: true }),
-    null,
-  );
-});
-
-test('con notas se guardan como JSON, sin duplicados', () => {
-  assert.equal(
-    refImages.normalize([A, A, B], { notasFabricante: 'nota', pickupInStore: false }),
+    refImages.normalize([A, A, B], { keep: true }),
     JSON.stringify([A, B]),
   );
 });
 
 test('lista vacía → null', () => {
-  assert.equal(
-    refImages.normalize([], { notasFabricante: 'nota', pickupInStore: false }),
-    null,
-  );
+  assert.equal(refImages.normalize([], { keep: true }), null);
 });
 
 test('más de 5 imágenes es 400', () => {
   const many = Array.from({ length: 6 }, (_, i) => `/uploads/order-refs/x${i}.webp`);
   assert.throws(
-    () => refImages.normalize(many, { notasFabricante: 'nota', pickupInStore: false }),
+    () => refImages.normalize(many, { keep: true }),
     (err) => err.statusCode === 400,
   );
 });
 
 test('una ruta fuera de order-refs es 400', () => {
   assert.throws(
-    () => refImages.normalize(['/uploads/products/hack.webp'], { notasFabricante: 'nota', pickupInStore: false }),
+    () => refImages.normalize(['/uploads/products/hack.webp'], { keep: true }),
     (err) => err.statusCode === 400,
   );
 });
