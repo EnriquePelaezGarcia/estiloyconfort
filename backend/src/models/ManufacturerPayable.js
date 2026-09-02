@@ -284,12 +284,21 @@ const ManufacturerPayable = {
       }))
       .sort((a, b) => b.balance - a.balance);
 
+    // Auditoría contable sep-2026 (h10): `owed` es la deuda real (saldos
+    // positivos) y `advances` los anticipos a favor (saldos negativos, como
+    // positivo). Antes solo se exponía el neto, donde un anticipo grande a un
+    // fabricante escondía la deuda con otro.
+    const owed = round(list.reduce((s, e) => s + Math.max(0, e.balance), 0));
+    const advances = round(list.reduce((s, e) => s + Math.max(0, -e.balance), 0));
+
     return {
       data: list,
       total: {
         amount: round(list.reduce((s, e) => s + e.amount, 0)),
         paid: round(list.reduce((s, e) => s + e.paid, 0)),
         balance: round(list.reduce((s, e) => s + e.balance, 0)),
+        owed,
+        advances,
       },
     };
   },

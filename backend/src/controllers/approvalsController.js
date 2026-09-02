@@ -2,6 +2,7 @@ const { pool } = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
+const Refund = require('../models/Refund');
 
 /**
  * Módulo "Aprobaciones" (Docs/plan-aprobaciones-admin.md) — agrega en un solo
@@ -220,22 +221,51 @@ async function fetchQuoteShipping(statuses) {
   }));
 }
 
+/** Reembolsos a clientes (h1) — solo aplican a pedidos, no a cotizaciones. */
+async function fetchOrderRefunds(statuses) {
+  const rows = await Refund.findByStatus(statuses);
+  return rows.map((r) => ({
+    id: `orf-${r.id}`,
+    rawId: r.id,
+    kind: 'order',
+    documentId: r.orderId,
+    type: 'refund',
+    documentLabel: r.orderNumber,
+    customerName: r.customerName,
+    amount: r.amount,
+    originalAmount: null,
+    label: r.reason ? `Reembolso · ${r.reason}` : 'Reembolso al cliente',
+    requestedByName: r.requestedByName ?? r.requestedByRole,
+    requestedAt: r.createdAt,
+    status: r.status,
+    reviewedByName: r.reviewedByName ?? null,
+    reviewedAt: r.reviewedAt ?? null,
+    reviewNote: r.reviewNote ?? null,
+  }));
+}
+
 // GET /api/admin/approvals?status=pending|reviewed&limit=&offset=
 const getApprovals = asyncHandler(async (req, res) => {
   const isPending = req.query.status !== 'reviewed';
   const statuses = isPending ? ['pending'] : ['approved', 'rejected'];
 
-  const [orderDiscounts, quoteDiscounts, orderCharges, quoteCharges, orderShipping, quoteShipping] =
-    await Promise.all([
-      fetchOrderDiscounts(statuses),
-      fetchQuoteDiscounts(statuses),
-      fetchOrderExtraCharges(statuses),
-      fetchQuoteExtraCharges(statuses),
-      fetchOrderShipping(statuses),
-      fetchQuoteShipping(statuses),
-    ]);
+  const [
+    orderDiscounts, quoteDiscounts, orderCharges, quoteCharges,
+    orderShipping, quoteShipping, orderRefunds,
+  ] = await Promise.all([
+    fetchOrderDiscounts(statuses),
+    fetchQuoteDiscounts(statuses),
+    fetchOrderExtraCharges(statuses),
+    fetchQuoteExtraCharges(statuses),
+    fetchOrderShipping(statuses),
+    fetchQuoteShipping(statuses),
+    fetchOrderRefunds(statuses),
+  ]);
 
-  let all = [...orderDiscounts, ...quoteDiscounts, ...orderCharges, ...quoteCharges, ...orderShipping, ...quoteShipping];
+  let all = [
+    ...orderDiscounts, ...quoteDiscounts, ...orderCharges, ...quoteCharges,
+    ...orderShipping, ...quoteShipping, ...orderRefunds,
+  ];
 
   if (isPending) {
     // Bandeja de trabajo: más antiguo primero (lo que lleva más tiempo esperando).
@@ -255,17 +285,19 @@ const getApprovals = asyncHandler(async (req, res) => {
 // Aparte de /admin/discounts/pending-count (que no se toca, D6 del plan) para
 // no arriesgar el badge que ya está en producción.
 const getApprovalsPendingCount = asyncHandler(async (req, res) => {
-  const [discounts, extraCharges, [[orderShipping]], [[quoteShipping]]] = await Promise.all([
+  const [discounts, extraCharges, [[orderShipping]], [[quoteShipping]], refunds] = await Promise.all([
     discountEngine.countPending(),
     extraChargeEngine.countPending(),
     pool.query(`SELECT COUNT(*) AS n FROM orders WHERE shipping_cost_status = 'pending'`),
     pool.query(`SELECT COUNT(*) AS n FROM quotes WHERE shipping_cost_status = 'pending'`),
+    Refund.countPending(),
   ]);
   const shipping = { orders: Number(orderShipping.n), quotes: Number(quoteShipping.n) };
   const total = discounts.orders + discounts.quotes
     + extraCharges.orders + extraCharges.quotes
-    + shipping.orders + shipping.quotes;
-  res.json({ data: { discounts, extraCharges, shipping, total } });
+    + shipping.orders + shipping.quotes
+    + refunds;
+  res.json({ data: { discounts, extraCharges, shipping, refunds, total } });
 });
 
 module.exports = { getApprovals, getApprovalsPendingCount };

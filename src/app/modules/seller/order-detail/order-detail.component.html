@@ -420,6 +420,12 @@
           <span class="material-symbols-outlined">print</span> Reimprimir último abono
         </button>
       }
+      @if (netPaid() > 0) {
+        <button type="button" class="btn btn--ghost btn--block no-print" (click)="openRefundModal()">
+          <span class="material-symbols-outlined">undo</span>
+          {{ isAdmin ? 'Registrar reembolso' : 'Solicitar reembolso' }}
+        </button>
+      }
     </div>
 
     <!-- Info -->
@@ -528,6 +534,34 @@
               </span>
               <span class="strong">{{ p.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
             </li>
+          }
+        </ul>
+      }
+
+      @if (refunds().length) {
+        <h3 class="info-subtitle">Reembolsos</h3>
+        <ul class="payments">
+          @for (r of refunds(); track r.id) {
+            <li>
+              <span>
+                {{ r.refundDate | date:'dd/MM/yyyy' }} · {{ methodLabel(r.method) }}
+                @if (r.reason) { <span class="payments__collector">{{ r.reason }}</span> }
+                <span class="payments__collector">
+                  @switch (r.status) {
+                    @case ('pending') { Pendiente de aprobación · pidió {{ r.requestedByName }} }
+                    @case ('approved') { Aprobado por {{ r.reviewedByName }} }
+                    @case ('rejected') { Rechazado{{ r.reviewNote ? ': ' + r.reviewNote : '' }} }
+                  }
+                </span>
+              </span>
+              <span class="strong">&minus;{{ r.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            </li>
+            @if (isAdmin && r.status === 'pending') {
+              <li class="no-print">
+                <button type="button" class="btn btn--success btn--sm" (click)="approveRefund(r.id)">Aprobar</button>
+                <button type="button" class="btn btn--ghost btn--sm" (click)="rejectRefund(r.id, '')">Rechazar</button>
+              </li>
+            }
           }
         </ul>
       }
@@ -846,6 +880,59 @@
           (added)="applyExtraCharge($event)"
           (cancelled)="extraChargeItemTarget.set(null)"
         />
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: solicitar / registrar reembolso (h1) — vendedor o admin ===== -->
+@if (refundModalOpen()) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">{{ isAdmin ? 'Registrar reembolso' : 'Solicitar reembolso' }}</h2>
+        <p class="muted">
+          Cobrado en este pedido: <strong>{{ netPaid() | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>.
+          @if (!isAdmin) { La solicitud la tiene que aprobar un administrador. }
+          El movimiento del dinero es manual.
+        </p>
+        <div class="field">
+          <label for="refundAmount">Monto a devolver</label>
+          <input
+            id="refundAmount"
+            type="number"
+            min="0"
+            [value]="refundAmount() ?? ''"
+            (input)="refundAmount.set($any($event.target).valueAsNumber)"
+          />
+        </div>
+        <div class="field">
+          <label for="refundMethod">Método</label>
+          <select id="refundMethod" [value]="refundMethod()" (change)="refundMethod.set($any($event.target).value)">
+            <option value="cash">Efectivo</option>
+            <option value="transfer">Transferencia</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="refundReason">Motivo (opcional)</label>
+          <textarea
+            id="refundReason"
+            [value]="refundReason()"
+            (input)="refundReason.set($any($event.target).value)"
+            placeholder="Devolución del mueble, cambio de producto, etc."
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="refundModalOpen.set(false)">Cancelar</button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            [disabled]="requestingRefund()"
+            (click)="submitRefund()"
+          >
+            {{ isAdmin ? 'Registrar' : 'Enviar solicitud' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>

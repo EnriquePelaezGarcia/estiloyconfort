@@ -1,7 +1,11 @@
 const { pool } = require('../config/database');
 const Expense = require('./Expense');
+const ExpenseCategory = require('./ExpenseCategory');
 const ManufacturerPayable = require('./ManufacturerPayable');
 const DeliveryCommission = require('./DeliveryCommission');
+const PricingConfig = require('./PricingConfig');
+
+const { TAX_CATEGORY } = ExpenseCategory;
 
 /**
  * Estado de resultados en BASE FLUJO DE EFECTIVO.
@@ -64,25 +68,31 @@ const ProfitLoss = {
     // Las comisiones de repartidor salen como renglón PROPIO: son de los
     // costos más grandes del mes y verlas revueltas con la gasolina no dice
     // nada. Se excluyen del total de variables para no contarlas dos veces.
+    // Auditoría contable sep-2026 (h9): los IMPUESTOS pagados al SAT (IVA + ISR)
+    // salen como renglón PROPIO — igual que las comisiones — y se excluyen del
+    // total de variables/fijos para no contarlos dos veces. El admin los captura
+    // en la categoría "Impuestos (IVA e ISR)" cuando el contador le dice cuánto.
     const commissionCategoryId = await DeliveryCommission.getCommissionCategoryId();
-    const [totals, commissions, byCategory] = await Promise.all([
-      Expense.totals({
-        from,
-        to,
-        excludeCategoryIds: commissionCategoryId ? [commissionCategoryId] : [],
-      }),
+    const taxCat = await ExpenseCategory.findByName(TAX_CATEGORY);
+    const taxCategoryId = taxCat?.id ?? null;
+    const excludeIds = [commissionCategoryId, taxCategoryId].filter(Boolean);
+
+    const [totals, commissions, taxes, byCategory] = await Promise.all([
+      Expense.totals({ from, to, excludeCategoryIds: excludeIds }),
       Expense.totalForCategory(commissionCategoryId, { from, to }),
+      Expense.totalForCategory(taxCategoryId, { from, to }),
       Expense.byCategory({ from, to, status: 'paid', dateBasis: 'paid' }),
     ]);
 
     const variableExpenses = round2(totals.variable);
     const fixedExpenses = round2(totals.fixed);
     const commissionsPaid = round2(commissions);
+    const taxesPaid = round2(taxes);
     const manufacturersTotal = round2(Number(manufacturersPaid.total));
 
     const totalIncome = round2(Number(income.total));
     const totalExpenses = round2(
-      manufacturersTotal + commissionsPaid + variableExpenses + fixedExpenses,
+      manufacturersTotal + commissionsPaid + taxesPaid + variableExpenses + fixedExpenses,
     );
     const netProfit = round2(totalIncome - totalExpenses);
     const margin = totalIncome > 0 ? round2((netProfit / totalIncome) * 100) : 0;
@@ -95,6 +105,12 @@ const ProfitLoss = {
          FROM orders WHERE order_status <> 'cancelled' AND payment_status <> 'paid'`,
     );
     const payableSummary = await ManufacturerPayable.summaryByManufacturer();
+    // h9: IVA embebido en lo cobrado (informativo, para cruzar con el contador).
+    // El precio de venta se arma CON IVA, así que el ingreso de caja lo trae
+    // dentro: iva = cobrado − cobrado / (1 + tasa).
+    const config = await PricingConfig.getMap();
+    const ivaRate = Number(config.iva) / 100 || 0;
+    const ivaInIncome = ivaRate > 0 ? round2(totalIncome - totalIncome / (1 + ivaRate)) : 0;
     const [[pendingCommissions]] = await pool.execute(
       `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
         WHERE category_id = ? AND status = 'pending'`,
@@ -120,6 +136,7 @@ const ProfitLoss = {
         manufacturers: manufacturersTotal,
         manufacturerBatches: Number(manufacturersPaid.count),
         commissions: commissionsPaid,
+        taxes: taxesPaid,
         variable: variableExpenses,
         fixed: fixedExpenses,
         total: totalExpenses,
@@ -134,7 +151,15 @@ const ProfitLoss = {
       margin,
       informative: {
         receivableFromCustomers: round2(Number(receivable.total)),
-        payableToManufacturers: round2(payableSummary.total.balance),
+        // h10: se separa deuda real de anticipos a favor — un anticipo grande a
+        // un fabricante enmascaraba la deuda con otro en el neto.
+        payableToManufacturers: {
+          owed: round2(payableSummary.total.owed),
+          advances: round2(payableSummary.total.advances),
+          net: round2(payableSummary.total.balance),
+        },
+        // h9: IVA que ya cobraste y tarde o temprano enteras al SAT.
+        ivaInIncome,
         pendingCommissions: round2(Number(pendingCommissions.total)),
         pendingFixedExpenses: round2(Number(pendingFixed.total)),
       },

@@ -32,9 +32,9 @@
   <section class="stat-grid">
     <a class="stat-card stat-card--success" [routerLink]="['detalle', 'income']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">trending_up</span></span>
-      <span class="stat-card__label">Ingresos brutos</span>
+      <span class="stat-card__label">Ingresos netos (cobrado)</span>
       <span class="stat-card__value">{{ s.totalIncome | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-      <span class="stat-card__hint">{{ s.monthIncome | currency:'MXN':'symbol-narrow':'1.2-2' }} este mes</span>
+      <span class="stat-card__hint">cobros menos reembolsos del período</span>
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
     <a class="stat-card stat-card--danger" [routerLink]="['detalle', 'cost']" [queryParams]="detailParams()">
@@ -46,9 +46,9 @@
     </a>
     <a class="stat-card" [routerLink]="['detalle', 'profit']" [queryParams]="detailParams()">
       <span class="stat-card__icon"><span class="material-symbols-outlined">savings</span></span>
-      <span class="stat-card__label">Ganancia neta</span>
-      <span class="stat-card__value">{{ s.netProfit | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-      <span class="stat-card__hint">margen {{ s.margin }}%</span>
+      <span class="stat-card__label">Margen bruto de producción</span>
+      <span class="stat-card__value">{{ s.grossProductionMargin | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+      <span class="stat-card__hint">margen {{ s.margin }}% · venta − costo de entregados</span>
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
     <a class="stat-card stat-card--gold" [routerLink]="['detalle', 'pending']" [queryParams]="detailParams()">
@@ -59,6 +59,20 @@
       <span class="stat-card__more">Ver detalle <span class="material-symbols-outlined">chevron_right</span></span>
     </a>
   </section>
+  <p class="fin-note">
+    <span class="material-symbols-outlined">info</span>
+    El <strong>margen bruto</strong> es venta menos costo de producción de lo entregado. La
+    <strong>utilidad neta</strong> del negocio (con gastos, comisiones e impuestos) está en
+    <a routerLink="/admin/estado-resultados">Estado de Resultados</a>.
+  </p>
+  @if (s.costWarnings.unpricedItems > 0) {
+    <p class="fin-warn">
+      <span class="material-symbols-outlined">warning</span>
+      {{ s.costWarnings.unpricedItems }} producto(s) entregado(s) en
+      {{ s.costWarnings.affectedOrders }} pedido(s) <strong>sin costo capturado</strong>:
+      cuentan como $0 y el margen bruto sale inflado. Revisa el costo de esos materiales.
+    </p>
+  }
 }
 
 <div class="panel">

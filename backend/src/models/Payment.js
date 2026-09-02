@@ -183,6 +183,72 @@ const Payment = {
     return { paid: paidNum, total, status, amount: amountTotal };
   },
 
+  /**
+   * Auditoría contable sep-2026 (h1): registra un REEMBOLSO como renglón
+   * NEGATIVO en `payments` (method 'refund'). Recalcula payment_amount y
+   * payment_status del pedido, pero NO corre el auto-avance de estatus — un
+   * reembolso no adelanta un pedido. Se llama desde `Refund.approve` dentro de
+   * su transacción.
+   *
+   * @param {import('mysql2/promise').PoolConnection} conn
+   * @param {{orderId:number, amount:number, refundDate?:string, notes?:string|null,
+   *   collectedById?:number|null}} params  `amount` POSITIVO (lo que se devuelve)
+   * @returns {{paymentId:number, paid:number, status:string}}
+   */
+  async registerRefund(conn, { orderId, amount, refundDate, notes, collectedById }) {
+    const [[orderRow]] = await conn.execute(
+      'SELECT total_amount FROM orders WHERE id = ?', [orderId],
+    );
+    if (!orderRow) {
+      const err = new Error('Pedido no encontrado');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const refundAmount = Math.round(Number(amount) * 100) / 100;
+    if (!(refundAmount > 0)) {
+      const err = new Error('El monto del reembolso debe ser mayor a 0');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const [[{ paidBefore }]] = await conn.execute(
+      'SELECT COALESCE(SUM(amount), 0) AS paidBefore FROM payments WHERE order_id = ?', [orderId],
+    );
+    if (refundAmount > Number(paidBefore) + 1e-6) {
+      const err = new Error(
+        `No se puede reembolsar $${refundAmount.toFixed(2)}: el pedido solo tiene `
+        + `$${Number(paidBefore).toFixed(2)} cobrado`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const [ins] = await conn.execute(
+      `INSERT INTO payments (order_id, amount, payment_method, payment_date, collected_by_id, notes)
+       VALUES (?, ?, 'refund', ?, ?, ?)`,
+      [
+        orderId,
+        -refundAmount,
+        refundDate || new Date().toISOString().slice(0, 10),
+        collectedById ?? null,
+        notes ?? null,
+      ],
+    );
+
+    const [[{ paid }]] = await conn.execute(
+      'SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE order_id = ?', [orderId],
+    );
+    const total = Number(orderRow.total_amount ?? 0);
+    const paidNum = Number(paid);
+    const status = paidNum <= 0 ? 'pending' : paidNum >= total ? 'paid' : 'partial';
+    await conn.execute(
+      'UPDATE orders SET payment_amount = ?, payment_status = ? WHERE id = ?',
+      [paidNum, status, orderId],
+    );
+    return { paymentId: ins.insertId, paid: paidNum, status };
+  },
+
   async findByOrder(orderId) {
     const [rows] = await pool.execute(
       `SELECT p.*, u.full_name AS collected_by_name

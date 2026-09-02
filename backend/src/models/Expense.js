@@ -67,15 +67,22 @@ function toDateOnly(value, fallback = null) {
 }
 
 /**
- * Deriva paid_date del par (status, expense_date).
- * Un gasto pendiente no tiene fecha de pago: todavía no sale de la caja.
+ * Deriva paid_date al pasar (o mantener) un gasto en 'paid'.
+ *
+ * Auditoría contable sep-2026 (h7 · opción b): la fecha que MANDA en el estado
+ * de resultados es cuándo SALIÓ el dinero, NO la fecha del gasto. Antes esto
+ * copiaba `expense_date`, y "Pagar la semana" un viernes que cruza fin de mes
+ * mandaba gastos al mes anterior; peor, un mes cerrado cambiaba de número al
+ * pagar algo atrasado. Ahora, si no hay fecha de pago explícita, es HOY (o la
+ * que ya tenía). Mover `expense_date` ya NO arrastra `paid_date`.
+ *
+ * La pantalla operativa "comisiones de la semana" sigue agrupando por
+ * `expense_date` — eso es cuánto se le paga al repartidor esa semana, no
+ * contabilidad.
  */
-function derivePaidDate(status, expenseDate, currentPaidDate = null) {
+function derivePaidDate(status, explicitPaidDate = null, currentPaidDate = null) {
   if (status !== 'paid') return null;
-  // Si ya venía pagado y el usuario NO movió la fecha del gasto, se respeta la
-  // fecha de pago existente (puede diferir legítimamente: gasto del día 3
-  // pagado el día 5). Solo se re-deriva cuando cambia expense_date.
-  return currentPaidDate || expenseDate;
+  return explicitPaidDate || currentPaidDate || fmt(new Date());
 }
 
 const Expense = {
@@ -139,7 +146,7 @@ const Expense = {
         amount,
         expenseDate,
         status,
-        derivePaidDate(status, expenseDate, toDateOnly(data.paidDate)),
+        derivePaidDate(status, toDateOnly(data.paidDate)),
         data.paymentMethod || 'cash',
         data.description ? String(data.description).slice(0, 255) : null,
         data.orderId || null,
@@ -154,9 +161,9 @@ const Expense = {
   },
 
   /**
-   * Edición. El caso que importa: mover `expense_date` de un gasto ya pagado
-   * DEBE arrastrar `paid_date`, o el gasto se queda sumando en el mes viejo
-   * del estado de resultados aunque en pantalla se vea con la fecha nueva.
+   * Edición. Auditoría contable sep-2026 (h7): mover `expense_date` YA NO toca
+   * `paid_date` — la fecha de pago es un hecho de caja independiente. `paid_date`
+   * solo se recalcula al cambiar el estado o al mandar una `paidDate` explícita.
    */
   async update(id, data) {
     const current = await this.findById(id);
@@ -204,13 +211,12 @@ const Expense = {
       : current.status;
     if (data.status !== undefined) { sets.push('status = ?'); params.push(newStatus); }
 
-    // paid_date se recalcula si cambió la fecha del gasto o el estado. Al mover
-    // la fecha se arrastra explícitamente (se ignora la paid_date vieja).
-    if (dateChanged || data.status !== undefined || data.paidDate !== undefined) {
+    // paid_date se recalcula solo al cambiar el estado o al pasar una paidDate
+    // explícita. Cambiar expense_date no lo toca (h7).
+    if (data.status !== undefined || data.paidDate !== undefined) {
       const explicitPaid = toDateOnly(data.paidDate);
-      const basePaid = dateChanged ? null : (explicitPaid || toDateOnly(current.paidDate));
       sets.push('paid_date = ?');
-      params.push(derivePaidDate(newStatus, newExpenseDate, explicitPaid || basePaid));
+      params.push(derivePaidDate(newStatus, explicitPaid, toDateOnly(current.paidDate)));
     }
 
     if (!sets.length) return current;
@@ -219,7 +225,10 @@ const Expense = {
     return this.findById(id);
   },
 
-  /** Marca pagado. `paidDate` default = la fecha del gasto, no hoy. */
+  /**
+   * Marca pagado. `paidDate` default = HOY (fecha real de la salida de caja),
+   * no la fecha del gasto — ver h7 en derivePaidDate.
+   */
   async markPaid(id, paidDate = null) {
     const current = await this.findById(id);
     if (!current) {
@@ -227,7 +236,7 @@ const Expense = {
       err.statusCode = 404;
       throw err;
     }
-    const date = toDateOnly(paidDate) || toDateOnly(current.expenseDate, fmt(new Date()));
+    const date = toDateOnly(paidDate) || fmt(new Date());
     await pool.execute(
       "UPDATE expenses SET status = 'paid', paid_date = ? WHERE id = ?",
       [date, id],
@@ -235,32 +244,21 @@ const Expense = {
     return this.findById(id);
   },
 
-  /** Marca varios pagados de un jalón: el botón "Pagar la semana". */
+  /**
+   * Marca varios pagados de un jalón: el botón "Pagar la semana". Todos con la
+   * MISMA fecha de pago (`paidDate` o hoy): es una sola salida de caja (h7).
+   */
   async markManyPaid(ids, paidDate = null) {
     const list = (Array.isArray(ids) ? ids : []).map(Number).filter(Number.isInteger);
     if (!list.length) return 0;
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-      let updated = 0;
-      for (const id of list) {
-        const [[row]] = await conn.execute('SELECT expense_date FROM expenses WHERE id = ?', [id]);
-        if (!row) continue;
-        const date = toDateOnly(paidDate) || toDateOnly(row.expense_date, fmt(new Date()));
-        const [res] = await conn.execute(
-          "UPDATE expenses SET status = 'paid', paid_date = ? WHERE id = ? AND status = 'pending'",
-          [date, id],
-        );
-        updated += res.affectedRows;
-      }
-      await conn.commit();
-      return updated;
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
-    }
+    const date = toDateOnly(paidDate) || fmt(new Date());
+    const placeholders = list.map(() => '?').join(',');
+    const [res] = await pool.execute(
+      `UPDATE expenses SET status = 'paid', paid_date = ?
+        WHERE id IN (${placeholders}) AND status = 'pending'`,
+      [date, ...list],
+    );
+    return res.affectedRows;
   },
 
   async remove(id) {

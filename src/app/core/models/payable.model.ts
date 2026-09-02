@@ -66,7 +66,16 @@ export interface PayableManufacturer {
 
 export interface PayableSummaryResponse {
   data: PayableManufacturer[];
-  meta: { total: { amount: number; paid: number; balance: number } };
+  meta: {
+    total: {
+      amount: number;
+      paid: number;
+      balance: number;
+      /** h10: deuda real (saldos positivos) y anticipos a favor (negativos), por separado. */
+      owed: number;
+      advances: number;
+    };
+  };
 }
 
 export interface PayableItem {

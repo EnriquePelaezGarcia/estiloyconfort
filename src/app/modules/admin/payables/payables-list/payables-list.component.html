@@ -9,9 +9,16 @@
 <section class="stat-grid">
   <div class="stat-card stat-card--danger">
     <span class="stat-card__icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
-    <span class="stat-card__label">Saldo total por pagar</span>
-    <span class="stat-card__value">{{ totalBalance() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
-    <span class="stat-card__hint">{{ manufacturers().length }} fabricante(s)</span>
+    <span class="stat-card__label">Por pagar a fabricantes</span>
+    <span class="stat-card__value">{{ totalOwed() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    @if (totalAdvances() > 0) {
+      <span class="stat-card__hint">
+        anticipos a favor: {{ totalAdvances() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        · neto {{ totalBalance() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+      </span>
+    } @else {
+      <span class="stat-card__hint">{{ manufacturers().length }} fabricante(s)</span>
+    }
   </div>
   <div class="stat-card">
     <span class="stat-card__icon"><span class="material-symbols-outlined">receipt_long</span></span>

@@ -159,6 +159,8 @@ export interface ProfitLossReport {
     manufacturerBatches: number;
     /** Renglón propio: es de los costos más grandes y variables del mes. */
     commissions: number;
+    /** Impuestos pagados al SAT (IVA + ISR) capturados por el admin (h9). */
+    taxes: number;
     variable: number;
     fixed: number;
     total: number;
@@ -177,7 +179,10 @@ export interface ProfitLossReport {
   /** Fuera del flujo: el puente entre la caja y lo devengado. */
   informative: {
     receivableFromCustomers: number;
-    payableToManufacturers: number;
+    /** h10: deuda real, anticipos a favor y neto — por separado. */
+    payableToManufacturers: { owed: number; advances: number; net: number };
+    /** h9: IVA embebido en lo cobrado, para cruzar con el contador. */
+    ivaInIncome: number;
     pendingCommissions: number;
     pendingFixedExpenses: number;
   };

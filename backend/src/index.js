@@ -10,6 +10,7 @@ const { scheduleQuoteCleanup } = require('./jobs/cleanupExpiredQuotes');
 const { scheduleQuoteRequestCleanup } = require('./jobs/cleanupExpiredQuoteRequests');
 const { scheduleFixedExpenses } = require('./jobs/generateFixedExpenses');
 const { scheduleDeliveryReminders } = require('./jobs/deliveryReminders');
+const { scheduleLayawayConversion } = require('./jobs/convertExpiredLayaways');
 
 const app = express();
 
@@ -72,6 +73,7 @@ async function start() {
     scheduleQuoteRequestCleanup();
     scheduleFixedExpenses();
     scheduleDeliveryReminders();
+    scheduleLayawayConversion();
     app.listen(env.port, () => {
       console.log(`🚀 API escuchando en http://localhost:${env.port}/api`);
       console.log(`   Entorno: ${env.nodeEnv}`);

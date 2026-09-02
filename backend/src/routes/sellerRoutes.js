@@ -41,6 +41,8 @@ router.patch('/orders/:id', sellerController.update);
 router.delete('/orders/:id', sellerController.remove);
 // Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente.
 router.post('/orders/:id/extra-charges', sellerController.applyExtraCharge);
+// h1 — solicitud de reembolso (vendedor sobre cualquier pedido; admin auto-aprueba).
+router.post('/orders/:id/refunds', sellerController.requestRefund);
 router.post('/orders/:id/share', ticketsController.share);
 router.patch('/orders/:id/assign', adminController.assignDelivery);
 router.get('/delivery-people', adminController.getDeliveryPeople);

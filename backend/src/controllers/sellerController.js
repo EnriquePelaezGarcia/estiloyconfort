@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Inventory = require('../models/Inventory');
 const Payment = require('../models/Payment');
+const Refund = require('../models/Refund');
 const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
@@ -209,6 +210,24 @@ const sellerController = {
       requestedByRole: req.user.role,
     });
     res.status(201).json({ data: order, message: 'Cargo extra agregado' });
+  }),
+
+  // POST /api/seller/orders/:id/refunds — solicita un reembolso (h1).
+  // Vendedor sobre cualquier pedido → 'pending'; admin → aprobado en el acto.
+  requestRefund: asyncHandler(async (req, res) => {
+    const refund = await Refund.create({
+      orderId: Number(req.params.id),
+      amount: req.body.amount,
+      method: req.body.method,
+      refundDate: req.body.refundDate,
+      reason: req.body.reason,
+    }, req.user);
+    res.status(201).json({
+      data: refund,
+      message: refund.status === 'approved'
+        ? 'Reembolso registrado'
+        : 'Solicitud de reembolso enviada a aprobación',
+    });
   }),
 
   // POST /api/seller/payments

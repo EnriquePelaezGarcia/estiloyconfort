@@ -44,6 +44,7 @@ router.get('/finances/transactions', adminController.getTransactions);
 router.get('/finances/by-payment-type', adminController.getByPaymentType);
 router.get('/finances/detail/:metric', adminController.getFinancesDetail);
 router.get('/finances/margin-analysis', adminController.getMarginAnalysis);
+router.post('/credit-clients/convert-expired-layaways', adminController.convertExpiredLayaways);
 
 // Pedidos y fabricantes (Fase 4)
 router.get('/orders', adminController.getOrders);
@@ -59,6 +60,8 @@ router.get('/discounts/pending-count', adminController.getPendingDiscountsCount)
 // Docs/plan-aprobaciones-admin.md
 router.patch('/orders/:id/extra-charges/:chargeId/approve', adminController.approveOrderExtraCharge);
 router.patch('/orders/:id/extra-charges/:chargeId/reject', adminController.rejectOrderExtraCharge);
+router.patch('/orders/:id/refunds/:refundId/approve', adminController.approveOrderRefund);
+router.patch('/orders/:id/refunds/:refundId/reject', adminController.rejectOrderRefund);
 router.patch('/orders/:id/shipping-cost/approve', adminController.approveOrderShipping);
 router.patch('/orders/:id/shipping-cost/reject', adminController.rejectOrderShipping);
 // Módulo "Aprobaciones": bandeja agregada de los 4 tipos × 2 documentos.

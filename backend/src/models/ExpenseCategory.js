@@ -11,6 +11,14 @@ const { pool } = require('../config/database');
 /** Nombre exacto de la categoría que genera Delivery.updateStatus (A.4 del plan). */
 const DELIVERY_COMMISSION_CATEGORY = 'Comisión repartidor';
 
+/**
+ * Categoría donde el admin registra los pagos de impuestos al SAT (IVA + ISR)
+ * que le indica el contador. El Estado de Resultados la trata como renglón
+ * propio (h9 de la auditoría contable sep-2026). Sembrada en
+ * schema_expenses_impuestos.sql.
+ */
+const TAX_CATEGORY = 'Impuestos (IVA e ISR)';
+
 function mapCategory(row) {
   return {
     id: row.id,
@@ -97,3 +105,4 @@ const ExpenseCategory = {
 
 module.exports = ExpenseCategory;
 module.exports.DELIVERY_COMMISSION_CATEGORY = DELIVERY_COMMISSION_CATEGORY;
+module.exports.TAX_CATEGORY = TAX_CATEGORY;

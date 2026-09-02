@@ -109,6 +109,21 @@ export class OrderDetailComponent implements OnInit {
   protected extraChargeItemTarget = signal<OrderItem | null>(null);
   protected applyingExtraCharge = signal(false);
 
+  // ===== Reembolsos (auditoría contable sep-2026, h1) =====
+  protected refundModalOpen = signal(false);
+  protected refundAmount = signal<number | null>(null);
+  protected refundMethod = signal<'cash' | 'transfer'>('cash');
+  protected refundReason = signal('');
+  protected requestingRefund = signal(false);
+
+  /** Lo efectivamente cobrado (suma de pagos, ya neteada de reembolsos previos). */
+  protected netPaid = computed(() => {
+    const o = this.order();
+    return o ? (o.payments ?? []).reduce((s, p) => s + p.amount, 0) : 0;
+  });
+
+  protected refunds = computed(() => this.order()?.refunds ?? []);
+
   /** Ids de items con una asignación de fabricante en curso. */
   protected assigningManufacturer = signal<Set<number>>(new Set());
 
@@ -694,6 +709,78 @@ export class OrderDetailComponent implements OnInit {
       error: (err: { error?: { message?: string } }) => {
         this.applyingExtraCharge.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo agregar el cargo extra');
+      },
+    });
+  }
+
+  // ===== Reembolsos (auditoría contable sep-2026, h1) =====
+
+  protected openRefundModal(): void {
+    this.refundAmount.set(null);
+    this.refundMethod.set('cash');
+    this.refundReason.set('');
+    this.refundModalOpen.set(true);
+  }
+
+  protected submitRefund(): void {
+    const order = this.order();
+    if (!order) return;
+    const amount = Number(this.refundAmount());
+    if (!(amount > 0)) {
+      this.notification.error('Captura un monto mayor a 0');
+      return;
+    }
+    if (amount > this.netPaid() + 0.001) {
+      this.notification.error(`El reembolso no puede superar lo cobrado (${this.netPaid()})`);
+      return;
+    }
+    this.requestingRefund.set(true);
+    this.sellerService.requestRefund(order.id, {
+      amount,
+      method: this.refundMethod(),
+      reason: this.refundReason().trim() || undefined,
+    }).subscribe({
+      next: (res) => {
+        this.requestingRefund.set(false);
+        this.refundModalOpen.set(false);
+        this.notification.success(res.message);
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.requestingRefund.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo registrar el reembolso');
+      },
+    });
+  }
+
+  protected approveRefund(refundId: number, newAmount?: string): void {
+    const order = this.order();
+    if (!order) return;
+    const amount = newAmount ? Number(newAmount) : undefined;
+    this.adminService.approveOrderRefund(order.id, refundId, amount).subscribe({
+      next: () => {
+        this.notification.success('Reembolso aprobado');
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar el reembolso');
+      },
+    });
+  }
+
+  protected rejectRefund(refundId: number, reviewNote: string): void {
+    const order = this.order();
+    if (!order) return;
+    this.adminService.rejectOrderRefund(order.id, refundId, reviewNote).subscribe({
+      next: () => {
+        this.notification.success('Reembolso rechazado');
+        this.load(order.id);
+        this.refreshApprovalsBadge();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar el reembolso');
       },
     });
   }

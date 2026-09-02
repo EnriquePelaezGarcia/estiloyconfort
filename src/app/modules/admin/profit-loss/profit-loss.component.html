@@ -111,6 +111,20 @@
             {{ r.expenses.commissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
           </span>
         </div>
+        @if (r.expenses.taxes > 0) {
+          <div class="breakdown__row">
+            <span class="breakdown__label">
+              Impuestos (SAT)
+              <small>IVA e ISR pagados al SAT</small>
+            </span>
+            <span class="breakdown__bar">
+              <span class="breakdown__fill" [style.width.%]="percentOf(r.expenses.taxes)"></span>
+            </span>
+            <span class="breakdown__value">
+              {{ r.expenses.taxes | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </span>
+          </div>
+        }
         <div class="breakdown__row">
           <span class="breakdown__label">Gastos variables</span>
           <span class="breakdown__bar">
@@ -203,8 +217,22 @@
         <span class="stat-card__icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
         <span class="stat-card__label">Por pagar a fabricantes</span>
         <span class="stat-card__value">
-          {{ r.informative.payableToManufacturers | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          {{ r.informative.payableToManufacturers.owed | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
         </span>
+        @if (r.informative.payableToManufacturers.advances > 0) {
+          <span class="stat-card__hint">
+            anticipos a favor:
+            {{ r.informative.payableToManufacturers.advances | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+        }
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__icon"><span class="material-symbols-outlined">receipt_long</span></span>
+        <span class="stat-card__label">IVA incluido en lo cobrado</span>
+        <span class="stat-card__value">
+          {{ r.informative.ivaInIncome | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </span>
+        <span class="stat-card__hint">para cruzar con el contador</span>
       </div>
       <div class="stat-card">
         <span class="stat-card__icon"><span class="material-symbols-outlined">two_wheeler</span></span>

@@ -275,6 +275,30 @@ export class AdminService {
     );
   }
 
+  // ===== Reembolsos (auditoría contable sep-2026, h1) =====
+
+  approveOrderRefund(
+    orderId: number,
+    refundId: number,
+    amount?: number,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/refunds/${refundId}/approve`,
+      amount != null ? { amount } : {},
+    );
+  }
+
+  rejectOrderRefund(
+    orderId: number,
+    refundId: number,
+    reviewNote: string,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/refunds/${refundId}/reject`,
+      { reviewNote },
+    );
+  }
+
   approveOrderShipping(orderId: number, amount?: number): Observable<{ data: Order; message: string }> {
     return this.api.patch<{ data: Order; message: string }>(
       `/admin/orders/${orderId}/shipping-cost/approve`,

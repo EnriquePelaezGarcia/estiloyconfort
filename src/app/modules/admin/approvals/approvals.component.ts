@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe, LowerCasePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Observable } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { AdminService } from '../../../core/services/admin.service';
 import { QuotesService } from '../../../core/services/quotes.service';
 import { ApprovalsService } from '../../../core/services/approvals.service';
@@ -15,6 +15,7 @@ const TYPE_LABELS: Record<ApprovalType, string> = {
   discount_product: 'Regalo',
   shipping: 'Envío manual',
   extra_charge: 'Cargo extra',
+  refund: 'Reembolso',
 };
 
 const TYPE_ICONS: Record<ApprovalType, string> = {
@@ -22,6 +23,7 @@ const TYPE_ICONS: Record<ApprovalType, string> = {
   discount_product: 'card_giftcard',
   shipping: 'local_shipping',
   extra_charge: 'build',
+  refund: 'undo',
 };
 
 /**
@@ -47,7 +49,7 @@ export class ApprovalsComponent implements OnInit {
 
   protected readonly typeLabels = TYPE_LABELS;
   protected readonly typeIcons = TYPE_ICONS;
-  protected readonly typeOptions: ApprovalType[] = ['discount_money', 'discount_product', 'shipping', 'extra_charge'];
+  protected readonly typeOptions: ApprovalType[] = ['discount_money', 'discount_product', 'shipping', 'extra_charge', 'refund'];
 
   protected activeTab = signal<Tab>('pending');
   protected loading = signal(true);
@@ -134,6 +136,8 @@ export class ApprovalsComponent implements OnInit {
           return this.adminService.approveOrderDiscount(item.documentId, item.rawId, amount);
         case 'extra_charge':
           return this.adminService.approveOrderExtraCharge(item.documentId, item.rawId, amount);
+        case 'refund':
+          return this.adminService.approveOrderRefund(item.documentId, item.rawId, amount);
         case 'shipping':
           return this.adminService.approveOrderShipping(item.documentId, amount);
       }
@@ -148,6 +152,8 @@ export class ApprovalsComponent implements OnInit {
           return this.quotesService.approveShippingCost(item.documentId, amount);
       }
     }
+    // 'refund' solo existe en pedidos; ninguna otra combinación llega aquí.
+    return throwError(() => new Error(`Aprobación no soportada: ${item.kind}/${item.type}`));
   }
 
   private dispatchReject(item: ApprovalItem, reviewNote: string): Observable<unknown> {
@@ -158,6 +164,8 @@ export class ApprovalsComponent implements OnInit {
           return this.adminService.rejectOrderDiscount(item.documentId, item.rawId, reviewNote);
         case 'extra_charge':
           return this.adminService.rejectOrderExtraCharge(item.documentId, item.rawId, reviewNote);
+        case 'refund':
+          return this.adminService.rejectOrderRefund(item.documentId, item.rawId, reviewNote);
         case 'shipping':
           return this.adminService.rejectOrderShipping(item.documentId, reviewNote);
       }
@@ -172,6 +180,7 @@ export class ApprovalsComponent implements OnInit {
           return this.quotesService.rejectShippingCost(item.documentId, reviewNote);
       }
     }
+    return throwError(() => new Error(`Rechazo no soportado: ${item.kind}/${item.type}`));
   }
 
   /** RN-MOD1: `newAmount` opcional modifica el monto antes de aprobar. */

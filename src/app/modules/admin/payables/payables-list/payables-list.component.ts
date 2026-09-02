@@ -27,6 +27,8 @@ export class PayablesListComponent implements OnInit {
   protected totalBalance = signal(0);
   protected totalAmount = signal(0);
   protected totalPaid = signal(0);
+  protected totalOwed = signal(0);
+  protected totalAdvances = signal(0);
   protected loading = signal(true);
 
   ngOnInit(): void {
@@ -36,6 +38,8 @@ export class PayablesListComponent implements OnInit {
         this.totalBalance.set(res.meta.total.balance);
         this.totalAmount.set(res.meta.total.amount);
         this.totalPaid.set(res.meta.total.paid);
+        this.totalOwed.set(res.meta.total.owed);
+        this.totalAdvances.set(res.meta.total.advances);
         this.loading.set(false);
       },
       error: () => {

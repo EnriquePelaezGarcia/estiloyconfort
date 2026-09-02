@@ -834,6 +834,9 @@ const Order = {
     order.discounts = await discountEngine.findAll('order', id);
     // Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno.
     order.extraCharges = await extraChargeEngine.findAll('order', id);
+    // Auditoría contable sep-2026 (h1): reembolsos del pedido (solicitados/
+    // aprobados/rechazados). Vacío si nunca se pidió uno.
+    order.refunds = await require('./Refund').findAllForOrder(id);
     // "Devuelto" (Plan Docs/plan-rastreo-pedido-cliente.md, C-2): un pedido
     // 'cancelled' que antes llegó a 'delivered' es una devolución. Sólo se
     // consulta el historial en ese caso — para el resto el dato es trivial.
@@ -3189,21 +3192,22 @@ const Order = {
   },
 
   /**
-   * Retorna todos los pedidos a Crédito Tienda o Apartado sin liquidar.
-   * Si un apartado venció el plazo y no fue convertido, actualiza el precio
-   * al de crédito y marca layaway_converted = 1.
-   * @param {object} opts  { sellerId } para filtrar por vendedor (admin omite)
+   * Convierte los apartados vencidos y no liquidados al precio de crédito
+   * (total = cash_total * (1 + interés)), marcándolos `layaway_converted = 1`.
+   *
+   * Auditoría contable sep-2026 (h6): ESTO ya no vive dentro de
+   * `findCreditClients` — un GET no debe escribir, y además hacía "saltar" el
+   * "Por cobrar" y los informativos del Estado de Resultados cada vez que
+   * alguien abría la pantalla. Ahora lo corre el cron `convertExpiredLayaways`
+   * (diario + al arrancar) y el endpoint manual de respaldo.
+   *
+   * El `AND o.cash_total IS NOT NULL` evita dejar `total_amount` en NULL en
+   * pedidos viejos sin `cash_total` capturado.
+   *
+   * @returns {number} cuántos apartados se convirtieron
    */
-  async findCreditClients({ sellerId } = {}) {
-    const params = [];
-    let sellerFilter = '';
-    if (sellerId) {
-      sellerFilter = 'AND o.seller_id = ?';
-      params.push(Number(sellerId));
-    }
-
-    // Convertir apartados vencidos al precio de crédito (operación global, no por vendedor).
-    await pool.execute(
+  async convertExpiredLayaways() {
+    const [res] = await pool.execute(
       `UPDATE orders o
        INNER JOIN (
          SELECT config_value AS interest
@@ -3214,9 +3218,26 @@ const Order = {
        WHERE o.payment_method = 'layaway'
          AND o.layaway_converted = 0
          AND o.layaway_deadline < CURDATE()
-         AND o.payment_status != 'paid'`,
+         AND o.payment_status != 'paid'
+         AND o.cash_total IS NOT NULL`,
       [],
     );
+    return res.affectedRows;
+  },
+
+  /**
+   * Retorna todos los pedidos a Crédito Tienda o Apartado sin liquidar.
+   * La conversión de apartados vencidos la hace `convertExpiredLayaways` (cron),
+   * no esta consulta de lectura.
+   * @param {object} opts  { sellerId } para filtrar por vendedor (admin omite)
+   */
+  async findCreditClients({ sellerId } = {}) {
+    const params = [];
+    let sellerFilter = '';
+    if (sellerId) {
+      sellerFilter = 'AND o.seller_id = ?';
+      params.push(Number(sellerId));
+    }
 
     const [rows] = await pool.execute(
       `SELECT

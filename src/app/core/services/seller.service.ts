@@ -8,6 +8,7 @@ import {
   DeliveryPerson,
   InventoryItem,
   Order,
+  OrderRefund,
   Paginated,
   PaymentInstrument,
   SellerDashboard,
@@ -66,6 +67,21 @@ export class SellerService {
     payload: { itemId: number | null; label: string; amount: number },
   ): Observable<{ data: Order; message: string }> {
     return this.api.post<{ data: Order; message: string }>(`/seller/orders/${orderId}/extra-charges`, payload);
+  }
+
+  /**
+   * Solicita un reembolso al cliente (auditoría contable sep-2026, h1). El
+   * vendedor lo puede pedir sobre cualquier pedido; nace 'pending' y lo aprueba
+   * el admin. Si lo pide un admin, se aprueba en el acto.
+   */
+  requestRefund(
+    orderId: number,
+    payload: { amount: number; method: 'cash' | 'transfer'; refundDate?: string; reason?: string },
+  ): Observable<{ data: OrderRefund; message: string }> {
+    return this.api.post<{ data: OrderRefund; message: string }>(
+      `/seller/orders/${orderId}/refunds`,
+      payload,
+    );
   }
 
   assignDelivery(

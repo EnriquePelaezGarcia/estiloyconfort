@@ -25,6 +25,37 @@ a.stat-card {
   }
 }
 
+// Nota que aclara que Finanzas no calcula la utilidad neta (Estado de Resultados sí).
+.fin-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: vars.$spacing-sm 0 vars.$spacing-md;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.1rem; flex-shrink: 0; }
+  a { color: vars.$color-primary; font-weight: 600; }
+}
+
+// Alarma h8: pedidos entregados sin costo capturado.
+.fin-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: rgba(#c0392b, 0.08);
+  border: 1px solid rgba(#c0392b, 0.25);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #922b21;
+
+  .material-symbols-outlined { font-size: 1.1rem; flex-shrink: 0; }
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;

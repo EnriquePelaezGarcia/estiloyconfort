@@ -202,6 +202,28 @@ export interface OrderExtraCharge {
   createdAt: string;
 }
 
+/** Reembolso a cliente (auditoría contable sep-2026, h1). */
+export interface OrderRefund {
+  id: number;
+  orderId: number;
+  orderNumber: string | null;
+  customerName: string | null;
+  amount: number;
+  method: 'cash' | 'transfer';
+  refundDate: string;
+  reason: string | null;
+  status: DiscountStatus;
+  requestedBy: number | null;
+  requestedByName: string | null;
+  requestedByRole: string | null;
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  paymentId: number | null;
+  createdAt: string;
+}
+
 /** Estado de aprobación del envío manual (Docs/plan-aprobaciones-admin.md RN-SM). */
 export type ShippingCostStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
@@ -353,6 +375,8 @@ export interface Order {
   discounts?: OrderDiscount[];
   /** Docs/plan-aprobaciones-admin.md — vacío si el pedido no tiene ninguno. */
   extraCharges?: OrderExtraCharge[];
+  /** Reembolsos solicitados/aprobados/rechazados (h1) — vacío si nunca se pidió uno. */
+  refunds?: OrderRefund[];
   /**
    * Docs/plan-fabricante-notificaciones-y-aceptacion.md — estado de aceptación
    * del/los fabricante(s) del pedido (solo en el detalle de admin).
@@ -695,12 +719,19 @@ export interface ManufacturerOrder {
 
 // ===== Admin (Fase 4 diferida) =====
 export interface FinancesSummary {
+  /** Pagos cobrados en el período (caja). */
   totalIncome: number;
-  monthIncome: number;
+  /** Venta de línea de los pedidos entregados en el período. */
+  deliveredSales: number;
+  /** Costo de producción de esos mismos pedidos entregados. */
   totalCost: number;
-  netProfit: number;
+  /** deliveredSales − totalCost. NO es la utilidad neta del negocio (ver Estado de Resultados). */
+  grossProductionMargin: number;
+  /** grossProductionMargin / deliveredSales, en %. */
   margin: number;
   pendingCollection: number;
+  /** Líneas entregadas sin costo capturado: cuentan como $0 e inflan el margen. */
+  costWarnings: { unpricedItems: number; affectedOrders: number };
 }
 
 export interface Transaction {

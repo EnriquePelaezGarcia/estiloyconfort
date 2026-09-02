@@ -8,6 +8,7 @@ const Notification = require('../models/Notification');
 const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
+const Refund = require('../models/Refund');
 const { calculateCredit, profitByCost, wholesaleProfit } = require('../utils/pricingCalculator');
 
 /**
@@ -140,10 +141,18 @@ const getDashboard = asyncHandler(async (req, res) => {
 // ===================== FINANZAS =====================
 
 // GET /api/admin/finances/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+//
+// Auditoría contable sep-2026 (h2/h3/h4): esta pantalla NO calcula la utilidad
+// neta del negocio — esa vive en el Estado de Resultados (base flujo de
+// efectivo, con gastos, comisiones e impuestos). Aquí:
+//   · "Ingresos (cobrado)"  = pagos recibidos en el período (caja).
+//   · "Margen bruto de producción" = venta − costo de los MISMOS pedidos
+//     entregados en el período. Ambos lados sobre la misma población para que
+//     la resta signifique algo (antes se restaba caja contra costo devengado).
 const getFinancesSummary = asyncHandler(async (req, res) => {
   const { from, to } = req.query;
 
-  // Filtro de período: ingresos por payment_date; costo por order_date del pedido entregado.
+  // Ingresos por payment_date; venta y costo por order_date del pedido entregado.
   const incomeConds = [];
   const incomeParams = [];
   if (from) { incomeConds.push('payment_date >= ?'); incomeParams.push(from); }
@@ -151,15 +160,11 @@ const getFinancesSummary = asyncHandler(async (req, res) => {
   const incomeWhere = incomeConds.length ? `WHERE ${incomeConds.join(' AND ')}` : '';
 
   const [[income]] = await pool.execute(
-    `SELECT
-        COALESCE(SUM(amount), 0) AS totalIncome,
-        COALESCE(SUM(CASE WHEN MONTH(payment_date) = MONTH(CURDATE()) AND YEAR(payment_date) = YEAR(CURDATE()) THEN amount ELSE 0 END), 0) AS monthIncome
-     FROM payments
-     ${incomeWhere}`,
+    `SELECT COALESCE(SUM(amount), 0) AS totalIncome FROM payments ${incomeWhere}`,
     incomeParams,
   );
 
-  // Egreso estimado: costo de producción de los pedidos entregados (filtrado por fecha del pedido).
+  // Producción entregada en el período: venta de línea vs. costo de línea.
   const costConds = ["o.order_status = 'delivered'"];
   const costParams = [];
   if (from) { costConds.push('o.order_date >= ?'); costParams.push(from); }
@@ -168,12 +173,27 @@ const getFinancesSummary = asyncHandler(async (req, res) => {
   // costo base del MATERIAL CONGELADO en la línea (oi.material_id, M4/M7),
   // nunca al de otro material. El `, 0)` final es el caso "ni siquiera hay
   // costo base para ese material" — corrupción, no estado normal (§2.6b).
-  const [[cost]] = await pool.execute(
-    `SELECT COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS totalCost
+  // deliveredSales es venta de LÍNEA: cargos extra y envío son ingreso aparte,
+  // no producción, así que quedan fuera del margen bruto.
+  const [[prod]] = await pool.execute(
+    `SELECT
+        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS totalCost,
+        COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, 0)), 0) AS deliveredSales
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
      WHERE ${costConds.join(' AND ')}`,
+    costParams,
+  );
+
+  // h8: líneas entregadas SIN costo (ni real ni base) — cuentan como $0 e
+  // inflan el margen. Es una alarma, no un estado normal.
+  const [[warn]] = await pool.execute(
+    `SELECT COUNT(*) AS unpricedItems, COUNT(DISTINCT oi.order_id) AS affectedOrders
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       LEFT JOIN product_material_prices mp ON mp.product_id = oi.product_id AND mp.material_id = oi.material_id AND mp.size_id = COALESCE(oi.size_id, 0)
+      WHERE ${costConds.join(' AND ')} AND oi.unit_cost IS NULL AND mp.base_cost IS NULL`,
     costParams,
   );
 
@@ -184,18 +204,31 @@ const getFinancesSummary = asyncHandler(async (req, res) => {
   );
 
   const totalIncome = Number(income.totalIncome);
-  const totalCost = Number(cost.totalCost);
-  const netProfit = totalIncome - totalCost;
-  const margin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
+  const totalCost = Number(prod.totalCost);
+  const deliveredSales = Number(prod.deliveredSales);
+  const grossProductionMargin = deliveredSales - totalCost;
+  const margin = deliveredSales > 0 ? (grossProductionMargin / deliveredSales) * 100 : 0;
 
   res.json({
     totalIncome,
-    monthIncome: Number(income.monthIncome),
+    deliveredSales,
     totalCost,
-    netProfit,
+    grossProductionMargin,
     margin: Math.round(margin * 100) / 100,
     pendingCollection: Number(pending.pendingCollection),
+    costWarnings: {
+      unpricedItems: Number(warn.unpricedItems),
+      affectedOrders: Number(warn.affectedOrders),
+    },
   });
+});
+
+// POST /api/admin/credit-clients/convert-expired-layaways
+// Respaldo manual del cron `convertExpiredLayaways` (h6): por si el servidor
+// estuvo apagado y hay apartados vencidos sin reprecificar. Idempotente.
+const convertExpiredLayaways = asyncHandler(async (req, res) => {
+  const converted = await Order.convertExpiredLayaways();
+  res.json({ data: { converted }, message: `${converted} apartado(s) vencido(s) convertido(s) a crédito` });
 });
 
 // GET /api/admin/finances/transactions
@@ -306,11 +339,14 @@ const getFinancesDetail = asyncHandler(async (req, res) => {
     const params = [];
     if (from) { conds.push('o.order_date >= ?'); params.push(from); }
     if (to) { conds.push('o.order_date <= ?'); params.push(`${to} 23:59:59`); }
+    // Auditoría contable sep-2026 (h4): `revenue` es venta de LÍNEA (no la suma
+    // de pagos del pedido), para que este detalle sume exactamente el
+    // "Margen bruto de producción" de la tarjeta.
     const [data] = await pool.execute(
       `SELECT o.id AS orderId, o.order_number AS orderNumber, o.customer_name AS customerName,
               o.customer_phone AS customerPhone, o.customer_email AS customerEmail,
               o.order_date AS date,
-              COALESCE((SELECT SUM(pay.amount) FROM payments pay WHERE pay.order_id = o.id), 0) AS revenue,
+              COALESCE(SUM(oi.quantity * COALESCE(oi.unit_price, 0)), 0) AS revenue,
               COALESCE(SUM(oi.quantity * COALESCE(oi.unit_cost, mp.base_cost, 0)), 0) AS cost
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
@@ -583,6 +619,23 @@ const rejectOrderExtraCharge = asyncHandler(async (req, res) => {
     req.params.id, req.params.chargeId, req.user.id, req.body.reviewNote,
   );
   res.json({ data: order, message: 'Cargo extra rechazado' });
+});
+
+// ===== Reembolsos (auditoría contable sep-2026, h1) =====
+
+// PATCH /api/admin/orders/:id/refunds/:refundId/approve
+// body.amount opcional: modifica el monto al aprobar (mismo criterio que descuentos).
+const approveOrderRefund = asyncHandler(async (req, res) => {
+  await Refund.approve(req.params.refundId, req.user.id, req.body.amount);
+  const order = await Order.findById(req.params.id);
+  res.json({ data: order, message: 'Reembolso aprobado' });
+});
+
+// PATCH /api/admin/orders/:id/refunds/:refundId/reject
+const rejectOrderRefund = asyncHandler(async (req, res) => {
+  await Refund.reject(req.params.refundId, req.user.id, req.body.reviewNote);
+  const order = await Order.findById(req.params.id);
+  res.json({ data: order, message: 'Reembolso rechazado' });
 });
 
 // PATCH /api/admin/orders/:id/shipping-cost/approve
@@ -1168,6 +1221,7 @@ module.exports = {
   getDashboard,
   getPricingHealth,
   getFinancesSummary,
+  convertExpiredLayaways,
   getTransactions,
   getByPaymentType,
   getFinancesDetail,
@@ -1182,6 +1236,8 @@ module.exports = {
   getPendingDiscountsCount,
   approveOrderExtraCharge,
   rejectOrderExtraCharge,
+  approveOrderRefund,
+  rejectOrderRefund,
   approveOrderShipping,
   rejectOrderShipping,
   getDeliveryPeople,

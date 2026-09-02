@@ -19,9 +19,9 @@ interface MetricConfig {
 }
 
 const METRIC_CONFIG: Record<FinanceMetric, MetricConfig> = {
-  income: { title: 'Ingresos brutos', icon: 'trending_up', totalLabel: 'Total ingresado', amountLabel: 'Monto cobrado' },
+  income: { title: 'Ingresos netos (cobrado)', icon: 'trending_up', totalLabel: 'Total cobrado neto', amountLabel: 'Monto cobrado' },
   cost: { title: 'Costo de producción', icon: 'trending_down', totalLabel: 'Costo total', amountLabel: 'Costo' },
-  profit: { title: 'Ganancia neta', icon: 'savings', totalLabel: 'Ganancia total', amountLabel: 'Ganancia' },
+  profit: { title: 'Margen bruto de producción', icon: 'savings', totalLabel: 'Margen total', amountLabel: 'Margen' },
   pending: { title: 'Por cobrar', icon: 'pending', totalLabel: 'Saldo total por cobrar', amountLabel: 'Saldo pendiente' },
 };
 

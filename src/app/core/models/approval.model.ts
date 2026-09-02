@@ -2,7 +2,12 @@
  * Módulo "Aprobaciones" (Docs/plan-aprobaciones-admin.md) — fila normalizada
  * que junta los 4 tipos de aprobación × 2 documentos en un solo listado.
  */
-export type ApprovalType = 'discount_money' | 'discount_product' | 'shipping' | 'extra_charge';
+export type ApprovalType =
+  | 'discount_money'
+  | 'discount_product'
+  | 'shipping'
+  | 'extra_charge'
+  | 'refund';
 export type ApprovalKind = 'order' | 'quote';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -33,5 +38,6 @@ export interface ApprovalsPendingCount {
   discounts: { orders: number; quotes: number };
   extraCharges: { orders: number; quotes: number };
   shipping: { orders: number; quotes: number };
+  refunds: number;
   total: number;
 }
