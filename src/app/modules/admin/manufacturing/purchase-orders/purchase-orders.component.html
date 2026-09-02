@@ -102,6 +102,7 @@
                           </td>
                           <td>
                             {{ it.materialLabel ?? '—' }}
+                            @if (it.sizeLabel) { <span class="muted"> · {{ it.sizeLabel }}</span> }
                             @if (it.color) { <span class="muted"> / {{ it.color }}</span> }
                           </td>
                           <td>
@@ -232,6 +233,18 @@
                     </select>
                     <p class="field__hint">Sin material la recepción no puede sumarlo a inventario.</p>
                   </div>
+                  @if (sizesForItem(i).length > 0) {
+                    <div class="field">
+                      <label>Talla</label>
+                      <select (change)="onSizeSelected(i, $event)" [value]="item.get('sizeId')?.value ?? ''">
+                        <option value="">Selecciona…</option>
+                        @for (s of sizesForItem(i); track s.id) {
+                          <option [value]="s.id">{{ s.label }}</option>
+                        }
+                      </select>
+                      <p class="field__hint">Obligatoria: la recepción suma al inventario de esa talla.</p>
+                    </div>
+                  }
                   <div class="field">
                     <label>Color (opcional)</label>
                     <input type="text" formControlName="color" placeholder="Ej. Blanco" />

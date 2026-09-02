@@ -210,6 +210,7 @@ export class PurchaseOrdersComponent implements OnInit {
       productSku: this.fb.control<string>(''),
       specifications: this.fb.control<string>(''),
       materialId: this.fb.control<number | null>(null),
+      sizeId: this.fb.control<number | null>(null),
       color: this.fb.control<string>(''),
       quantity: this.fb.control<number>(1, { validators: [Validators.required, Validators.min(1)] }),
       unitCost: this.fb.control<number>(0, { validators: [Validators.min(0)] }),
@@ -224,6 +225,22 @@ export class PurchaseOrdersComponent implements OnInit {
     return Object.entries(product.materials)
       .filter(([, cost]) => cost.cost !== null)
       .map(([id, cost]) => ({ id: Number(id), label: cost.label }));
+  }
+
+  /** Tallas del producto elegido en la línea `index` (vacío = no se vende por talla). */
+  protected sizesForItem(index: number): Array<{ id: number; label: string }> {
+    const productId = Number(this.items.at(index).get('productId')?.value) || null;
+    return this.products().find((p) => p.id === productId)?.sizes ?? [];
+  }
+
+  /** Costo unitario sugerido para (producto, material, talla) de la línea `index`. */
+  private suggestedCost(index: number): number | null {
+    const group = this.items.at(index);
+    const product = this.products().find((p) => p.id === Number(group.get('productId')?.value));
+    const material = product?.materials[Number(group.get('materialId')?.value)];
+    if (!material) return null;
+    const sizeId = Number(group.get('sizeId')?.value) || 0;
+    return sizeId && material.sizeCosts?.[sizeId] != null ? material.sizeCosts[sizeId] : material.cost;
   }
 
   protected openCreate(): void {
@@ -253,22 +270,33 @@ export class PurchaseOrdersComponent implements OnInit {
     const firstMaterial = product
       ? Object.entries(product.materials).find(([, c]) => c.cost !== null)
       : undefined;
+    // Si el producto se vende por talla y tiene una sola, se preselecciona.
+    const sizes = product?.sizes ?? [];
     group.patchValue({
       productId: id,
       productName: product?.name ?? '',
       productSku: product?.sku ?? '',
       materialId: firstMaterial ? Number(firstMaterial[0]) : null,
-      unitCost: firstMaterial ? (firstMaterial[1].cost ?? 0) : 0,
+      sizeId: sizes.length === 1 ? sizes[0].id : null,
     });
+    const cost = this.suggestedCost(index);
+    group.patchValue({ unitCost: cost ?? 0 });
   }
 
   /** Al cambiar el material de la línea, recalcula el costo unitario sugerido. */
   protected onMaterialSelected(index: number, event: Event): void {
     const materialId = Number((event.target as HTMLSelectElement).value) || null;
-    const group = this.items.at(index);
-    const product = this.products().find((p) => p.id === Number(group.get('productId')?.value));
-    const cost = product && materialId ? product.materials[materialId]?.cost ?? null : null;
-    group.patchValue({ materialId, ...(cost !== null ? { unitCost: cost } : {}) });
+    this.items.at(index).patchValue({ materialId });
+    const cost = this.suggestedCost(index);
+    if (cost !== null) this.items.at(index).patchValue({ unitCost: cost });
+  }
+
+  /** Al cambiar la talla de la línea, recalcula el costo unitario sugerido. */
+  protected onSizeSelected(index: number, event: Event): void {
+    const sizeId = Number((event.target as HTMLSelectElement).value) || null;
+    this.items.at(index).patchValue({ sizeId });
+    const cost = this.suggestedCost(index);
+    if (cost !== null) this.items.at(index).patchValue({ unitCost: cost });
   }
 
   private firstQuotedCost(product: ManufacturerCatalogProduct): number {
@@ -292,6 +320,15 @@ export class PurchaseOrdersComponent implements OnInit {
       return;
     }
     const raw = this.form.getRawValue();
+    // Talla obligatoria para productos existentes que se venden por talla: sin
+    // ella la recepción no puede sumar a inventario (D5).
+    const missingSize = (raw.items ?? []).some((it, i) =>
+      !it.isNewProduct && this.sizesForItem(i).length > 0 && !it.sizeId);
+    if (missingSize) {
+      this.notification.error('Falta la talla en un renglón de un producto que se vende por talla.');
+      return;
+    }
+
     const items: PurchaseOrderItem[] = (raw.items ?? []).map((it) => ({
       isNewProduct: !!it.isNewProduct,
       productId: it.isNewProduct ? null : (it.productId ?? null),
@@ -299,6 +336,7 @@ export class PurchaseOrdersComponent implements OnInit {
       productSku: it.productSku || null,
       specifications: it.isNewProduct ? (it.specifications || null) : null,
       materialId: it.isNewProduct ? null : (it.materialId ?? null),
+      sizeId: it.isNewProduct ? null : (it.sizeId ?? null),
       color: it.color?.trim() || null,
       quantity: Number(it.quantity) || 1,
       unitCost: Number(it.unitCost) || 0,
@@ -355,7 +393,7 @@ export class PurchaseOrdersComponent implements OnInit {
             .filter((it) => (it.pendingQuantity ?? it.quantity) > 0)
             .map((it) => ({
               itemId: it.id!,
-              productName: it.productName,
+              productName: it.sizeLabel ? `${it.productName} · ${it.sizeLabel}` : it.productName,
               pending: it.pendingQuantity ?? it.quantity,
               quantity: it.pendingQuantity ?? it.quantity,
               condition: 'ok' as const,

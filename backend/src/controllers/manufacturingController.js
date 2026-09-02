@@ -73,6 +73,8 @@ function mapPoItem(r) {
     specifications: r.specifications ?? null,
     materialId: r.material_id ?? null,
     materialLabel: r.material_label ?? null,
+    sizeId: r.size_id ?? null,
+    sizeLabel: r.size_label ?? null,
     color: r.color ?? null,
     quantity,
     receivedQuantity,
@@ -195,9 +197,10 @@ const manufacturingController = {
     );
     if (!row) throw ApiError.notFound('Orden de compra no encontrada');
     const [items] = await pool.execute(
-      `SELECT poi.*, mat.label AS material_label
+      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label
          FROM purchase_order_items poi
          LEFT JOIN materials mat ON mat.id = poi.material_id
+         LEFT JOIN sizes sz ON sz.id = poi.size_id
         WHERE poi.purchase_order_id = ? ORDER BY poi.id`,
       [req.params.id],
     );
@@ -270,6 +273,23 @@ const manufacturingController = {
       };
     });
     const totalCost = normalized.reduce((s, it) => s + it.subtotal, 0);
+
+    // Talla obligatoria y válida para productos existentes que se venden por
+    // talla: sin ella la recepción no puede sumar a inventario (D5).
+    for (const it of normalized) {
+      if (it.isNewProduct || !it.productId) continue;
+      const [declaredSizes] = await pool.execute(
+        'SELECT size_id FROM product_sizes WHERE product_id = ? AND is_active = TRUE',
+        [it.productId],
+      );
+      if (declaredSizes.length === 0) {
+        if (it.sizeId != null) throw new ApiError(400, `"${it.productName}" no se vende por talla.`);
+      } else if (it.sizeId == null) {
+        throw new ApiError(400, `"${it.productName}" se vende por talla: indica cuál en el renglón.`);
+      } else if (!declaredSizes.some((s) => Number(s.size_id) === it.sizeId)) {
+        throw new ApiError(400, `"${it.productName}" no ofrece la talla ${it.sizeId}.`);
+      }
+    }
 
     const conn = await pool.getConnection();
     try {
@@ -574,7 +594,7 @@ const manufacturingController = {
     const where = `WHERE ${conditions.join(' AND ')}`;
     const [rows] = await pool.execute(
       `SELECT p.id, p.name, p.sku,
-              pmc.material_id, mat.code, mat.label, pmc.cost,
+              pmc.material_id, mat.code, mat.label, pmc.cost, pmc.size_id,
               pmc.manufacturer_id, m.name AS manufacturer_name,
               c.name AS category_name
        FROM products p
@@ -583,14 +603,28 @@ const manufacturingController = {
        JOIN manufacturers m ON m.id = pmc.manufacturer_id
        LEFT JOIN categories c ON c.id = p.category_id
        ${where}
-       ORDER BY m.name, p.name, mat.sort_order`,
+       ORDER BY m.name, p.name, mat.sort_order, pmc.size_id`,
       params,
     );
 
     const productIds = [...new Set(rows.map((r) => r.id))];
     const priceByKey = new Map();
     const stockByProduct = new Map();
+    const sizesByProduct = new Map();
     if (productIds.length) {
+      // Tallas declaradas del producto (D5): la OC de un producto por talla
+      // tiene que decir cuál, para que la recepción sume a la celda correcta.
+      const [sizeRows] = await pool.query(
+        `SELECT ps.product_id, s.id, s.label
+           FROM product_sizes ps JOIN sizes s ON s.id = ps.size_id
+          WHERE ps.product_id IN (?) AND ps.is_active = TRUE
+          ORDER BY s.sort_order`,
+        [productIds],
+      );
+      for (const r of sizeRows) {
+        if (!sizesByProduct.has(r.product_id)) sizesByProduct.set(r.product_id, []);
+        sizesByProduct.get(r.product_id).push({ id: r.id, label: r.label });
+      }
       const [mpRows] = await pool.query(
         `SELECT product_id, material_id, base_cost, price_cash
            FROM product_material_prices WHERE product_id IN (?)`,
@@ -623,19 +657,32 @@ const manufacturingController = {
           manufacturerId: r.manufacturer_id,
           manufacturerName: r.manufacturer_name,
           categoryName: r.category_name ?? null,
+          sizes: sizesByProduct.get(r.id) ?? [],
           materials: {},
         });
       }
       const cost = r.cost != null ? Number(r.cost) : null;
       const mi = priceByKey.get(`${r.id}:${r.material_id}`);
-      grouped.get(key).materials[r.material_id] = {
-        code: r.code,
-        label: r.label,
-        cost,
-        isBaseCost: cost != null && mi?.baseCost != null && cost === mi.baseCost,
-        priceCash: mi?.priceCash ?? null,
-        unitMargin: cost != null && mi?.priceCash != null ? Math.round((mi.priceCash - cost) * 100) / 100 : null,
-      };
+      const sizeId = Number(r.size_id) || 0;
+      const materials = grouped.get(key).materials;
+      // `product_manufacturer_costs` trae una fila por (material, talla). La
+      // entrada del material se arma con la talla 0 (sin talla) o la primera
+      // que llegue —van ordenadas por size_id, así que 0 gana— y `sizeCosts`
+      // guarda el costo de cada talla concreta para el form de la OC.
+      if (!materials[r.material_id] || sizeId === 0) {
+        materials[r.material_id] = {
+          code: r.code,
+          label: r.label,
+          cost,
+          isBaseCost: cost != null && mi?.baseCost != null && cost === mi.baseCost,
+          priceCash: mi?.priceCash ?? null,
+          unitMargin: cost != null && mi?.priceCash != null ? Math.round((mi.priceCash - cost) * 100) / 100 : null,
+          sizeCosts: materials[r.material_id]?.sizeCosts ?? {},
+        };
+      }
+      if (sizeId !== 0 && cost != null) {
+        materials[r.material_id].sizeCosts[sizeId] = cost;
+      }
     }
 
     res.json({ data: [...grouped.values()] });

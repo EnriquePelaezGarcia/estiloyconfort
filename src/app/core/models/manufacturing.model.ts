@@ -50,6 +50,9 @@ export interface PurchaseOrderItem {
   specifications: string | null;
   materialId?: number | null;
   materialLabel?: string | null;
+  /** Talla del renglón (D5). null = producto sin talla. */
+  sizeId?: number | null;
+  sizeLabel?: string | null;
   color?: string | null;
   quantity: number;
   /** Solo en lectura: piezas ya recibidas y las que faltan. */
@@ -172,6 +175,8 @@ export interface ManufacturerCatalogMaterialCost {
   isBaseCost: boolean;
   priceCash: number | null;
   unitMargin: number | null;
+  /** Costo de este fabricante por talla concreta (D5). Llave = sizeId. Vacío si el producto no se vende por talla. */
+  sizeCosts?: Record<number, number>;
 }
 
 export interface ManufacturerCatalogProduct {
@@ -182,6 +187,8 @@ export interface ManufacturerCatalogProduct {
   manufacturerId: number | null;
   manufacturerName: string | null;
   categoryName: string | null;
+  /** Tallas declaradas del producto (D5). Vacío = no se vende por talla. */
+  sizes?: Array<{ id: number; label: string }>;
   /** Los costos de este fabricante para el producto, uno por material declarado (M2/M3). Llave = materialId. */
   materials: Record<number, ManufacturerCatalogMaterialCost>;
 }

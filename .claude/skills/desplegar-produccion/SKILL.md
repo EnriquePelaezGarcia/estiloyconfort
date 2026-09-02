@@ -324,6 +324,21 @@ ssh estiloyconfort 'cd /opt/estiloyconfort/app/deploy && docker compose exec -T 
 
 Luego cada uno sin `--dry-run` tras el OK.
 
+### Auditoría de coherencia de stock
+
+`reconcile_stock.js` compara el agregado por (producto, material) contra la suma
+de celdas por talla y los buckets de color. Corre el reporte **antes y después**
+del deploy:
+
+```powershell
+ssh estiloyconfort 'cd /opt/estiloyconfort/app/deploy && docker compose exec -T backend-prod node src/database/reconcile_stock.js'
+```
+
+Si "regla 1" (agregado por talla) sale con descuadres, 🔶 enséñaselos al usuario;
+`--apply` recalcula el agregado como la suma de las celdas (valor derivado, es
+seguro). Los descuadres de color y los buckets negativos NO se corrigen solos.
+Verifica que `inventory_movements.size_id` exista (lo agrega `schema_size_lines.sql`).
+
 ---
 
 ## Paso 6 — Verificar
