@@ -182,6 +182,14 @@ export const adminRoutes: Routes = [
         title: 'Comisiones de repartidor - Panel Admin',
       },
       {
+        path: 'gastos/comisiones-vendedores',
+        loadComponent: () =>
+          import('./expenses/seller-commissions/seller-commissions.component').then(
+            (m) => m.SellerCommissionsComponent,
+          ),
+        title: 'Comisiones de vendedores - Panel Admin',
+      },
+      {
         path: 'cuentas-por-pagar',
         loadComponent: () =>
           import('./payables/payables-list/payables-list.component').then(

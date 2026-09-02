@@ -11,6 +11,7 @@ import {
   ProfitLossReport,
   RecurringExpense,
   RecurringListResponse,
+  SellerCommissionListResponse,
   TodaySummary,
 } from '../models/expense.model';
 
@@ -127,6 +128,26 @@ export class ExpensesService {
     return this.api
       .post<{ data: { scanned: number; created: number; skipped: number } }>(
         '/expenses/commissions/backfill',
+        {},
+      )
+      .pipe(map((r) => r.data));
+  }
+
+  // ─── COMISIONES DE VENDEDOR ────────────────────────────────────────────────
+
+  /** Default del backend: la semana en curso (lunes-domingo). */
+  sellerCommissions(filters: ExpenseFilters = {}): Observable<SellerCommissionListResponse> {
+    return this.api.get<SellerCommissionListResponse>(
+      '/expenses/seller-commissions',
+      toParams(filters),
+    );
+  }
+
+  /** Genera las comisiones de pedidos anteriores al módulo. Idempotente. */
+  backfillSellerCommissions(): Observable<{ scanned: number; created: number; skipped: number }> {
+    return this.api
+      .post<{ data: { scanned: number; created: number; skipped: number } }>(
+        '/expenses/seller-commissions/backfill',
         {},
       )
       .pipe(map((r) => r.data));

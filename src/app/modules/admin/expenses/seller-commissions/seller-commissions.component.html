@@ -1,8 +1,8 @@
 <header class="page-head">
   <div>
     <p class="page-head__overline">Administración</p>
-    <h1 class="page-head__title">Comisiones de repartidor</h1>
-    <p class="page-head__sub">El cobro de armado que le corresponde a quien entregó</p>
+    <h1 class="page-head__title">Comisiones de vendedores</h1>
+    <p class="page-head__sub">El monto fijo que gana el vendedor por cada pedido que levanta</p>
   </div>
   <nav class="page-head__tabs">
     <a routerLink="/admin/gastos" class="btn btn--ghost">
@@ -11,10 +11,10 @@
     <a routerLink="/admin/gastos/fijos" class="btn btn--ghost">
       <span class="material-symbols-outlined">event_repeat</span> Gastos fijos
     </a>
-    <a routerLink="/admin/gastos/comisiones-vendedores" class="btn btn--ghost">
-      <span class="material-symbols-outlined">sell</span> Comisiones vendedores
+    <a routerLink="/admin/gastos/comisiones" class="btn btn--ghost">
+      <span class="material-symbols-outlined">two_wheeler</span> Comisiones repartidor
     </a>
-    <button type="button" class="btn btn--ghost" (click)="backfill()" title="Genera las comisiones de entregas anteriores">
+    <button type="button" class="btn btn--ghost" (click)="backfill()" title="Genera las comisiones de pedidos anteriores">
       <span class="material-symbols-outlined">history</span> Generar histórico
     </button>
   </nav>
@@ -27,7 +27,7 @@
     <button type="button" class="chip" [class.chip--active]="period() === 'year'" (click)="selectPeriod('year')">Este año</button>
   </div>
   <select class="filter-select" (change)="onPayeeChange($event)">
-    <option value="">Todos los repartidores</option>
+    <option value="">Todos los vendedores</option>
     @for (p of payees(); track p.id) {
       <option [value]="p.id">{{ p.fullName }}</option>
     }
@@ -41,10 +41,10 @@
 
 <section class="stat-grid">
   <div class="stat-card">
-    <span class="stat-card__icon"><span class="material-symbols-outlined">two_wheeler</span></span>
+    <span class="stat-card__icon"><span class="material-symbols-outlined">sell</span></span>
     <span class="stat-card__label">Comisiones del período</span>
     <span class="stat-card__value">{{ total() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
-    <span class="stat-card__hint">{{ commissions().length }} entrega(s) con armado</span>
+    <span class="stat-card__hint">{{ commissions().length }} pedido(s)</span>
   </div>
   <div class="stat-card stat-card--gold">
     <span class="stat-card__icon"><span class="material-symbols-outlined">pending</span></span>
@@ -97,11 +97,11 @@
                 />
               }
             </th>
-            <th>Entrega</th>
+            <th>Fecha</th>
             <th>Pedido</th>
             <th>Cliente</th>
-            <th>Repartidor</th>
-            <th class="table__num">Armado</th>
+            <th>Vendedor</th>
+            <th class="table__num">Total del pedido</th>
             <th class="table__num">Comisión</th>
             <th>Estado</th>
           </tr>
@@ -119,14 +119,17 @@
                 }
               </td>
               <td>{{ c.expenseDate | date: 'dd/MM/yyyy' }}</td>
-              <td>{{ c.orderNumber ?? '—' }}</td>
+              <td>
+                @if (c.orderId) {
+                  <a [routerLink]="['/admin/pedidos', c.orderId]">{{ c.orderNumber ?? '—' }}</a>
+                } @else {
+                  {{ c.orderNumber ?? '—' }}
+                }
+              </td>
               <td>{{ c.customerName ?? '—' }}</td>
               <td>{{ c.payeeName ?? '—' }}</td>
               <td class="table__num">
-                {{ c.assemblyCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
-                @if (c.assemblyFloors) {
-                  <small class="table__hint">{{ c.assemblyFloors }} piso(s)</small>
-                }
+                {{ (c.orderTotal ?? 0) | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
               </td>
               <td class="table__num"><strong>{{ c.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
               <td>
@@ -139,8 +142,7 @@
           } @empty {
             <tr>
               <td colspan="8" class="empty">
-                Sin comisiones en este período. Se generan solas al completar una entrega
-                con servicio de armado.
+                Sin comisiones en este período. Se generan solas al crear un pedido.
               </td>
             </tr>
           }

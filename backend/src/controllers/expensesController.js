@@ -2,6 +2,7 @@ const Expense = require('../models/Expense');
 const ExpenseCategory = require('../models/ExpenseCategory');
 const RecurringExpense = require('../models/RecurringExpense');
 const DeliveryCommission = require('../models/DeliveryCommission');
+const SellerCommission = require('../models/SellerCommission');
 const ProfitLoss = require('../models/ProfitLoss');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -197,6 +198,53 @@ const expensesController = {
     res.json({
       data: result,
       message: `${result.created} comisión(es) generadas de ${result.scanned} entregas`,
+    });
+  }),
+
+  // ─── COMISIONES DE VENDEDOR ────────────────────────────────────────────────
+
+  /**
+   * GET /api/expenses/seller-commissions?period&date&from&to&payeeUserId&status
+   * Default: la SEMANA en curso (lunes-domingo), como se les paga.
+   */
+  listSellerCommissions: asyncHandler(async (req, res) => {
+    const { from, to, period } = periodFromQuery({ period: 'week', ...req.query });
+    const [data, payees] = await Promise.all([
+      SellerCommission.list({
+        from,
+        to,
+        payeeUserId: req.query.payeeUserId,
+        status: req.query.status,
+      }),
+      SellerCommission.payees(),
+    ]);
+    const total = data.reduce((sum, c) => sum + c.amount, 0);
+    const pendingTotal = data
+      .filter((c) => c.status === 'pending')
+      .reduce((sum, c) => sum + c.amount, 0);
+    res.json({
+      data,
+      meta: {
+        period,
+        from,
+        to,
+        payees,
+        total: Math.round(total * 100) / 100,
+        pendingTotal: Math.round(pendingTotal * 100) / 100,
+        count: data.length,
+      },
+    });
+  }),
+
+  /**
+   * POST /api/expenses/seller-commissions/backfill — genera las comisiones de
+   * los pedidos anteriores a la activación del módulo. Idempotente.
+   */
+  backfillSellerCommissions: asyncHandler(async (req, res) => {
+    const result = await SellerCommission.backfill();
+    res.json({
+      data: result,
+      message: `${result.created} comisión(es) generadas de ${result.scanned} pedidos`,
     });
   }),
 

@@ -3,6 +3,7 @@ const Expense = require('./Expense');
 const ExpenseCategory = require('./ExpenseCategory');
 const ManufacturerPayable = require('./ManufacturerPayable');
 const DeliveryCommission = require('./DeliveryCommission');
+const SellerCommission = require('./SellerCommission');
 const PricingConfig = require('./PricingConfig');
 
 const { TAX_CATEGORY } = ExpenseCategory;
@@ -72,14 +73,19 @@ const ProfitLoss = {
     // salen como renglón PROPIO — igual que las comisiones — y se excluyen del
     // total de variables/fijos para no contarlos dos veces. El admin los captura
     // en la categoría "Impuestos (IVA e ISR)" cuando el contador le dice cuánto.
+    // Docs/plan-comisiones-vendedor.md: la comisión al vendedor sale como otro
+    // renglón propio (igual que la del repartidor y los impuestos), y se excluye
+    // del total de variables para no contarla dos veces.
     const commissionCategoryId = await DeliveryCommission.getCommissionCategoryId();
+    const sellerCommissionCategoryId = await SellerCommission.getCommissionCategoryId();
     const taxCat = await ExpenseCategory.findByName(TAX_CATEGORY);
     const taxCategoryId = taxCat?.id ?? null;
-    const excludeIds = [commissionCategoryId, taxCategoryId].filter(Boolean);
+    const excludeIds = [commissionCategoryId, sellerCommissionCategoryId, taxCategoryId].filter(Boolean);
 
-    const [totals, commissions, taxes, byCategory] = await Promise.all([
+    const [totals, commissions, sellerCommissions, taxes, byCategory] = await Promise.all([
       Expense.totals({ from, to, excludeCategoryIds: excludeIds }),
       Expense.totalForCategory(commissionCategoryId, { from, to }),
+      Expense.totalForCategory(sellerCommissionCategoryId, { from, to }),
       Expense.totalForCategory(taxCategoryId, { from, to }),
       Expense.byCategory({ from, to, status: 'paid', dateBasis: 'paid' }),
     ]);
@@ -87,12 +93,14 @@ const ProfitLoss = {
     const variableExpenses = round2(totals.variable);
     const fixedExpenses = round2(totals.fixed);
     const commissionsPaid = round2(commissions);
+    const sellerCommissionsPaid = round2(sellerCommissions);
     const taxesPaid = round2(taxes);
     const manufacturersTotal = round2(Number(manufacturersPaid.total));
 
     const totalIncome = round2(Number(income.total));
     const totalExpenses = round2(
-      manufacturersTotal + commissionsPaid + taxesPaid + variableExpenses + fixedExpenses,
+      manufacturersTotal + commissionsPaid + sellerCommissionsPaid + taxesPaid
+      + variableExpenses + fixedExpenses,
     );
     const netProfit = round2(totalIncome - totalExpenses);
     const margin = totalIncome > 0 ? round2((netProfit / totalIncome) * 100) : 0;
@@ -116,6 +124,11 @@ const ProfitLoss = {
         WHERE category_id = ? AND status = 'pending'`,
       [commissionCategoryId ?? 0],
     );
+    const [[pendingSellerCommissions]] = await pool.execute(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
+        WHERE category_id = ? AND status = 'pending'`,
+      [sellerCommissionCategoryId ?? 0],
+    );
     const [[pendingFixed]] = await pool.query(
       `SELECT COALESCE(SUM(e.amount), 0) AS total
          FROM expenses e JOIN expense_categories c ON c.id = e.category_id
@@ -136,6 +149,7 @@ const ProfitLoss = {
         manufacturers: manufacturersTotal,
         manufacturerBatches: Number(manufacturersPaid.count),
         commissions: commissionsPaid,
+        sellerCommissions: sellerCommissionsPaid,
         taxes: taxesPaid,
         variable: variableExpenses,
         fixed: fixedExpenses,
@@ -161,6 +175,7 @@ const ProfitLoss = {
         // h9: IVA que ya cobraste y tarde o temprano enteras al SAT.
         ivaInIncome,
         pendingCommissions: round2(Number(pendingCommissions.total)),
+        pendingSellerCommissions: round2(Number(pendingSellerCommissions.total)),
         pendingFixedExpenses: round2(Number(pendingFixed.total)),
       },
     };

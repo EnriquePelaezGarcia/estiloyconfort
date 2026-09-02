@@ -144,6 +144,40 @@ export interface CommissionPayee {
 }
 
 /**
+ * Comisión fija al vendedor por cada pedido que emite
+ * (Docs/plan-comisiones-vendedor.md). Se genera sola al crear el pedido y nace
+ * pendiente: entra al estado de resultados cuando se marca pagada.
+ */
+export interface SellerCommission {
+  expenseId: number;
+  amount: number;
+  expenseDate: string;
+  status: ExpenseStatus;
+  paidDate: string | null;
+  orderId: number | null;
+  orderNumber: string | null;
+  customerName: string | null;
+  orderTotal: number | null;
+  orderStatus: string | null;
+  paymentStatus: string | null;
+  payeeUserId: number | null;
+  payeeName: string | null;
+}
+
+export interface SellerCommissionListResponse {
+  data: SellerCommission[];
+  meta: {
+    period: string;
+    from: string;
+    to: string;
+    payees: CommissionPayee[];
+    total: number;
+    pendingTotal: number;
+    count: number;
+  };
+}
+
+/**
  * Estado de resultados en base FLUJO DE EFECTIVO: solo el dinero que entró y
  * salió en el período. Por eso el costo de mercancía es lo que se le PAGÓ al
  * fabricante, no el costo devengado que muestra la pantalla de Finanzas.
@@ -159,6 +193,8 @@ export interface ProfitLossReport {
     manufacturerBatches: number;
     /** Renglón propio: es de los costos más grandes y variables del mes. */
     commissions: number;
+    /** Renglón propio: comisión fija al vendedor por cada pedido emitido. */
+    sellerCommissions: number;
     /** Impuestos pagados al SAT (IVA + ISR) capturados por el admin (h9). */
     taxes: number;
     variable: number;
@@ -184,6 +220,8 @@ export interface ProfitLossReport {
     /** h9: IVA embebido en lo cobrado, para cruzar con el contador. */
     ivaInIncome: number;
     pendingCommissions: number;
+    /** Comisiones de vendedor aún sin pagar. */
+    pendingSellerCommissions: number;
     pendingFixedExpenses: number;
   };
 }

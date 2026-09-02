@@ -12,6 +12,14 @@ const { pool } = require('../config/database');
 const DELIVERY_COMMISSION_CATEGORY = 'Comisión repartidor';
 
 /**
+ * Categoría de la comisión fija que se le paga al vendedor por cada pedido que
+ * emite (Docs/plan-comisiones-vendedor.md). La genera Order.createOne; el
+ * Estado de Resultados la trata como renglón propio. Sembrada en
+ * schema_seller_commission.sql.
+ */
+const SELLER_COMMISSION_CATEGORY = 'Comisión vendedor';
+
+/**
  * Categoría donde el admin registra los pagos de impuestos al SAT (IVA + ISR)
  * que le indica el contador. El Estado de Resultados la trata como renglón
  * propio (h9 de la auditoría contable sep-2026). Sembrada en
@@ -105,4 +113,5 @@ const ExpenseCategory = {
 
 module.exports = ExpenseCategory;
 module.exports.DELIVERY_COMMISSION_CATEGORY = DELIVERY_COMMISSION_CATEGORY;
+module.exports.SELLER_COMMISSION_CATEGORY = SELLER_COMMISSION_CATEGORY;
 module.exports.TAX_CATEGORY = TAX_CATEGORY;
