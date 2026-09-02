@@ -14,6 +14,8 @@ const router = Router();
 router.use(authenticate, authorize('seller', 'admin'));
 
 router.get('/dashboard', sellerController.dashboard);
+// "Mis ganancias": comisiones por los pedidos que emitió (solo las suyas).
+router.get('/earnings', sellerController.earnings);
 
 // Notificaciones in-app del vendedor (campana + página). Controlador compartido.
 // El fabricante avisa aquí cuando acepta/rechaza un pedido del vendedor.

@@ -1,0 +1,75 @@
+<header class="page-head">
+  <div>
+    <p class="page-head__overline">Vendedor</p>
+    <h1 class="page-head__title">Mis ganancias</h1>
+    <p class="page-head__sub">Tu comisión por cada pedido que levantas</p>
+  </div>
+</header>
+
+<div class="period-tabs">
+  @for (p of periods; track p.value) {
+    <button
+      type="button"
+      class="period-tab"
+      [class.period-tab--active]="period() === p.value"
+      (click)="setPeriod(p.value)"
+    >
+      {{ p.label }}
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando ganancias…</p></div>
+} @else if (earnings(); as e) {
+  <p class="range">Del {{ e.from | date: 'dd/MM/yyyy' }} al {{ e.to | date: 'dd/MM/yyyy' }}</p>
+
+  <div class="summary">
+    <div class="summary-card">
+      <span class="summary-card__label">Pedidos con comisión</span>
+      <span class="summary-card__value">{{ e.summary.orderCount }}</span>
+    </div>
+    <div class="summary-card summary-card--money">
+      <span class="summary-card__label">Total del período</span>
+      <span class="summary-card__value">{{ e.summary.total | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-card__label">Pagado</span>
+      <span class="summary-card__value">{{ e.summary.paidTotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-card__label">Pendiente</span>
+      <span class="summary-card__value">{{ e.summary.pendingTotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+    </div>
+  </div>
+
+  @if (e.orders.length === 0) {
+    <div class="state">
+      <span class="material-symbols-outlined" style="font-size: 2.5rem">savings</span>
+      <p>No tienes ventas con comisión en este período.</p>
+    </div>
+  } @else {
+    <div class="cards">
+      @for (o of e.orders; track o.orderId) {
+        <a class="ecard" [routerLink]="['/vendedor/pedidos', o.orderId]">
+          <div class="ecard__head">
+            <span class="ecard__order">{{ o.orderNumber }}</span>
+            <span class="ecard__date">{{ o.orderDate | date: 'dd/MM/yyyy' }}</span>
+          </div>
+          <p class="ecard__customer">{{ o.customerName }}</p>
+          <div class="ecard__foot">
+            <span class="badge" [class]="statusTone[o.commissionStatus]">
+              {{ statusLabels[o.commissionStatus] }}
+              @if (o.commissionStatus === 'paid' && o.commissionPaidDate) {
+                · {{ o.commissionPaidDate | date: 'dd/MM' }}
+              }
+            </span>
+            <span class="ecard__amount">
+              {{ o.commissionAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+            </span>
+          </div>
+        </a>
+      }
+    </div>
+  }
+}

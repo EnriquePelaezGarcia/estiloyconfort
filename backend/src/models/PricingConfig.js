@@ -37,6 +37,10 @@ const ALLOWED_KEYS = [
   // Docs/plan-aprobaciones-admin.md §11.3: umbral de aviso (NO bloqueo) de
   // entregas "Día preciso" ya comprometidas en el mismo horario.
   'max_deliveries_per_slot',
+  // Docs/plan-comisiones-vendedor.md: monto fijo en dinero que se le paga al
+  // vendedor por cada pedido que emite. Genera la comisión automática al crear
+  // el pedido; cambiarlo no toca las comisiones ya generadas.
+  'seller_commission_per_order',
 ];
 
 const PricingConfig = {
@@ -72,6 +76,7 @@ const PricingConfig = {
       fabrication_days: 15,
       max_seller_discount: 2000,
       max_deliveries_per_slot: 3,
+      seller_commission_per_order: 50,
     };
     for (const r of rows) map[r.config_key] = r.config_value;
     return map;

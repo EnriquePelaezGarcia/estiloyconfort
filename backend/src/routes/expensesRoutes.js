@@ -29,6 +29,9 @@ router.get('/pnl', expensesController.pnl);
 router.get('/commissions', expensesController.listCommissions);
 router.post('/commissions/backfill', expensesController.backfillCommissions);
 
+router.get('/seller-commissions', expensesController.listSellerCommissions);
+router.post('/seller-commissions/backfill', expensesController.backfillSellerCommissions);
+
 router.get('/today', expensesController.today);
 router.patch('/pay-many', expensesController.payMany);
 

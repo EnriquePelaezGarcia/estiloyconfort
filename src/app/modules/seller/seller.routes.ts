@@ -23,6 +23,12 @@ export const sellerRoutes: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
+        path: 'ganancias',
+        loadComponent: () =>
+          import('./earnings/seller-earnings.component').then((m) => m.SellerEarningsComponent),
+        title: 'Mis ganancias - Vendedor',
+      },
+      {
         path: 'solicitudes-cotizacion',
         loadComponent: () =>
           import('./quotes/quote-requests-list/quote-requests-list.component').then(

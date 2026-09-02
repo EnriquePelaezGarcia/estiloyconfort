@@ -670,6 +670,34 @@ export interface DeliveryEarnings {
   };
 }
 
+/** Una fila de "Mis ganancias" del vendedor: un pedido con su comisión. */
+export interface SellerEarningsOrder {
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  orderDate: string;
+  totalAmount: number;
+  orderStatus: OrderStatus;
+  paymentStatus: PaymentStatus;
+  commissionAmount: number;
+  commissionStatus: 'paid' | 'pending';
+  commissionPaidDate: string | null;
+}
+
+/** Respuesta de GET /seller/earnings (Docs/plan-comisiones-vendedor.md). */
+export interface SellerEarnings {
+  period: EarningsPeriod;
+  from: string;
+  to: string;
+  orders: SellerEarningsOrder[];
+  summary: {
+    orderCount: number;
+    total: number;
+    paidTotal: number;
+    pendingTotal: number;
+  };
+}
+
 export interface WeeklyListRow {
   productId: number;
   productName: string;

@@ -141,6 +141,7 @@ export class ProfitLossComponent implements OnInit {
       ['EGRESOS'],
       ['Pagos a fabricantes', r.expenses.manufacturers.toFixed(2)],
       ['Comisiones de repartidores', r.expenses.commissions.toFixed(2)],
+      ['Comisiones de vendedores', r.expenses.sellerCommissions.toFixed(2)],
       ['Impuestos (IVA e ISR) pagados al SAT', r.expenses.taxes.toFixed(2)],
       ['Gastos variables', r.expenses.variable.toFixed(2)],
       ['Gastos fijos', r.expenses.fixed.toFixed(2)],
@@ -158,6 +159,7 @@ export class ProfitLossComponent implements OnInit {
       ['Anticipos a favor con fabricantes', r.informative.payableToManufacturers.advances.toFixed(2)],
       ['IVA incluido en lo cobrado', r.informative.ivaInIncome.toFixed(2)],
       ['Comisiones pendientes', r.informative.pendingCommissions.toFixed(2)],
+      ['Comisiones de vendedores pendientes', r.informative.pendingSellerCommissions.toFixed(2)],
       ['Gastos fijos sin pagar', r.informative.pendingFixedExpenses.toFixed(2)],
     ];
     const csv = rows

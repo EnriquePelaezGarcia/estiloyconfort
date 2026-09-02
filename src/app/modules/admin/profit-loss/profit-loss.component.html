@@ -111,6 +111,18 @@
             {{ r.expenses.commissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
           </span>
         </div>
+        <div class="breakdown__row">
+          <span class="breakdown__label">
+            Comisiones de vendedores
+            <small>pagos por pedido emitido</small>
+          </span>
+          <span class="breakdown__bar">
+            <span class="breakdown__fill" [style.width.%]="percentOf(r.expenses.sellerCommissions)"></span>
+          </span>
+          <span class="breakdown__value">
+            {{ r.expenses.sellerCommissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+          </span>
+        </div>
         @if (r.expenses.taxes > 0) {
           <div class="breakdown__row">
             <span class="breakdown__label">
@@ -239,6 +251,13 @@
         <span class="stat-card__label">Comisiones pendientes</span>
         <span class="stat-card__value">
           {{ r.informative.pendingCommissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
+        </span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__icon"><span class="material-symbols-outlined">sell</span></span>
+        <span class="stat-card__label">Comisiones de vendedores pendientes</span>
+        <span class="stat-card__value">
+          {{ r.informative.pendingSellerCommissions | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}
         </span>
       </div>
       <div class="stat-card">

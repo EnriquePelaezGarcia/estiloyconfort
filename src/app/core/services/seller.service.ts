@@ -6,12 +6,14 @@ import {
   CreateOrderRequest,
   CreditClient,
   DeliveryPerson,
+  EarningsPeriod,
   InventoryItem,
   Order,
   OrderRefund,
   Paginated,
   PaymentInstrument,
   SellerDashboard,
+  SellerEarnings,
   StockReservation,
 } from '../models/order.model';
 import { CreditConfig } from '../models/pricing-config.model';
@@ -22,6 +24,16 @@ export class SellerService {
 
   getDashboard(): Observable<SellerDashboard> {
     return this.api.get<SellerDashboard>('/seller/dashboard');
+  }
+
+  /**
+   * "Mis ganancias": comisiones por los pedidos que emitió el vendedor
+   * autenticado (Docs/plan-comisiones-vendedor.md). Solo las suyas.
+   */
+  getEarnings(period: EarningsPeriod, date?: string): Observable<{ data: SellerEarnings }> {
+    const params: Record<string, string> = { period };
+    if (date) params['date'] = date;
+    return this.api.get<{ data: SellerEarnings }>('/seller/earnings', params);
   }
 
   getOrders(status?: string, scope?: 'all'): Observable<Paginated<Order>> {

@@ -3,12 +3,14 @@ const Inventory = require('../models/Inventory');
 const Payment = require('../models/Payment');
 const Refund = require('../models/Refund');
 const PricingConfig = require('../models/PricingConfig');
+const SellerCommission = require('../models/SellerCommission');
 const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { isPickupWithinGrace } = require('../utils/pickup');
 const { isValidCustomerPhone } = require('../utils/validators');
+const { periodFromQuery } = require('../utils/periods');
 const { pool } = require('../config/database');
 
 /**
@@ -310,6 +312,15 @@ const sellerController = {
     const quote = calculateCredit(Number(amount), config);
     if (!quote) throw ApiError.badRequest('No se pudo calcular el plan de crédito');
     res.json({ data: quote });
+  }),
+
+  // GET /api/seller/earnings?period&date — "Mis ganancias" del vendedor:
+  // comisiones por los pedidos que emitió (Docs/plan-comisiones-vendedor.md).
+  // El vendedor SOLO ve las suyas: el id sale de req.user, nunca del query.
+  earnings: asyncHandler(async (req, res) => {
+    const { from, to, period } = periodFromQuery(req.query);
+    const data = await SellerCommission.earningsForSeller(req.user.id, { from, to });
+    res.json({ data: { period, ...data } });
   }),
 
   // GET /api/seller/inventory — disponibilidad de productos para armar pedidos.

@@ -1468,6 +1468,19 @@ const Order = {
         });
       }
 
+      // Comisión fija al vendedor por el pedido (Docs/plan-comisiones-vendedor.md).
+      // Cubre también la venta partida: createSplit llama a createOne N veces, así
+      // que se genera una comisión por nota. El require va aquí dentro para no
+      // arrastrar el módulo al cargar Order. La comisión es contabilidad, no
+      // operación: si falla NO se hace rollback de la venta — un INSERT fallido
+      // en MySQL no aborta la transacción, y el caso se recupera con el backfill.
+      try {
+        const SellerCommission = require('./SellerCommission');
+        await SellerCommission.generateForOrder(orderId, conn);
+      } catch (err) {
+        console.error(`⚠️  No se pudo generar la comisión del vendedor para el pedido ${orderId}:`, err.message);
+      }
+
       return orderId;
   },
 
@@ -2853,6 +2866,23 @@ const Order = {
     } else if (status === 'cancelled') {
       await StockReservation.releaseByOrder(id, 'Pedido cancelado');
     }
+
+    // Comisión del vendedor (Docs/plan-comisiones-vendedor.md): se revierte al
+    // cancelar (solo si sigue pendiente de pago) y se regenera si el pedido
+    // SALE de 'cancelled' hacia otro estado. La comisión es contabilidad, no
+    // operación: un fallo aquí no debe tumbar el cambio de estatus.
+    try {
+      const SellerCommission = require('./SellerCommission');
+      if (status === 'cancelled') {
+        const { keptPaid } = await SellerCommission.revertForOrder(id);
+        if (keptPaid) return { ...(await this.findById(id)), commissionKeptPaid: true };
+      } else if (order.orderStatus === 'cancelled') {
+        await SellerCommission.generateForOrder(id);
+      }
+    } catch (err) {
+      console.error(`⚠️  No se pudo actualizar la comisión del vendedor del pedido ${id}:`, err.message);
+    }
+
     return this.findById(id);
   },
 
@@ -2956,6 +2986,17 @@ const Order = {
       }
       // §4.3: cancelar el pedido libera cualquier reserva activa ligada a él.
       await StockReservation.releaseByOrder(id, 'Pedido cancelado', conn);
+
+      // Comisión del vendedor (Docs/plan-comisiones-vendedor.md): se borra solo
+      // si sigue pendiente de pago; si ya se pagó, se conserva (el dinero salió)
+      // y la UI lo avisa. No debe tumbar la cancelación si falla.
+      try {
+        const SellerCommission = require('./SellerCommission');
+        await SellerCommission.revertForOrder(id, conn);
+      } catch (err) {
+        console.error(`⚠️  No se pudo revertir la comisión del vendedor del pedido ${id}:`, err.message);
+      }
+
       await conn.commit();
     } catch (err) {
       await conn.rollback();
