@@ -46,7 +46,7 @@ export class SellerService {
   /**
    * Sube UNA foto de referencia para el fabricante. El pedido todavía no existe
    * (se está capturando en el POS): devuelve la ruta relativa ya reescalada a
-   * WebP, que luego viaja en `notasFabricanteImagenes` al crear/editar.
+   * WebP, que luego viaja en `items[].modification.images` al crear/editar.
    */
   uploadManufacturerRefImage(file: File | Blob): Observable<{ data: { url: string } }> {
     const fd = new FormData();

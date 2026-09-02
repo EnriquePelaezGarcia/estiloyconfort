@@ -122,16 +122,6 @@
             </div>
           </div>
         }
-        @if (a.notasFabricante) {
-          <div class="note-banner">
-            <span class="material-symbols-outlined">package_2</span>
-            <div class="note-banner__info">
-              <span class="note-banner__title">Notas fabricante</span>
-              <span class="note-banner__text">{{ a.notasFabricante }}</span>
-            </div>
-          </div>
-        }
-
         @if (a.items && a.items.length) {
           <h3 class="info-subtitle">Productos</h3>
           <ul class="items">
@@ -160,6 +150,12 @@
                     @if (it.color) { <span>{{ it.color }}</span> }
                     <span>x{{ it.quantity }}</span>
                   </span>
+                  <!-- Docs/plan-fabricacion-y-notas-por-linea.md: si este mueble
+                       se fabricó con modificación, el repartidor lo revisa contra
+                       la nota antes de entregar. -->
+                  @if (it.isCustomModification || it.fabricationNote) {
+                    <span class="prod-row__mod">✏️ {{ it.fabricationNote || 'Lleva modificación — revísalo' }}</span>
+                  }
                 </span>
               </li>
             }

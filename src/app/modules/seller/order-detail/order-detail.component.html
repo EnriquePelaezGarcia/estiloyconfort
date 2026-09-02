@@ -147,6 +147,7 @@
                   {{ it.materialLabel }}
                   @if (it.sizeLabel) { <span class="muted"> · {{ it.sizeLabel }}</span> }
                   @if (it.color) { <span class="muted"> · {{ it.color }}</span> }
+                  @if (it.isCustomModification) { <span class="muted"> · lleva modificación</span> }
                 </td>
                 <td class="num">{{ it.quantity }}</td>
                 <td class="num">{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
@@ -467,27 +468,36 @@
           </div>
         }
         @if (o.deliveryPersonName) { <div><dt>Repartidor</dt><dd>{{ o.deliveryPersonName }}</dd></div> }
-        @if (o.notasFabricante) { <div class="no-print"><dt>Notas fabricante</dt><dd>{{ o.notasFabricante }}</dd></div> }
-        @if (o.notasFabricanteImagenes?.length) {
-          <div class="no-print">
-            <dt>Imágenes de referencia</dt>
-            <dd>
-              <ul class="ref-images">
-                @for (img of o.notasFabricanteImagenes; track img) {
-                  <li>
-                    <button
-                      type="button"
-                      class="ref-images__btn"
-                      title="Ver imagen de referencia"
-                      (click)="zoomedImage.set(img)"
-                    >
-                      <img [src]="img | mediaUrl:'thumb'" alt="Referencia para el fabricante" />
-                    </button>
-                  </li>
+        <!-- Docs/plan-fabricacion-y-notas-por-linea.md: las instrucciones para
+             el fabricante son por mueble. -->
+        @for (it of o.items; track it.id) {
+          @if (it.isCustomModification) {
+            <div class="no-print">
+              <dt>Modificación · {{ it.productName }}</dt>
+              <dd>
+                {{ it.fabricationNote || 'Sin nota' }}
+                @if (it.fabricationRefImages?.length) {
+                  <ul class="ref-images">
+                    @for (img of it.fabricationRefImages; track img) {
+                      <li>
+                        <button
+                          type="button"
+                          class="ref-images__btn"
+                          title="Ver imagen de referencia"
+                          (click)="zoomedImage.set(img)"
+                        >
+                          <img [src]="img | mediaUrl:'thumb'" alt="Referencia para el fabricante" />
+                        </button>
+                      </li>
+                    }
+                  </ul>
                 }
-              </ul>
-            </dd>
-          </div>
+              </dd>
+            </div>
+          }
+        }
+        @if (o.notasFabricante) {
+          <div class="no-print"><dt>Notas fabricante (pedido antiguo)</dt><dd>{{ o.notasFabricante }}</dd></div>
         }
         @if (o.notasPedido) { <div><dt>Notas del pedido</dt><dd>{{ o.notasPedido }}</dd></div> }
         @if (o.instruccionesEntrega) { <div class="no-print"><dt>Instrucciones de entrega</dt><dd>{{ o.instruccionesEntrega }}</dd></div> }

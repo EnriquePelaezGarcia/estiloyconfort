@@ -47,8 +47,17 @@
                 <span class="muted"> · {{ r.productSku }}</span>
                 @if (r.sizeLabel) { <span class="muted"> · {{ r.sizeLabel }}</span> }
                 @if (r.color) { <span class="muted"> / {{ r.color }}</span> }
-                @if (r.fabricationNote) {
-                  <span class="specs">✏️ {{ r.fabricationNote }}</span>
+                @if (r.isCustomModification || r.fabricationNote) {
+                  <span class="specs">✏️ {{ r.fabricationNote || 'Ver fotos de referencia' }}</span>
+                }
+                @if (r.fabricationRefImages.length) {
+                  <span class="ref-thumbs">
+                    @for (img of r.fabricationRefImages; track img) {
+                      <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                        <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble" width="36" height="36" />
+                      </a>
+                    }
+                  </span>
                 }
               </td>
               <td data-label="Cantidad" class="num">{{ r.quantity }}</td>
@@ -146,7 +155,16 @@
       <div class="modal__body">
         <p class="strong">{{ r.orderNumber }} — {{ r.productName }}</p>
         <p class="muted">{{ r.materialLabel }}@if (r.color) { / {{ r.color }} } · pedidas {{ r.quantity }}, ya recibidas {{ r.receivedQuantity }}</p>
-        @if (r.fabricationNote) { <p class="specs">✏️ {{ r.fabricationNote }}</p> }
+        @if (r.isCustomModification || r.fabricationNote) { <p class="specs">✏️ {{ r.fabricationNote || 'Ver fotos de referencia' }}</p> }
+        @if (r.fabricationRefImages.length) {
+          <p class="ref-thumbs">
+            @for (img of r.fabricationRefImages; track img) {
+              <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble" width="44" height="44" />
+              </a>
+            }
+          </p>
+        }
 
         <div class="field">
           <label>Piezas recibidas (acumulado)</label>

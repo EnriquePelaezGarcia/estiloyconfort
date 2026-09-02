@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { FactoryOrderItemRow } from '../../../../core/models/manufacturing.model';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 
 /** Un pedido con todos sus items de fabricación agrupados. */
 export interface FactoryOrderGroup {
@@ -20,7 +21,7 @@ export interface FactoryOrderGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './factory-orders.component.html',
   styleUrl: './factory-orders.component.scss',
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, MediaUrlPipe],
 })
 export class FactoryOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);

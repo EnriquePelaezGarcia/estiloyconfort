@@ -269,6 +269,96 @@
     flex: 1;
     min-width: 120px;
   }
+
+  // ── Modificación por línea (Docs/plan-fabricacion-y-notas-por-linea.md) ──
+  &__mod-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 4px;
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+    cursor: pointer;
+
+    input[type='checkbox'] { accent-color: vars.$color-primary; cursor: pointer; }
+  }
+
+  &__mod-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 4px;
+    padding: 0.5rem;
+    background: vars.$color-bg;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+  }
+
+  &__mod-note {
+    width: 100%;
+    font: inherit;
+    font-size: 0.8rem;
+    resize: vertical;
+  }
+
+  &__mod-images {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+  }
+
+  &__mod-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px dashed vars.$color-border;
+    border-radius: vars.$radius-sm;
+    color: vars.$color-primary;
+    cursor: pointer;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+
+    &--disabled { opacity: 0.5; pointer-events: none; }
+  }
+
+  &__mod-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__mod-thumb {
+    position: relative;
+
+    img { border-radius: vars.$radius-sm; object-fit: cover; display: block; }
+
+    button {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: vars.$color-text;
+      color: #fff;
+      cursor: pointer;
+
+      .material-symbols-outlined { font-size: 0.85rem; }
+    }
+  }
+
+  &__mod-hint { color: vars.$color-text-secondary; flex-basis: 100%; }
 }
 
 .qty {

@@ -89,6 +89,15 @@
       margin-right: 0.4rem;
     }
   }
+
+  // Docs/plan-fabricacion-y-notas-por-linea.md: el repartidor coteja el mueble
+  // modificado contra esta nota antes de entregarlo.
+  &__mod {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: vars.$color-text;
+  }
 }
 
 // Teléfono como acceso directo a WhatsApp (informa "ya vamos en camino").

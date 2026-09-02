@@ -100,10 +100,24 @@
                   <span class="badge badge--amber">Por fabricar</span>
                 }
               </dd>
-              @if (it.fabricationNote) {
+              @if (it.isCustomModification || it.fabricationNote) {
                 <dd class="field__qty-line">
                   <span class="order__status-label">Modificación:</span>
-                  <span class="field__qty">✏️ {{ it.fabricationNote }}</span>
+                  <span class="field__qty">✏️ {{ it.fabricationNote || 'Ver fotos de referencia' }}</span>
+                </dd>
+              }
+              @if (it.fabricationRefImages?.length) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Referencia:</span>
+                  <ul class="ref-images">
+                    @for (img of it.fabricationRefImages; track img) {
+                      <li>
+                        <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                          <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble a fabricar" />
+                        </a>
+                      </li>
+                    }
+                  </ul>
                 </dd>
               }
               <dd class="field__qty-line">
@@ -140,29 +154,6 @@
             </div>
           }
 
-          @if (o.notas_fabricante) {
-            <div class="field">
-              <dt class="field__label">Notas fabricante</dt>
-              <dd class="field__value">{{ o.notas_fabricante }}</dd>
-            </div>
-          }
-
-          @if (o.notas_fabricante_imagenes?.length) {
-            <div class="field">
-              <dt class="field__label">Imágenes de referencia</dt>
-              <dd class="field__value">
-                <ul class="ref-images">
-                  @for (img of o.notas_fabricante_imagenes; track img) {
-                    <li>
-                      <a [href]="img | mediaUrl" target="_blank" rel="noopener">
-                        <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble a fabricar" />
-                      </a>
-                    </li>
-                  }
-                </ul>
-              </dd>
-            </div>
-          }
         </dl>
 
         @if (o.order_status === 'pending') {
