@@ -31,9 +31,6 @@
                   {{ item.name }}
                 </a>
                 <p class="cart-item__variants">{{ materialLabel(item) }}@if (variantLabel(item)) {, {{ variantLabel(item) }}}</p>
-                @if (!item.inStock) {
-                  <span class="cart-item__lead">Sobre pedido</span>
-                }
               </div>
 
               <div class="cart-item__qty">
