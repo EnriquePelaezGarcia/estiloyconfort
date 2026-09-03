@@ -267,9 +267,15 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           const reqMaterial = Number(this.route.snapshot.queryParamMap.get('material'));
           const reqSize = Number(this.route.snapshot.queryParamMap.get('size'));
 
+          // Sin `?material=` en la URL, el default es MDF si el producto lo
+          // cotiza (el material que más se vende); si no lo cotiza pero hay
+          // un solo material cotizado (p.ej. solo Melamina), ese se preselecciona.
+          // Con dos o más materiales sin MDF, el cliente elige.
           const distinctMaterials = [...new Set(quoted.map((m) => m.material_id))];
+          const mdf = quoted.find((m) => m.code === 'MDF');
           let material: number | null = null;
           if (distinctMaterials.includes(reqMaterial)) material = reqMaterial;
+          else if (mdf) material = mdf.material_id;
           else if (distinctMaterials.length === 1) material = distinctMaterials[0];
           if (material == null) return;
           this.selectedMaterial.set(material);
