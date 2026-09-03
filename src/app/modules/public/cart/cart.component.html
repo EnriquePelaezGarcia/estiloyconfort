@@ -133,14 +133,6 @@
           </div>
 
           <div class="cart-summary__rows">
-            <div class="cart-summary__row">
-              <span>Subtotal (sin IVA)</span>
-              <span>{{ cart.subtotal() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
-            <div class="cart-summary__row">
-              <span>IVA (16%)</span>
-              <span>{{ cart.iva() | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-            </div>
             @if (shippingState() === 'covered') {
               <div class="cart-summary__row">
                 <span>Envío estimado</span>

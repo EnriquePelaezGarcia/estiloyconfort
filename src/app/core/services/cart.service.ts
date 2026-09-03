@@ -14,11 +14,15 @@ export class CartService {
 
   readonly items = computed(() => this._cart().items);
   readonly itemCount = computed(() => this._cart().items.reduce((n, i) => n + i.quantity, 0));
-  readonly subtotal = computed(() =>
+  /**
+   * `priceCash` sale de `calculatePrices()` en el backend con el IVA YA
+   * INCLUIDO (K = G + G·iva, antes de dividir entre la comisión de tarjeta) —
+   * es el mismo precio que se ve en la ficha del producto. `total` es la
+   * suma directa de las líneas: sumarle IVA aparte lo cobraría dos veces.
+   */
+  readonly total = computed(() =>
     this._cart().items.reduce((sum, i) => sum + (i.priceCash + i.variantPriceModifier) * i.quantity, 0)
   );
-  readonly iva = computed(() => this.subtotal() * 0.16);
-  readonly total = computed(() => this.subtotal() + this.iva());
 
   /**
    * Agrega un producto EN UN MATERIAL concreto. El precio se toma de
