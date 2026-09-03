@@ -81,6 +81,19 @@
         }
         <h1 class="detail__name">{{ product()!.name }}</h1>
 
+        @if (product()!.description) {
+          <p
+            #descriptionText
+            class="detail__description"
+            [class.detail__description--clamped]="!descriptionExpanded()"
+          >{{ product()!.description }}</p>
+          @if (descriptionClamped()) {
+            <button type="button" class="detail__description-toggle" (click)="toggleDescription()">
+              {{ descriptionExpanded() ? 'Ver menos' : 'Ver más...' }}
+            </button>
+          }
+        }
+
         <!-- Material: M5 — con un solo material declarado, la ficha no pregunta -->
         @if (materialOptions().length > 1) {
           <div class="detail__variants">
@@ -230,12 +243,16 @@
                 }
                 @if (product()!.dimensions_length) {
                   <div class="specs-list__row">
-                    <dt>Dimensiones</dt>
-                    <dd>
-                      {{ product()!.dimensions_length }} ×
-                      {{ product()!.dimensions_width }} ×
-                      {{ product()!.dimensions_height }} cm
-                    </dd>
+                    <dt>Fondo (cm)</dt>
+                    <dd>{{ product()!.dimensions_length }}</dd>
+                  </div>
+                  <div class="specs-list__row">
+                    <dt>Ancho (cm)</dt>
+                    <dd>{{ product()!.dimensions_width }}</dd>
+                  </div>
+                  <div class="specs-list__row">
+                    <dt>Alto (cm)</dt>
+                    <dd>{{ product()!.dimensions_height }}</dd>
                   </div>
                 }
                 @if (product()!.weight_volumetric) {

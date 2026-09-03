@@ -142,6 +142,7 @@
       <div class="field">
         <quill-editor
           formControlName="shipping_policy"
+          [modules]="quillModules"
           [styles]="{ minHeight: '220px' }"
           placeholder="Escribe la política de envíos..."
         />
@@ -171,6 +172,7 @@
       <div class="field">
         <quill-editor
           formControlName="policy_acceptance"
+          [modules]="quillModules"
           [styles]="{ minHeight: '160px' }"
           placeholder="Escribe el texto de aceptación..."
         />

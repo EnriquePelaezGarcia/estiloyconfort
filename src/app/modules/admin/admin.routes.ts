@@ -1,25 +1,17 @@
 import { Routes } from '@angular/router';
 import { provideQuillConfig } from 'ngx-quill/config';
 import { unsavedChangesGuard } from '../../core/guards/unsaved-changes.guard';
-
-// Toolbar única para los editores de texto enriquecido del admin (detalles
-// de producto, contenido fijo del sitio): negrita/cursiva, encabezados y
-// listas alcanzan para lo que hoy se captura ahí. Se registra a nivel de
-// estas rutas (no en app.config) para que el bundle del sitio público —
-// zero Quill — no cargue un editor que nunca usa.
-const QUILL_TOOLBAR = [
-  ['bold', 'italic'],
-  [{ header: [2, 3, false] }],
-  [{ list: 'ordered' }, { list: 'bullet' }],
-  ['link'],
-  ['clean'],
-];
+import { ADMIN_QUILL_MODULES } from './quill-config';
 
 // Fase 3: Panel de Administrador
 export const adminRoutes: Routes = [
   {
     path: '',
-    providers: [provideQuillConfig({ modules: { toolbar: QUILL_TOOLBAR } })],
+    // Fallback por si algún `<quill-editor>` futuro no le pasa `[modules]`
+    // directo (ver quill-config.ts): probado que este override de ruta NO
+    // llega a `QuillEditorComponent` hoy — cada editor existente ya trae
+    // `[modules]="adminQuillModules"` en su plantilla, que sí funciona.
+    providers: [provideQuillConfig({ modules: ADMIN_QUILL_MODULES })],
     loadComponent: () =>
       import('./layout/admin-layout.component').then((m) => m.AdminLayoutComponent),
     children: [

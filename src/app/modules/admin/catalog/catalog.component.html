@@ -154,11 +154,13 @@
           <label>Detalles (ficha pública)</label>
           <p class="field__hint">
             Se muestra en el panel "Detalles" de la ficha del producto, junto
-            con las especificaciones de abajo. Admite negritas, encabezados y
-            listas.
+            con las especificaciones de abajo. Los últimos 6 botones son de
+            tabla: insertar tabla, agregar fila, agregar columna, borrar fila,
+            borrar columna, borrar tabla.
           </p>
           <quill-editor
             formControlName="detailsContent"
+            [modules]="quillModules"
             [styles]="{ minHeight: '180px' }"
             placeholder="Elegancia, organización y funcionalidad en un mueble diseñado para..."
           />
@@ -215,7 +217,7 @@
         <p class="form-section">Dimensiones y peso</p>
         <div class="field-grid">
           <div class="field">
-            <label for="length">Largo (cm)</label>
+            <label for="length">Fondo (cm)</label>
             <input id="length" type="number" formControlName="length" min="0" step="0.01" />
           </div>
           <div class="field">

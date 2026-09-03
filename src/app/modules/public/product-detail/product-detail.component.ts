@@ -1,11 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -55,6 +58,27 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   product = signal<Product | null>(null);
   loading = signal(true);
   error = signal(false);
+
+  /** "Ver más..." de la descripción (D?): colapsada a 3 líneas por default. */
+  descriptionExpanded = signal(false);
+  /**
+   * Solo se muestra "Ver más..." si el texto de verdad se corta a 3 líneas
+   * — una descripción corta no necesita el botón. Se mide comparando
+   * scrollHeight (alto real del texto) contra clientHeight (alto visible
+   * con el recorte de 3 líneas aplicado) DESPUÉS de que el párrafo se pinta
+   * con el texto del producto nuevo.
+   */
+  descriptionClamped = signal(false);
+  private descriptionTextEl = viewChild<ElementRef<HTMLParagraphElement>>('descriptionText');
+  private readonly measureDescriptionClamp = effect(() => {
+    const p = this.product();
+    const el = this.descriptionTextEl()?.nativeElement;
+    if (!p?.description || !el) { this.descriptionClamped.set(false); return; }
+    queueMicrotask(() => {
+      if (!el.isConnected) return;
+      this.descriptionClamped.set(el.scrollHeight > el.clientHeight + 1);
+    });
+  });
 
   /**
    * Los dos paneles fijos de la ficha (política de envíos, aceptación de
@@ -251,6 +275,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
       this.selectedMaterial.set(null);
       this.selectedSize.set(null);
       this.activeImageIndex.set(0);
+      this.descriptionExpanded.set(false);
       this.productService.getProduct(slug).subscribe({
         next: p => {
           this.product.set(p);
@@ -337,6 +362,10 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   selectImage(index: number): void {
     this.activeImageIndex.set(index);
+  }
+
+  toggleDescription(): void {
+    this.descriptionExpanded.update((v) => !v);
   }
 
   selectVariant(type: string, value: string): void {

@@ -18,6 +18,7 @@ import { Category } from '../../../core/models/category.model';
 import { CalculatedPrices, DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ADMIN_QUILL_MODULES } from '../quill-config';
 
 function slugify(value: string): string {
   return value
@@ -108,6 +109,9 @@ type PriceMode = 'margin' | 'price';
   imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective, MediaUrlPipe, QuillEditorComponent],
 })
 export class CatalogComponent implements OnInit {
+  /** Módulos del editor "Detalles (ficha pública)" — ver quill-config.ts. */
+  protected readonly quillModules = ADMIN_QUILL_MODULES;
+
   private productService = inject(ProductService);
   private pricingService = inject(PricingService);
   private manufacturingService = inject(ManufacturingService);

@@ -71,12 +71,16 @@
 
   &__layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    // `minmax(0, 1fr)`, no `1fr` a secas: una columna `1fr` sin el `minmax`
+    // NO se encoge por debajo del tamaño intrínseco de su contenido — la foto
+    // (o un párrafo largo) empuja la columna más ancha que el viewport en vez
+    // de ajustarse, y en celular la ficha se desborda horizontal.
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: v.$spacing-2xl;
     align-items: start;
 
     @media (max-width: v.$bp-tablet) {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
@@ -105,6 +109,41 @@
     color: v.$color-text;
     margin: 0;
     line-height: 1.2;
+  }
+
+  &__description {
+    margin: v.$spacing-xs 0 0;
+    color: v.$color-text-secondary;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    text-align: justify;
+
+    // "Ver más...": recorta a 3 líneas mientras no esté expandida. La medición
+    // de si hace falta el botón (product-detail.component.ts) compara contra
+    // ESTE alto recortado, así que el default (colapsada) tiene que ser el
+    // estado en el que se mide.
+    &--clamped {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  }
+
+  &__description-toggle {
+    align-self: flex-start;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    font-family: v.$font-body;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: v.$color-primary;
+    cursor: pointer;
+
+    &:hover { color: v.$color-primary-dark; text-decoration: underline; }
   }
 
   &__badge {
@@ -193,42 +232,86 @@
 
 // Texto capturado con el editor del admin (ngx-quill): details_content del
 // producto y el body de los paneles fijos (site_content). Angular sanea el
-// HTML al enlazarlo con [innerHTML]; aquí solo se le da tipografía acorde
-// al resto de la ficha.
+// HTML al enlazarlo con [innerHTML]; aquí se le da tipografía acorde al
+// resto de la ficha.
+//
+// TODO va en `::ng-deep`: el contenido de [innerHTML] lo crea el navegador
+// directo desde una cadena, no el compilador de plantillas de Angular, así
+// que nunca recibe el atributo `_ngcontent-*` que usa la encapsulación por
+// default — un selector `.rich-content table {}` normal JAMÁS matchea (se
+// confirmó: la lista de viñetas "se veía bien" solo por el estilo default
+// del navegador para <ul><li>, no por este CSS; una tabla sin borde/relleno
+// por default sí lo delató). `::ng-deep` es la forma soportada de estilizar
+// HTML que no pasa por la plantilla — sigue scopeado por `.rich-content`
+// como ancestro, no se vuelve verdaderamente global.
 .rich-content {
   font-family: v.$font-body;
   font-size: 0.9rem;
   color: v.$color-text;
   line-height: 1.6;
+  // `overflow-wrap` SÍ es una propiedad heredada — a diferencia de margin/
+  // padding/bordes de abajo, no hace falta `::ng-deep` para que llegue al
+  // contenido de [innerHTML]. Hace falta porque el HTML pegado de Word suele
+  // traer `&nbsp;` en vez de espacio normal entre casi cada palabra (se
+  // confirmó en "Taburete baúl": una frase entera unida por `&nbsp;` es UNA
+  // sola "palabra" para el navegador — sin punto para partir la línea, la
+  // desborda en vez de ajustarla — de ahí el layout roto en celular).
+  overflow-wrap: break-word;
 
-  > :first-child { margin-top: 0; }
-  > :last-child { margin-bottom: 0; }
+  ::ng-deep {
+    > :first-child { margin-top: 0; }
+    > :last-child { margin-bottom: 0; }
 
-  p { margin: 0 0 v.$spacing-sm; }
+    p { margin: 0 0 v.$spacing-sm; }
 
-  h1, h2, h3, h4 {
-    font-family: v.$font-headline;
-    color: v.$color-text;
-    line-height: 1.3;
-    margin: v.$spacing-md 0 v.$spacing-xs;
-  }
+    h1, h2, h3, h4 {
+      font-family: v.$font-headline;
+      color: v.$color-text;
+      line-height: 1.3;
+      margin: v.$spacing-md 0 v.$spacing-xs;
+    }
 
-  h1 { font-size: 1.15rem; }
-  h2 { font-size: 1.05rem; }
-  h3, h4 { font-size: 0.95rem; }
+    h1 { font-size: 1.15rem; }
+    h2 { font-size: 1.05rem; }
+    h3, h4 { font-size: 0.95rem; }
 
-  strong { font-weight: 700; }
+    strong { font-weight: 700; }
 
-  ul, ol {
-    margin: 0 0 v.$spacing-sm;
-    padding-left: 1.25rem;
-  }
+    ul, ol {
+      margin: 0 0 v.$spacing-sm;
+      padding-left: 1.25rem;
+    }
 
-  li { margin-bottom: calc(v.$spacing-xs / 2); }
+    li { margin-bottom: calc(v.$spacing-xs / 2); }
 
-  a {
-    color: v.$color-primary;
-    text-decoration: underline;
+    a {
+      color: v.$color-primary;
+      text-decoration: underline;
+    }
+
+    // Tabla capturada en "Detalles" (pegada de Word/Excel o armada con el
+    // editor). `display: block` + `overflow-x: auto` en la propia tabla
+    // (no en un wrapper aparte, porque el HTML llega tal cual del editor)
+    // evita que una tabla ancha rompa el layout en celular.
+    table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+      margin: 0 0 v.$spacing-sm;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    td, th {
+      border: 1px solid v.$color-border;
+      padding: v.$spacing-xs v.$spacing-sm;
+    }
+
+    th {
+      background: v.$color-bg;
+      font-weight: 700;
+      text-align: left;
+    }
   }
 }
 

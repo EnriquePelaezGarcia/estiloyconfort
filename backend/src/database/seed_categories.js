@@ -29,8 +29,8 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
 
 const CATEGORIES = [
-  { slug: 'tocadores-y-vanities', name: 'Tocadores y Vanities', order_display: 1,
-    description: 'Tocadores con luz, vanities y espejos de cajones' },
+  { slug: 'tocadores-vanity', name: 'Tocadores Vanity', order_display: 1,
+    description: 'Tocadores con luz, vanity y espejos de cajones' },
   { slug: 'camas-y-cabeceras',    name: 'Camas y Cabeceras',    order_display: 2,
     description: 'Camas, bases, cabeceras y juegos de recámara' },
   { slug: 'roperos-y-closets',    name: 'Roperos y Closets',    order_display: 3,
@@ -64,8 +64,8 @@ const RULES = [
   { slug: 'torres-y-espejos',     re: /torres|^espejo/i },
   { slug: 'buros-y-cajoneras',    re: /bur[oó]|cajonera/i },
   { slug: 'taburetes-y-sillas',   re: /taburete|silla/i },
-  { slug: 'tocadores-y-vanities', re: /tocador|vanity/i },
-  { slug: 'tocadores-y-vanities', re: /hello kitty|glow|grand|nogal station/i, weak: true },
+  { slug: 'tocadores-vanity', re: /tocador|vanity/i },
+  { slug: 'tocadores-vanity', re: /hello kitty|glow|grand|nogal station/i, weak: true },
 ];
 
 function classify(name) {

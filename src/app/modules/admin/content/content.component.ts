@@ -8,6 +8,7 @@ import { HeroImage } from '../../../core/models/hero-image.model';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { NotificationService } from '../../../core/services/notification.service';
 import { SiteContent } from '../../../core/models/site-content.model';
+import { ADMIN_QUILL_MODULES } from '../quill-config';
 
 /**
  * Pantalla del contenido del sitio público que no vive en el catálogo:
@@ -28,6 +29,9 @@ import { SiteContent } from '../../../core/models/site-content.model';
   imports: [ReactiveFormsModule, DatePipe, QuillEditorComponent, MediaUrlPipe],
 })
 export class ContentComponent implements OnInit {
+  /** Módulos de los editores de política — ver quill-config.ts. */
+  protected readonly quillModules = ADMIN_QUILL_MODULES;
+
   private siteContentService = inject(SiteContentService);
   private heroImageService = inject(HeroImageService);
   private notification = inject(NotificationService);
