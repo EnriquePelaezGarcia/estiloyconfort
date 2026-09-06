@@ -851,7 +851,8 @@ const Order = {
               r.reason AS reservation_reason, r.note AS reservation_note,
               r.customer_name AS reservation_customer_name,
               (SELECT image_url FROM product_images
-                WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image,
+                WHERE product_id = oi.product_id
+                ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image,
               (SELECT slug FROM products WHERE id = oi.product_id) AS product_slug
        FROM order_items oi
        LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id

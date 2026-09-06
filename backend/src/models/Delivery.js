@@ -87,7 +87,8 @@ const Delivery = {
               oi.material_label, oi.size_label, oi.color,
               oi.is_custom_modification, oi.fabrication_note,
               (SELECT image_url FROM product_images
-                 WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
+                 WHERE product_id = oi.product_id
+                 ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
        FROM order_items oi WHERE oi.order_id = ?`,
       [delivery.orderId],
     );

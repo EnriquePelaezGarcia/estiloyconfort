@@ -54,7 +54,8 @@ module.exports = {
     const [items] = await pool.execute(
       `SELECT oi.product_name, oi.quantity, oi.requires_fabrication, oi.warehouse_condition,
               (SELECT image_url FROM product_images
-                WHERE product_id = oi.product_id AND is_primary = TRUE LIMIT 1) AS image_url
+                WHERE product_id = oi.product_id
+                ORDER BY is_primary DESC, order_display, id LIMIT 1) AS image_url
          FROM order_items oi WHERE oi.order_id = ? ORDER BY oi.id`,
       [order.id],
     );

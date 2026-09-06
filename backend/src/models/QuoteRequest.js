@@ -71,7 +71,8 @@ function mapItem(row) {
 const ITEMS_SELECT = `
   SELECT qri.*,
          (SELECT image_url FROM product_images
-            WHERE product_id = qri.product_id AND is_primary = TRUE LIMIT 1) AS primary_image
+            WHERE product_id = qri.product_id
+            ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
   FROM quote_request_items qri WHERE qri.quote_request_id = ? ORDER BY qri.id
 `;
 

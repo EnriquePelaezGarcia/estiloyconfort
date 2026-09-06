@@ -69,7 +69,8 @@ const Product = {
               -- Se expone aunque el orden no sea 'popular': sin este número no
               -- hay forma de explicar por qué un producto quedó donde quedó.
               COALESCE(pop.popularity_count, 0) AS popularity_count,
-              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image,
+              (SELECT image_url FROM product_images WHERE product_id = p.id
+                 ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image,
               -- Galería para el carrusel de la tarjeta del catálogo: sin esto
               -- habría que pedir la ficha de cada producto para saber si tiene
               -- más de una foto. Se corta a 8 con SUBSTRING_INDEX porque
@@ -192,7 +193,8 @@ const Product = {
   async search(q) {
     const [rows] = await pool.execute(
       `SELECT p.id, p.name, p.slug, pp.price_from,
-              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) AS primary_image
+              (SELECT image_url FROM product_images WHERE product_id = p.id
+                 ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
        FROM products p
        LEFT JOIN product_public_prices pp ON pp.product_id = p.id
        WHERE p.is_active = TRUE AND (p.name LIKE ? OR p.sku LIKE ?)
@@ -376,6 +378,14 @@ const Product = {
   async addImage(productId, { image_url, alt_text, is_primary, order_display, material_id = null }) {
     if (is_primary) {
       await pool.execute('UPDATE product_images SET is_primary = FALSE WHERE product_id = ?', [productId]);
+    } else {
+      // Sin una principal, la foto no aparece en catálogo, pedidos ni entregas
+      // (las subconsultas priorizan is_primary). La primera imagen que se sube
+      // se vuelve principal por sí sola aunque el formulario no lo marque.
+      const [[{ count }]] = await pool.execute(
+        'SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?', [productId]
+      );
+      if (count === 0) is_primary = true;
     }
     const [res] = await pool.execute(
       'INSERT INTO product_images (product_id, material_id, image_url, alt_text, is_primary, order_display) VALUES (?,?,?,?,?,?)',
@@ -422,6 +432,16 @@ const Product = {
     );
     if (!image) return null;
     await pool.execute('DELETE FROM product_images WHERE id = ? AND product_id = ?', [imageId, productId]);
+    // Si se borró la principal, promover otra para que el producto no quede sin
+    // foto en catálogo/pedidos/entregas.
+    if (image.is_primary) {
+      await pool.execute(
+        `UPDATE product_images SET is_primary = TRUE
+           WHERE product_id = ?
+           ORDER BY order_display, id LIMIT 1`,
+        [productId]
+      );
+    }
     return image;
   },
 
