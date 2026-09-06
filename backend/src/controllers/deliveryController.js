@@ -45,6 +45,26 @@ const deliveryController = {
     if (status === 'completed' && (!delivery.signatureImageUrl || !delivery.photoUrl)) {
       throw ApiError.badRequest('Se requiere firma y foto antes de marcar como entregada');
     }
+
+    // No se puede finalizar una entrega con saldo por cobrar: el repartidor
+    // debe registrar el cobro antes de marcarla como entregada. Excepción:
+    // Crédito Tienda (store_credit) — el saldo se financia y se paga a plazos
+    // DESPUÉS de la entrega, así que ahí sí es normal cerrar con saldo. El
+    // enganche mínimo del crédito ya se validó antes de que el pedido saliera
+    // a ruta (Order.paymentClearsForDelivery).
+    if (status === 'completed' && delivery.paymentMethod !== 'store_credit') {
+      const balance = Number(delivery.totalAmount ?? 0) - Number(delivery.paymentAmount ?? 0);
+      if (balance > 0.01) {
+        const pend = balance.toLocaleString('es-MX', {
+          style: 'currency', currency: 'MXN', minimumFractionDigits: 2,
+        });
+        throw ApiError.badRequest(
+          `No puedes finalizar la entrega: faltan ${pend} por cobrar. `
+          + 'Registra el cobro del saldo pendiente antes de marcarla como entregada.',
+        );
+      }
+    }
+
     const updated = await Delivery.updateStatus(req.params.id, status);
     res.json({ data: updated, message: 'Estado actualizado' });
   }),

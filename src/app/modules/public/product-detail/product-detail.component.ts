@@ -22,6 +22,10 @@ import { SiteContent } from '../../../core/models/site-content.model';
 import { CartVariantSelection } from '../../../core/models/cart.model';
 import { PriceDisplayComponent } from '../../../shared/components/price-display/price-display.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import {
+  ImageLightboxComponent,
+  LightboxImage,
+} from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { mediaUrl } from '../../../core/utils/media-url';
 import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 import { AccordionItemComponent } from '../../../shared/components/accordion-item/accordion-item.component';
@@ -42,6 +46,7 @@ import { MATERIAL_HELP } from './material-help';
     ReviewsBadgeComponent,
     AccordionItemComponent,
     FieldHelpComponent,
+    ImageLightboxComponent,
   ],
 })
 export class ProductDetailComponent implements OnInit, OnDestroy {
@@ -229,6 +234,18 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     return mediaUrl(imgs[this.activeImageIndex()]?.image_url ?? p?.primary_image);
   });
 
+  /** El visor a pantalla completa (clic/tap sobre la foto) está abierto. */
+  lightboxOpen = signal(false);
+
+  /** Fotos de la galería vigente, listas para el visor (URL completa). */
+  lightboxImages = computed<LightboxImage[]>(() =>
+    this.galleryImages()
+      .map((img) => ({ src: mediaUrl(img.image_url) ?? '', alt: img.alt_text || this.product()?.name || '' }))
+      .filter((s) => s.src),
+  );
+
+  private touchStartX = 0;
+
   variantTypes = computed(() => {
     const variants = this.product()?.variants ?? [];
     const types = new Map<string, ProductVariant[]>();
@@ -362,6 +379,35 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   selectImage(index: number): void {
     this.activeImageIndex.set(index);
+  }
+
+  /** Flecha "‹" / swipe a la derecha — foto anterior, con vuelta al final. */
+  prevImage(): void {
+    const n = this.galleryImages().length;
+    if (n > 1) this.activeImageIndex.update((i) => (i - 1 + n) % n);
+  }
+
+  /** Flecha "›" / swipe a la izquierda — foto siguiente, con vuelta al inicio. */
+  nextImage(): void {
+    const n = this.galleryImages().length;
+    if (n > 1) this.activeImageIndex.update((i) => (i + 1) % n);
+  }
+
+  openLightbox(): void {
+    if (this.lightboxImages().length) this.lightboxOpen.set(true);
+  }
+
+  onGalleryTouchStart(event: TouchEvent): void {
+    this.touchStartX = event.changedTouches[0]?.clientX ?? 0;
+  }
+
+  onGalleryTouchEnd(event: TouchEvent): void {
+    const dx = (event.changedTouches[0]?.clientX ?? 0) - this.touchStartX;
+    if (Math.abs(dx) < 40) return;
+    // Evita que el "click" sintético tras el swipe abra el visor.
+    event.preventDefault();
+    if (dx < 0) this.nextImage();
+    else this.prevImage();
   }
 
   toggleDescription(): void {

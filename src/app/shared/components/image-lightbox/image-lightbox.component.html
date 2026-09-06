@@ -1,8 +1,47 @@
 <div class="modal-backdrop" (click)="closed.emit()">
-  <div class="lightbox" (click)="$event.stopPropagation()">
+  <div
+    class="lightbox"
+    (click)="$event.stopPropagation()"
+    (touchstart)="onTouchStart($event)"
+    (touchend)="onTouchEnd($event)"
+  >
     <button type="button" class="icon-btn lightbox__close" (click)="closed.emit()" aria-label="Cerrar">
       <span class="material-symbols-outlined">close</span>
     </button>
-    <img class="lightbox__img" [src]="src()" [alt]="alt()" />
+
+    @if (current(); as img) {
+      <img class="lightbox__img" [src]="img.src" [alt]="img.alt || ''" />
+    }
+
+    @if (hasMultiple()) {
+      <button
+        type="button"
+        class="lightbox__nav lightbox__nav--prev"
+        (click)="prev()"
+        aria-label="Foto anterior"
+      >
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <button
+        type="button"
+        class="lightbox__nav lightbox__nav--next"
+        (click)="next()"
+        aria-label="Foto siguiente"
+      >
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
+
+      <div class="lightbox__dots">
+        @for (slide of slides(); track $index) {
+          <button
+            type="button"
+            class="lightbox__dot"
+            [class.lightbox__dot--active]="index() === $index"
+            (click)="goTo($index)"
+            [attr.aria-label]="'Ir a la foto ' + ($index + 1)"
+          ></button>
+        }
+      </div>
+    }
   </div>
 </div>

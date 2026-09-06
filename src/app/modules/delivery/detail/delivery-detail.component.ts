@@ -109,6 +109,19 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     return a ? Math.max(0, a.totalAmount - a.paymentAmount) : 0;
   });
 
+  /**
+   * No se puede finalizar una entrega con saldo por cobrar: hay que registrar
+   * el cobro primero. Excepción: Crédito Tienda, donde el saldo se financia y
+   * se liquida a plazos después de la entrega. El backend aplica la misma regla
+   * (deliveryController.updateStatus) — esto solo es para bloquear el botón y
+   * avisar en pantalla antes de intentarlo.
+   */
+  protected balanceBlocksCompletion = computed(() => {
+    const a = this.assignment();
+    if (!a || a.deliveryStatus === 'completed') return false;
+    return a.paymentMethod !== 'store_credit' && this.balance() > 0.01;
+  });
+
   // ===== Descuento (Docs/plan-descuentos.md, RN-D2: solo dinero) =====
   protected discountModalOpen = signal(false);
   protected savingDiscount = signal(false);
@@ -121,7 +134,9 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   );
 
   protected canComplete = computed(
-    () => this.hasSignature() && !!this.photoData() && this.assignment()?.deliveryStatus !== 'completed',
+    () => this.hasSignature() && !!this.photoData()
+      && this.assignment()?.deliveryStatus !== 'completed'
+      && !this.balanceBlocksCompletion(),
   );
 
   /** ¿La venta fue a Crédito Tienda? */
@@ -521,6 +536,16 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     const a = this.assignment();
     if (!a) return;
     if (!this.requirePhotoAndSignature()) return;
+    if (this.balanceBlocksCompletion()) {
+      const pend = this.balance().toLocaleString('es-MX', {
+        style: 'currency', currency: 'MXN', minimumFractionDigits: 2,
+      });
+      this.notification.error(
+        `No puedes finalizar la entrega: faltan ${pend} por cobrar. `
+        + 'Usa "Registrar cobro" para cobrar el saldo antes de marcarla como entregada.',
+      );
+      return;
+    }
     const canvas = this.canvasRef()?.nativeElement;
     const signature = canvas ? canvas.toDataURL('image/png') : undefined;
     this.saving.set(true);

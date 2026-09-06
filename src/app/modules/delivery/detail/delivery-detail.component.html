@@ -286,17 +286,35 @@
             <span class="material-symbols-outlined">check_circle</span> Entrega completada
           </div>
         } @else {
+          @if (balanceBlocksCompletion()) {
+            <div class="pay-block-alert" role="alert">
+              <span class="material-symbols-outlined">account_balance_wallet</span>
+              <div>
+                <strong>Falta registrar el cobro</strong>
+                <p>
+                  Este pedido tiene {{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                  por cobrar. Registra el pago del saldo antes de marcar la entrega como
+                  completada.
+                </p>
+              </div>
+            </div>
+          }
           <div class="proof-actions">
             <button type="button" class="btn btn--ghost" (click)="saveProof()" [disabled]="saving()">
               <span class="material-symbols-outlined">save</span> Guardar evidencia
             </button>
-            <button type="button" class="btn btn--success" (click)="markDelivered()" [disabled]="saving()">
+            <button
+              type="button"
+              class="btn btn--success"
+              (click)="markDelivered()"
+              [disabled]="saving() || balanceBlocksCompletion()"
+            >
               @if (saving()) { <span class="spinner spinner--sm"></span> }
               @else { <span class="material-symbols-outlined">task_alt</span> }
               Marcar entregada
             </button>
           </div>
-          @if (!canComplete()) {
+          @if (!canComplete() && !balanceBlocksCompletion()) {
             <p class="hint">Se requiere foto y firma para guardar o completar la entrega.</p>
           }
 

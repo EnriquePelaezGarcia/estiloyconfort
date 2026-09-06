@@ -322,11 +322,23 @@
   gap: v.$spacing-sm;
 
   &__main {
+    position: relative;
     aspect-ratio: 1;
     border-radius: v.$radius-lg;
     overflow: hidden;
     background: v.$color-surface;
     border: 1px solid v.$color-border;
+  }
+
+  // El <button> que envuelve la foto para abrir el visor a pantalla completa.
+  &__zoom {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: zoom-in;
   }
 
   &__img {
@@ -336,6 +348,63 @@
     transition: transform v.$transition-slow;
 
     &:hover { transform: scale(1.03); }
+  }
+
+  // Flechas sobre la foto — solo cuando hay más de una imagen.
+  &__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: v.$radius-full;
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    cursor: pointer;
+    transition: background v.$transition-fast;
+
+    &:hover { background: rgba(0, 0, 0, 0.6); }
+
+    &--prev { left: v.$spacing-sm; }
+    &--next { right: v.$spacing-sm; }
+
+    .material-symbols-outlined { font-size: 1.5rem; }
+  }
+
+  // Puntitos-contador, blanco translúcido, sobre el borde inferior de la foto.
+  // En móvil son la única referencia de "hay más fotos"; a partir de tablet
+  // mandan las miniaturas de abajo y los puntitos se ocultan.
+  &__dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: v.$spacing-sm;
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+
+    @media (min-width: v.$bp-tablet) { display: none; }
+  }
+
+  &__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    padding: 0;
+    border: none;
+    border-radius: v.$radius-full;
+    background: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    transition: background v.$transition-fast, transform v.$transition-fast;
+
+    &--active {
+      background: rgba(255, 255, 255, 0.98);
+      transform: scale(1.15);
+    }
   }
 
   &__placeholder {
@@ -350,9 +419,13 @@
   }
 
   &__thumbs {
-    display: flex;
+    display: none;
     gap: v.$spacing-sm;
     flex-wrap: wrap;
+
+    // En móvil la referencia son los puntitos sobre la foto; las miniaturas
+    // aparecen a partir de tablet, donde hay ancho para ellas.
+    @media (min-width: v.$bp-tablet) { display: flex; }
   }
 
   &__thumb {

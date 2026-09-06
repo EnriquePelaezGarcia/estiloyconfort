@@ -31,3 +31,55 @@
   background: vars.$color-surface;
   box-shadow: vars.$shadow-md;
 }
+
+// Flechas de navegación — solo cuando hay más de una foto.
+.lightbox__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: vars.$radius-full;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+  transition: background vars.$transition-fast;
+
+  &:hover { background: rgba(0, 0, 0, 0.65); }
+
+  &--prev { left: 0.5rem; }
+  &--next { right: 0.5rem; }
+
+  .material-symbols-outlined { font-size: 1.75rem; }
+}
+
+// Puntitos-contador, blanco translúcido, debajo de la imagen.
+.lightbox__dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.75rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.lightbox__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: vars.$radius-full;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: background vars.$transition-fast, transform vars.$transition-fast;
+
+  &--active {
+    background: rgba(255, 255, 255, 0.95);
+    transform: scale(1.15);
+  }
+}
