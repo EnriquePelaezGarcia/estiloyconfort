@@ -52,6 +52,29 @@
     background: vars.$color-bg;
   }
 
+  // Miniatura clicable: abre la foto del producto a tamaño completo.
+  &__thumb-btn {
+    position: relative;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    line-height: 0;
+    cursor: zoom-in;
+  }
+
+  &__thumb-zoom {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    padding: 1px;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.6);
+  }
+
   &__thumb--empty {
     display: flex;
     align-items: center;

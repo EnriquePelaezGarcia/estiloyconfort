@@ -86,6 +86,120 @@
   strong { color: vars.$color-primary; }
 }
 
+// ── Buscador de "Producto existente" ──
+.product-picker {
+  position: relative;
+
+  &__input {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0 0.5rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-surface;
+
+    .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-text-secondary; }
+
+    input {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      padding: 0.5rem 0;
+      font-family: vars.$font-body;
+      font-size: 0.9rem;
+      color: vars.$color-text;
+
+      &:focus { outline: none; }
+    }
+
+    .icon-btn { padding: 0.15rem; }
+  }
+
+  &__list {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    max-height: 16rem;
+    overflow-y: auto;
+    background: vars.$color-surface;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  &__opt {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: 0;
+    border-radius: vars.$radius-sm;
+    background: transparent;
+    text-align: left;
+    font-size: 0.88rem;
+    color: vars.$color-text;
+    cursor: pointer;
+
+    &:hover, &:focus-visible { background: rgba(vars.$color-primary, 0.08); }
+
+    img { border-radius: vars.$radius-sm; object-fit: cover; flex-shrink: 0; }
+  }
+
+  &__opt-text { line-height: 1.25; }
+
+  &__thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-primary, 0.06);
+    color: vars.$color-text-secondary;
+
+    &--lg { width: 72px; height: 72px; }
+  }
+
+  &__empty {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+    text-align: center;
+  }
+
+  &__selected {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    padding: 0.4rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-bg;
+
+    img { border-radius: vars.$radius-sm; object-fit: cover; }
+  }
+
+  &__selected-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.88rem;
+
+    .muted { font-size: 0.8rem; }
+  }
+}
+
+.muted { color: vars.$color-text-secondary; }
+
 // ── Fila de detalle (items de la OC) ──
 .detail-row > td {
   background: rgba(vars.$color-primary, 0.02);

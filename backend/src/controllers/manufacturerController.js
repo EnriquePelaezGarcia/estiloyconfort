@@ -91,7 +91,11 @@ const manufacturerController = {
       `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
               oi.ready_quantity, oi.fabrication_note, oi.fabrication_ref_images,
               oi.is_custom_modification,
-              oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color
+              oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color,
+              (SELECT image_url FROM product_images
+                WHERE product_id = oi.product_id
+                ORDER BY (material_id = oi.material_id) DESC, is_primary DESC, order_display, id
+                LIMIT 1) AS primary_image
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        WHERE o.order_status IN (${placeholders})
@@ -143,6 +147,9 @@ const manufacturerController = {
         isCustomModification: !!it.is_custom_modification,
         fabricationNote: it.fabrication_note ?? null,
         fabricationRefImages: refImages.parse(it.fabrication_ref_images),
+        // Foto del producto (la del material de esta línea si la hay, si no la
+        // principal). Ruta relativa: el front la resuelve con el pipe `mediaUrl`.
+        imageUrl: it.primary_image ?? null,
         materialId: it.material_id,
         materialLabel: it.material_label,
         sizeId: it.size_id ?? null,

@@ -756,6 +756,8 @@ export interface ManufacturerOrder {
     isCustomModification?: boolean;
     fabricationNote?: string | null;
     fabricationRefImages?: string[];
+    /** Foto del producto (ruta relativa, resolver con `mediaUrl`). */
+    imageUrl?: string | null;
     materialId?: number | null;
     materialLabel?: string | null;
     sizeId?: number | null;

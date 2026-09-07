@@ -189,6 +189,8 @@ export interface ManufacturerCatalogProduct {
   name: string;
   sku: string | null;
   stockQuantity: number;
+  /** Imagen principal del producto (ruta relativa; usar el pipe `mediaUrl`). null si no tiene fotos. */
+  primaryImage: string | null;
   manufacturerId: number | null;
   manufacturerName: string | null;
   categoryName: string | null;

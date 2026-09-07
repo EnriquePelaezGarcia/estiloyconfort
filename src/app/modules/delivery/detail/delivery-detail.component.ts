@@ -31,6 +31,7 @@ import {
 } from '../../../core/models/order-labels';
 import { DiscountReasonPickerComponent } from '../../../shared/components/discount-reason-picker/discount-reason-picker.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 @Component({
   selector: 'app-delivery-detail',
@@ -44,6 +45,7 @@ import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
     CurrencyInputDirective,
     DiscountReasonPickerComponent,
     MediaUrlPipe,
+    ImageLightboxComponent,
   ],
 })
 export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -61,6 +63,9 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   protected assignment = signal<DeliveryAssignment | null>(null);
   protected loading = signal(true);
+
+  /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
 
   /** '1:00pm – 3:00pm', o '' si el pedido no tiene ventana capturada. */
   protected windowOf(a: DeliveryAssignment): string {

@@ -596,7 +596,9 @@ const manufacturingController = {
       `SELECT p.id, p.name, p.sku,
               pmc.material_id, mat.code, mat.label, pmc.cost, pmc.size_id,
               pmc.manufacturer_id, m.name AS manufacturer_name,
-              c.name AS category_name
+              c.name AS category_name,
+              (SELECT image_url FROM product_images WHERE product_id = p.id
+                 ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
        FROM products p
        JOIN product_manufacturer_costs pmc ON pmc.product_id = p.id
        JOIN materials mat ON mat.id = pmc.material_id
@@ -654,6 +656,7 @@ const manufacturingController = {
         grouped.set(key, {
           id: r.id, name: r.name, sku: r.sku,
           stockQuantity: stockByProduct.get(r.id) ?? 0,
+          primaryImage: r.primary_image ?? null,
           manufacturerId: r.manufacturer_id,
           manufacturerName: r.manufacturer_name,
           categoryName: r.category_name ?? null,

@@ -5,13 +5,14 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ManufacturerOrder, OrderStatus } from '../../../core/models/order.model';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../../../core/models/order-labels';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 @Component({
   selector: 'app-manufacturer-orders',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-orders.component.html',
   styleUrl: './manufacturer-orders.component.scss',
-  imports: [DatePipe, MediaUrlPipe],
+  imports: [DatePipe, MediaUrlPipe, ImageLightboxComponent],
 })
 export class ManufacturerOrdersComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -25,6 +26,9 @@ export class ManufacturerOrdersComponent implements OnInit {
   /** Pedido cuyo modal de rechazo está abierto (null = cerrado). */
   protected rejectingOrder = signal<ManufacturerOrder | null>(null);
   protected rejectReason = signal('');
+
+  /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
 
   ngOnInit(): void {
     this.load();

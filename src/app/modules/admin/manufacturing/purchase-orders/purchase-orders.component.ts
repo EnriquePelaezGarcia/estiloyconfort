@@ -23,6 +23,7 @@ import { CategoryService } from '../../../../core/services/category.service';
 import { Category } from '../../../../core/models/category.model';
 import { PayablesService } from '../../../../core/services/payables.service';
 import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 import { PayablePaymentStatus } from '../../../../core/models/payable.model';
 import {
   PAYMENT_STATUS_LABELS,
@@ -41,7 +42,12 @@ interface PoPayment {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './purchase-orders.component.html',
   styleUrl: './purchase-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective, MediaUrlPipe],
+  host: {
+    // Cierra el buscador de productos al hacer clic fuera (mismo patrón que
+    // navbar/field-help). El clic dentro del buscador detiene la propagación.
+    '(document:click)': 'closeProductPicker()',
+  },
 })
 export class PurchaseOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
@@ -206,6 +212,9 @@ export class PurchaseOrdersComponent implements OnInit {
     return this.fb.group({
       isNewProduct: this.fb.control<boolean>(false),
       productId: this.fb.control<number | null>(null),
+      // Texto del buscador de "Producto existente". No se envía al backend
+      // (save() arma el payload a mano); viaja con el renglón al reordenarse.
+      productSearch: this.fb.control<string>(''),
       productName: this.fb.control<string>('', { validators: [Validators.required] }),
       productSku: this.fb.control<string>(''),
       specifications: this.fb.control<string>(''),
@@ -262,25 +271,98 @@ export class PurchaseOrdersComponent implements OnInit {
     this.items.removeAt(index);
   }
 
+  // ── Buscador de "Producto existente" ─────────────────────────────────────
+  /** Renglón cuyo buscador de producto está abierto (null = ninguno). */
+  protected productPickerOpen = signal<number | null>(null);
+
+  protected openProductPicker(index: number, event?: Event): void {
+    // El clic dentro del buscador no debe llegar al listener de `document`
+    // que cierra el popover (host binding).
+    event?.stopPropagation();
+    this.productPickerOpen.set(index);
+  }
+
+  /** Al enfocar un renglón que ya tiene producto, limpia el texto para buscar
+   *  de nuevo; la foto/ficha de abajo sigue mostrando lo elegido. */
+  protected onProductFocus(index: number): void {
+    this.productPickerOpen.set(index);
+    if (this.items.at(index).get('productId')?.value) {
+      this.items.at(index).patchValue({ productSearch: '' });
+    }
+  }
+
+  protected closeProductPicker(): void {
+    this.productPickerOpen.set(null);
+  }
+
+  /** Texto tecleado en el buscador del renglón (dispara el filtrado). */
+  protected onProductSearch(index: number): void {
+    this.productPickerOpen.set(index);
+    // Si borra el texto, se limpia el producto elegido: el renglón vuelve a
+    // pedir una selección.
+    if (!this.items.at(index).get('productSearch')?.value?.trim()) {
+      this.items.at(index).patchValue({ productId: null });
+    }
+  }
+
+  /**
+   * Catálogo filtrado por el texto del renglón. Un producto aparece una sola
+   * vez aunque se le compre a varios fabricantes (igual que `find` por id en
+   * el resto del componente).
+   */
+  protected filteredProducts(index: number): ManufacturerCatalogProduct[] {
+    const term = (this.items.at(index).get('productSearch')?.value ?? '').trim().toLowerCase();
+    const seen = new Set<number>();
+    const out: ManufacturerCatalogProduct[] = [];
+    for (const p of this.products()) {
+      if (seen.has(p.id)) continue;
+      if (term && !p.name.toLowerCase().includes(term) && !(p.sku ?? '').toLowerCase().includes(term)) {
+        continue;
+      }
+      seen.add(p.id);
+      out.push(p);
+      if (out.length >= 30) break;
+    }
+    return out;
+  }
+
+  /** Producto elegido en el renglón (para pintar su foto). */
+  protected selectedProduct(index: number): ManufacturerCatalogProduct | null {
+    const id = Number(this.items.at(index).get('productId')?.value) || null;
+    return id ? this.products().find((p) => p.id === id) ?? null : null;
+  }
+
   /** Al elegir un producto existente, copia nombre/sku y el primer material cotizado. */
-  protected onProductSelected(index: number, event: Event): void {
-    const id = Number((event.target as HTMLSelectElement).value) || null;
+  protected selectProduct(index: number, product: ManufacturerCatalogProduct): void {
     const group = this.items.at(index);
-    const product = this.products().find((p) => p.id === id);
-    const firstMaterial = product
-      ? Object.entries(product.materials).find(([, c]) => c.cost !== null)
-      : undefined;
+    const firstMaterial = Object.entries(product.materials).find(([, c]) => c.cost !== null);
     // Si el producto se vende por talla y tiene una sola, se preselecciona.
-    const sizes = product?.sizes ?? [];
+    const sizes = product.sizes ?? [];
     group.patchValue({
-      productId: id,
-      productName: product?.name ?? '',
-      productSku: product?.sku ?? '',
+      productId: product.id,
+      productSearch: product.sku ? `${product.name} (${product.sku})` : product.name,
+      productName: product.name,
+      productSku: product.sku ?? '',
       materialId: firstMaterial ? Number(firstMaterial[0]) : null,
       sizeId: sizes.length === 1 ? sizes[0].id : null,
     });
     const cost = this.suggestedCost(index);
     group.patchValue({ unitCost: cost ?? 0 });
+    this.closeProductPicker();
+  }
+
+  /** Quita el producto elegido y limpia el buscador del renglón. */
+  protected clearProduct(index: number): void {
+    this.items.at(index).patchValue({
+      productId: null,
+      productSearch: '',
+      productName: '',
+      productSku: '',
+      materialId: null,
+      sizeId: null,
+      unitCost: 0,
+    });
+    this.productPickerOpen.set(index);
   }
 
   /** Al cambiar el material de la línea, recalcula el costo unitario sugerido. */

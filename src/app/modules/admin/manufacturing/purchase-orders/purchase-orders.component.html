@@ -213,14 +213,59 @@
               </div>
 
               @if (!item.get('isNewProduct')?.value) {
-                <div class="field">
+                <div class="field product-picker">
                   <label>Producto existente</label>
-                  <select (change)="onProductSelected(i, $event)" [value]="item.get('productId')?.value ?? ''">
-                    <option value="">Selecciona un producto…</option>
-                    @for (p of products(); track p.id) {
-                      <option [value]="p.id">{{ p.name }} @if (p.sku) { ({{ p.sku }}) }</option>
+                  <div class="product-picker__input" (click)="openProductPicker(i, $event)">
+                    <span class="material-symbols-outlined">search</span>
+                    <input type="text" formControlName="productSearch" autocomplete="off"
+                           placeholder="Busca por nombre o SKU…"
+                           (focus)="onProductFocus(i)"
+                           (input)="onProductSearch(i)" />
+                    @if (item.get('productId')?.value) {
+                      <button type="button" class="icon-btn" (click)="clearProduct(i); $event.stopPropagation()"
+                              aria-label="Quitar producto">
+                        <span class="material-symbols-outlined">close</span>
+                      </button>
                     }
-                  </select>
+                  </div>
+                  @if (productPickerOpen() === i) {
+                    <ul class="product-picker__list">
+                      @for (p of filteredProducts(i); track p.id) {
+                        <li>
+                          <button type="button" class="product-picker__opt" (click)="selectProduct(i, p)">
+                            @if (p.primaryImage) {
+                              <img [src]="p.primaryImage | mediaUrl:'thumb'" [alt]="p.name" width="40" height="40" />
+                            } @else {
+                              <span class="product-picker__thumb product-picker__thumb--empty">
+                                <span class="material-symbols-outlined">chair</span>
+                              </span>
+                            }
+                            <span class="product-picker__opt-text">
+                              {{ p.name }}
+                              @if (p.sku) { <span class="muted"> · {{ p.sku }}</span> }
+                            </span>
+                          </button>
+                        </li>
+                      } @empty {
+                        <li class="product-picker__empty">Sin resultados</li>
+                      }
+                    </ul>
+                  }
+                  @if (selectedProduct(i); as sp) {
+                    <div class="product-picker__selected">
+                      @if (sp.primaryImage) {
+                        <img [src]="sp.primaryImage | mediaUrl:'thumb'" [alt]="sp.name" width="72" height="72" />
+                      } @else {
+                        <span class="product-picker__thumb product-picker__thumb--empty product-picker__thumb--lg">
+                          <span class="material-symbols-outlined">chair</span>
+                        </span>
+                      }
+                      <div class="product-picker__selected-info">
+                        <strong>{{ sp.name }}</strong>
+                        @if (sp.sku) { <span class="muted">{{ sp.sku }}</span> }
+                      </div>
+                    </div>
+                  }
                 </div>
                 <div class="grid-2">
                   <div class="field">

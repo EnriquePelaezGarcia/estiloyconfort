@@ -128,14 +128,22 @@
             @for (it of a.items; track it.id) {
               <li class="prod-row">
                 @if (it.imageUrl) {
-                  <img
-                    class="prod-row__thumb"
-                    [src]="it.imageUrl | mediaUrl: 'thumb'"
-                    [alt]="it.productName"
-                    width="52"
-                    height="52"
-                    loading="lazy"
-                  />
+                  <button
+                    type="button"
+                    class="prod-row__thumb-btn"
+                    title="Ver foto en grande"
+                    (click)="zoomedImage.set(it.imageUrl!)"
+                  >
+                    <img
+                      class="prod-row__thumb"
+                      [src]="it.imageUrl | mediaUrl"
+                      [alt]="it.productName"
+                      width="52"
+                      height="52"
+                      loading="lazy"
+                    />
+                    <span class="prod-row__thumb-zoom material-symbols-outlined">zoom_in</span>
+                  </button>
                 } @else {
                   <span class="prod-row__thumb prod-row__thumb--empty material-symbols-outlined">chair</span>
                 }
@@ -575,4 +583,13 @@
       </div>
     </div>
   </div>
+}
+
+<!-- ===== Foto del producto a tamaño completo (clic en la miniatura) ===== -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox
+    [src]="(img | mediaUrl) ?? ''"
+    [alt]="'Foto del producto'"
+    (closed)="zoomedImage.set(null)"
+  />
 }
