@@ -18,7 +18,7 @@ export interface PayableDocument {
   sourceId: number;
   manufacturerId: number;
   manufacturerName: string | null;
-  /** `EC-2026-0002` o `OC-000012`. */
+  /** `EC-2026-0002` o `OC-2026-0012`. */
   folio: string;
   /** Cliente del pedido, o notas de la OC. */
   reference: string | null;

@@ -63,6 +63,9 @@ const quoteRequestsController = {
           quantity: it.quantity,
           unitPriceCash: it.unitPriceCash,
           imageUrl: it.imageUrl,
+          // El asesor toca el nombre y abre la ficha pública del producto
+          // (/producto/:slug) en una pestaña nueva.
+          productSlug: it.productSlug ?? null,
         })),
       },
     });

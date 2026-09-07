@@ -12,6 +12,7 @@
     margin-bottom: vars.$spacing-md;
   }
   &__date { font-size: 0.8rem; color: vars.$color-text-secondary; }
+  &__ref { font-size: 1.05rem; font-weight: 700; color: vars.$color-text; letter-spacing: 0.02em; }
   &__start { margin-top: vars.$spacing-sm; width: 100%; justify-content: center; }
 
   &__due-date {
@@ -152,6 +153,12 @@
 
 .btn--sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
 .modal--sm { max-width: 440px; }
+
+.po-notes {
+  margin: vars.$spacing-sm 0 0;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+}
 
 // Foto del producto: miniatura clicable que abre el visor a tamaño completo.
 .prod-photo {

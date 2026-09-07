@@ -9,8 +9,21 @@ const { syncMaterialPricesAndReprice } = require('../utils/productPricing');
 // 'partially_received' y 'received' NO se ponen a mano: los pone la recepción
 // (POST /purchase-orders/:id/receipts).
 const PO_STATUSES = ['draft', 'sent', 'in_production', 'partially_received', 'received', 'cancelled'];
-const PO_MANUAL_STATUSES = ['draft', 'sent', 'in_production', 'cancelled'];
 const RECEIPT_CONDITIONS = ['ok', 'damaged', 'incomplete'];
+
+/**
+ * Fecha en 'YYYY-MM-DD' con los getters LOCALES: recortar el ISO en UTC correría
+ * el día en el servidor (UTC) para un `<input type="date">`. Igual que
+ * adminController.toDateOnly.
+ */
+function toDateOnly(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 /** minúsculas, sin acentos, guiones — para el slug de un producto nuevo. */
 function slugify(text) {
@@ -36,10 +49,17 @@ async function productIsSizedWithoutSize(conn, poItem) {
   return rows.length > 0;
 }
 
-// Genera un consecutivo OC-000001 a partir del total de órdenes de compra.
+// Folio de OC tipo OC-2026-0002: prefijo + año + consecutivo del AÑO con
+// relleno a 4 dígitos, mismo formato que el folio de pedido (EC-2026-0001).
+// El consecutivo se reinicia el 1 de enero; se cuenta por el prefijo del
+// propio folio para que cuadre con backfill_po_number_yearly.js.
 async function generatePoNumber() {
-  const [[{ n }]] = await pool.execute('SELECT COUNT(*) AS n FROM purchase_orders');
-  return `OC-${String(Number(n) + 1).padStart(6, '0')}`;
+  const year = new Date().getFullYear();
+  const [[{ n }]] = await pool.execute(
+    'SELECT COUNT(*) AS n FROM purchase_orders WHERE po_number LIKE ?',
+    [`OC-${year}-%`],
+  );
+  return `OC-${year}-${String(Number(n) + 1).padStart(4, '0')}`;
 }
 
 function mapManufacturer(r) {
@@ -87,6 +107,13 @@ function mapPoItem(r) {
     // que bodega ya aceptó).
     isReady: !!r.is_ready,
     readyQuantity: Number(r.ready_quantity ?? 0),
+    readyByName: r.ready_by_name ?? null,
+    readyAt: r.ready_at ?? null,
+    // Condición de la última recepción en bodega de este renglón (null = aún no
+    // se recibe nada) — para el badge "Almacén" del panel, igual que en
+    // pedidos-fabrica.
+    warehouseCondition: r.warehouse_condition ?? null,
+    warehouseNote: r.warehouse_note ?? null,
   };
 }
 
@@ -98,8 +125,9 @@ function mapPo(r) {
     manufacturerName: r.manufacturer_name ?? null,
     status: r.status,
     orderDate: r.order_date,
-    expectedDate: r.expected_date,
-    receivedDate: r.received_date,
+    // Columnas DATE: sin hora para el <input type="date"> del panel.
+    expectedDate: toDateOnly(r.expected_date),
+    receivedDate: toDateOnly(r.received_date),
     totalCost: Number(r.total_cost),
     notes: r.notes ?? null,
     createdByName: r.created_by_name ?? null,
@@ -175,11 +203,21 @@ const manufacturingController = {
 
   // ─── ÓRDENES DE COMPRA ───────────────────────────────────────────────────────
   // GET /api/manufacturing/purchase-orders?status=&manufacturerId=
+  // El panel (homologado con "Pedidos a fábrica") pinta una tabla agrupada: cada
+  // OC llega ya con sus `items[]` (nombre, foto, material, talla, color, avance
+  // del fabricante y recepción en bodega), sin llamada extra ni expandir.
   listPurchaseOrders: asyncHandler(async (req, res) => {
     const { status, manufacturerId } = req.query;
     const conditions = [];
     const params = [];
-    if (status) { conditions.push('po.status = ?'); params.push(status); }
+    if (status && status !== 'all') {
+      conditions.push('po.status = ?');
+      params.push(status);
+    } else if (!status) {
+      // Por defecto solo las "activas": las recibidas y canceladas se piden con
+      // ?status=received / ?status=cancelled / ?status=all.
+      conditions.push("po.status IN ('draft','sent','in_production','partially_received')");
+    }
     if (manufacturerId) { conditions.push('po.manufacturer_id = ?'); params.push(Number(manufacturerId)); }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const [rows] = await pool.execute(
@@ -193,32 +231,49 @@ const manufacturingController = {
       params,
     );
 
-    // Fotos de los productos de cada OC (para el mini-carrusel de la lista).
-    // Una sola consulta para todas las OCs; los renglones de producto nuevo
-    // (sin product_id) no aportan foto.
-    const imagesByPo = new Map();
     const poIds = rows.map((r) => r.id);
+    const itemsByPo = new Map();
     if (poIds.length) {
-      const [imgRows] = await pool.query(
-        `SELECT poi.purchase_order_id AS po_id, poi.id,
+      const [items] = await pool.query(
+        `SELECT poi.*, mat.label AS material_label, sz.label AS size_label,
+                rb.full_name AS ready_by_name,
                 (SELECT pi.image_url FROM product_images pi
                   WHERE pi.product_id = poi.product_id
-                  ORDER BY pi.is_primary DESC, pi.order_display, pi.id LIMIT 1) AS image_url
+                  ORDER BY (pi.material_id = poi.material_id) DESC, pi.is_primary DESC,
+                           pi.order_display, pi.id
+                  LIMIT 1) AS primary_image
            FROM purchase_order_items poi
-          WHERE poi.purchase_order_id IN (?) AND poi.product_id IS NOT NULL
+           LEFT JOIN materials mat ON mat.id = poi.material_id
+           LEFT JOIN sizes sz ON sz.id = poi.size_id
+           LEFT JOIN users rb ON rb.id = poi.ready_by
+          WHERE poi.purchase_order_id IN (?)
           ORDER BY poi.id`,
         [poIds],
       );
-      for (const r of imgRows) {
-        if (!r.image_url) continue;
-        if (!imagesByPo.has(r.po_id)) imagesByPo.set(r.po_id, []);
-        const arr = imagesByPo.get(r.po_id);
-        if (!arr.includes(r.image_url)) arr.push(r.image_url);
+
+      // Condición de la última recepción en bodega por renglón (para el badge
+      // "Almacén"): la línea de `stock_receipt_lines` más reciente de cada ítem.
+      const [rcpt] = await pool.query(
+        `SELECT srl.line_source_id AS item_id, srl.condition_flag, srl.note
+           FROM stock_receipt_lines srl
+           JOIN stock_receipts sr ON sr.id = srl.receipt_id
+          WHERE sr.source_type = 'purchase_order' AND sr.source_id IN (?)
+          ORDER BY srl.receipt_id, srl.id`,
+        [poIds],
+      );
+      const lastCond = new Map();
+      for (const l of rcpt) lastCond.set(l.item_id, { flag: l.condition_flag, note: l.note });
+
+      for (const it of items) {
+        const c = lastCond.get(it.id);
+        if (c) { it.warehouse_condition = c.flag; it.warehouse_note = c.note; }
+        if (!itemsByPo.has(it.purchase_order_id)) itemsByPo.set(it.purchase_order_id, []);
+        itemsByPo.get(it.purchase_order_id).push(mapPoItem(it));
       }
     }
 
     res.json({
-      data: rows.map((r) => ({ ...mapPo(r), productImages: imagesByPo.get(r.id) ?? [] })),
+      data: rows.map((r) => ({ ...mapPo(r), items: itemsByPo.get(r.id) ?? [] })),
     });
   }),
 
@@ -369,27 +424,110 @@ const manufacturingController = {
   }),
 
   // PATCH /api/manufacturing/purchase-orders/:id/status
-  // Solo estatus "manuales": 'received' y 'partially_received' los pone la
-  // recepción (POST .../receipts), que además suma a inventario.
+  // El panel ya no tiene selector de estatus (homologación con "Pedidos a
+  // fábrica"): las dos únicas acciones manuales son "Enviar al fabricante"
+  // (draft -> sent, la vuelve visible en su portal) y "Cancelar". El resto
+  // ('in_production', 'partially_received', 'received') lo deriva la recepción.
   updatePurchaseOrderStatus: asyncHandler(async (req, res) => {
     const { status } = req.body;
-    if (!PO_MANUAL_STATUSES.includes(status)) {
+    if (status !== 'sent' && status !== 'cancelled') {
       throw new ApiError(400, PO_STATUSES.includes(status)
-        ? 'Ese estatus lo pone la recepción de mercancía, no se asigna a mano.'
+        ? 'Ese estatus lo maneja el flujo (recepción / avance del fabricante), no se asigna a mano.'
         : 'Estatus no válido');
     }
-    const [result] = await pool.execute(
-      'UPDATE purchase_orders SET status = ? WHERE id = ?',
-      [status, req.params.id],
-    );
-    if (result.affectedRows === 0) throw ApiError.notFound('Orden de compra no encontrada');
+    const [[po]] = await pool.execute('SELECT status FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (!po) throw ApiError.notFound('Orden de compra no encontrada');
+    if (status === 'sent' && po.status !== 'draft') {
+      throw new ApiError(400, 'Solo una orden en borrador se puede enviar al fabricante.');
+    }
+    if (status === 'cancelled' && po.status === 'received') {
+      throw new ApiError(400, 'Una orden ya recibida no se puede cancelar.');
+    }
+    await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', [status, req.params.id]);
     const [[row]] = await pool.execute(
       `SELECT po.*, m.name AS manufacturer_name
        FROM purchase_orders po LEFT JOIN manufacturers m ON m.id = po.manufacturer_id
        WHERE po.id = ?`,
       [req.params.id],
     );
-    res.json({ data: mapPo(row), message: 'Estatus actualizado' });
+    res.json({
+      data: mapPo(row),
+      message: status === 'sent' ? 'Orden enviada al fabricante' : 'Orden cancelada',
+    });
+  }),
+
+  // PATCH /api/manufacturing/purchase-orders/:id — campos editables de la
+  // cabecera desde el panel: fecha esperada (espejo de la fecha del fabricante
+  // en "Pedidos a fábrica"), notas y REASIGNAR fabricante. La reasignación
+  // resuelve el caso "el fabricante rechazó el encargo": se pasa a otro y su
+  // aceptación vuelve a 'pending'.
+  updatePurchaseOrder: asyncHandler(async (req, res) => {
+    const poId = Number(req.params.id);
+    const [[po]] = await pool.execute(
+      'SELECT id, status, manufacturer_id FROM purchase_orders WHERE id = ?',
+      [poId],
+    );
+    if (!po) throw ApiError.notFound('Orden de compra no encontrada');
+    if (po.status === 'received' || po.status === 'cancelled') {
+      throw new ApiError(400, 'Una orden ya recibida o cancelada no se puede editar.');
+    }
+
+    const sets = [];
+    const params = [];
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'expectedDate')) {
+      sets.push('expected_date = ?');
+      params.push(req.body.expectedDate || null);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'notes')) {
+      const notes = String(req.body.notes ?? '').trim();
+      sets.push('notes = ?');
+      params.push(notes || null);
+    }
+
+    let manufacturerChanged = false;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'manufacturerId')) {
+      const manufacturerId = req.body.manufacturerId == null ? null : Number(req.body.manufacturerId);
+      if (manufacturerId !== null && !Number.isInteger(manufacturerId)) {
+        throw new ApiError(400, 'Fabricante no válido');
+      }
+      // Reasignar solo tiene sentido antes de que empiece la producción: si el
+      // fabricante ya reportó avance o bodega ya recibió algo, el encargo está
+      // ligado a él (costos, notas de crédito, inventario en camino).
+      if (manufacturerId !== po.manufacturer_id
+          && po.status !== 'draft' && po.status !== 'sent') {
+        throw new ApiError(400, 'Ya no se puede cambiar el fabricante: la orden está en producción o con recepciones.');
+      }
+      if (manufacturerId !== null) {
+        const [[m]] = await pool.execute(
+          'SELECT id, is_active FROM manufacturers WHERE id = ?', [manufacturerId],
+        );
+        if (!m) throw ApiError.notFound('Fabricante no encontrado');
+        if (!m.is_active) throw new ApiError(400, 'Ese fabricante está inactivo');
+      }
+      if (manufacturerId !== po.manufacturer_id) {
+        manufacturerChanged = true;
+        sets.push('manufacturer_id = ?');
+        params.push(manufacturerId);
+        // El nuevo fabricante todavía no acepta nada.
+        sets.push("acceptance_status = 'pending'", 'acceptance_reject_reason = NULL',
+          'acceptance_reviewed_by = NULL', 'acceptance_reviewed_at = NULL');
+      }
+    }
+
+    if (sets.length === 0) {
+      res.json({ message: 'Sin cambios' });
+      return;
+    }
+
+    params.push(poId);
+    await pool.execute(`UPDATE purchase_orders SET ${sets.join(', ')} WHERE id = ?`, params);
+    res.json({
+      message: manufacturerChanged
+        ? 'Orden actualizada. El nuevo fabricante debe aceptar el encargo.'
+        : 'Orden de compra actualizada',
+    });
   }),
 
   // POST /api/manufacturing/purchase-orders/:id/receipts

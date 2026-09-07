@@ -184,13 +184,13 @@
 
           @switch (q.status) {
             @case ('open') {
-              <button type="button" class="btn btn--primary btn--sm" (click)="confirm(q)">
+              <button type="button" class="btn btn--primary btn--sm" (click)="askConfirmQuote(q)">
                 <span class="material-symbols-outlined">task_alt</span>
                 Marcar confirmada
               </button>
             }
             @case ('confirmed') {
-              <button type="button" class="btn btn--primary btn--sm" (click)="createOrder(q)">
+              <button type="button" class="btn btn--primary btn--sm" (click)="askCreateOrder(q)">
                 <span class="material-symbols-outlined">point_of_sale</span>
                 Crear pedido
               </button>
@@ -223,6 +223,45 @@
         }
       </p>
     }
+  </div>
+}
+
+@if (pendingConfirmQuote(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm modal--confirm">
+      <div class="modal__body">
+        <h2 class="panel__title">Marcar cotización como confirmada</h2>
+        <p class="muted">
+          La cotización de <strong>{{ target.customerName }}</strong>
+          ({{ target.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+          quedará confirmada y lista para levantar el pedido.
+        </p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="pendingConfirmQuote.set(null)">Cancelar</button>
+        <button type="button" class="btn btn--primary" (click)="confirmQuote()">Confirmar cotización</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (pendingCreateOrder(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm modal--confirm">
+      <div class="modal__body">
+        <h2 class="panel__title">Crear pedido</h2>
+        <p class="muted">
+          Se abrirá el punto de venta con la cotización de
+          <strong>{{ target.customerName }}</strong>
+          ({{ target.totalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+          precargada para levantar el pedido.
+        </p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="pendingCreateOrder.set(null)">Cancelar</button>
+        <button type="button" class="btn btn--primary" (click)="confirmCreateOrder()">Crear pedido</button>
+      </div>
+    </div>
   </div>
 }
 

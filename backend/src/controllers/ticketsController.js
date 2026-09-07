@@ -99,6 +99,9 @@ module.exports = {
           // el aviso de fecha estimada por fabricación/agotado.
           requiresFabrication: it.requiresFabrication,
           imageUrl: it.imageUrl,
+          // Slug vigente del producto: el cliente toca el nombre en el ticket
+          // y abre la ficha pública (/producto/:slug) en una pestaña nueva.
+          productSlug: it.productSlug ?? null,
         })),
 
         payments: (order.payments ?? []).map((p) => ({

@@ -71,7 +71,17 @@
                 />
               }
               <div class="line__main">
-                <p class="line__name">{{ it.productName }}</p>
+                @if (it.productSlug; as slug) {
+                  <a
+                    class="line__name line__name--link"
+                    [routerLink]="['/producto', slug]"
+                    target="_blank"
+                    rel="noopener"
+                    >{{ it.productName }}</a
+                  >
+                } @else {
+                  <p class="line__name">{{ it.productName }}</p>
+                }
                 <p class="line__spec">
                   {{ it.materialLabel }}@if (it.sizeLabel) { · {{ it.sizeLabel }} }@if (it.color) { · {{ it.color }} }
                   @if (it.quantity > 1) {

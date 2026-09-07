@@ -1,80 +1,77 @@
 <header class="page-head">
   <div>
     <p class="page-head__overline">Fabricante</p>
-    <h1 class="page-head__title">Pedidos a fabricar</h1>
+    <h1 class="page-head__title">Por fabricar</h1>
   </div>
 </header>
 
 @if (loading()) {
-  <div class="state"><div class="spinner"></div><p>Cargando pedidos…</p></div>
+  <div class="state"><div class="spinner"></div><p>Cargando…</p></div>
 } @else if (orders().length === 0) {
   <div class="state">
     <span class="material-symbols-outlined" style="font-size:2.5rem">precision_manufacturing</span>
-    <p>No hay pedidos en fabricación.</p>
+    <p>No tienes nada por fabricar.</p>
   </div>
 } @else {
   <div class="orders">
-    @for (o of orders(); track o.id) {
+    @for (o of orders(); track o.kind + ':' + o.id) {
       <article class="panel order">
         <div class="order__head">
-          <span class="order__status-label">Estatus del pedido:</span>
-          <span class="badge" [class]="statusTone(o.order_status)">{{ statusLabel(o.order_status) }}</span>
+          <span class="order__ref">{{ o.ref }}</span>
+          @if (allReady(o)) {
+            <span class="badge badge--green">Todo listo</span>
+          }
         </div>
 
-        @if (o.acceptance?.status === 'pending') {
+        @if (o.acceptance.status === 'pending') {
           <div class="accept-banner accept-banner--pending">
             <span class="material-symbols-outlined">notification_important</span>
             <div class="accept-banner__text">
-              <strong>Revisa y acepta este pedido</strong>
-              <span>Confirma la medida, el material y el color antes de empezar. No puedes iniciar la fabricación hasta aceptarlo.</span>
+              <strong>Revisa y acepta este encargo</strong>
+              <span>Confirma la medida, el material y el color antes de empezar.</span>
             </div>
             <div class="accept-banner__actions">
               <button type="button" class="btn btn--primary btn--sm"
-                      [disabled]="working().has(o.id)" (click)="acceptOrder(o)">
-                Aceptar pedido
+                      [disabled]="isWorking(o)" (click)="acceptOrder(o)">
+                Aceptar
               </button>
               <button type="button" class="btn btn--ghost btn--sm"
-                      [disabled]="working().has(o.id)" (click)="openReject(o)">
+                      [disabled]="isWorking(o)" (click)="openReject(o)">
                 Rechazar
               </button>
             </div>
           </div>
-        } @else if (o.acceptance?.status === 'rejected') {
+        } @else if (o.acceptance.status === 'rejected') {
           <div class="accept-banner accept-banner--rejected">
             <span class="material-symbols-outlined">cancel</span>
             <div class="accept-banner__text">
-              <strong>Rechazaste este pedido</strong>
-              <span>Motivo: {{ o.acceptance?.rejectReason }}. La tienda ya fue avisada.</span>
+              <strong>Rechazaste este encargo</strong>
+              <span>Motivo: {{ o.acceptance.rejectReason }}. La tienda ya fue avisada.</span>
             </div>
             <div class="accept-banner__actions">
               <button type="button" class="btn btn--ghost btn--sm"
-                      [disabled]="working().has(o.id)" (click)="acceptOrder(o)">
+                      [disabled]="isWorking(o)" (click)="acceptOrder(o)">
                 Aceptar de todos modos
               </button>
             </div>
           </div>
-        } @else if (o.acceptance?.status === 'accepted') {
+        } @else {
           <div class="accept-banner accept-banner--ok">
             <span class="material-symbols-outlined">check_circle</span>
-            <span>Aceptaste este pedido.</span>
+            <span>Aceptaste este encargo.</span>
           </div>
         }
 
         <div class="order__due-date">
           <span class="order__status-label">Fecha de entrega a la tienda:</span>
-          @if (o.manufacturer_due_date) {
-            <span class="badge badge--blue">{{ o.manufacturer_due_date | date:'dd/MM/yyyy' }}</span>
+          @if (o.dueDate) {
+            <span class="badge badge--blue">{{ o.dueDate | date:'dd/MM/yyyy' }}</span>
           } @else {
             <span class="muted">Sin definir</span>
           }
         </div>
 
         <dl class="order__fields">
-          <div class="field">
-            <dt class="field__label">Número de pedido</dt>
-            <dd class="field__value">{{ o.order_number }}</dd>
-          </div>
-
           @for (it of o.items; track it.id) {
             <div class="field">
               @if (it.imageUrl) {
@@ -105,19 +102,26 @@
                 <span class="order__status-label">Estado del producto:</span>
                 @if (it.isReady) {
                   <span class="badge badge--green">Listo</span>
-                } @else if ((it.readyQuantity ?? 0) > 0) {
+                } @else if (it.readyQuantity > 0) {
                   <span class="badge badge--amber">{{ it.readyQuantity }}/{{ it.quantity }} listas</span>
                 } @else {
                   <span class="badge badge--amber">Por fabricar</span>
                 }
               </dd>
-              @if (it.isCustomModification || it.fabricationNote) {
+
+              @if (it.fabricationNote) {
                 <dd class="field__qty-line">
                   <span class="order__status-label">Modificación:</span>
                   <span class="field__qty">✏️ {{ it.fabricationNote || 'Ver fotos de referencia' }}</span>
                 </dd>
               }
-              @if (it.fabricationRefImages?.length) {
+              @if (it.specifications) {
+                <dd class="field__qty-line">
+                  <span class="order__status-label">Especificaciones:</span>
+                  <span class="field__qty">{{ it.specifications }}</span>
+                </dd>
+              }
+              @if (it.fabricationRefImages.length) {
                 <dd class="field__qty-line">
                   <span class="order__status-label">Referencia:</span>
                   <ul class="ref-images">
@@ -131,6 +135,7 @@
                   </ul>
                 </dd>
               }
+
               <dd class="field__qty-line">
                 <span class="order__status-label">Piezas a fabricar:</span>
                 <span class="field__qty">{{ it.quantity }}</span>
@@ -138,12 +143,11 @@
               @if (it.quantity > 1) {
                 <dd class="field__qty-line">
                   <span class="order__status-label">Piezas listas:</span>
-                  <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity ?? 0"
+                  <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity"
                          (change)="setReadyQuantity(o, it.id, $any($event.target).value)"
                          style="width:4.5rem" />
                 </dd>
               }
-              <!-- M4: material y color son de ESTA línea, no del pedido completo. -->
               @if (it.materialLabel) {
                 <dd class="field__qty-line">
                   <span class="order__status-label">Material:</span>
@@ -164,15 +168,18 @@
               }
             </div>
           }
-
         </dl>
 
-        @if (o.order_status === 'pending') {
+        @if (o.notes) {
+          <p class="po-notes"><strong>Notas de la tienda:</strong> {{ o.notes }}</p>
+        }
+
+        @if (o.canStart) {
           <button
             type="button"
             class="btn btn--ghost order__start"
-            [disabled]="o.acceptance?.status !== 'accepted'"
-            [title]="o.acceptance?.status !== 'accepted' ? 'Acepta el pedido primero' : ''"
+            [disabled]="o.acceptance.status !== 'accepted'"
+            [title]="o.acceptance.status !== 'accepted' ? 'Acepta el encargo primero' : ''"
             (click)="startFabrication(o)"
           >
             <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación
@@ -183,18 +190,27 @@
   </div>
 }
 
-<!-- ===== Modal: rechazar pedido ===== -->
+<!-- ===== Foto del producto a tamaño completo (clic en la miniatura) ===== -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox
+    [src]="(img | mediaUrl) ?? ''"
+    [alt]="'Foto del producto'"
+    (closed)="zoomedImage.set(null)"
+  />
+}
+
+<!-- ===== Modal: rechazar encargo ===== -->
 @if (rejectingOrder(); as o) {
   <div class="modal-backdrop">
     <div class="modal modal--sm">
       <div class="modal__head">
-        <h2>Rechazar el pedido {{ o.order_number }}</h2>
+        <h2>Rechazar {{ o.ref }}</h2>
         <button type="button" class="icon-btn" (click)="closeReject()" aria-label="Cerrar">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal__body">
-        <p class="muted">La tienda recibirá un aviso con tu motivo y reasignará el pedido.</p>
+        <p class="muted">La tienda recibirá un aviso con tu motivo.</p>
         <div class="field">
           <label>Motivo del rechazo *</label>
           <textarea rows="3" [value]="rejectReason()"
@@ -205,19 +221,10 @@
       <div class="modal__foot">
         <button type="button" class="btn btn--ghost" (click)="closeReject()">Cancelar</button>
         <button type="button" class="btn btn--danger"
-                [disabled]="working().has(o.id)" (click)="submitReject()">
-          Rechazar pedido
+                [disabled]="isWorking(o)" (click)="submitReject()">
+          Rechazar
         </button>
       </div>
     </div>
   </div>
-}
-
-<!-- ===== Foto del producto a tamaño completo (clic en la miniatura) ===== -->
-@if (zoomedImage(); as img) {
-  <app-image-lightbox
-    [src]="(img | mediaUrl) ?? ''"
-    [alt]="'Foto del producto'"
-    (closed)="zoomedImage.set(null)"
-  />
 }

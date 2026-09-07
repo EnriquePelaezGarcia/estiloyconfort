@@ -1,9 +1,8 @@
 import {
-  ChangeDetectionStrategy, Component, OnInit, PLATFORM_ID, computed, inject, signal,
+  ChangeDetectionStrategy, Component, OnInit, computed, inject, signal,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
-import { interval } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -13,13 +12,7 @@ import {
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderItem,
-  PurchaseOrderReceipt,
   PurchaseOrderStatus,
-} from '../../../../core/models/manufacturing.model';
-import {
-  PURCHASE_ORDER_MANUAL_STATUSES,
-  PURCHASE_ORDER_STATUS_LABELS,
-  PURCHASE_ORDER_STATUS_TONE,
 } from '../../../../core/models/manufacturing.model';
 import { MaterialsStore } from '../../../../core/services/materials.store';
 import { CategoryService } from '../../../../core/services/category.service';
@@ -39,6 +32,9 @@ interface PoPayment {
   balance: number;
   status: PayablePaymentStatus;
 }
+
+/** Opciones del filtro superior (reemplaza al viejo selector de estatus manual). */
+type PoFilter = 'active' | 'received' | 'cancelled' | 'all';
 
 @Component({
   selector: 'app-purchase-orders',
@@ -73,44 +69,24 @@ export class PurchaseOrdersComponent implements OnInit {
 
   protected orders = signal<PurchaseOrder[]>([]);
   protected manufacturers = signal<Manufacturer[]>([]);
-
-  /**
-   * Tick compartido (cada 3 s) que rota los mini-carruseles de fotos de la
-   * lista: una sola señal para todas las filas, en vez de un timer por OC.
-   */
-  private readonly carouselTick = isPlatformBrowser(inject(PLATFORM_ID))
-    ? toSignal(interval(3000), { initialValue: 0 })
-    : signal(0);
-
-  /** Foto visible ahora del carrusel de la OC `o` (rota si tiene varias). */
-  protected currentImage(o: PurchaseOrder): string | null {
-    const imgs = o.productImages ?? [];
-    if (imgs.length === 0) return null;
-    return imgs[(this.carouselTick() ?? 0) % imgs.length];
-  }
   protected products = signal<ManufacturerCatalogProduct[]>([]);
   protected loading = signal(true);
-  protected statusFilter = signal('');
 
-  /** OC expandida (muestra sus items). */
-  protected expanded = signal<number | null>(null);
-  protected expandedItems = signal<PurchaseOrderItem[]>([]);
-  /** Eventos de recepción de la OC expandida (los trae `getPurchaseOrder`). */
-  protected expandedReceipts = signal<PurchaseOrderReceipt[]>([]);
+  protected filter = signal<PoFilter>('active');
+  protected readonly filterOptions: Array<{ value: PoFilter; label: string }> = [
+    { value: 'active', label: 'Activas' },
+    { value: 'received', label: 'Recibidas' },
+    { value: 'cancelled', label: 'Canceladas' },
+    { value: 'all', label: 'Todas' },
+  ];
 
   protected creating = signal(false);
   protected saving = signal(false);
 
-  protected readonly allStatuses: PurchaseOrderStatus[] = [
-    'draft', 'sent', 'in_production', 'partially_received', 'received', 'cancelled',
-  ];
-  /** Los que el admin puede poner a mano en el dropdown (recepción los excluye). */
-  protected readonly manualStatuses = PURCHASE_ORDER_MANUAL_STATUSES;
-
-  protected readonly statusOptions = [
-    { value: '', label: 'Todos los estados' },
-    ...this.allStatuses.map((s) => ({ value: s, label: PURCHASE_ORDER_STATUS_LABELS[s] })),
-  ];
+  /** Ids de OC con una acción de cabecera en curso (enviar / cancelar / fecha). */
+  protected working = signal<Set<number>>(new Set());
+  /** Ids de renglones con un cambio de "listo" en curso. */
+  protected markingReady = signal<Set<number>>(new Set());
 
   protected readonly form = this.fb.group({
     manufacturerId: this.fb.control<number | null>(null),
@@ -174,7 +150,8 @@ export class PurchaseOrdersComponent implements OnInit {
 
   protected load(): void {
     this.loading.set(true);
-    const status = (this.statusFilter() || undefined) as PurchaseOrderStatus | undefined;
+    const f = this.filter();
+    const status = f === 'active' ? undefined : f;
     this.manufacturingService.getPurchaseOrders(status).subscribe({
       next: (res) => {
         this.orders.set(res.data);
@@ -188,41 +165,192 @@ export class PurchaseOrdersComponent implements OnInit {
   }
 
   protected onFilterChange(event: Event): void {
-    this.statusFilter.set((event.target as HTMLSelectElement).value);
+    this.filter.set((event.target as HTMLSelectElement).value as PoFilter);
     this.load();
   }
 
-  protected changeStatus(order: PurchaseOrder, event: Event): void {
-    const status = (event.target as HTMLSelectElement).value as PurchaseOrderStatus;
-    this.manufacturingService.updatePurchaseOrderStatus(order.id, status).subscribe({
-      next: (res) => {
-        this.orders.update((list) => list.map((o) => (o.id === order.id ? res.data : o)));
-        this.notification.success('Estatus actualizado');
-      },
-      error: () => this.notification.error('No se pudo actualizar el estatus'),
-    });
+  // ── Estado derivado de la OC (ya no hay selector manual) ─────────────────
+  /**
+   * Etiqueta de estado que sigue al trabajo, no un dropdown: 'sent' con algún
+   * renglón ya reportado listo se muestra como "En producción".
+   */
+  protected derivedStatusLabel(o: PurchaseOrder): string {
+    // Como en "Pedidos a fábrica": sin adorno mientras el trabajo está activo.
+    // Solo se etiqueta lo que el avance por renglón no comunica.
+    if (o.status === 'sent') {
+      return (o.items ?? []).some((it) => (it.readyQuantity ?? 0) > 0) ? 'En producción' : '';
+    }
+    const labels: Record<PurchaseOrderStatus, string> = {
+      draft: 'Borrador',
+      sent: '',
+      in_production: 'En producción',
+      partially_received: 'Recepción parcial',
+      received: 'Recibida',
+      cancelled: 'Cancelada',
+    };
+    return labels[o.status];
   }
 
-  protected toggle(order: PurchaseOrder): void {
-    if (this.expanded() === order.id) {
-      this.expanded.set(null);
+  protected statusTone(o: PurchaseOrder): string {
+    switch (o.status) {
+      case 'received': return 'badge--green';
+      case 'cancelled': return 'badge--red';
+      case 'draft': return 'badge--gray';
+      default: return 'badge--amber';
+    }
+  }
+
+  /** Enviar al fabricante (draft → sent). */
+  protected sendToManufacturer(o: PurchaseOrder): void {
+    if (!o.manufacturerId) {
+      this.notification.error('Asigna un fabricante a la orden antes de enviarla.');
       return;
     }
-    this.expanded.set(order.id);
-    this.expandedItems.set([]);
-    this.expandedReceipts.set([]);
-    this.loadExpandedDetail(order.id);
+    this.setWorking(o.id, true);
+    this.manufacturingService.setPurchaseOrderStatus(o.id, 'sent').subscribe({
+      next: (res) => {
+        this.setWorking(o.id, false);
+        this.notification.success(res.message);
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.setWorking(o.id, false);
+        this.notification.error(err?.error?.message ?? 'No se pudo enviar la orden');
+      },
+    });
   }
 
-  /** Trae items + eventos de recepción de una OC y los deja en los signals. */
-  private loadExpandedDetail(id: number): void {
-    this.manufacturingService.getPurchaseOrder(id).subscribe({
+  protected cancelOrder(o: PurchaseOrder): void {
+    if (!confirm(`¿Cancelar la orden ${o.poNumber}?`)) return;
+    this.setWorking(o.id, true);
+    this.manufacturingService.setPurchaseOrderStatus(o.id, 'cancelled').subscribe({
       next: (res) => {
-        this.expandedItems.set(res.data.items ?? []);
-        this.expandedReceipts.set(res.data.receipts ?? []);
+        this.setWorking(o.id, false);
+        this.notification.success(res.message);
+        this.load();
       },
-      error: () => this.notification.error('No se pudo cargar el detalle'),
+      error: (err: { error?: { message?: string } }) => {
+        this.setWorking(o.id, false);
+        this.notification.error(err?.error?.message ?? 'No se pudo cancelar la orden');
+      },
     });
+  }
+
+  protected onExpectedDateChange(o: PurchaseOrder, event: Event): void {
+    const expectedDate = (event.target as HTMLInputElement).value || null;
+    this.setWorking(o.id, true);
+    this.manufacturingService.updatePurchaseOrder(o.id, { expectedDate }).subscribe({
+      next: () => {
+        this.setWorking(o.id, false);
+        this.orders.update((list) => list.map((x) => (x.id === o.id ? { ...x, expectedDate } : x)));
+        this.notification.success('Fecha esperada actualizada');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.setWorking(o.id, false);
+        this.notification.error(err?.error?.message ?? 'No se pudo actualizar la fecha');
+      },
+    });
+  }
+
+  // ── Editar cabecera de la OC (reasignar fabricante, fecha, notas) ─────────
+  protected editing = signal<PurchaseOrder | null>(null);
+  protected savingEdit = signal(false);
+  protected readonly editForm = this.fb.group({
+    manufacturerId: this.fb.control<number | null>(null),
+    expectedDate: this.fb.control<string | null>(null),
+    notes: this.fb.control<string>(''),
+  });
+
+  protected openEdit(o: PurchaseOrder): void {
+    this.editing.set(o);
+    this.editForm.reset({
+      manufacturerId: o.manufacturerId ?? null,
+      expectedDate: o.expectedDate ?? null,
+      notes: o.notes ?? '',
+    });
+    const mf = this.editForm.controls.manufacturerId;
+    if (this.canReassignManufacturer(o)) mf.enable();
+    else mf.disable();
+  }
+
+  protected closeEdit(): void {
+    this.editing.set(null);
+  }
+
+  /** El fabricante solo se puede cambiar mientras la OC no entró a producción. */
+  protected canReassignManufacturer(o: PurchaseOrder): boolean {
+    return o.status === 'draft' || o.status === 'sent';
+  }
+
+  protected submitEdit(): void {
+    const o = this.editing();
+    if (!o) return;
+    const raw = this.editForm.getRawValue();
+    this.savingEdit.set(true);
+    this.manufacturingService.updatePurchaseOrder(o.id, {
+      manufacturerId: raw.manufacturerId ?? null,
+      expectedDate: raw.expectedDate || null,
+      notes: raw.notes?.trim() || null,
+    }).subscribe({
+      next: (res) => {
+        this.savingEdit.set(false);
+        this.notification.success(res.message);
+        this.closeEdit();
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingEdit.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo actualizar la orden');
+      },
+    });
+  }
+
+  private setWorking(id: number, on: boolean): void {
+    this.working.update((s) => {
+      const next = new Set(s);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  // ── Avance del fabricante por renglón ────────────────────────────────────
+  protected onReadyToggle(o: PurchaseOrder, it: PurchaseOrderItem): void {
+    const itemId = it.id!;
+    const next = !it.isReady;
+    this.markingReady.update((s) => new Set(s).add(itemId));
+    this.manufacturingService.markPurchaseOrderItemReady(o.id, itemId, next).subscribe({
+      next: () => {
+        this.markingReady.update((s) => { const n = new Set(s); n.delete(itemId); return n; });
+        this.load();
+      },
+      error: () => {
+        this.markingReady.update((s) => { const n = new Set(s); n.delete(itemId); return n; });
+        this.notification.error('No se pudo actualizar el renglón');
+      },
+    });
+  }
+
+  protected onReadyQty(o: PurchaseOrder, it: PurchaseOrderItem, value: string): void {
+    const qty = Math.max(0, Math.trunc(Number(value) || 0));
+    if (qty > it.quantity) return;
+    const itemId = it.id!;
+    this.markingReady.update((s) => new Set(s).add(itemId));
+    this.manufacturingService
+      .markPurchaseOrderItemReady(o.id, itemId, qty >= it.quantity, qty)
+      .subscribe({
+        next: () => {
+          this.markingReady.update((s) => { const n = new Set(s); n.delete(itemId); return n; });
+          this.load();
+        },
+        error: () => {
+          this.markingReady.update((s) => { const n = new Set(s); n.delete(itemId); return n; });
+          this.notification.error('No se pudo actualizar el renglón');
+        },
+      });
+  }
+
+  protected print(): void {
+    window.print();
   }
 
   // ── Formulario de creación ───────────────────────────────────────────────
@@ -399,11 +527,6 @@ export class PurchaseOrdersComponent implements OnInit {
     if (cost !== null) this.items.at(index).patchValue({ unitCost: cost });
   }
 
-  private firstQuotedCost(product: ManufacturerCatalogProduct): number {
-    const found = Object.values(product.materials).map((m) => m.cost).find((c) => c !== null);
-    return found ?? 0;
-  }
-
   private recalcTotal(): void {
     const total = this.items.controls.reduce((sum, ctrl) => {
       const q = Number(ctrl.get('quantity')?.value) || 0;
@@ -464,78 +587,42 @@ export class PurchaseOrdersComponent implements OnInit {
     });
   }
 
-  protected statusLabel(s: PurchaseOrderStatus): string { return PURCHASE_ORDER_STATUS_LABELS[s]; }
-  protected statusTone(s: PurchaseOrderStatus): string { return PURCHASE_ORDER_STATUS_TONE[s]; }
-
-  // ── Recepción de mercancía ───────────────────────────────────────────────
-  /** OC en recepción (null = modal cerrado). */
-  protected receiving = signal<PurchaseOrder | null>(null);
-  protected receiptRows = signal<
-    Array<{ itemId: number; productName: string; pending: number; quantity: number; condition: 'ok' | 'damaged' | 'incomplete'; note: string }>
-  >([]);
+  // ── Recepción en bodega por renglón (homologado con "Pedidos a fábrica") ──
+  protected receiving = signal<{ po: PurchaseOrder; item: PurchaseOrderItem } | null>(null);
+  protected receiptQty = signal(0);
+  protected receiptCondition = signal<'ok' | 'damaged' | 'incomplete'>('ok');
   protected receiptNote = signal('');
   protected savingReceipt = signal(false);
 
-  protected canReceive(o: PurchaseOrder): boolean {
-    return ['sent', 'in_production', 'partially_received'].includes(o.status);
-  }
-
-  protected openReceipt(o: PurchaseOrder): void {
-    this.receiving.set(o);
+  protected openWarehouseReceipt(po: PurchaseOrder, item: PurchaseOrderItem): void {
+    this.receiving.set({ po, item });
+    this.receiptQty.set(item.pendingQuantity ?? item.quantity);
+    this.receiptCondition.set('ok');
     this.receiptNote.set('');
-    this.receiptRows.set([]);
-    this.manufacturingService.getPurchaseOrder(o.id).subscribe({
-      next: (res) => {
-        this.expandedItems.set(res.data.items ?? []);
-        this.expandedReceipts.set(res.data.receipts ?? []);
-        this.receiptRows.set(
-          (res.data.items ?? [])
-            .filter((it) => (it.pendingQuantity ?? it.quantity) > 0)
-            .map((it) => ({
-              itemId: it.id!,
-              productName: it.sizeLabel ? `${it.productName} · ${it.sizeLabel}` : it.productName,
-              pending: it.pendingQuantity ?? it.quantity,
-              quantity: it.pendingQuantity ?? it.quantity,
-              condition: 'ok' as const,
-              note: '',
-            })),
-        );
-      },
-      error: () => this.notification.error('No se pudo cargar el detalle de la orden'),
-    });
   }
 
-  protected closeReceipt(): void {
+  protected closeWarehouseReceipt(): void {
     this.receiving.set(null);
-    this.receiptRows.set([]);
   }
 
-  protected setReceiptQty(i: number, value: string): void {
-    const n = Math.trunc(Number(value) || 0);
-    this.receiptRows.update((rows) => rows.map((r, idx) => (idx === i ? { ...r, quantity: Math.max(0, Math.min(r.pending, n)) } : r)));
-  }
-
-  protected setReceiptCondition(i: number, value: string): void {
-    this.receiptRows.update((rows) =>
-      rows.map((r, idx) => (idx === i ? { ...r, condition: value as 'ok' | 'damaged' | 'incomplete' } : r)));
-  }
-
-  protected setReceiptNote(i: number, value: string): void {
-    this.receiptRows.update((rows) => rows.map((r, idx) => (idx === i ? { ...r, note: value } : r)));
-  }
-
-  protected submitReceipt(): void {
-    const po = this.receiving();
-    if (!po) return;
-    const items = this.receiptRows()
-      .filter((r) => r.quantity > 0)
-      .map((r) => ({ itemId: r.itemId, quantity: r.quantity, condition: r.condition, note: r.note.trim() || null }));
-    if (items.length === 0) {
-      this.notification.error('Indica cuántas piezas llegaron en al menos un renglón');
+  protected submitWarehouseReceipt(): void {
+    const ctx = this.receiving();
+    if (!ctx) return;
+    const pending = ctx.item.pendingQuantity ?? ctx.item.quantity;
+    const qty = Math.trunc(this.receiptQty());
+    if (qty <= 0 || qty > pending) {
+      this.notification.error(`La cantidad debe estar entre 1 y ${pending}.`);
       return;
     }
     this.savingReceipt.set(true);
-    this.manufacturingService.receivePurchaseOrder(po.id, { note: this.receiptNote().trim() || null, items }).subscribe({
+    this.manufacturingService.receivePurchaseOrder(ctx.po.id, {
+      items: [{
+        itemId: ctx.item.id!,
+        quantity: qty,
+        condition: this.receiptCondition(),
+        note: this.receiptNote().trim() || null,
+      }],
+    }).subscribe({
       next: (res) => {
         this.savingReceipt.set(false);
         this.notification.success(res.message);
@@ -545,10 +632,9 @@ export class PurchaseOrdersComponent implements OnInit {
             `Nota de crédito sugerida por $${res.data.creditNote.amount.toFixed(2)} en Cuentas por pagar.`,
           );
         }
-        this.closeReceipt();
+        this.closeWarehouseReceipt();
         this.load();
         this.loadPayments();
-        if (this.expanded() === po.id) this.loadExpandedDetail(po.id);
       },
       error: (err: { error?: { message?: string } }) => {
         this.savingReceipt.set(false);
@@ -601,11 +687,6 @@ export class PurchaseOrdersComponent implements OnInit {
           this.savingProduct.set(false);
           this.notification.success(res.message);
           this.closeMaterialize();
-          if (this.expanded() === ctx.poId) {
-            this.manufacturingService.getPurchaseOrder(ctx.poId).subscribe({
-              next: (r) => this.expandedItems.set(r.data.items ?? []),
-            });
-          }
           this.load();
         },
         error: (err: { error?: { message?: string } }) => {

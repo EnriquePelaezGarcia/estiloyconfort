@@ -159,6 +159,17 @@
 
   &__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   &__name { font-family: v.$font-headline; font-size: 0.9rem; font-weight: 600; color: v.$color-text; }
+  // El nombre enlaza a la ficha pública del producto; abre en pestaña nueva
+  // para no perder la precotización.
+  &__name--link {
+    align-self: flex-start;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+
+    &:hover { text-decoration-color: currentColor; }
+  }
   &__detail { font-family: v.$font-body; font-size: 0.72rem; color: v.$color-text-secondary; }
   &__qty { font-family: v.$font-body; font-size: 0.8rem; color: v.$color-text-secondary; }
   &__price { font-family: v.$font-headline; font-size: 0.85rem; font-weight: 700; color: v.$color-primary; white-space: nowrap; }

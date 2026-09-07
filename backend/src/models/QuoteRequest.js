@@ -61,6 +61,8 @@ function mapItem(row) {
     /** Foto principal VIGENTE del producto (no congelada): si el catálogo
      * cambia la foto, la precotización muestra la actual. null si no tiene. */
     imageUrl: row.primary_image ?? null,
+    /** Slug VIGENTE del producto, para abrir su ficha pública (/producto/:slug). */
+    productSlug: row.product_slug ?? null,
   };
 }
 
@@ -72,7 +74,8 @@ const ITEMS_SELECT = `
   SELECT qri.*,
          (SELECT image_url FROM product_images
             WHERE product_id = qri.product_id
-            ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
+            ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image,
+         (SELECT slug FROM products WHERE id = qri.product_id) AS product_slug
   FROM quote_request_items qri WHERE qri.quote_request_id = ? ORDER BY qri.id
 `;
 

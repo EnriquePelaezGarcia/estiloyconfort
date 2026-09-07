@@ -246,3 +246,30 @@
 }
 
 .muted { color: vars.$color-text-secondary; font-size: 0.85rem; }
+
+// Modales de confirmación ("Confirmar cotización" / "Crear pedido"): el body
+// global no lleva padding vertical y el pie quedaba embutido dentro del body,
+// con la línea divisoria sin llegar a los bordes. Aquí el pie es hermano del
+// body, con aire parejo arriba y a los lados, y los botones a los extremos.
+.modal--confirm {
+  .modal__body {
+    padding: vars.$spacing-lg;
+    gap: vars.$spacing-sm;
+  }
+
+  .panel__title {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .muted {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .modal__foot {
+    justify-content: space-between;
+    margin-top: 0;
+  }
+}

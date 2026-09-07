@@ -80,6 +80,12 @@ git diff <desplegado>..origin/development -- backend/.env.example
   función nueva va a fallar en silencio. Avísale al usuario qué variables
   faltan; él pone los valores — **nunca le pidas que pegue secretos en el
   chat**, ni los imprimas en la salida de un comando.
+- **Backfills** (scripts `.js` en `src/database/`, no solo `.sql`): revisa
+  `git diff --name-only <desplegado>..origin/development -- backend/src/database/`.
+  Corren **después** del deploy, dentro del contenedor. Pendiente vigente:
+  `npm run db:migrate:po-number-yearly` renumera las OC al formato
+  `OC-2026-0002` si ya hay órdenes de compra en staging (idempotente; correr
+  primero con `--dry-run`).
 
 ## Paso 3 — Publicar
 

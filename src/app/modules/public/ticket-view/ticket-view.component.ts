@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TicketsService } from '../../../core/services/tickets.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { PublicTicket } from '../../../core/models/ticket.model';
@@ -44,7 +44,7 @@ const DELIVERY_LABELS: Record<DeliveryType, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ticket-view.component.html',
   styleUrl: './ticket-view.component.scss',
-  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent, MediaUrlPipe],
+  imports: [CurrencyPipe, DatePipe, RouterLink, ImageLightboxComponent, MediaUrlPipe],
 })
 export class TicketViewComponent implements OnInit {
   private route = inject(ActivatedRoute);

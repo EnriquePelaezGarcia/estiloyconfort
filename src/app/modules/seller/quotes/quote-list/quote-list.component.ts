@@ -46,6 +46,10 @@ export class QuoteListComponent implements OnInit {
   protected copiedId = signal<number | null>(null);
   /** Cotización pendiente de confirmar borrado. */
   protected pendingDelete = signal<Quote | null>(null);
+  /** Cotización pendiente de confirmar "Crear pedido" (evita el clic accidental). */
+  protected pendingCreateOrder = signal<Quote | null>(null);
+  /** Cotización pendiente de confirmar "Marcar confirmada". */
+  protected pendingConfirmQuote = signal<Quote | null>(null);
 
   /** Docs/plan-descuentos.md: descuento que el admin está por rechazar (pide motivo). */
   protected pendingReject = signal<{ quote: Quote; discount: QuoteDiscount } | null>(null);
@@ -150,13 +154,29 @@ export class QuoteListComponent implements OnInit {
     this.router.navigate([this.panelBase, 'cotizaciones', quote.id, 'editar']);
   }
 
+  /** Pide confirmar antes de saltar al POS: el clic accidental era demasiado fácil. */
+  protected askCreateOrder(quote: Quote): void {
+    this.pendingCreateOrder.set(quote);
+  }
+
   /** Abre el POS con la cotización precargada para levantar el pedido. */
-  protected createOrder(quote: Quote): void {
+  protected confirmCreateOrder(): void {
+    const quote = this.pendingCreateOrder();
+    if (!quote) return;
+    this.pendingCreateOrder.set(null);
     const target = this.panelBase === '/admin' ? 'punto-venta' : 'nuevo';
     this.router.navigate([this.panelBase, target], { queryParams: { fromQuote: quote.id } });
   }
 
-  protected confirm(quote: Quote): void {
+  /** Pide confirmar antes de marcar la cotización como confirmada. */
+  protected askConfirmQuote(quote: Quote): void {
+    this.pendingConfirmQuote.set(quote);
+  }
+
+  protected confirmQuote(): void {
+    const quote = this.pendingConfirmQuote();
+    if (!quote) return;
+    this.pendingConfirmQuote.set(null);
     this.quotesService.confirm(quote.id).subscribe({
       next: () => {
         this.notification.success('Cotización confirmada — ya puedes levantar el pedido');

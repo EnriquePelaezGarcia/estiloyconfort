@@ -75,22 +75,37 @@ const manufacturerController = {
     const manufacturerId = await manufacturerIdOf(req.user.id);
     if (!manufacturerId) return res.json({ data: [] });
 
+    // La lista semanal es "haz N de estos": suma piezas de los pedidos de venta
+    // a fabricar Y de las órdenes de compra activas — para el fabricante son lo
+    // mismo (ver la vista unificada del portal).
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
+    const poPlaceholders = PO_VISIBLE_STATUSES.map(() => '?').join(',');
     const [rows] = await pool.execute(
-      `SELECT oi.product_id, oi.product_name, oi.product_sku,
-              SUM(oi.quantity) AS total_quantity,
-              SUM(oi.is_ready = FALSE) AS pending_lines,
-              SUM(oi.is_ready = TRUE) AS ready_lines,
+      `SELECT u.product_id, u.product_name, u.product_sku,
+              SUM(u.quantity) AS total_quantity,
+              SUM(u.is_ready = FALSE) AS pending_lines,
+              SUM(u.is_ready = TRUE) AS ready_lines,
               COUNT(*) AS line_count
-       FROM order_items oi
-       JOIN orders o ON o.id = oi.order_id
-       WHERE o.order_status IN (${placeholders})
-         AND oi.requires_fabrication = 1
-         AND oi.manufacturer_id = ?
-         ${DEPOSIT_GATE}
-       GROUP BY oi.product_id, oi.product_name, oi.product_sku
-       ORDER BY oi.product_name`,
-      [...FABRICATION_STATUSES, manufacturerId],
+       FROM (
+         SELECT oi.product_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready
+           FROM order_items oi
+           JOIN orders o ON o.id = oi.order_id
+          WHERE o.order_status IN (${placeholders})
+            AND oi.requires_fabrication = 1
+            AND oi.manufacturer_id = ?
+            ${DEPOSIT_GATE}
+         UNION ALL
+         SELECT poi.product_id, poi.product_name, poi.product_sku, poi.quantity, poi.is_ready
+           FROM purchase_order_items poi
+           JOIN purchase_orders po ON po.id = poi.purchase_order_id
+          WHERE po.status IN (${poPlaceholders})
+            AND po.manufacturer_id = ?
+            AND po.acceptance_status <> 'rejected'
+            AND poi.product_id IS NOT NULL
+       ) u
+       GROUP BY u.product_id, u.product_name, u.product_sku
+       ORDER BY u.product_name`,
+      [...FABRICATION_STATUSES, manufacturerId, ...PO_VISIBLE_STATUSES, manufacturerId],
     );
     res.json({
       data: rows.map((r) => ({

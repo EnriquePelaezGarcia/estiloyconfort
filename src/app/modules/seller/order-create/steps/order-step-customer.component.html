@@ -325,6 +325,12 @@
           </div>
         }
       </div>
+      <!--
+        El repartidor solo se asigna sobre un pedido que ya existe: al crearlo
+        no hay a qué entrega engancharlo. En alta se omite el campo; al editar
+        un pedido ya creado vuelve a aparecer.
+      -->
+      @if (store.isEditing()) {
       <div class="field">
         <label for="deliveryPersonId">Asignar repartidor</label>
         <select id="deliveryPersonId" formControlName="deliveryPersonId" [disabled]="store.deliveryAssignmentBlocked()">
@@ -339,6 +345,7 @@
           <p class="field__hint">Opcional. Al asignarlo, el pedido pasa a "En entrega" y aparece en las entregas del repartidor.</p>
         }
       </div>
+      }
       }
     </div>
 

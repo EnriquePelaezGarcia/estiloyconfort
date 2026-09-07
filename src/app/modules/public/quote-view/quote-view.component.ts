@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { QuotesService } from '../../../core/services/quotes.service';
 import { PublicQuote } from '../../../core/models/quote.model';
 import { SaleScheme } from '../../../core/models/order.model';
@@ -31,7 +31,7 @@ const SCHEME_LABELS: Record<SaleScheme, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './quote-view.component.html',
   styleUrl: './quote-view.component.scss',
-  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent, MediaUrlPipe],
+  imports: [CurrencyPipe, DatePipe, RouterLink, ImageLightboxComponent, MediaUrlPipe],
 })
 export class QuoteViewComponent implements OnInit {
   private route = inject(ActivatedRoute);

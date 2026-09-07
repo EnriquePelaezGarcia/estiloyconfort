@@ -8,11 +8,6 @@ export type PurchaseOrderStatus =
   | 'received'
   | 'cancelled';
 
-/** Estatus que el admin sí puede poner a mano (los de recepción los pone el flujo de recepción). */
-export const PURCHASE_ORDER_MANUAL_STATUSES: PurchaseOrderStatus[] = [
-  'draft', 'sent', 'in_production', 'cancelled',
-];
-
 export interface Manufacturer {
   id: number;
   name: string;
@@ -65,6 +60,12 @@ export interface PurchaseOrderItem {
   /** Lo que el FABRICANTE reporta (distinto de `receivedQuantity`, que pone bodega). */
   isReady?: boolean;
   readyQuantity?: number;
+  /** Quién marcó listo el renglón (fabricante o admin en su nombre) y cuándo. */
+  readyByName?: string | null;
+  readyAt?: string | null;
+  /** Condición de la última recepción en bodega (null = aún no se recibe). */
+  warehouseCondition?: 'ok' | 'damaged' | 'incomplete' | null;
+  warehouseNote?: string | null;
 }
 
 /** Un evento de recepción de una OC. */
@@ -98,11 +99,7 @@ export interface PurchaseOrder {
   notes: string | null;
   createdByName?: string | null;
   itemCount?: number;
-  /**
-   * Fotos principales de los productos de la OC (solo en el listado), sin
-   * repetir. Con más de una, la lista las rota en un mini-carrusel.
-   */
-  productImages?: string[];
+  /** El listado del panel ya trae los renglones (tabla agrupada, sin expandir). */
   items?: PurchaseOrderItem[];
   receipts?: PurchaseOrderReceipt[];
   /** Solo se pide desde que la OC se manda ('sent' en adelante). */

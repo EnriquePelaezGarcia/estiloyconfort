@@ -306,6 +306,22 @@ ssh estiloyconfort 'cd /opt/estiloyconfort/app/deploy && docker compose exec -T 
 Idempotente. En prod con 0 pedidos solo deja `order_sequences` con el esquema
 nuevo.
 
+### Post-deploy: folio de OC por año
+
+El folio de orden de compra pasó de `OC-000002` a `OC-2026-0002` (mismo formato
+que el pedido). No hay `.sql`: `generatePoNumber()` cuenta por prefijo del año.
+**Si ya hay OC creadas en prod**, renumerarlas con el backfill (idempotente,
+sin colisión de UNIQUE — el formato viejo `OC-\d{6}` no choca con el nuevo):
+
+```powershell
+ssh estiloyconfort 'cd /opt/estiloyconfort/app/deploy && docker compose exec -T backend-prod node src/database/backfill_po_number_yearly.js --dry-run'
+ssh estiloyconfort 'cd /opt/estiloyconfort/app/deploy && docker compose exec -T backend-prod npm run db:migrate:po-number-yearly'
+```
+
+Si al desplegar prod no había ninguna OC, el backfill no toca nada y la primera
+OC ya sale con el formato nuevo — igual conviene correr el `--dry-run` para
+confirmarlo.
+
 ### Datos del catálogo (una vez, revisando el dry-run)
 
 Estos tocan filas que en producción **pueden ser reales**. Corre el `--dry-run`,
