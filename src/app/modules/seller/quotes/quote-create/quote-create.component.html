@@ -750,4 +750,14 @@
     </div>
 
   </form>
+
+  @if (isEditing()) {
+    <section class="panel history-panel">
+      <h2 class="panel__title">Historial de la cotización</h2>
+      @if (loadedSellerName(); as name) {
+        <p class="history-panel__owner">Creada por <strong>{{ name }}</strong></p>
+      }
+      <app-activity-log [entries]="quoteActivity()" />
+    </section>
+  }
 }

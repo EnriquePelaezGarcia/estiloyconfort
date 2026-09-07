@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { QuotesService } from '../../../../core/services/quotes.service';
 import { QuoteRequestsService } from '../../../../core/services/quote-requests.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -36,6 +37,7 @@ export class QuoteListComponent implements OnInit {
   private quoteRequestsService = inject(QuoteRequestsService);
   private notification = inject(NotificationService);
   private approvalsService = inject(ApprovalsService);
+  private auth = inject(AuthService);
   private router = inject(Router);
 
   protected loading = signal(true);
@@ -147,6 +149,14 @@ export class QuoteListComponent implements OnInit {
 
   protected newQuote(): void {
     this.router.navigate([this.panelBase, 'cotizaciones', 'nueva']);
+  }
+
+  /**
+   * Todos los vendedores pueden ver y editar cualquier cotización, pero
+   * eliminarla sigue siendo del dueño (quien la creó) o de un admin.
+   */
+  protected canDelete(quote: Quote): boolean {
+    return this.isAdmin || quote.sellerId === this.auth.currentUser()?.id;
   }
 
   /** Editable mientras no se haya convertido en pedido. */

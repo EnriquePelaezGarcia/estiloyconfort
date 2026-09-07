@@ -20,27 +20,18 @@
 
     .material-symbols-outlined { color: #dc2626; }
   }
-}
 
-// El verde de WhatsApp rompe la paleta a propósito (regla 4 del sistema):
-// señala "esto sale de la aplicación". No usarlo en ningún otro botón.
-.btn--whatsapp {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid transparent;
-  background: #25d366;
-  color: #ffffff;
+  &:has(.banner__actions) { align-items: flex-start; }
 
-  &:hover:not(:disabled) { background: #128c7e; }
-  &:disabled { opacity: 0.65; cursor: default; }
-
-  .btn__wa-icon {
-    width: 1.05rem;
-    height: 1.05rem;
-    fill: currentColor;
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$spacing-sm;
+    margin-top: vars.$spacing-sm;
   }
 }
+
+// El estilo de `.btn--whatsapp` vive en styles/_business.scss (global).
 
 .detail-grid {
   display: grid;

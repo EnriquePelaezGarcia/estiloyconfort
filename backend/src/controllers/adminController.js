@@ -9,6 +9,7 @@ const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
 const Refund = require('../models/Refund');
+const OrderCancellation = require('../models/OrderCancellation');
 const refImages = require('../utils/orderRefImages');
 const { calculateCredit, profitByCost, wholesaleProfit } = require('../utils/pricingCalculator');
 
@@ -579,10 +580,26 @@ const getOrder = asyncHandler(async (req, res) => {
   order.manufacturerAcceptance = await ManufacturerAcceptance.forOrder(order.id);
   // Historial del pedido (línea de tiempo de estatus + evidencia de entrega).
   order.history = await Order.getHistory(order.id);
+  // Solicitud de cancelación pendiente (el admin la aprueba/rechaza aquí mismo).
+  order.pendingCancellation = await OrderCancellation.findPendingForOrder(order.id);
   // Docs/plan-descuentos.md: apaga el badge de "rechazado" si el admin mismo
   // había pedido un descuento que otro admin rechazó (caso raro, mismo trato).
   await discountEngine.acknowledgeRejected('order', order.id, req.user.id);
   res.json({ data: order });
+});
+
+// PATCH /api/admin/orders/:id/cancellation/:cancellationId/approve
+const approveOrderCancellation = asyncHandler(async (req, res) => {
+  await OrderCancellation.approve(req.params.cancellationId, req.user.id);
+  const order = await Order.findById(req.params.id);
+  res.json({ data: order, message: 'Cancelación aprobada, pedido cancelado' });
+});
+
+// PATCH /api/admin/orders/:id/cancellation/:cancellationId/reject
+const rejectOrderCancellation = asyncHandler(async (req, res) => {
+  await OrderCancellation.reject(req.params.cancellationId, req.user.id, req.body.reviewNote);
+  const order = await Order.findById(req.params.id);
+  res.json({ data: order, message: 'Solicitud de cancelación rechazada' });
 });
 
 // PATCH /api/admin/orders/:id/discounts/:discountId/approve
@@ -663,6 +680,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 const assignDelivery = asyncHandler(async (req, res) => {
   const { deliveryPersonId, assignmentDate } = req.body;
   if (!deliveryPersonId) throw ApiError.badRequest('deliveryPersonId es obligatorio');
+  if (await OrderCancellation.hasPending(req.params.id)) {
+    throw ApiError.badRequest(
+      'Este pedido tiene una solicitud de cancelación pendiente. Resuélvela antes de asignar reparto.',
+    );
+  }
   const order = await Order.assignDeliveryPerson(req.params.id, deliveryPersonId, assignmentDate);
   res.json({ data: order, message: 'Repartidor asignado' });
 });
@@ -1244,6 +1266,8 @@ module.exports = {
   rejectOrderExtraCharge,
   approveOrderRefund,
   rejectOrderRefund,
+  approveOrderCancellation,
+  rejectOrderCancellation,
   approveOrderShipping,
   rejectOrderShipping,
   getDeliveryPeople,

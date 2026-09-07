@@ -238,6 +238,10 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   private initCanvas(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas || this.ctx) return;
+    // Sin ancho todavía (layout no aplicado): no se fija el contexto para que
+    // un intento posterior (onPointerDown, restoreSignature) lo reintente con
+    // el canvas ya medido — si no, el bitmap quedaría de 0px.
+    if (!canvas.offsetWidth) return;
     this.sizeCanvas(canvas);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -378,13 +382,37 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     this.mediaStream = null;
   }
 
+  /**
+   * Vuelve a pintar la firma guardada sobre el canvas.
+   *
+   * En una entrega ya completada, al recargar la página el canvas puede
+   * existir en el DOM pero todavía sin ancho real: se acaba de cambiar de la
+   * vista "Cargando…" a la del detalle y el layout aún no se aplica. Si se
+   * dibujaba en ese instante, el bitmap quedaba de 0px y la firma
+   * "desaparecía". Se espera (por frames) a que el canvas mida, luego se
+   * (re)dimensiona y se dibuja la imagen.
+   */
   private restoreSignature(dataUrl: string): void {
-    const canvas = this.canvasRef()?.nativeElement;
-    if (!canvas || !this.ctx) return;
     const img = new Image();
     img.onload = () => {
-      this.ctx!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      this.hasSignature.set(true);
+      let tries = 0;
+      const draw = () => {
+        const canvas = this.canvasRef()?.nativeElement;
+        if (!canvas) return;
+        if (!canvas.offsetWidth && tries++ < 30) {
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(draw);
+          else setTimeout(draw, 50);
+          return;
+        }
+        this.sizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        this.configureCtx(ctx);
+        this.ctx = ctx;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        this.hasSignature.set(true);
+      };
+      draw();
     };
     img.src = dataUrl;
   }

@@ -69,8 +69,13 @@ export class SellerService {
     );
   }
 
-  cancelOrder(id: number): Observable<{ message: string }> {
-    return this.api.delete<{ message: string }>(`/seller/orders/${id}`);
+  /**
+   * Solicita cancelar un pedido con una razón (obligatoria). Si lo pide un
+   * vendedor nace como solicitud 'pendiente' y el pedido queda congelado hasta
+   * que el admin la apruebe/rechace; si lo pide un admin, se cancela en el acto.
+   */
+  requestCancellation(id: number, reason: string): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>(`/seller/orders/${id}/cancellation`, { reason });
   }
 
   /** Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente. */

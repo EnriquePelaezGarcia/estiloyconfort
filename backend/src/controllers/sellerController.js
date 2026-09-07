@@ -1,4 +1,6 @@
 const Order = require('../models/Order');
+const ActivityLog = require('../models/ActivityLog');
+const OrderCancellation = require('../models/OrderCancellation');
 const Inventory = require('../models/Inventory');
 const Payment = require('../models/Payment');
 const Refund = require('../models/Refund');
@@ -11,6 +13,7 @@ const ApiError = require('../utils/ApiError');
 const { calculateCredit } = require('../utils/pricingCalculator');
 const { isPickupWithinGrace } = require('../utils/pickup');
 const { isValidCustomerPhone } = require('../utils/validators');
+const { formatQuoteFolio } = require('../utils/folio');
 const { periodFromQuery } = require('../utils/periods');
 const { pool } = require('../config/database');
 
@@ -96,6 +99,8 @@ const sellerController = {
     // que el admin en el detalle.
     order.manufacturerAcceptance = await ManufacturerAcceptance.forOrder(order.id);
     order.history = await Order.getHistory(order.id);
+    // Solicitud de cancelación pendiente (congela edición y asignación de reparto).
+    order.pendingCancellation = await OrderCancellation.findPendingForOrder(order.id);
     // Docs/plan-descuentos.md: al abrir el pedido se apaga el badge de
     // "descuento rechazado" de quien lo pidió, si era suyo.
     await discountEngine.acknowledgeRejected('order', order.id, req.user.id);
@@ -111,7 +116,26 @@ const sellerController = {
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('El pedido debe incluir al menos un producto');
     }
+    // La ubicación de Google Maps es obligatoria en una entrega a domicilio
+    // (no aplica a "recoge en tienda"): el repartidor la abre con un clic.
+    if (!req.body.pickupInStore && !String(req.body.googleMapsUrl || '').trim()) {
+      throw ApiError.badRequest('La ubicación (URL de Google Maps) es obligatoria para crear el pedido');
+    }
     const order = await Order.create(req.body, req.user.id, req.user.role);
+
+    // Rastro de la conversión cotización → pedido (bitácora de ambos).
+    if (req.body.fromQuoteId) {
+      const quoteFolio = formatQuoteFolio(Number(req.body.fromQuoteId));
+      await ActivityLog.record({
+        entityType: 'quote', entityId: Number(req.body.fromQuoteId), action: 'convert', actor: req.user,
+        summary: `Convirtió la cotización en el pedido ${order.orderNumber}`,
+      });
+      await ActivityLog.record({
+        entityType: 'order', entityId: order.id, action: 'create', actor: req.user,
+        summary: `Pedido creado desde la cotización ${quoteFolio}`,
+      });
+    }
+
     res.status(201).json({ data: order, message: 'Pedido creado exitosamente' });
   }),
 
@@ -139,6 +163,9 @@ const sellerController = {
     if (!Array.isArray(req.body.saleGroups) || req.body.saleGroups.length < 2) {
       throw ApiError.badRequest('Una venta partida necesita al menos 2 notas (saleGroups).');
     }
+    if (!req.body.pickupInStore && !String(req.body.googleMapsUrl || '').trim()) {
+      throw ApiError.badRequest('La ubicación (URL de Google Maps) es obligatoria para crear el pedido');
+    }
     const { saleGroupId, orders } = await Order.createSplit(req.body, req.user.id, req.user.role);
     res.status(201).json({ data: { saleGroupId, orders }, message: 'Venta partida creada exitosamente' });
   }),
@@ -147,8 +174,11 @@ const sellerController = {
   // 'pending' se edita libre. 'fabricating'/'in_warehouse'/'ready' también se
   // editan (incluidas las líneas de fabricación): el fabricante se re-notifica
   // y vuelve a aceptar (Docs/plan-fabricante-notificaciones-y-aceptacion.md D3).
-  // 'in_delivery'/'delivered'/'cancelled' no se editan. El admin puede editar
-  // el pedido de cualquier vendedor.
+  // 'in_delivery'/'delivered'/'cancelled' no se editan.
+  //
+  // Cualquier vendedor o admin puede editar cualquier pedido; el cambio queda
+  // registrado en `activity_log` con quién lo hizo (visible en "Historial del
+  // pedido").
   //
   // Excepción: un "recoge en tienda" del mismo día se edita como si fuera
   // 'pending' (Docs/plan-recoge-en-tienda.md D7). Nace en 'delivered', así que
@@ -156,8 +186,12 @@ const sellerController = {
   update: asyncHandler(async (req, res) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
-    if (req.user.role !== 'admin' && existing.sellerId !== req.user.id) {
-      throw ApiError.forbidden('Este pedido no te pertenece');
+
+    // Congelado: hay una solicitud de cancelación esperando al admin.
+    if (await OrderCancellation.hasPending(existing.id)) {
+      throw ApiError.badRequest(
+        'Este pedido tiene una solicitud de cancelación pendiente. Espera a que el admin la resuelva.',
+      );
     }
 
     const pickupGrace = isPickupWithinGrace(existing);
@@ -196,16 +230,39 @@ const sellerController = {
       }
     }
 
+    // Bitácora: quién editó y qué cambió (visible en "Historial del pedido").
+    const { summary, changes } = ActivityLog.diffEntity(existing, order);
+    if (changes) {
+      await ActivityLog.record({
+        entityType: 'order', entityId: order.id, action: 'edit', actor: req.user, summary, changes,
+      });
+    }
+
     res.json({ data: order, message: 'Pedido actualizado' });
   }),
 
-  // DELETE /api/seller/orders/:id  (cancelar)
-  remove: asyncHandler(async (req, res) => {
+  // POST /api/seller/orders/:id/cancellation — solicita cancelar el pedido.
+  // Solo el vendedor dueño o un admin. El vendedor genera una solicitud
+  // 'pendiente' (el pedido queda congelado y se avisa al admin); el admin
+  // cancela en el acto. La razón (texto libre) es obligatoria.
+  requestCancellation: asyncHandler(async (req, res) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
-    if (existing.sellerId !== req.user.id) throw ApiError.forbidden('Este pedido no te pertenece');
-    await Order.remove(req.params.id, req.user.id);
-    res.json({ message: 'Pedido cancelado' });
+    if (req.user.role !== 'admin' && existing.sellerId !== req.user.id) {
+      throw ApiError.forbidden('Este pedido no te pertenece');
+    }
+    if (!req.body.reason || !String(req.body.reason).trim()) {
+      throw ApiError.badRequest('Indica la razón de la cancelación');
+    }
+    const { cancellation, cancelled } = await OrderCancellation.request(
+      { orderId: existing.id, reason: req.body.reason }, req.user,
+    );
+    res.status(cancelled ? 200 : 202).json({
+      data: cancellation,
+      message: cancelled
+        ? 'Pedido cancelado'
+        : 'Solicitud de cancelación enviada al administrador',
+    });
   }),
 
   // POST /api/seller/orders/:id/extra-charges — cargo extra sobre un pedido
@@ -217,6 +274,10 @@ const sellerController = {
       amount: req.body.amount,
       requestedBy: req.user.id,
       requestedByRole: req.user.role,
+    });
+    await ActivityLog.record({
+      entityType: 'order', entityId: order.id, action: 'extra_charge', actor: req.user,
+      summary: `Agregó el cargo extra "${req.body.label}" por $${Number(req.body.amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
     });
     res.status(201).json({ data: order, message: 'Cargo extra agregado' });
   }),

@@ -1,3 +1,5 @@
+import { ActivityEntry } from './activity.model';
+import { ApprovalStatus } from './approval.model';
 import { ManufacturerOption } from './manufacturing.model';
 
 export type OrderStatus =
@@ -396,6 +398,30 @@ export interface Order {
    * (admin `getOrder` / vendedor `getOne`).
    */
   history?: OrderHistory | null;
+  /**
+   * Solicitud de cancelación pendiente, si la hay. Mientras exista, el pedido
+   * está congelado (no se edita ni se asigna a reparto) hasta que el admin la
+   * apruebe o rechace. Solo en los endpoints de detalle.
+   */
+  pendingCancellation?: OrderCancellationRequest | null;
+}
+
+/** Solicitud de cancelación de pedido (`order_cancellations`). */
+export interface OrderCancellationRequest {
+  id: number;
+  orderId: number;
+  orderNumber: string | null;
+  customerName: string | null;
+  reason: string;
+  status: ApprovalStatus;
+  requestedBy: number | null;
+  requestedByName: string | null;
+  requestedByRole: string | null;
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
 }
 
 /** Un cambio de estatus del pedido (`order_status_history`). */
@@ -422,6 +448,8 @@ export interface OrderDeliveryProof {
 export interface OrderHistory {
   statusHistory: OrderStatusHistoryEntry[];
   delivery: OrderDeliveryProof | null;
+  /** Bitácora de ediciones: quién tocó el pedido y qué cambió. */
+  activity?: ActivityEntry[];
 }
 
 export type ManufacturerAcceptanceStatus = 'pending' | 'accepted' | 'rejected';

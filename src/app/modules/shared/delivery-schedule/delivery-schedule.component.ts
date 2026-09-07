@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DeliveryScheduleService, formatWindow } from '../../../core/services/delivery-schedule.service';
+import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import {
   DeliveryBucket, DeliveryScheduleCounts, ScheduledDelivery,
 } from '../../../core/models/delivery-schedule.model';
+import { DeliveryPerson } from '../../../core/models/order.model';
 import { DeliveryRescheduleComponent } from '../delivery-reschedule/delivery-reschedule.component';
 import { waPhone } from '../../../core/utils/phone';
 
@@ -36,6 +38,7 @@ interface ScheduleGroup {
 })
 export class DeliveryScheduleComponent implements OnInit {
   private scheduleService = inject(DeliveryScheduleService);
+  private sellerService = inject(SellerService);
   private notification = inject(NotificationService);
   private router = inject(Router);
 
@@ -46,6 +49,13 @@ export class DeliveryScheduleComponent implements OnInit {
   protected commitmentFilter = signal<'all' | 'exact' | 'tentative'>('all');
   /** Entrega abierta en el modal de reprogramación; null = cerrado. */
   protected rescheduling = signal<ScheduledDelivery | null>(null);
+
+  // ===== Asignar repartidor (admin y vendedor) =====
+  protected deliveryPeople = signal<DeliveryPerson[]>([]);
+  /** Entrega abierta en el modal de asignación; null = cerrado. */
+  protected assigning = signal<ScheduledDelivery | null>(null);
+  protected selectedDeliveryPerson = signal<number | null>(null);
+  protected assigningBusy = signal(false);
 
   /** Base del link al detalle: distinto path para admin y vendedor. */
   protected orderDetailBase = computed(() =>
@@ -84,6 +94,42 @@ export class DeliveryScheduleComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.sellerService.getDeliveryPeople().subscribe({
+      next: (res) => this.deliveryPeople.set(res.data),
+      error: () => {},
+    });
+  }
+
+  /** Se puede asignar repartidor cuando el pedido está listo y sin fabricación pendiente. */
+  protected canAssign(d: ScheduledDelivery): boolean {
+    return d.orderStatus === 'ready' && !d.hasPendingFabrication;
+  }
+
+  protected openAssign(d: ScheduledDelivery): void {
+    this.selectedDeliveryPerson.set(d.deliveryPersonId ?? null);
+    this.assigning.set(d);
+  }
+
+  protected confirmAssign(): void {
+    const d = this.assigning();
+    const personId = this.selectedDeliveryPerson();
+    if (!d || !personId || this.assigningBusy()) {
+      if (!personId) this.notification.error('Selecciona un repartidor');
+      return;
+    }
+    this.assigningBusy.set(true);
+    this.sellerService.assignDelivery(d.orderId, personId).subscribe({
+      next: () => {
+        this.assigningBusy.set(false);
+        this.assigning.set(null);
+        this.notification.success('Repartidor asignado');
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.assigningBusy.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo asignar el repartidor');
+      },
+    });
   }
 
   protected load(): void {

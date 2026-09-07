@@ -46,14 +46,50 @@ $sidebar-width: 264px;
   }
 }
 
+.sidebar__head {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-xs;
+  padding-bottom: vars.$spacing-lg;
+  border-bottom: 1px solid rgba(#fff, 0.1);
+  margin-bottom: vars.$spacing-md;
+  flex-shrink: 0;
+}
+
 .sidebar__brand {
   display: flex;
   align-items: center;
   gap: vars.$spacing-sm;
-  padding: 0 vars.$spacing-sm vars.$spacing-lg;
-  border-bottom: 1px solid rgba(#fff, 0.1);
-  margin-bottom: vars.$spacing-md;
+  padding: 0 vars.$spacing-sm;
+  min-width: 0; // deja que el texto se recorte antes de desbordar el drawer
+}
+
+// Botón de cerrar del drawer. Solo en móvil: en escritorio el sidebar es fijo.
+.sidebar__close {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: vars.$radius-md;
+  background: rgba(#fff, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background vars.$transition-fast;
+
+  &:hover {
+    background: rgba(#fff, 0.18);
+  }
+
+  .material-symbols-outlined {
+    font-size: 1.4rem;
+  }
+
+  @media (min-width: vars.$bp-desktop) {
+    display: none;
+  }
 }
 
 .sidebar__ornament {

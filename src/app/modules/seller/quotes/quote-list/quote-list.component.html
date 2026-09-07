@@ -208,9 +208,11 @@
               <span class="material-symbols-outlined">edit</span>
               Editar
             </button>
-            <button type="button" class="icon-btn icon-btn--danger" (click)="askDelete(q)" aria-label="Eliminar cotización">
-              <span class="material-symbols-outlined">delete</span>
-            </button>
+            @if (canDelete(q)) {
+              <button type="button" class="icon-btn icon-btn--danger" (click)="askDelete(q)" aria-label="Eliminar cotización">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            }
           }
         </div>
       </article>

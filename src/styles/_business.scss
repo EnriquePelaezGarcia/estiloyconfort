@@ -36,6 +36,45 @@
 }
 
 // ===== Buttons =====
+//
+// bootstrap.min.css se carga de forma global (angular.json) y trae su propia
+// clase `.btn` con estados :hover/:focus-visible/:active/:disabled. Esos
+// estados leen variables `--bs-btn-*-color` / `--bs-btn-*-bg` que SÓLO definen
+// las clases de color de Bootstrap (`.btn-primary`, `.btn-danger`…). Este
+// proyecto usa la convención BEM `.btn` + `.btn--primary`, así que esas
+// variables quedaban sin definir y, como algunos selectores de estado de
+// Bootstrap pesan más que una sola clase — p.ej. `.btn:first-child:active`
+// (0-3-0) vs `.btn--primary` (0-1-0) —, al hacer clic pisaban el color del
+// texto con un valor inválido: el texto caía al gris oscuro del body (ilegible
+// sobre el morado) y el fondo se quedaba "pegado" tras soltar el clic. Lo
+// mismo en `:disabled`.
+//
+// La solución: alimentar las variables `--bs-btn-*` en cada variante (vía el
+// mixin `btn-theme`) para que los estados de Bootstrap rendericen NUESTRA
+// paleta en lugar de romperse. Se mantienen también `color`/`background-color`
+// explícitos para los contextos sin Bootstrap.
+
+@mixin btn-theme($fg, $bg, $hover-bg) {
+  --bs-btn-color: #{$fg};
+  --bs-btn-bg: #{$bg};
+  --bs-btn-border-color: transparent;
+  --bs-btn-hover-color: #{$fg};
+  --bs-btn-hover-bg: #{$hover-bg};
+  --bs-btn-hover-border-color: transparent;
+  --bs-btn-active-color: #{$fg};
+  --bs-btn-active-bg: #{$hover-bg};
+  --bs-btn-active-border-color: transparent;
+  --bs-btn-disabled-color: #{$fg};
+  --bs-btn-disabled-bg: #{$bg};
+  --bs-btn-disabled-border-color: transparent;
+
+  color: $fg;
+  background-color: $bg;
+  border-color: transparent;
+
+  &:hover:not(:disabled) { background-color: $hover-bg; }
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -47,33 +86,71 @@
   font-family: vars.$font-body;
   font-size: 0.9rem;
   font-weight: 600;
+  color: vars.$color-text;
+  background-color: transparent;
   cursor: pointer;
-  transition: background vars.$transition-fast, opacity vars.$transition-fast;
+  transition: background-color vars.$transition-fast, opacity vars.$transition-fast;
+
+  // Fallback neutro para un `.btn` sin variante de color (que sí hereda el
+  // `.btn` global de Bootstrap): que sus estados no resuelvan a algo inválido.
+  --bs-btn-color: currentColor;
+  --bs-btn-bg: transparent;
+  --bs-btn-hover-color: currentColor;
+  --bs-btn-hover-bg: transparent;
+  --bs-btn-active-color: currentColor;
+  --bs-btn-active-bg: transparent;
+  --bs-btn-disabled-color: currentColor;
+  --bs-btn-disabled-bg: transparent;
+  --bs-btn-border-color: transparent;
+  --bs-btn-hover-border-color: transparent;
+  --bs-btn-active-border-color: transparent;
+  --bs-btn-disabled-border-color: transparent;
 
   .material-symbols-outlined { font-size: 1.2rem; }
+
+  // Bootstrap no pinta anillo de foco sin sus variables; lo reponemos aquí.
+  &:focus-visible {
+    outline: 2px solid vars.$color-primary;
+    outline-offset: 2px;
+  }
+
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  &--primary {
-    background: vars.$color-primary;
-    color: #fff;
-    &:hover:not(:disabled) { background: vars.$color-primary-dark; }
+  &--primary { @include btn-theme(#fff, vars.$color-primary, vars.$color-primary-dark); }
+  &--success { @include btn-theme(#fff, vars.$color-success, #1b5e20); }
+  &--danger  { @include btn-theme(#fff, vars.$color-error, #8a0019); }
+
+  // El verde de WhatsApp rompe la paleta a propósito (regla 4 del sistema de
+  // diseño): señala "esto sale de la aplicación". No usarlo en otros botones.
+  &--whatsapp {
+    @include btn-theme(#fff, #25d366, #128c7e);
+
+    .btn__wa-icon { width: 1.05rem; height: 1.05rem; fill: currentColor; }
   }
-  &--ghost {
-    background: transparent;
+
+  // `--ghost` y `--outline` son el mismo botón secundario: borde y fondo
+  // transparente, texto en color de contenido.
+  &--ghost,
+  &--outline {
+    --bs-btn-color: #{vars.$color-text};
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: #{vars.$color-border};
+    --bs-btn-hover-color: #{vars.$color-text};
+    --bs-btn-hover-bg: #{vars.$color-bg};
+    --bs-btn-hover-border-color: #{vars.$color-border};
+    --bs-btn-active-color: #{vars.$color-text};
+    --bs-btn-active-bg: #{vars.$color-bg};
+    --bs-btn-active-border-color: #{vars.$color-border};
+    --bs-btn-disabled-color: #{vars.$color-text};
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: #{vars.$color-border};
+
+    background-color: transparent;
     border-color: vars.$color-border;
     color: vars.$color-text;
-    &:hover:not(:disabled) { background: vars.$color-bg; }
+    &:hover:not(:disabled) { background-color: vars.$color-bg; }
   }
-  &--success {
-    background: vars.$color-success;
-    color: #fff;
-    &:hover:not(:disabled) { background: #1b5e20; }
-  }
-  &--danger {
-    background: vars.$color-error;
-    color: #fff;
-    &:hover:not(:disabled) { background: #8a0019; }
-  }
+
   &--block { width: 100%; }
   &--lg { padding: 0.85rem 1.3rem; font-size: 1rem; }
   &--sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }

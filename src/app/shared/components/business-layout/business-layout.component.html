@@ -5,13 +5,27 @@
   }
 
   <aside class="sidebar" [class.sidebar--open]="sidebarOpen()">
-    <a class="sidebar__brand" routerLink="/">
-      <span class="sidebar__ornament">☾</span>
-      <span class="sidebar__brand-text">
-        Estilo y Confort
-        <small>{{ panelSubtitle() }}</small>
+    <div class="sidebar__head">
+      <!-- En móvil vuelve a caer justo donde está el botón de hamburguesa del
+           topbar (que queda tapado por el drawer abierto): así el gesto natural
+           de "volver a tocar ahí para cerrar" funciona. Oculto en escritorio,
+           donde el drawer es fijo. -->
+      <button
+        type="button"
+        class="sidebar__close"
+        (click)="closeSidebar()"
+        aria-label="Cerrar menú"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <span class="sidebar__brand">
+        <span class="sidebar__ornament">☾</span>
+        <span class="sidebar__brand-text">
+          Estilo y Confort
+          <small>{{ panelSubtitle() }}</small>
+        </span>
       </span>
-    </a>
+    </div>
 
     <nav class="sidebar__nav">
       @for (item of navItems(); track item.label) {

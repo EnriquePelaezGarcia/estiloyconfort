@@ -62,6 +62,8 @@ router.patch('/orders/:id/extra-charges/:chargeId/approve', adminController.appr
 router.patch('/orders/:id/extra-charges/:chargeId/reject', adminController.rejectOrderExtraCharge);
 router.patch('/orders/:id/refunds/:refundId/approve', adminController.approveOrderRefund);
 router.patch('/orders/:id/refunds/:refundId/reject', adminController.rejectOrderRefund);
+router.patch('/orders/:id/cancellation/:cancellationId/approve', adminController.approveOrderCancellation);
+router.patch('/orders/:id/cancellation/:cancellationId/reject', adminController.rejectOrderCancellation);
 router.patch('/orders/:id/shipping-cost/approve', adminController.approveOrderShipping);
 router.patch('/orders/:id/shipping-cost/reject', adminController.rejectOrderShipping);
 // Módulo "Aprobaciones": bandeja agregada de los 4 tipos × 2 documentos.

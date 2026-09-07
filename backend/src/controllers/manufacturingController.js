@@ -468,9 +468,6 @@ const manufacturingController = {
       [poId],
     );
     if (!po) throw ApiError.notFound('Orden de compra no encontrada');
-    if (po.status === 'received' || po.status === 'cancelled') {
-      throw new ApiError(400, 'Una orden ya recibida o cancelada no se puede editar.');
-    }
 
     const sets = [];
     const params = [];

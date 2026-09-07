@@ -40,7 +40,9 @@ router.post(
 );
 router.post('/orders/split', sellerController.createSplit);
 router.patch('/orders/:id', sellerController.update);
-router.delete('/orders/:id', sellerController.remove);
+// Cancelar un pedido pasa por aprobación del admin: el vendedor SOLICITA con
+// una razón; el admin (o el propio flujo si lo pide un admin) lo cancela.
+router.post('/orders/:id/cancellation', sellerController.requestCancellation);
 // Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente.
 router.post('/orders/:id/extra-charges', sellerController.applyExtraCharge);
 // h1 — solicitud de reembolso (vendedor sobre cualquier pedido; admin auto-aprueba).

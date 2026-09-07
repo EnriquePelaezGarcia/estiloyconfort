@@ -566,6 +566,12 @@ export class OrderDraftStore {
   });
   /** El cliente se lleva el mueble de la tienda ahora mismo. */
   readonly isPickup = computed(() => !!this.pickupSig());
+
+  /**
+   * La ubicación de Google Maps es obligatoria para CREAR un pedido con envío
+   * a domicilio. No al editar (pedidos viejos pueden no tenerla) ni en pickup.
+   */
+  readonly googleMapsRequired = computed(() => !this.isEditing() && !this.pickupSig());
   /**
    * RN-P1: solo se puede recoger lo que YA está en tienda. Un mueble sobre
    * pedido o agotado no se lo puede llevar nadie hoy.
@@ -1024,6 +1030,15 @@ export class OrderDraftStore {
     effect(() => {
       const materialIds = new Set(this.lines().map((l) => l.materialId));
       materialIds.forEach((id) => this.ensureColorsLoaded(id));
+    });
+
+    // La ubicación de Google Maps es obligatoria al CREAR un pedido con envío a
+    // domicilio. No se exige en "recoge en tienda" ni al editar un pedido viejo
+    // (que puede haberse levantado antes de esta regla).
+    effect(() => {
+      const ctrl = this.form.controls.googleMapsUrl;
+      ctrl.setValidators(this.googleMapsRequired() ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
     });
 
     // §11.3: contador de saturación del horario — solo aplica a "Día preciso"

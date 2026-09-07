@@ -30,10 +30,12 @@
           <span class="material-symbols-outlined">search</span>
           <input
             type="search"
-            placeholder="Buscar productos..."
+            placeholder="Buscar por nombre o categoría..."
             class="catalog__search-input"
             [(ngModel)]="searchValue"
             (ngModelChange)="onSearch($event)"
+            (focus)="searchFocused = true"
+            (blur)="searchFocused = false"
           />
         </div>
 
@@ -41,7 +43,7 @@
           <p class="catalog__count">{{ totalItems() }} productos encontrados</p>
         }
 
-        <label class="catalog__sort">
+        <label class="catalog__sort" [class.catalog__sort--search-hidden]="searchValue.trim()">
           <span class="catalog__sort-label">Ordenar por</span>
           <select [value]="filters().sort" (change)="onSortChange($any($event.target).value)">
             <option value="popular">Más populares</option>

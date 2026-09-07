@@ -3,7 +3,7 @@
     <p class="page-head__overline">Administración</p>
     <h1 class="page-head__title">Aprobaciones</h1>
     <p class="page-head__sub">
-      Descuentos, regalos, envío manual y cargos extra de pedidos y cotizaciones — todo en un solo lugar.
+      Descuentos, regalos, envío manual, cargos extra, reembolsos y cancelaciones de pedidos y cotizaciones — todo en un solo lugar.
     </p>
   </div>
 </header>
@@ -62,11 +62,15 @@
             <td data-label="Cliente">{{ item.customerName }}</td>
             <td data-label="Motivo" class="muted">{{ item.label }}</td>
             <td data-label="Monto" class="num">
-              @if (item.originalAmount !== null) {
-                <span class="approval-amount__original">{{ item.originalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-                →
+              @if (isAmountless(item)) {
+                —
+              } @else {
+                @if (item.originalAmount !== null) {
+                  <span class="approval-amount__original">{{ item.originalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  →
+                }
+                {{ item.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
               }
-              {{ item.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
             </td>
             <td data-label="Pedido por" class="muted">{{ item.requestedByName ?? '—' }}</td>
             <td data-label="Fecha" class="muted">{{ item.requestedAt | date:'d MMM y' }}</td>
@@ -78,23 +82,34 @@
             }
             <td class="actions">
               @if (activeTab() === 'pending') {
-                <input
-                  type="number"
-                  class="approval-amount-input"
-                  min="0"
-                  step="0.01"
-                  [value]="item.amount"
-                  #amt
-                  title="Monto a aprobar"
-                />
-                <button
-                  type="button"
-                  class="btn btn--primary btn--sm"
-                  [disabled]="processingId() === item.id"
-                  (click)="approve(item, amt.value)"
-                >
-                  <span class="material-symbols-outlined">check</span> Aprobar
-                </button>
+                @if (isAmountless(item)) {
+                  <button
+                    type="button"
+                    class="btn btn--primary btn--sm"
+                    [disabled]="processingId() === item.id"
+                    (click)="approve(item)"
+                  >
+                    <span class="material-symbols-outlined">check</span> Aprobar
+                  </button>
+                } @else {
+                  <input
+                    type="number"
+                    class="approval-amount-input"
+                    min="0"
+                    step="0.01"
+                    [value]="item.amount"
+                    #amt
+                    title="Monto a aprobar"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn--primary btn--sm"
+                    [disabled]="processingId() === item.id"
+                    (click)="approve(item, amt.value)"
+                  >
+                    <span class="material-symbols-outlined">check</span> Aprobar
+                  </button>
+                }
                 <button type="button" class="btn btn--ghost btn--sm" (click)="askReject(item)">
                   <span class="material-symbols-outlined">close</span> Rechazar
                 </button>
@@ -122,8 +137,14 @@
       <div class="modal__body">
         <h2 class="panel__title">Rechazar {{ typeLabels[target.type] | lowercase }}</h2>
         <p class="muted">
-          {{ target.documentLabel }} — {{ target.customerName }} ({{ target.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+          {{ target.documentLabel }} — {{ target.customerName }}
+          @if (!isAmountless(target)) {
+            ({{ target.amount | currency:'MXN':'symbol-narrow':'1.2-2' }})
+          }
         </p>
+        @if (target.type === 'cancellation') {
+          <p class="strong">Motivo del vendedor: {{ target.label }}</p>
+        }
         <div class="field">
           <label for="approvalsRejectNote">Motivo (opcional)</label>
           <textarea

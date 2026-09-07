@@ -1,4 +1,5 @@
 const Quote = require('../models/Quote');
+const ActivityLog = require('../models/ActivityLog');
 const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -18,11 +19,18 @@ function withShareUrl(quote) {
   return { ...quote, shareUrl: shareUrlFor(quote.token) };
 }
 
-/** Solo el dueño de la cotización o un admin pueden operarla. */
-function assertCanManage(quote, user) {
+/**
+ * Ver, editar y confirmar una cotización lo puede hacer cualquier vendedor o
+ * admin — la sesión ya la validó la ruta (`authorize('seller', 'admin')`).
+ * Cada edición queda registrada en `activity_log` con quién la hizo.
+ *
+ * BORRAR sigue siendo exclusivo del dueño (el vendedor que la creó) o de un
+ * admin: es destructivo y no deja rastro reversible.
+ */
+function assertCanDelete(quote, user) {
   if (user.role === 'admin') return;
   if (quote.sellerId !== user.id) {
-    throw ApiError.forbidden('Esta cotización no te pertenece');
+    throw ApiError.forbidden('Solo el vendedor que creó la cotización o un admin pueden eliminarla');
   }
 }
 
@@ -47,7 +55,6 @@ const quotesController = {
   update: asyncHandler(async (req, res) => {
     const existing = await Quote.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Cotización no encontrada');
-    assertCanManage(existing, req.user);
     if (existing.status === 'converted') {
       throw ApiError.badRequest('Esta cotización ya se convirtió en pedido y no se puede editar');
     }
@@ -61,12 +68,18 @@ const quotesController = {
       throw ApiError.badRequest('La cotización debe incluir al menos un producto');
     }
     const quote = await Quote.update(req.params.id, req.body, req.user.id, req.user.role);
+    const { summary, changes } = ActivityLog.diffEntity(existing, quote);
+    if (changes) {
+      await ActivityLog.record({
+        entityType: 'quote', entityId: quote.id, action: 'edit', actor: req.user, summary, changes,
+      });
+    }
     res.json({ data: withShareUrl(quote), message: 'Cotización actualizada' });
   }),
 
-  // GET /api/quotes — propias (vendedor) o todas (admin)
+  // GET /api/quotes — todas las cotizaciones vigentes (vendedor y admin)
   list: asyncHandler(async (req, res) => {
-    const data = await Quote.findAllForUser(req.user);
+    const data = await Quote.findAllForUser();
     res.json({ data: data.map(withShareUrl) });
   }),
 
@@ -74,10 +87,10 @@ const quotesController = {
   getOne: asyncHandler(async (req, res) => {
     const quote = await Quote.findById(req.params.id);
     if (!quote) throw ApiError.notFound('Cotización no encontrada');
-    assertCanManage(quote, req.user);
     // Docs/plan-descuentos.md: al abrir la cotización se apaga el badge de
     // "descuento rechazado" de quien lo pidió, si era suyo.
     await discountEngine.acknowledgeRejected('quote', quote.id, req.user.id);
+    quote.activity = await ActivityLog.findForEntity('quote', quote.id);
     res.json({ data: withShareUrl(quote) });
   }),
 
@@ -103,17 +116,23 @@ const quotesController = {
   // ===== Cargos extra y envío manual (Docs/plan-aprobaciones-admin.md) =====
 
   // POST /api/quotes/:id/extra-charges — cargo extra sobre una cotización YA
-  // EXISTENTE (RN-EC6). Vendedor (dueño) o admin.
+  // EXISTENTE (RN-EC6). Cualquier vendedor o admin.
   applyExtraCharge: asyncHandler(async (req, res) => {
     const existing = await Quote.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Cotización no encontrada');
-    assertCanManage(existing, req.user);
     const quote = await Quote.applyExtraCharge(req.params.id, {
       itemId: req.body.itemId ?? null,
       label: req.body.label,
       amount: req.body.amount,
       requestedBy: req.user.id,
       requestedByRole: req.user.role,
+    });
+    await ActivityLog.record({
+      entityType: 'quote',
+      entityId: quote.id,
+      action: 'extra_charge',
+      actor: req.user,
+      summary: `Agregó el cargo extra "${req.body.label}" por $${Number(req.body.amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
     });
     res.status(201).json({ data: withShareUrl(quote), message: 'Cargo extra agregado' });
   }),
@@ -156,19 +175,24 @@ const quotesController = {
   confirm: asyncHandler(async (req, res) => {
     const existing = await Quote.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Cotización no encontrada');
-    assertCanManage(existing, req.user);
     if (existing.status === 'converted') {
       throw ApiError.badRequest('Esta cotización ya se convirtió en pedido');
     }
     const quote = await Quote.confirm(req.params.id);
+    if (existing.status !== 'confirmed') {
+      await ActivityLog.record({
+        entityType: 'quote', entityId: quote.id, action: 'confirm', actor: req.user,
+        summary: 'Marcó la cotización como confirmada por el cliente',
+      });
+    }
     res.json({ data: withShareUrl(quote), message: 'Cotización confirmada' });
   }),
 
-  // DELETE /api/quotes/:id
+  // DELETE /api/quotes/:id — solo el vendedor que la creó o un admin.
   remove: asyncHandler(async (req, res) => {
     const existing = await Quote.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Cotización no encontrada');
-    assertCanManage(existing, req.user);
+    assertCanDelete(existing, req.user);
     await Quote.remove(req.params.id);
     res.json({ message: 'Cotización eliminada' });
   }),

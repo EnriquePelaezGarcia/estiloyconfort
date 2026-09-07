@@ -3,6 +3,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
 const Refund = require('../models/Refund');
+const OrderCancellation = require('../models/OrderCancellation');
 
 /**
  * Módulo "Aprobaciones" (Docs/plan-aprobaciones-admin.md) — agrega en un solo
@@ -221,6 +222,29 @@ async function fetchQuoteShipping(statuses) {
   }));
 }
 
+/** Solicitudes de cancelación de pedido — sin monto (`amount: 0`). */
+async function fetchOrderCancellations(statuses) {
+  const rows = await OrderCancellation.findByStatus(statuses);
+  return rows.map((r) => ({
+    id: `ocn-${r.id}`,
+    rawId: r.id,
+    kind: 'order',
+    documentId: r.orderId,
+    type: 'cancellation',
+    documentLabel: r.orderNumber,
+    customerName: r.customerName,
+    amount: 0,
+    originalAmount: null,
+    label: r.reason ? `Cancelación · ${r.reason}` : 'Cancelación de pedido',
+    requestedByName: r.requestedByName ?? r.requestedByRole,
+    requestedAt: r.createdAt,
+    status: r.status,
+    reviewedByName: r.reviewedByName ?? null,
+    reviewedAt: r.reviewedAt ?? null,
+    reviewNote: r.reviewNote ?? null,
+  }));
+}
+
 /** Reembolsos a clientes (h1) — solo aplican a pedidos, no a cotizaciones. */
 async function fetchOrderRefunds(statuses) {
   const rows = await Refund.findByStatus(statuses);
@@ -251,7 +275,7 @@ const getApprovals = asyncHandler(async (req, res) => {
 
   const [
     orderDiscounts, quoteDiscounts, orderCharges, quoteCharges,
-    orderShipping, quoteShipping, orderRefunds,
+    orderShipping, quoteShipping, orderRefunds, orderCancellations,
   ] = await Promise.all([
     fetchOrderDiscounts(statuses),
     fetchQuoteDiscounts(statuses),
@@ -260,11 +284,12 @@ const getApprovals = asyncHandler(async (req, res) => {
     fetchOrderShipping(statuses),
     fetchQuoteShipping(statuses),
     fetchOrderRefunds(statuses),
+    fetchOrderCancellations(statuses),
   ]);
 
   let all = [
     ...orderDiscounts, ...quoteDiscounts, ...orderCharges, ...quoteCharges,
-    ...orderShipping, ...quoteShipping, ...orderRefunds,
+    ...orderShipping, ...quoteShipping, ...orderRefunds, ...orderCancellations,
   ];
 
   if (isPending) {
@@ -285,19 +310,20 @@ const getApprovals = asyncHandler(async (req, res) => {
 // Aparte de /admin/discounts/pending-count (que no se toca, D6 del plan) para
 // no arriesgar el badge que ya está en producción.
 const getApprovalsPendingCount = asyncHandler(async (req, res) => {
-  const [discounts, extraCharges, [[orderShipping]], [[quoteShipping]], refunds] = await Promise.all([
+  const [discounts, extraCharges, [[orderShipping]], [[quoteShipping]], refunds, cancellations] = await Promise.all([
     discountEngine.countPending(),
     extraChargeEngine.countPending(),
     pool.query(`SELECT COUNT(*) AS n FROM orders WHERE shipping_cost_status = 'pending'`),
     pool.query(`SELECT COUNT(*) AS n FROM quotes WHERE shipping_cost_status = 'pending'`),
     Refund.countPending(),
+    OrderCancellation.countPending(),
   ]);
   const shipping = { orders: Number(orderShipping.n), quotes: Number(quoteShipping.n) };
   const total = discounts.orders + discounts.quotes
     + extraCharges.orders + extraCharges.quotes
     + shipping.orders + shipping.quotes
-    + refunds;
-  res.json({ data: { discounts, extraCharges, shipping, refunds, total } });
+    + refunds + cancellations;
+  res.json({ data: { discounts, extraCharges, shipping, refunds, cancellations, total } });
 });
 
 module.exports = { getApprovals, getApprovalsPendingCount };

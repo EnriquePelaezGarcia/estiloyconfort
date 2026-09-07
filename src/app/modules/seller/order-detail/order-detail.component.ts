@@ -5,6 +5,7 @@ import { CurrencyInputDirective } from '../../../shared/directives/currency-inpu
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { TicketsService } from '../../../core/services/tickets.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
@@ -16,11 +17,12 @@ import { isPickupWithinGrace } from '../../../core/utils/pickup';
 import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
 import { ExtraChargePickerComponent } from '../../../shared/components/extra-charge-picker/extra-charge-picker.component';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { ActivityLogComponent } from '../../../shared/components/activity-log/activity-log.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
 import {
-  DeliveryCommitment, Order, OrderDiscount, OrderExtraCharge, OrderItem, OrderStatus, PaymentStatus,
-  StockReservationReason,
+  DeliveryCommitment, DeliveryPerson, Order, OrderDiscount, OrderExtraCharge, OrderItem, OrderStatus,
+  PaymentStatus, StockReservationReason,
 } from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
@@ -67,7 +69,7 @@ interface AbonoReceipt {
   imports: [
     CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective,
     DeliveryRescheduleComponent, ExtraChargePickerComponent,
-    ImageLightboxComponent, MediaUrlPipe,
+    ImageLightboxComponent, ActivityLogComponent, MediaUrlPipe,
   ],
 })
 export class OrderDetailComponent implements OnInit {
@@ -82,14 +84,28 @@ export class OrderDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private fb = inject(FormBuilder);
+  private auth = inject(AuthService);
 
   protected order = signal<Order | null>(null);
   protected loading = signal(true);
   protected paymentModalOpen = signal(false);
   protected cancelModalOpen = signal(false);
+  /** Razón obligatoria al solicitar/hacer la cancelación. */
+  protected cancelReason = signal('');
+  protected cancelling = signal(false);
+  /** Admin resolviendo la solicitud de cancelación pendiente. */
+  protected reviewingCancellation = signal(false);
+  protected rejectCancellationOpen = signal(false);
+  protected rejectCancellationNote = signal('');
   protected savingPayment = signal(false);
   protected assemblyModalOpen = signal(false);
   protected removingAssembly = signal(false);
+
+  // ===== Asignar repartidor (admin y vendedor) =====
+  protected deliveryPeople = signal<DeliveryPerson[]>([]);
+  protected assignDeliveryOpen = signal(false);
+  protected selectedDeliveryPerson = signal<number | null>(null);
+  protected assigningDelivery = signal(false);
 
   /** Foto de producto abierta a tamaño completo (clic en la miniatura); null = cerrada. */
   protected zoomedImage = signal<string | null>(null);
@@ -222,11 +238,45 @@ export class OrderDetailComponent implements OnInit {
    * Docs/plan-fabricante-notificaciones-y-aceptacion.md D3). in_delivery /
    * delivered / cancelled → no. Mismas reglas para vendedor y admin.
    */
+  /** Solicitud de cancelación pendiente de aprobación del admin, si la hay. */
+  protected pendingCancellation = computed(() => this.order()?.pendingCancellation ?? null);
+
   protected canEdit = computed(() => {
     const o = this.order();
     if (!o) return false;
+    // Congelado mientras el admin no resuelva la solicitud de cancelación.
+    if (this.pendingCancellation()) return false;
     if (this.pickupGrace()) return true;
     return ['pending', 'fabricating', 'in_warehouse', 'ready'].includes(o.orderStatus);
+  });
+
+  /**
+   * Cancelar un pedido lo puede iniciar el dueño (quien lo levantó) o un admin.
+   * El vendedor genera una SOLICITUD que el admin aprueba; el admin cancela en
+   * el acto. No se puede volver a pedir si ya hay una solicitud pendiente.
+   */
+  protected canCancel = computed(() => {
+    const o = this.order();
+    if (!o) return false;
+    if (this.pendingCancellation()) return false;
+    return this.isAdmin || o.sellerId === this.auth.currentUser()?.id;
+  });
+
+  /** El admin ve el bloque para aprobar/rechazar la solicitud pendiente. */
+  protected canReviewCancellation = computed(() => this.isAdmin && !!this.pendingCancellation());
+
+  /**
+   * Asignar repartidor: admin y vendedor, cuando el pedido está "Listo para
+   * entrega" (regla dura del backend), no es recoge-en-tienda, no tiene
+   * fabricación pendiente y no está en cancelación.
+   */
+  protected canAssignDelivery = computed(() => {
+    const o = this.order();
+    if (!o) return false;
+    if (this.pendingCancellation()) return false;
+    if (o.pickupInStore) return false;
+    if (o.orderStatus !== 'ready') return false;
+    return !(o.items ?? []).some((it) => it.requiresFabrication && !it.isReady);
   });
 
   /** Aviso al editar un pedido que ya está en proceso (no 'pending'). */
@@ -245,6 +295,9 @@ export class OrderDetailComponent implements OnInit {
 
   /** Línea de tiempo de estatus (`order_status_history`), orden ascendente. */
   protected statusHistory = computed(() => this.order()?.history?.statusHistory ?? []);
+
+  /** Bitácora de ediciones (`activity_log`): quién tocó el pedido y qué cambió. */
+  protected orderActivity = computed(() => this.order()?.history?.activity ?? []);
 
   /** Evidencia de entrega (foto, firma, repartidor); null si aún no hay entrega. */
   protected deliveryProof = computed(() => this.order()?.history?.delivery ?? null);
@@ -405,6 +458,12 @@ export class OrderDetailComponent implements OnInit {
         this.ivaRate.set(data.iva);
         this.wholesalePriceIncludesIva.set(data.wholesalePriceIncludesIva);
       },
+      error: () => {},
+    });
+
+    // Repartidores para el modal de asignación (endpoint compartido seller/admin).
+    this.sellerService.getDeliveryPeople().subscribe({
+      next: (res) => this.deliveryPeople.set(res.data),
       error: () => {},
     });
   }
@@ -858,18 +917,98 @@ export class OrderDetailComponent implements OnInit {
     });
   }
 
-  protected confirmCancel(): void {
+  protected openCancelModal(): void {
+    this.cancelReason.set('');
+    this.cancelModalOpen.set(true);
+  }
+
+  protected openAssignDelivery(): void {
+    this.selectedDeliveryPerson.set(this.order()?.deliveryPersonId ?? null);
+    this.assignDeliveryOpen.set(true);
+  }
+
+  protected confirmAssignDelivery(): void {
     const order = this.order();
-    if (!order) return;
-    this.sellerService.cancelOrder(order.id).subscribe({
+    const personId = this.selectedDeliveryPerson();
+    if (!order || !personId || this.assigningDelivery()) {
+      if (!personId) this.notification.error('Selecciona un repartidor');
+      return;
+    }
+    this.assigningDelivery.set(true);
+    this.sellerService.assignDelivery(order.id, personId).subscribe({
       next: () => {
-        this.notification.success('Pedido cancelado');
-        this.cancelModalOpen.set(false);
+        this.assigningDelivery.set(false);
+        this.assignDeliveryOpen.set(false);
+        this.notification.success('Repartidor asignado');
         this.load(order.id);
       },
       error: (err: { error?: { message?: string } }) => {
+        this.assigningDelivery.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo asignar el repartidor');
+      },
+    });
+  }
+
+  /**
+   * Vendedor → crea una solicitud de cancelación (el admin la aprueba).
+   * Admin → cancela el pedido en el acto. En ambos casos la razón es obligatoria.
+   */
+  protected confirmCancel(): void {
+    const order = this.order();
+    const reason = this.cancelReason().trim();
+    if (!order || !reason || this.cancelling()) return;
+    this.cancelling.set(true);
+    this.sellerService.requestCancellation(order.id, reason).subscribe({
+      next: (res) => {
+        this.cancelling.set(false);
         this.cancelModalOpen.set(false);
+        this.notification.success(res?.message ?? 'Listo');
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.cancelling.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo cancelar');
+      },
+    });
+  }
+
+  /** Admin: aprueba la solicitud de cancelación pendiente → cancela el pedido. */
+  protected approveCancellation(): void {
+    const order = this.order();
+    const req = this.pendingCancellation();
+    if (!order || !req || this.reviewingCancellation()) return;
+    this.reviewingCancellation.set(true);
+    this.adminService.approveOrderCancellation(order.id, req.id).subscribe({
+      next: (res) => {
+        this.reviewingCancellation.set(false);
+        this.notification.success(res.message);
+        this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.reviewingCancellation.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo aprobar la cancelación');
+      },
+    });
+  }
+
+  protected confirmRejectCancellation(): void {
+    const order = this.order();
+    const req = this.pendingCancellation();
+    if (!order || !req || this.reviewingCancellation()) return;
+    this.reviewingCancellation.set(true);
+    this.adminService.rejectOrderCancellation(order.id, req.id, this.rejectCancellationNote()).subscribe({
+      next: (res) => {
+        this.reviewingCancellation.set(false);
+        this.rejectCancellationOpen.set(false);
+        this.rejectCancellationNote.set('');
+        this.notification.success(res.message);
+        this.approvalsService.refreshPendingCounts().subscribe({ error: () => {} });
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.reviewingCancellation.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo rechazar la solicitud');
       },
     });
   }

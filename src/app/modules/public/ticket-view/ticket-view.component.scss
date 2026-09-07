@@ -389,15 +389,6 @@ $fp-num-lg:  18pt;
     color: $text-primary;
     white-space: pre-line;
   }
-
-  // Deslinde de fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6):
-  // mismo texto que en el ticket térmico, en tono discreto de nota al pie.
-  &__notice {
-    margin: 0.375rem 0 0;
-    font-size: $fs-fine;
-    line-height: 1.6;
-    color: $text-tertiary;
-  }
 }
 
 // Compromiso de entrega "exacta": misma etiqueta que en el resto del sistema
@@ -612,7 +603,6 @@ $fp-num-lg:  18pt;
     margin-bottom: 4mm;
   }
   .fact__value { font-size: $fp-body; }
-  .fact__notice { font-size: $fp-fine; }
 
   .history__row { font-size: $fp-meta; padding: 1mm 0; }
 

@@ -16,6 +16,7 @@ const TYPE_LABELS: Record<ApprovalType, string> = {
   shipping: 'Envío manual',
   extra_charge: 'Cargo extra',
   refund: 'Reembolso',
+  cancellation: 'Cancelación',
 };
 
 const TYPE_ICONS: Record<ApprovalType, string> = {
@@ -24,6 +25,7 @@ const TYPE_ICONS: Record<ApprovalType, string> = {
   shipping: 'local_shipping',
   extra_charge: 'build',
   refund: 'undo',
+  cancellation: 'cancel',
 };
 
 /**
@@ -49,7 +51,12 @@ export class ApprovalsComponent implements OnInit {
 
   protected readonly typeLabels = TYPE_LABELS;
   protected readonly typeIcons = TYPE_ICONS;
-  protected readonly typeOptions: ApprovalType[] = ['discount_money', 'discount_product', 'shipping', 'extra_charge', 'refund'];
+  protected readonly typeOptions: ApprovalType[] = ['discount_money', 'discount_product', 'shipping', 'extra_charge', 'refund', 'cancellation'];
+
+  /** La cancelación no lleva monto: cambia la UI de la fila y del modal. */
+  protected isAmountless(item: ApprovalItem): boolean {
+    return item.type === 'cancellation';
+  }
 
   protected activeTab = signal<Tab>('pending');
   protected loading = signal(true);
@@ -138,6 +145,8 @@ export class ApprovalsComponent implements OnInit {
           return this.adminService.approveOrderExtraCharge(item.documentId, item.rawId, amount);
         case 'refund':
           return this.adminService.approveOrderRefund(item.documentId, item.rawId, amount);
+        case 'cancellation':
+          return this.adminService.approveOrderCancellation(item.documentId, item.rawId);
         case 'shipping':
           return this.adminService.approveOrderShipping(item.documentId, amount);
       }
@@ -166,6 +175,8 @@ export class ApprovalsComponent implements OnInit {
           return this.adminService.rejectOrderExtraCharge(item.documentId, item.rawId, reviewNote);
         case 'refund':
           return this.adminService.rejectOrderRefund(item.documentId, item.rawId, reviewNote);
+        case 'cancellation':
+          return this.adminService.rejectOrderCancellation(item.documentId, item.rawId, reviewNote);
         case 'shipping':
           return this.adminService.rejectOrderShipping(item.documentId, reviewNote);
       }

@@ -939,7 +939,10 @@ const Order = {
    */
   async getHistory(id) {
     const OrderStatusHistory = require('./OrderStatusHistory');
+    const ActivityLog = require('./ActivityLog');
     const statusHistory = await OrderStatusHistory.findByOrderId(id);
+    // Bitácora de ediciones: quién tocó el pedido y qué cambió.
+    const activity = await ActivityLog.findForEntity('order', id);
 
     // `deliveries` es 1:1 con el pedido (ver Delivery.markFailed): a lo más una fila.
     const [[dv]] = await pool.execute(
@@ -964,7 +967,7 @@ const Order = {
       }
       : null;
 
-    return { statusHistory, delivery };
+    return { statusHistory, delivery, activity };
   },
 
   /**

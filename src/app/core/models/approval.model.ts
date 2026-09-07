@@ -7,7 +7,8 @@ export type ApprovalType =
   | 'discount_product'
   | 'shipping'
   | 'extra_charge'
-  | 'refund';
+  | 'refund'
+  | 'cancellation';
 export type ApprovalKind = 'order' | 'quote';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -39,5 +40,6 @@ export interface ApprovalsPendingCount {
   extraCharges: { orders: number; quotes: number };
   shipping: { orders: number; quotes: number };
   refunds: number;
+  cancellations: number;
   total: number;
 }

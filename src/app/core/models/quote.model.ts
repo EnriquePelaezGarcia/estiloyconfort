@@ -1,3 +1,4 @@
+import { ActivityEntry } from './activity.model';
 import { DiscountReasonCategory, OrderDiscount, OrderExtraCharge, SaleScheme, ShippingCostStatus } from './order.model';
 
 /** Mismo shape que OrderDiscount (Docs/plan-descuentos.md) — nunca 'delivery_person' aquí. */
@@ -101,6 +102,8 @@ export interface Quote {
   discounts?: QuoteDiscount[];
   /** Docs/plan-aprobaciones-admin.md — vacío si la cotización no tiene ninguno. */
   extraCharges?: QuoteExtraCharge[];
+  /** Bitácora de ediciones (solo en el detalle `getById`). */
+  activity?: ActivityEntry[];
 }
 
 /**

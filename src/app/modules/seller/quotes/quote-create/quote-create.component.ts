@@ -19,11 +19,13 @@ import {
   AssemblyRates, DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, SaleScheme,
 } from '../../../../core/models/order.model';
 import { CreateQuoteRequest, Quote, QuoteDiscount, QuoteStatus } from '../../../../core/models/quote.model';
+import { ActivityEntry } from '../../../../core/models/activity.model';
 import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
 import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
 import { DiscountReasonPickerComponent } from '../../../../shared/components/discount-reason-picker/discount-reason-picker.component';
 import { ExtraChargePickerComponent } from '../../../../shared/components/extra-charge-picker/extra-charge-picker.component';
+import { ActivityLogComponent } from '../../../../shared/components/activity-log/activity-log.component';
 import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 
 /** Docs/plan-aprobaciones-admin.md RN-EC1: tope de cargos extra activos por documento. */
@@ -86,6 +88,7 @@ interface QuoteDraftSnapshot {
   imports: [
     ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent,
     DiscountReasonPickerComponent, ExtraChargePickerComponent, MediaUrlPipe,
+    ActivityLogComponent,
   ],
 })
 export class QuoteCreateComponent implements OnInit {
@@ -125,6 +128,9 @@ export class QuoteCreateComponent implements OnInit {
   protected loadedQuoteNumber = signal<string | null>(null);
   protected loadedQuoteStatus = signal<QuoteStatus | null>(null);
   protected loadedQuoteOrderId = signal<number | null>(null);
+  /** Bitácora de ediciones de la cotización cargada (`activity_log`). */
+  protected quoteActivity = signal<ActivityEntry[]>([]);
+  protected loadedSellerName = signal<string | null>(null);
   protected isConverted = computed(() => this.loadedQuoteStatus() === 'converted');
 
   /**
@@ -699,6 +705,8 @@ export class QuoteCreateComponent implements OnInit {
         this.loadedQuoteNumber.set(quote.quoteNumber);
         this.loadedQuoteStatus.set(quote.status);
         this.loadedQuoteOrderId.set(quote.orderId ?? null);
+        this.quoteActivity.set(quote.activity ?? []);
+        this.loadedSellerName.set(quote.sellerName ?? null);
         this.form.patchValue({
           customerName: quote.customerName,
           customerPhone: formatPhoneDigits(quote.customerPhone ?? ''),

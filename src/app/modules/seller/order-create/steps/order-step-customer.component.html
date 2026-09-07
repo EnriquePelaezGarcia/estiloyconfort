@@ -147,9 +147,14 @@
           }
         </div>
       }
-      <div class="field">
+      <div
+        class="field"
+        [class.field--error]="store.form.controls.googleMapsUrl.touched && store.form.controls.googleMapsUrl.invalid"
+      >
         <div class="field__label-row">
-          <label for="googleMapsUrl">Ubicación (URL de Google Maps)</label>
+          <label for="googleMapsUrl">
+            Ubicación (URL de Google Maps)@if (store.googleMapsRequired()) { *}
+          </label>
           <app-field-help text="El repartidor podrá abrirlo con un clic." />
         </div>
         <input
@@ -158,6 +163,9 @@
           formControlName="googleMapsUrl"
           placeholder="https://maps.google.com/?q=..."
         />
+        @if (store.form.controls.googleMapsUrl.touched && store.form.controls.googleMapsUrl.invalid) {
+          <p class="field__error">Pega la ubicación de Google Maps del domicilio del cliente.</p>
+        }
       </div>
       <div class="field">
         <label for="instruccionesEntrega">Instrucciones de Entrega</label>
