@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import {
   ManufacturerPurchaseOrder,
   PURCHASE_ORDER_STATUS_LABELS,
@@ -19,7 +21,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-purchase-orders.component.html',
   styleUrl: './manufacturer-purchase-orders.component.scss',
-  imports: [DatePipe],
+  imports: [DatePipe, MediaUrlPipe, ImageLightboxComponent],
 })
 export class ManufacturerPurchaseOrdersComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -30,6 +32,9 @@ export class ManufacturerPurchaseOrdersComponent implements OnInit {
 
   protected orders = signal<ManufacturerPurchaseOrder[]>([]);
   protected loading = signal(true);
+
+  /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
 
   /** Ids de OC con una acción de aceptación/rechazo o avance en curso. */
   protected working = signal<Set<number>>(new Set());

@@ -71,6 +71,8 @@ function mapPoItem(r) {
     productSku: r.product_sku ?? null,
     isNewProduct: !!r.is_new_product,
     specifications: r.specifications ?? null,
+    // Foto principal VIGENTE del producto (null en renglones de producto nuevo).
+    imageUrl: r.primary_image ?? null,
     materialId: r.material_id ?? null,
     materialLabel: r.material_label ?? null,
     sizeId: r.size_id ?? null,
@@ -190,7 +192,34 @@ const manufacturingController = {
        ORDER BY po.created_at DESC`,
       params,
     );
-    res.json({ data: rows.map(mapPo) });
+
+    // Fotos de los productos de cada OC (para el mini-carrusel de la lista).
+    // Una sola consulta para todas las OCs; los renglones de producto nuevo
+    // (sin product_id) no aportan foto.
+    const imagesByPo = new Map();
+    const poIds = rows.map((r) => r.id);
+    if (poIds.length) {
+      const [imgRows] = await pool.query(
+        `SELECT poi.purchase_order_id AS po_id, poi.id,
+                (SELECT pi.image_url FROM product_images pi
+                  WHERE pi.product_id = poi.product_id
+                  ORDER BY pi.is_primary DESC, pi.order_display, pi.id LIMIT 1) AS image_url
+           FROM purchase_order_items poi
+          WHERE poi.purchase_order_id IN (?) AND poi.product_id IS NOT NULL
+          ORDER BY poi.id`,
+        [poIds],
+      );
+      for (const r of imgRows) {
+        if (!r.image_url) continue;
+        if (!imagesByPo.has(r.po_id)) imagesByPo.set(r.po_id, []);
+        const arr = imagesByPo.get(r.po_id);
+        if (!arr.includes(r.image_url)) arr.push(r.image_url);
+      }
+    }
+
+    res.json({
+      data: rows.map((r) => ({ ...mapPo(r), productImages: imagesByPo.get(r.id) ?? [] })),
+    });
   }),
 
   // GET /api/manufacturing/purchase-orders/:id
@@ -205,7 +234,10 @@ const manufacturingController = {
     );
     if (!row) throw ApiError.notFound('Orden de compra no encontrada');
     const [items] = await pool.execute(
-      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label
+      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label,
+              (SELECT pi.image_url FROM product_images pi
+                WHERE pi.product_id = poi.product_id
+                ORDER BY pi.is_primary DESC, pi.order_display, pi.id LIMIT 1) AS primary_image
          FROM purchase_order_items poi
          LEFT JOIN materials mat ON mat.id = poi.material_id
          LEFT JOIN sizes sz ON sz.id = poi.size_id

@@ -29,7 +29,26 @@
       <tbody>
         @for (o of orders(); track o.id) {
           <tr>
-            <td data-label="Orden" class="strong">{{ o.poNumber }}</td>
+            <td data-label="Orden" class="strong">
+              <div class="po-cell">
+                @if (currentImage(o); as img) {
+                  <span
+                    class="po-thumb"
+                    [class.po-thumb--multi]="(o.productImages?.length ?? 0) > 1"
+                    [title]="(o.productImages?.length ?? 0) > 1
+                      ? (o.productImages?.length + ' productos') : ''"
+                  >
+                    @for (src of [img]; track src) {
+                      <img [src]="src | mediaUrl:'thumb'" alt="" width="44" height="44" />
+                    }
+                    @if ((o.productImages?.length ?? 0) > 1) {
+                      <span class="po-thumb__count">{{ o.productImages?.length }}</span>
+                    }
+                  </span>
+                }
+                <span>{{ o.poNumber }}</span>
+              </div>
+            </td>
             <td data-label="Fabricante">{{ o.manufacturerName ?? '—' }}</td>
             <td data-label="Items" class="num">{{ o.itemCount ?? 0 }}</td>
             <td data-label="Total" class="num">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
@@ -102,11 +121,19 @@
                       @for (it of expandedItems(); track it.id) {
                         <tr>
                           <td>
-                            {{ it.productName }}
-                            @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
-                            @if (it.specifications) {
-                              <span class="specs">{{ it.specifications }}</span>
-                            }
+                            <div class="po-cell">
+                              @if (it.imageUrl) {
+                                <img class="po-item-thumb" [src]="it.imageUrl | mediaUrl:'thumb'"
+                                     alt="" width="40" height="40" />
+                              }
+                              <span>
+                                {{ it.productName }}
+                                @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
+                                @if (it.specifications) {
+                                  <span class="specs">{{ it.specifications }}</span>
+                                }
+                              </span>
+                            </div>
                           </td>
                           <td>
                             {{ it.materialLabel ?? '—' }}

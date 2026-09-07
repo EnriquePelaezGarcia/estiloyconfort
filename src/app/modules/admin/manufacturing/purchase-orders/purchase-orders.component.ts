@@ -1,6 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import {
+  ChangeDetectionStrategy, Component, OnInit, PLATFORM_ID, computed, inject, signal,
+} from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
+import { interval } from 'rxjs';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -70,6 +73,21 @@ export class PurchaseOrdersComponent implements OnInit {
 
   protected orders = signal<PurchaseOrder[]>([]);
   protected manufacturers = signal<Manufacturer[]>([]);
+
+  /**
+   * Tick compartido (cada 3 s) que rota los mini-carruseles de fotos de la
+   * lista: una sola señal para todas las filas, en vez de un timer por OC.
+   */
+  private readonly carouselTick = isPlatformBrowser(inject(PLATFORM_ID))
+    ? toSignal(interval(3000), { initialValue: 0 })
+    : signal(0);
+
+  /** Foto visible ahora del carrusel de la OC `o` (rota si tiene varias). */
+  protected currentImage(o: PurchaseOrder): string | null {
+    const imgs = o.productImages ?? [];
+    if (imgs.length === 0) return null;
+    return imgs[(this.carouselTick() ?? 0) % imgs.length];
+  }
   protected products = signal<ManufacturerCatalogProduct[]>([]);
   protected loading = signal(true);
   protected statusFilter = signal('');

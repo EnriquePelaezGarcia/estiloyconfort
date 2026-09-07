@@ -75,6 +75,17 @@
 
           @for (it of o.items; track it.id) {
             <div class="field">
+              @if (it.imageUrl) {
+                <button
+                  type="button"
+                  class="prod-photo"
+                  title="Ver foto en grande"
+                  (click)="zoomedImage.set(it.imageUrl!)"
+                >
+                  <img [src]="it.imageUrl | mediaUrl:'thumb'" [alt]="it.productName" loading="lazy" />
+                  <span class="prod-photo__hint material-symbols-outlined">zoom_in</span>
+                </button>
+              }
               <dt class="field__label">Nombre del producto</dt>
               <dd class="field__value field__value--product">
                 @if (it.quantity <= 1) {
@@ -143,6 +154,15 @@
       </article>
     }
   </div>
+}
+
+<!-- ===== Foto del producto a tamaño completo (clic en la miniatura) ===== -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox
+    [src]="(img | mediaUrl) ?? ''"
+    [alt]="'Foto del producto'"
+    (closed)="zoomedImage.set(null)"
+  />
 }
 
 <!-- ===== Modal: rechazar orden de compra ===== -->

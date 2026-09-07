@@ -48,6 +48,8 @@ export interface PurchaseOrderItem {
   productSku: string | null;
   isNewProduct: boolean;
   specifications: string | null;
+  /** Foto principal vigente del producto; null en renglones de producto nuevo. */
+  imageUrl?: string | null;
   materialId?: number | null;
   materialLabel?: string | null;
   /** Talla del renglón (D5). null = producto sin talla. */
@@ -96,6 +98,11 @@ export interface PurchaseOrder {
   notes: string | null;
   createdByName?: string | null;
   itemCount?: number;
+  /**
+   * Fotos principales de los productos de la OC (solo en el listado), sin
+   * repetir. Con más de una, la lista las rota en un mini-carrusel.
+   */
+  productImages?: string[];
   items?: PurchaseOrderItem[];
   receipts?: PurchaseOrderReceipt[];
   /** Solo se pide desde que la OC se manda ('sent' en adelante). */
@@ -109,6 +116,8 @@ export interface ManufacturerPoItem {
   productName: string;
   productSku: string | null;
   specifications: string | null;
+  /** Foto del producto (ruta relativa); null en renglones de producto nuevo. */
+  imageUrl: string | null;
   materialLabel: string | null;
   sizeLabel: string | null;
   color: string | null;

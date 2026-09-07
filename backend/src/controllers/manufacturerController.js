@@ -47,6 +47,10 @@ function mapPoItemForPortal(r) {
     materialLabel: r.material_label ?? null,
     sizeLabel: r.size_label ?? null,
     color: r.color ?? null,
+    // Foto del producto (la del material de la línea si la hay, si no la
+    // principal); null en renglones de producto nuevo. Ruta relativa: el front
+    // la resuelve con el pipe `mediaUrl`.
+    imageUrl: r.primary_image ?? null,
     quantity: Number(r.quantity),
     isReady: !!r.is_ready,
     readyQuantity: Number(r.ready_quantity ?? 0),
@@ -396,7 +400,12 @@ const manufacturerController = {
 
     const poIds = orders.map((o) => o.id);
     const [items] = await pool.query(
-      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label
+      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label,
+              (SELECT pi.image_url FROM product_images pi
+                WHERE pi.product_id = poi.product_id
+                ORDER BY (pi.material_id = poi.material_id) DESC, pi.is_primary DESC,
+                         pi.order_display, pi.id
+                LIMIT 1) AS primary_image
          FROM purchase_order_items poi
          LEFT JOIN materials mat ON mat.id = poi.material_id
          LEFT JOIN sizes sz ON sz.id = poi.size_id

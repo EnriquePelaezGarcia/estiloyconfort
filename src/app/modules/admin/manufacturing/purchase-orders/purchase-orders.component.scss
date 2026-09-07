@@ -231,6 +231,63 @@
   color: vars.$color-text-secondary;
 }
 
+// Foto(s) de los productos de la OC: mini-carrusel en el listado + miniatura
+// por renglón en el detalle expandido.
+.po-cell {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+}
+
+.po-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: vars.$radius-sm;
+  overflow: hidden;
+  border: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    // Cambio suave entre fotos del carrusel.
+    animation: po-thumb-fade 0.4s ease;
+  }
+
+  &__count {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    min-width: 1rem;
+    padding: 0 0.2rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1rem;
+    text-align: center;
+    color: #fff;
+    background: color-mix(in srgb, #000 62%, transparent);
+    border-top-left-radius: vars.$radius-sm;
+  }
+}
+
+@keyframes po-thumb-fade {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.po-item-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: vars.$radius-sm;
+  border: 1px solid vars.$color-border;
+}
+
 // Estado de pago de la OC, leído de cuentas por pagar (no se guarda aquí).
 .badge--sm {
   display: inline-block;
