@@ -56,9 +56,9 @@
               @if (o.status === 'received' || o.status === 'partially_received') {
                 <span class="badge" [class]="statusTone(o.status)">{{ statusLabel(o.status) }}</span>
               } @else {
-                <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
+                <select class="status-select" (change)="changeStatus(o, $event)">
                   @for (s of manualStatuses; track s) {
-                    <option [value]="s">{{ statusLabel(s) }}</option>
+                    <option [value]="s" [selected]="s === o.status">{{ statusLabel(s) }}</option>
                   }
                 </select>
               }
