@@ -15,14 +15,14 @@
           <input
             id="customerPhone"
             type="tel"
-            inputmode="numeric"
-            maxlength="22"
+            inputmode="tel"
+            maxlength="24"
             formControlName="customerPhone"
             placeholder="222 123 4567"
             (input)="store.onPhoneInput($event)"
           />
           @if (store.form.controls.customerPhone.touched && store.form.controls.customerPhone.invalid) {
-            <p class="field__error">Ingresa un teléfono a 10 dígitos.</p>
+            <p class="field__error">Ingresa un teléfono a 10 dígitos, o con lada internacional (+1 646 275 7126).</p>
           }
         </div>
         <div class="field" [class.field--error]="store.form.controls.customerEmail.touched && store.form.controls.customerEmail.invalid">
@@ -249,10 +249,8 @@
             }
           </div>
           @if (!store.hasFabricationLines()) {
-            <div class="field" [class.field--error]="store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid">
-              <label for="deliverySlotChoice">
-                Horario de entrega @if (store.isExactDelivery()) { <span class="req">*</span> }
-              </label>
+            <div class="field">
+              <label for="deliverySlotChoice">Horario de entrega</label>
               <select id="deliverySlotChoice" formControlName="deliverySlotChoice">
                 <option value="">Sin horario definido</option>
                 @for (slot of store.deliverySlots(); track slot.id) {
@@ -260,8 +258,11 @@
                 }
                 <option value="custom">Otro horario…</option>
               </select>
-              @if (store.form.controls.deliverySlotChoice.touched && store.form.controls.deliverySlotChoice.invalid) {
-                <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
+              @if (store.isExactDelivery()) {
+                <p class="field__hint">
+                  Opcional: si el cliente aún no define la hora (p. ej. un regalo),
+                  déjalo en «Sin horario definido» y se captura después editando el pedido.
+                </p>
               }
               <!-- Docs/plan-aprobaciones-admin.md §11.3: aviso NO bloqueante, no impide agendar. -->
               @if (store.slotCountInfo(); as slotInfo) {
@@ -298,6 +299,31 @@
             Se puede cambiar después, cuando el mueble llegue y se acuerde la entrega con el cliente.
           }
         </p>
+
+        @if (store.wasExactCommitment()) {
+          <div
+            class="field"
+            [class.field--error]="store.form.controls.deliveryChangeReason.touched && store.deliveryChangeReasonRequired() && !store.form.controls.deliveryChangeReason.value?.trim()"
+          >
+            <label for="deliveryChangeReason">
+              Motivo del cambio
+              @if (store.deliveryChangeReasonRequired()) { <span class="req">*</span> }
+            </label>
+            <textarea
+              id="deliveryChangeReason"
+              formControlName="deliveryChangeReason"
+              rows="2"
+              placeholder="Ej. el cliente adelantó el evento / cambió la hora del salón"
+            ></textarea>
+            <p class="field__hint">
+              Esta es una entrega comprometida. Rellenar un horario que faltaba no
+              necesita motivo; cambiar una fecha u hora ya acordada sí queda registrado.
+            </p>
+            @if (store.form.controls.deliveryChangeReason.touched && store.deliveryChangeReasonRequired() && !store.form.controls.deliveryChangeReason.value?.trim()) {
+              <p class="field__error">Indica por qué se mueve esta entrega comprometida.</p>
+            }
+          </div>
+        }
       </div>
       <div class="field">
         <label for="deliveryPersonId">Asignar repartidor</label>

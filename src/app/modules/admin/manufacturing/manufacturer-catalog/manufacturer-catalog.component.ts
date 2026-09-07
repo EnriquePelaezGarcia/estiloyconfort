@@ -9,7 +9,7 @@ import {
   ManufacturerInput,
 } from '../../../../core/models/manufacturing.model';
 import { MaterialsStore } from '../../../../core/services/materials.store';
-import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../../core/utils/phone';
+import { formatPhoneDigits, formatPhoneForDisplay, normalizePhone, phoneValidator } from '../../../../core/utils/phone';
 
 @Component({
   selector: 'app-manufacturer-catalog',
@@ -37,8 +37,8 @@ export class ManufacturerCatalogComponent implements OnInit {
   protected readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(255)]],
     contactName: [''],
-    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
-    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
+    // Opcional; 10 dígitos ("222 123 4567") o "+lada" internacional. Vacío pasa.
+    phone: ['', [phoneValidator]],
     email: ['', [Validators.email]],
     address: [''],
     notes: [''],
@@ -117,7 +117,7 @@ export class ManufacturerCatalogComponent implements OnInit {
     const input: ManufacturerInput = {
       name: (v.name ?? '').trim(),
       contactName: v.contactName || null,
-      phone: v.phone || null,
+      phone: v.phone ? normalizePhone(v.phone) : null,
       email: v.email || null,
       address: v.address || null,
       notes: v.notes || null,

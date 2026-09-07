@@ -7,6 +7,7 @@ import { NotificationService } from '../../../../core/services/notification.serv
 import { ApprovalsService } from '../../../../core/services/approvals.service';
 import { Quote, QuoteDiscount, QuoteExtraCharge, QuoteStatus } from '../../../../core/models/quote.model';
 import { SaleScheme } from '../../../../core/models/order.model';
+import { waPhone } from '../../../../core/utils/phone';
 
 type FilterTab = 'all' | QuoteStatus;
 
@@ -316,11 +317,11 @@ export class QuoteListComponent implements OnInit {
   }
 
   protected whatsappUrl(quote: Quote): string {
-    const phone = (quote.customerPhone ?? '').replace(/\D/g, '');
+    const phone = waPhone(quote.customerPhone);
     const text = encodeURIComponent(
       `Hola ${quote.customerName}, aquí está tu cotización de Mueblería Estilo y Confort:\n${quote.shareUrl}`,
     );
-    return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 
   /** Días naturales que le quedan de vigencia (para avisar de las que están por vencer). */

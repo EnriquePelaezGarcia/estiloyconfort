@@ -133,7 +133,7 @@ const manufacturingController = {
   createManufacturer: asyncHandler(async (req, res) => {
     const { name, contactName, phone, email, address, notes } = req.body;
     if (!name || !name.trim()) throw new ApiError(400, 'El nombre del fabricante es obligatorio');
-    if (!isValidOptionalPhone(phone)) throw new ApiError(400, 'El teléfono debe tener 10 dígitos');
+    if (!isValidOptionalPhone(phone)) throw new ApiError(400, 'Teléfono inválido: 10 dígitos, o "+" con lada internacional');
     const [result] = await pool.execute(
       `INSERT INTO manufacturers (name, contact_name, phone, email, address, notes)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -148,7 +148,7 @@ const manufacturingController = {
     const { name, contactName, phone, email, address, notes } = req.body;
     const [[existing]] = await pool.execute('SELECT id FROM manufacturers WHERE id = ?', [req.params.id]);
     if (!existing) throw ApiError.notFound('Fabricante no encontrado');
-    if (!isValidOptionalPhone(phone)) throw new ApiError(400, 'El teléfono debe tener 10 dígitos');
+    if (!isValidOptionalPhone(phone)) throw new ApiError(400, 'Teléfono inválido: 10 dígitos, o "+" con lada internacional');
     await pool.execute(
       `UPDATE manufacturers
        SET name = ?, contact_name = ?, phone = ?, email = ?, address = ?, notes = ?

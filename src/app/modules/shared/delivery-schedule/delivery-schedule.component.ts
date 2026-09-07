@@ -6,6 +6,7 @@ import {
   DeliveryBucket, DeliveryScheduleCounts, ScheduledDelivery,
 } from '../../../core/models/delivery-schedule.model';
 import { DeliveryRescheduleComponent } from '../delivery-reschedule/delivery-reschedule.component';
+import { waPhone } from '../../../core/utils/phone';
 
 /** Filtro activo de las tarjetas resumen. 'all' = sin filtrar. */
 type BucketFilter = DeliveryBucket | 'all' | 'overdue_exact';
@@ -131,7 +132,7 @@ export class DeliveryScheduleComponent implements OnInit {
    * comprometida y acordar una tentativa no son la misma conversación.
    */
   protected whatsappLink(d: ScheduledDelivery): string {
-    const phone = (d.customerPhone ?? '').replace(/\D/g, '');
+    const phone = waPhone(d.customerPhone);
     const date = d.expectedDeliveryDate
       ? new Date(`${String(d.expectedDeliveryDate).slice(0, 10)}T12:00:00`)
         .toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -143,7 +144,9 @@ export class DeliveryScheduleComponent implements OnInit {
       ? `Hola ${d.customerName}, le confirmamos la entrega de su pedido ${d.orderNumber} para el ${date}${range}. ¿Todo bien por su parte?`
       : `Hola ${d.customerName}, ya tenemos listo su pedido ${d.orderNumber}. ¿Le queda bien que se lo llevemos el ${date}${range}?`;
 
-    return `https://wa.me/52${phone}?text=${encodeURIComponent(message)}`;
+    return phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
   }
 
   protected openReschedule(d: ScheduledDelivery): void {

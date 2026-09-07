@@ -3,6 +3,7 @@ const discountEngine = require('../models/discountEngine');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const env = require('../config/environment');
+const { isValidCustomerPhone } = require('../utils/validators');
 
 /**
  * URL pública que el vendedor comparte por WhatsApp. Se calcula al vuelo en
@@ -31,8 +32,8 @@ const quotesController = {
     if (!req.body.customerName || !String(req.body.customerName).trim()) {
       throw ApiError.badRequest('El nombre del cliente es obligatorio');
     }
-    if (!/^\d{10}$/.test(String(req.body.customerPhone ?? '').replace(/\D/g, ''))) {
-      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos)');
+    if (!isValidCustomerPhone(req.body.customerPhone)) {
+      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos, o "+" con lada internacional)');
     }
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('La cotización debe incluir al menos un producto');
@@ -53,8 +54,8 @@ const quotesController = {
     if (!req.body.customerName || !String(req.body.customerName).trim()) {
       throw ApiError.badRequest('El nombre del cliente es obligatorio');
     }
-    if (!/^\d{10}$/.test(String(req.body.customerPhone ?? '').replace(/\D/g, ''))) {
-      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos)');
+    if (!isValidCustomerPhone(req.body.customerPhone)) {
+      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos, o "+" con lada internacional)');
     }
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('La cotización debe incluir al menos un producto');

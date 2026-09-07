@@ -13,7 +13,7 @@ import { DraftHandoffService } from '../../../../core/services/draft-handoff.ser
 import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
 import { addBusinessDays } from '../../../../core/utils/business-days';
 import { availableOf, colorMismatch, reservationsTooltip } from '../../../../core/utils/stock-availability';
-import { PHONE_PATTERN, formatPhoneDigits } from '../../../../core/utils/phone';
+import { formatPhoneDigits, normalizePhone, phoneValidator, waPhone } from '../../../../core/utils/phone';
 import { AuthService } from '../../../../core/auth/auth.service';
 import {
   AssemblyRates, DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, SaleScheme,
@@ -136,7 +136,7 @@ export class QuoteCreateComponent implements OnInit {
 
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
-    customerPhone: ['', [Validators.required, Validators.pattern(PHONE_PATTERN)]],
+    customerPhone: ['', [Validators.required, phoneValidator]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     /**
      * Recoge en tienda (Docs/plan-recoge-en-tienda.md D4): se cotiza sin envío
@@ -1042,7 +1042,7 @@ export class QuoteCreateComponent implements OnInit {
     const raw = this.form.getRawValue();
     return {
       customerName: raw.customerName!.trim(),
-      customerPhone: raw.customerPhone!.replace(/\D/g, ''),
+      customerPhone: normalizePhone(raw.customerPhone!),
       // Precotización de origen: el backend la marca 'converted' al crear.
       quoteRequestToken: this.fromRequestToken(),
       paymentMethod: raw.paymentMethod!,
@@ -1185,11 +1185,11 @@ export class QuoteCreateComponent implements OnInit {
    * cotizó sin capturar el número.
    */
   protected whatsappUrl(quote: Quote): string {
-    const phone = (quote.customerPhone ?? '').replace(/\D/g, '');
+    const phone = waPhone(quote.customerPhone);
     const text = encodeURIComponent(
       `Hola ${quote.customerName}, aquí está tu cotización de Mueblería Estilo y Confort:\n${quote.shareUrl}`,
     );
-    return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 
   /** Base del panel actual: el mismo componente sirve a admin y a vendedor. */

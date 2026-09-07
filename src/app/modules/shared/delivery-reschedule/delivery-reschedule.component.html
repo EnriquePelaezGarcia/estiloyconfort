@@ -10,10 +10,10 @@
 
   <p class="modal__subject">{{ orderNumber() }} · {{ customerName() }}</p>
 
-  @if (requiresReason()) {
+  @if (wasExact()) {
     <p class="modal__warning">
       <span class="material-symbols-outlined">warning</span>
-      Esta es una entrega comprometida. El cambio quedará registrado.
+      Esta es una entrega comprometida. Cambiar una fecha u hora ya acordada queda registrado; completar un horario que faltaba, no.
     </p>
   }
 
@@ -52,7 +52,7 @@
 
     @if (!hasPendingFabrication()) {
       <div class="field">
-        <label for="rs-slot">Horario de entrega @if (isExact()) { <span class="req">*</span> }</label>
+        <label for="rs-slot">Horario de entrega</label>
         <select id="rs-slot" formControlName="deliverySlotChoice">
           <option value="">Sin horario definido</option>
           @for (slot of slots(); track slot.id) {
@@ -60,8 +60,8 @@
           }
           <option value="custom">Otro horario…</option>
         </select>
-        @if (form.controls.deliverySlotChoice.touched && form.controls.deliverySlotChoice.invalid) {
-          <p class="field__error">Selecciona el horario de entrega. En una entrega exacta es obligatorio.</p>
+        @if (isExact()) {
+          <p class="field__hint">Opcional: si el cliente aún no define la hora, déjalo en «Sin horario definido».</p>
         }
       </div>
     }

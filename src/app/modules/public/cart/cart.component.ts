@@ -6,7 +6,7 @@ import { MaterialsStore } from '../../../core/services/materials.store';
 import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
 import { ShippingService } from '../../../core/services/shipping.service';
 import { CartItem } from '../../../core/models/cart.model';
-import { formatPhoneDigits } from '../../../core/utils/phone';
+import { formatPhoneDigits, normalizePhone } from '../../../core/utils/phone';
 import { environment } from '../../../../environments/environment';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 
@@ -145,7 +145,7 @@ export class CartComponent {
         items: this.cart.buildRequestItems(),
         shippingPostalCode: cp,
         customerName: this.customerName().trim() || null,
-        customerPhone: this.customerPhone().trim() || null,
+        customerPhone: this.customerPhone().trim() ? normalizePhone(this.customerPhone()) : null,
         replaceToken: this.readLastToken(),
       })
       .subscribe({

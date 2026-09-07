@@ -273,6 +273,7 @@
             <canvas
               #signature
               class="signature"
+              [class.signature--locked]="signatureLocked()"
               (pointerdown)="onCanvasPointerDown($event)"
               (pointermove)="onPointerMove($event)"
               (pointerup)="onPointerUp()"

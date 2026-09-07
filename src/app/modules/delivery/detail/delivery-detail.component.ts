@@ -20,6 +20,7 @@ import { TicketsService } from '../../../core/services/tickets.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
+import { waPhone } from '../../../core/utils/phone';
 import {
   DeliveryAssignment, DiscountReasonCategory, PaymentInstrument, PaymentStatus, SaleScheme,
 } from '../../../core/models/order.model';
@@ -108,6 +109,15 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
+
+  /**
+   * Una vez que la entrega está 'completed', la firma queda congelada: no se
+   * puede volver a trazar sobre ella, agregar una nueva ni borrarla. El canvas
+   * sólo se usa para MOSTRAR la firma que se guardó al cerrar la entrega.
+   */
+  protected signatureLocked = computed(
+    () => this.assignment()?.deliveryStatus === 'completed',
+  );
 
   protected balance = computed(() => {
     const a = this.assignment();
@@ -270,8 +280,12 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   /** Primer toque sobre la firma en celular: expande a pantalla completa en vez de dibujar. */
   protected onCanvasPointerDown(event: PointerEvent): void {
-    const completed = this.assignment()?.deliveryStatus === 'completed';
-    if (!completed && !this.signatureExpanded() && this.isMobileViewport()) {
+    // Entrega cerrada: la firma está congelada, ignora cualquier toque.
+    if (this.signatureLocked()) {
+      event.preventDefault();
+      return;
+    }
+    if (!this.signatureExpanded() && this.isMobileViewport()) {
       event.preventDefault();
       this.openSignatureFullscreen();
       return;
@@ -395,6 +409,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   protected onPointerDown(event: PointerEvent): void {
+    if (this.signatureLocked()) return;
     this.initCanvas();
     if (!this.ctx) return;
     this.drawing = true;
@@ -405,7 +420,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   protected onPointerMove(event: PointerEvent): void {
-    if (!this.drawing || !this.ctx) return;
+    if (this.signatureLocked() || !this.drawing || !this.ctx) return;
     const { x, y } = this.pos(event);
     this.ctx.lineTo(x, y);
     this.ctx.stroke();
@@ -417,6 +432,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   protected clearSignature(): void {
+    if (this.signatureLocked()) return;
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas || !this.ctx) return;
     this.ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -844,11 +860,10 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     try {
       localStorage.setItem(this.enRouteStorageKey, message);
     } catch { /* modo privado / SSR: el texto sólo aplica a este envío */ }
-    const digits = (a.customerPhone ?? '').replace(/\D/g, '');
-    const phone = digits.length >= 10 ? digits.slice(-10) : '';
+    const phone = waPhone(a.customerPhone);
     const text = encodeURIComponent(message);
     window.open(
-      phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`,
+      phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`,
       '_blank',
     );
     this.enRouteModalOpen.set(false);

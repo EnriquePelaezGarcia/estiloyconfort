@@ -320,6 +320,12 @@
   height: 180px;
   touch-action: none;
   cursor: crosshair;
+
+  // Entrega cerrada: la firma queda congelada, no se puede trazar encima.
+  &--locked {
+    pointer-events: none;
+    cursor: default;
+  }
 }
 
 // Pista de que se puede tocar para firmar a pantalla completa; sólo aplica

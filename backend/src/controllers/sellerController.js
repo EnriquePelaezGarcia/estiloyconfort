@@ -100,7 +100,7 @@ const sellerController = {
   create: asyncHandler(async (req, res) => {
     if (!req.body.customerName) throw ApiError.badRequest('El nombre del cliente es obligatorio');
     if (!isValidCustomerPhone(req.body.customerPhone)) {
-      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos)');
+      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos, o "+" con lada internacional)');
     }
     if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
       throw ApiError.badRequest('El pedido debe incluir al menos un producto');
@@ -128,7 +128,7 @@ const sellerController = {
   createSplit: asyncHandler(async (req, res) => {
     if (!req.body.customerName) throw ApiError.badRequest('El nombre del cliente es obligatorio');
     if (!isValidCustomerPhone(req.body.customerPhone)) {
-      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos)');
+      throw ApiError.badRequest('El teléfono del cliente es obligatorio (10 dígitos, o "+" con lada internacional)');
     }
     if (!Array.isArray(req.body.saleGroups) || req.body.saleGroups.length < 2) {
       throw ApiError.badRequest('Una venta partida necesita al menos 2 notas (saleGroups).');

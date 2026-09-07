@@ -5,7 +5,7 @@ import { AdminService } from '../../../core/services/admin.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ManufacturingService } from '../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../core/utils/phone';
+import { formatPhoneDigits, formatPhoneForDisplay, normalizePhone, phoneValidator } from '../../../core/utils/phone';
 import { User, UserRole } from '../../../core/models/user.model';
 import { Manufacturer } from '../../../core/models/manufacturing.model';
 import {
@@ -64,8 +64,8 @@ export class UsersComponent implements OnInit {
   protected form = this.fb.group({
     fullName: ['', [Validators.required, Validators.minLength(3)]],
     email: ['', [Validators.required, Validators.email]],
-    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
-    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
+    // Opcional; 10 dígitos ("222 123 4567") o "+lada" internacional. Vacío pasa.
+    phone: ['', [phoneValidator]],
     roleId: [null as number | null, Validators.required],
     manufacturerId: [null as number | null],
     isActive: [true],
@@ -193,7 +193,7 @@ export class UsersComponent implements OnInit {
       const payload: UpdateUserRequest = {
         email: raw.email!,
         fullName: raw.fullName!,
-        phone: raw.phone || null,
+        phone: raw.phone ? normalizePhone(raw.phone) : null,
         roleId: raw.roleId!,
         manufacturerId: raw.manufacturerId ?? null,
         isActive: raw.isActive!,
@@ -207,7 +207,7 @@ export class UsersComponent implements OnInit {
       const payload: CreateUserRequest = {
         fullName: raw.fullName!,
         email: raw.email!,
-        phone: raw.phone || null,
+        phone: raw.phone ? normalizePhone(raw.phone) : null,
         roleId: raw.roleId!,
         manufacturerId: raw.manufacturerId ?? null,
         canAdjustInventory: raw.canAdjustInventory ?? false,

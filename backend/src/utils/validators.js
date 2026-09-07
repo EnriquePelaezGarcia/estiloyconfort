@@ -16,21 +16,22 @@ function isNonEmptyString(value) {
 }
 
 /**
- * Teléfono del cliente en un pedido/cotización: 10 dígitos tras quitar
- * separadores. Mismo criterio que ya exige el front (`core/utils/phone.ts`
- * PHONE_PATTERN) y el que usa `quotesController`. El rastreador público
- * verifica al cliente con los últimos 4 dígitos, así que sin teléfono no hay
- * forma de rastrear el pedido — por eso pasa a ser obligatorio en el backend.
+ * Teléfono del cliente en un pedido/cotización. Dos formas válidas, igual que
+ * el front (`core/utils/phone.ts` `isAcceptablePhone`):
+ *  - **Nacional (México)**: 10 dígitos tras quitar separadores ("2221234567").
+ *  - **Internacional**: empieza con "+" y trae de 8 a 15 dígitos ("+16462757126").
+ * El rastreador público verifica al cliente con los últimos 4 dígitos, así que
+ * sin teléfono no hay forma de rastrear el pedido — por eso es obligatorio.
  */
 function isValidCustomerPhone(value) {
-  return /^\d{10}$/.test(String(value ?? '').replace(/\D/g, ''));
+  const s = String(value ?? '').trim();
+  if (s.startsWith('+')) return /^\+\d{8,15}$/.test(s.replace(/[\s()\-.]/g, ''));
+  return /^\d{10}$/.test(s.replace(/\D/g, ''));
 }
 
 /**
  * Teléfono OPCIONAL (contacto público, alta de usuario, ficha de fabricante):
- * vacío/nulo es válido, pero si viene algo tiene que ser un teléfono a 10
- * dígitos tras quitar separadores. Mismo criterio que el front
- * (`core/utils/phone.ts` PHONE_PATTERN).
+ * vacío/nulo es válido; si viene algo, se valida como {@link isValidCustomerPhone}.
  */
 function isValidOptionalPhone(value) {
   if (value === undefined || value === null || String(value).trim() === '') return true;
@@ -58,7 +59,7 @@ function validateAdminCreateUser(body) {
   const errors = [];
   if (!isValidEmail(body.email)) errors.push('Email inválido');
   if (!isNonEmptyString(body.fullName)) errors.push('El nombre completo es obligatorio');
-  if (!isValidOptionalPhone(body.phone)) errors.push('El teléfono debe tener 10 dígitos');
+  if (!isValidOptionalPhone(body.phone)) errors.push('Teléfono inválido: 10 dígitos, o "+" con lada internacional');
   return errors;
 }
 
@@ -117,7 +118,7 @@ function validateContactMessage(body) {
   }
   if (!isValidEmail(body.email)) errors.push('Email inválido');
   if (!isValidOptionalPhone(body.phone)) {
-    errors.push('El teléfono debe tener 10 dígitos');
+    errors.push('Teléfono inválido: 10 dígitos, o "+" con lada internacional');
   }
   if (
     !isNonEmptyString(body.message) ||

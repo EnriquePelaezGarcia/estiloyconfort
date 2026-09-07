@@ -448,11 +448,20 @@ export interface CreateOrderRequest {
   /** Instrumento del abono inicial: sólo efectivo o transferencia. */
   initialPaymentMethod?: 'cash' | 'transfer' | null;
   expectedDeliveryDate?: string | null;
-  /** 'exact' exige fecha y ventana horaria; el backend rechaza lo contrario. */
+  /**
+   * 'exact' exige la FECHA; el horario es opcional (un regalo puede tener el
+   * día cerrado y la hora por confirmar) y se captura después editando.
+   */
   deliveryCommitment?: DeliveryCommitment;
   deliveryWindowStart?: string | null;
   deliveryWindowEnd?: string | null;
   deliverySlotId?: number | null;
+  /**
+   * Motivo de la reprogramación (D7). Sólo se exige al EDITAR cuando en una
+   * entrega 'exact' se pisa una fecha u hora que ya estaba fija; rellenar un
+   * horario que faltaba no lo necesita.
+   */
+  rescheduleReason?: string | null;
   notes?: string | null;
   shippingCost?: number | null;
   shippingPostalCode?: string | null;

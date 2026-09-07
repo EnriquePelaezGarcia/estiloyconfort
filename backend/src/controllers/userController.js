@@ -108,7 +108,7 @@ const update = asyncHandler(async (req, res) => {
   if (!existing) throw ApiError.notFound('Usuario no encontrado');
 
   if (req.body.phone !== undefined && !isValidOptionalPhone(req.body.phone)) {
-    throw ApiError.badRequest('El teléfono debe tener 10 dígitos');
+    throw ApiError.badRequest('Teléfono inválido: 10 dígitos, o "+" con lada internacional');
   }
 
   // El vínculo con el fabricante depende del rol resultante, así que se resuelve
