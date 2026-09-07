@@ -23,6 +23,14 @@ export const manufacturerRoutes: Routes = [
         title: 'Pedidos a fabricar - Fabricante',
       },
       {
+        path: 'ordenes-compra',
+        loadComponent: () =>
+          import('./purchase-orders/manufacturer-purchase-orders.component').then(
+            (m) => m.ManufacturerPurchaseOrdersComponent,
+          ),
+        title: 'Órdenes de compra - Fabricante',
+      },
+      {
         path: 'notificaciones',
         loadComponent: () =>
           import('../../shared/components/notifications-page/notifications-page.component').then(

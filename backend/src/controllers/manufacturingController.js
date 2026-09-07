@@ -81,6 +81,10 @@ function mapPoItem(r) {
     pendingQuantity: Math.max(0, quantity - receivedQuantity),
     unitCost: Number(r.unit_cost),
     subtotal: Number(r.subtotal),
+    // Lo que el FABRICANTE reporta (distinto de `receivedQuantity`, que es lo
+    // que bodega ya aceptó).
+    isReady: !!r.is_ready,
+    readyQuantity: Number(r.ready_quantity ?? 0),
   };
 }
 
@@ -98,6 +102,10 @@ function mapPo(r) {
     notes: r.notes ?? null,
     createdByName: r.created_by_name ?? null,
     itemCount: r.item_count != null ? Number(r.item_count) : undefined,
+    // Aceptación del fabricante (Docs/plan-fabricante-notificaciones-y-aceptacion.md,
+    // extendido a órdenes de compra): 'pending' hasta que él la revise.
+    acceptanceStatus: r.acceptance_status ?? 'pending',
+    acceptanceRejectReason: r.acceptance_reject_reason ?? null,
   };
 }
 

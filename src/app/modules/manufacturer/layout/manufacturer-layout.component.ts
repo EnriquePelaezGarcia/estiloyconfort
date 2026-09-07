@@ -19,6 +19,7 @@ export class ManufacturerLayoutComponent implements OnInit {
   protected readonly navItems: BusinessNavItem[] = [
     { label: 'Lista semanal', icon: 'list_alt', route: 'lista-semanal' },
     { label: 'Pedidos a fabricar', icon: 'precision_manufacturing', route: 'pedidos' },
+    { label: 'Órdenes de compra', icon: 'inventory_2', route: 'ordenes-compra' },
     {
       label: 'Notificaciones',
       icon: 'notifications',

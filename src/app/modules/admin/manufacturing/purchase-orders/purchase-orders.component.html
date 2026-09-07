@@ -56,11 +56,19 @@
               @if (o.status === 'received' || o.status === 'partially_received') {
                 <span class="badge" [class]="statusTone(o.status)">{{ statusLabel(o.status) }}</span>
               } @else {
-                <select class="status-select" [value]="o.status" (change)="changeStatus(o, $event)">
+                <select class="status-select" (change)="changeStatus(o, $event)">
                   @for (s of manualStatuses; track s) {
-                    <option [value]="s">{{ statusLabel(s) }}</option>
+                    <option [value]="s" [selected]="s === o.status">{{ statusLabel(s) }}</option>
                   }
                 </select>
+              }
+              <!-- Aceptación del fabricante: solo aplica desde que se manda (no en Borrador). -->
+              @if (o.status !== 'draft' && o.acceptanceStatus === 'pending') {
+                <div><small class="badge badge--sm badge--amber">Pendiente de aceptar</small></div>
+              } @else if (o.status !== 'draft' && o.acceptanceStatus === 'rejected') {
+                <div><small class="badge badge--sm badge--red" [title]="o.acceptanceRejectReason ?? ''">Rechazada por el fabricante</small></div>
+              } @else if (o.status !== 'draft' && o.acceptanceStatus === 'accepted') {
+                <div><small class="badge badge--sm badge--green">Aceptada</small></div>
               }
             </td>
             <td class="actions">
@@ -86,7 +94,7 @@
                     <thead>
                       <tr>
                         <th>Producto</th><th>Material</th><th>Tipo</th>
-                        <th class="num">Cant.</th><th class="num">Recibido</th>
+                        <th class="num">Cant.</th><th>Fabricante reporta</th><th class="num">Recibido</th>
                         <th class="num">Costo unit.</th><th></th>
                       </tr>
                     </thead>
@@ -111,6 +119,15 @@
                             </span>
                           </td>
                           <td class="num">{{ it.quantity }}</td>
+                          <td>
+                            @if (it.isReady) {
+                              <span class="badge badge--green">Listo</span>
+                            } @else if ((it.readyQuantity ?? 0) > 0) {
+                              <span class="badge badge--amber">{{ it.readyQuantity }}/{{ it.quantity }}</span>
+                            } @else {
+                              <span class="muted">Sin reportar</span>
+                            }
+                          </td>
                           <td class="num">
                             {{ it.receivedQuantity ?? 0 }}/{{ it.quantity }}
                             @if ((it.pendingQuantity ?? it.quantity) > 0) {
