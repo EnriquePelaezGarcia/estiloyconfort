@@ -60,6 +60,9 @@ export interface PurchaseOrderItem {
   pendingQuantity?: number;
   unitCost: number;
   subtotal?: number;
+  /** Lo que el FABRICANTE reporta (distinto de `receivedQuantity`, que pone bodega). */
+  isReady?: boolean;
+  readyQuantity?: number;
 }
 
 /** Un evento de recepción de una OC. */
@@ -77,6 +80,9 @@ export interface PurchaseOrderReceiptInput {
   items: Array<{ itemId: number; quantity: number; condition: 'ok' | 'damaged' | 'incomplete'; note?: string | null }>;
 }
 
+/** Aceptación del fabricante sobre una OC (igual que en pedidos de venta). */
+export type PoAcceptanceStatus = 'pending' | 'accepted' | 'rejected';
+
 export interface PurchaseOrder {
   id: number;
   poNumber: string;
@@ -92,6 +98,35 @@ export interface PurchaseOrder {
   itemCount?: number;
   items?: PurchaseOrderItem[];
   receipts?: PurchaseOrderReceipt[];
+  /** Solo se pide desde que la OC se manda ('sent' en adelante). */
+  acceptanceStatus?: PoAcceptanceStatus;
+  acceptanceRejectReason?: string | null;
+}
+
+/** Item de una OC tal como lo ve el fabricante en su portal: sin costos. */
+export interface ManufacturerPoItem {
+  id: number;
+  productName: string;
+  productSku: string | null;
+  specifications: string | null;
+  materialLabel: string | null;
+  sizeLabel: string | null;
+  color: string | null;
+  quantity: number;
+  isReady: boolean;
+  readyQuantity: number;
+}
+
+/** OC tal como la ve el fabricante en su portal. */
+export interface ManufacturerPurchaseOrder {
+  id: number;
+  poNumber: string;
+  status: PurchaseOrderStatus;
+  orderDate: string;
+  expectedDate: string | null;
+  notes: string | null;
+  acceptance: { status: PoAcceptanceStatus; rejectReason: string | null };
+  items: ManufacturerPoItem[];
 }
 
 /** Payload para crear una orden de compra. */

@@ -11,6 +11,7 @@ import {
   PayableSourceType,
   PaymentBatch,
 } from '../models/payable.model';
+import { ManufacturerPurchaseOrder } from '../models/manufacturing.model';
 
 /** Filtros del historial. El backend fuerza el fabricante desde el token. */
 export interface ManufacturerHistoryFilters {
@@ -66,6 +67,31 @@ export class ManufacturerService {
 
   // Notificaciones in-app: ver `NotificationCenterStore` (compartido con admin
   // y vendedor; endpoint por rol).
+
+  // ─── ÓRDENES DE COMPRA (encargos sin pedido de cliente) ────────────────────
+  getPurchaseOrders(): Observable<{ data: ManufacturerPurchaseOrder[] }> {
+    return this.api.get<{ data: ManufacturerPurchaseOrder[] }>('/manufacturer/purchase-orders');
+  }
+
+  acceptPurchaseOrder(id: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>(`/manufacturer/purchase-orders/${id}/accept`, {});
+  }
+
+  rejectPurchaseOrder(id: number, reason: string): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>(`/manufacturer/purchase-orders/${id}/reject`, { reason });
+  }
+
+  markPurchaseOrderItemReady(
+    poId: number,
+    itemId: number,
+    isReady: boolean,
+    readyQuantity?: number,
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(
+      `/manufacturer/purchase-orders/${poId}/items/${itemId}/ready`,
+      readyQuantity != null ? { readyQuantity } : { isReady },
+    );
+  }
 
   markItemReady(
     orderId: number,

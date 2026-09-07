@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const ManufacturerPayable = require('../models/ManufacturerPayable');
 const ManufacturerAcceptance = require('../models/ManufacturerAcceptance');
+const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { pool } = require('../config/database');
@@ -9,6 +10,11 @@ const refImages = require('../utils/orderRefImages');
 
 // Estados de pedido que requieren fabricación.
 const FABRICATION_STATUSES = ['pending', 'fabricating'];
+
+// Estados de una OC en los que ya es "trabajo" para el fabricante: en 'draft'
+// sigue siendo solo del admin (Docs/plan-...-portal.md — antes de mandarla no
+// existe para él, igual que un pedido de venta antes de asignarle línea).
+const PO_VISIBLE_STATUSES = ['sent', 'in_production', 'partially_received'];
 
 // Un mueble sobre pedido no entra a la carga del fabricante hasta que el
 // cliente deja el anticipo:
@@ -29,6 +35,22 @@ const DEPOSIT_GATE =
 async function manufacturerIdOf(userId) {
   const [[row]] = await pool.execute('SELECT manufacturer_id FROM users WHERE id = ?', [userId]);
   return row?.manufacturer_id ?? null;
+}
+
+/** Item de una OC tal como lo ve el fabricante: sin costos ni columnas de bodega. */
+function mapPoItemForPortal(r) {
+  return {
+    id: r.id,
+    productName: r.product_name,
+    productSku: r.product_sku ?? null,
+    specifications: r.specifications ?? null,
+    materialLabel: r.material_label ?? null,
+    sizeLabel: r.size_label ?? null,
+    color: r.color ?? null,
+    quantity: Number(r.quantity),
+    isReady: !!r.is_ready,
+    readyQuantity: Number(r.ready_quantity ?? 0),
+  };
 }
 
 /**
@@ -341,6 +363,163 @@ const manufacturerController = {
 
   // Notificaciones in-app: ver `notificationsController` (compartido con
   // admin y vendedor). Las rutas /manufacturer/notifications* lo usan.
+
+  // ─── ÓRDENES DE COMPRA EN EL PORTAL ────────────────────────────────────────
+  // Encargos directos al fabricante (sin pedido de cliente detrás): mismo
+  // trato que un pedido de venta — se ve, se acepta/rechaza y se reporta por
+  // producto — pero solo desde que el admin la manda ('sent' en adelante); en
+  // 'draft' sigue siendo solo del admin, y en 'received' ya se resolvió y pasa
+  // a Historial.
+
+  // GET /api/manufacturer/purchase-orders
+  purchaseOrders: asyncHandler(async (req, res) => {
+    const manufacturerId = await manufacturerIdOf(req.user.id);
+    if (!manufacturerId) return res.json({ data: [] });
+
+    const placeholders = PO_VISIBLE_STATUSES.map(() => '?').join(',');
+    const [orders] = await pool.query(
+      `SELECT id, po_number, status, order_date, expected_date, notes,
+              acceptance_status, acceptance_reject_reason
+         FROM purchase_orders
+        WHERE manufacturer_id = ? AND status IN (${placeholders})
+        ORDER BY expected_date IS NULL, expected_date ASC, order_date ASC`,
+      [manufacturerId, ...PO_VISIBLE_STATUSES],
+    );
+    if (orders.length === 0) return res.json({ data: [] });
+
+    const poIds = orders.map((o) => o.id);
+    const [items] = await pool.query(
+      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label
+         FROM purchase_order_items poi
+         LEFT JOIN materials mat ON mat.id = poi.material_id
+         LEFT JOIN sizes sz ON sz.id = poi.size_id
+        WHERE poi.purchase_order_id IN (?)
+        ORDER BY poi.id`,
+      [poIds],
+    );
+    const byPo = new Map(orders.map((o) => [o.id, {
+      id: o.id,
+      poNumber: o.po_number,
+      status: o.status,
+      orderDate: o.order_date,
+      expectedDate: o.expected_date,
+      notes: o.notes ?? null,
+      acceptance: {
+        status: o.acceptance_status,
+        rejectReason: o.acceptance_reject_reason ?? null,
+      },
+      items: [],
+    }]));
+    for (const it of items) {
+      byPo.get(it.purchase_order_id)?.items.push(mapPoItemForPortal(it));
+    }
+    res.json({ data: [...byPo.values()] });
+  }),
+
+  /**
+   * Trae la OC y, si quien pide es fabricante, exige que sea la suya. El admin
+   * puede actuar por un fabricante que no usa el sistema (igual que en pedidos).
+   */
+  _requirePo: async (req, poId) => {
+    const [[po]] = await pool.execute(
+      `SELECT id, po_number, manufacturer_id, status, acceptance_status
+         FROM purchase_orders WHERE id = ?`,
+      [poId],
+    );
+    if (!po) throw ApiError.notFound('Orden de compra no encontrada');
+    if (req.user.role === 'manufacturer') {
+      const manufacturerId = await manufacturerIdOf(req.user.id);
+      if (!manufacturerId || po.manufacturer_id !== manufacturerId) {
+        throw ApiError.forbidden('Esta orden de compra no te fue asignada');
+      }
+    }
+    return po;
+  },
+
+  // POST /api/manufacturer/purchase-orders/:id/accept
+  acceptPurchaseOrder: asyncHandler(async (req, res) => {
+    const poId = Number(req.params.id);
+    const po = await manufacturerController._requirePo(req, poId);
+    if (po.status === 'draft' || po.status === 'cancelled') {
+      throw ApiError.badRequest('Esta orden de compra no está activa');
+    }
+    await pool.execute(
+      `UPDATE purchase_orders
+          SET acceptance_status = 'accepted', acceptance_reviewed_by = ?,
+              acceptance_reviewed_at = NOW(), acceptance_reject_reason = NULL
+        WHERE id = ?`,
+      [req.user.id, poId],
+    );
+    await Notification.create({
+      audience: 'admin',
+      type: 'po_accepted',
+      title: `Fabricante aceptó la orden de compra ${po.po_number}`,
+      body: null,
+    });
+    res.json({ message: 'Orden de compra aceptada' });
+  }),
+
+  // POST /api/manufacturer/purchase-orders/:id/reject  { reason }
+  rejectPurchaseOrder: asyncHandler(async (req, res) => {
+    const poId = Number(req.params.id);
+    const po = await manufacturerController._requirePo(req, poId);
+    if (po.status === 'draft' || po.status === 'cancelled') {
+      throw ApiError.badRequest('Esta orden de compra no está activa');
+    }
+    const reason = String(req.body.reason ?? '').trim().slice(0, 255);
+    if (!reason) throw ApiError.badRequest('Indica el motivo del rechazo');
+    await pool.execute(
+      `UPDATE purchase_orders
+          SET acceptance_status = 'rejected', acceptance_reviewed_by = ?,
+              acceptance_reviewed_at = NOW(), acceptance_reject_reason = ?
+        WHERE id = ?`,
+      [req.user.id, reason, poId],
+    );
+    const [[m]] = await pool.execute('SELECT name FROM manufacturers WHERE id = ?', [po.manufacturer_id]);
+    await Notification.create({
+      audience: 'admin',
+      type: 'po_rejected',
+      title: `${m?.name ?? 'Un fabricante'} rechazó la orden de compra ${po.po_number}`,
+      body: reason,
+    });
+    res.json({ message: 'Orden de compra rechazada. Se avisó a la tienda.' });
+  }),
+
+  // PATCH /api/manufacturer/purchase-orders/:poId/items/:itemId/ready
+  markPurchaseOrderItemReady: asyncHandler(async (req, res) => {
+    const { poId, itemId } = req.params;
+    await manufacturerController._requirePo(req, Number(poId));
+    const [[item]] = await pool.execute(
+      'SELECT id, quantity FROM purchase_order_items WHERE id = ? AND purchase_order_id = ?',
+      [itemId, poId],
+    );
+    if (!item) throw ApiError.notFound('Item no encontrado en esta orden de compra');
+
+    // `readyQuantity` (parcial) manda; si no viene, `isReady` marca/desmarca
+    // la línea completa (compat con el toggle de una sola pieza).
+    const hasQty = req.body.readyQuantity != null;
+    const quantity = Number(item.quantity);
+    let readyQuantity;
+    let isReady;
+    if (hasQty) {
+      readyQuantity = Math.max(0, Math.min(quantity, Math.trunc(Number(req.body.readyQuantity)) || 0));
+      isReady = readyQuantity >= quantity;
+    } else {
+      isReady = req.body.isReady !== false;
+      readyQuantity = isReady ? quantity : 0;
+    }
+    await pool.execute(
+      `UPDATE purchase_order_items
+          SET is_ready = ?, ready_quantity = ?, ready_by = ?, ready_at = NOW()
+        WHERE id = ?`,
+      [isReady ? 1 : 0, readyQuantity, req.user.id, itemId],
+    );
+    res.json({
+      message: hasQty
+        ? 'Avance actualizado'
+        : (isReady ? 'Producto marcado como listo' : 'Producto marcado como pendiente'),
+    });
+  }),
 
   // ─── HISTORIAL Y PAGOS ─────────────────────────────────────────────────────
 

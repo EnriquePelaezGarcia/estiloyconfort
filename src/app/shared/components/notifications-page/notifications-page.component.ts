@@ -74,8 +74,10 @@ export class NotificationsPageComponent implements OnInit {
       case 'order_assigned':
         return 'assignment';
       case 'order_accepted':
+      case 'po_accepted':
         return 'check_circle';
       case 'order_rejected':
+      case 'po_rejected':
         return 'cancel';
       default:
         return 'info';

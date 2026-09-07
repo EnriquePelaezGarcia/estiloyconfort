@@ -30,4 +30,13 @@ router.post('/orders/:id/accept', manufacturerController.acceptOrder);
 router.post('/orders/:id/reject', manufacturerController.rejectOrder);
 router.patch('/orders/:orderId/items/:itemId/ready', manufacturerController.markItemReady);
 
+// Órdenes de compra (encargos sin pedido de cliente detrás).
+router.get('/purchase-orders', manufacturerController.purchaseOrders);
+router.post('/purchase-orders/:id/accept', manufacturerController.acceptPurchaseOrder);
+router.post('/purchase-orders/:id/reject', manufacturerController.rejectPurchaseOrder);
+router.patch(
+  '/purchase-orders/:poId/items/:itemId/ready',
+  manufacturerController.markPurchaseOrderItemReady,
+);
+
 module.exports = router;
