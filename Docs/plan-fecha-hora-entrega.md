@@ -591,8 +591,12 @@ Disponible desde la agenda y desde el detalle de pedido
 (`src/app/modules/seller/order-detail/order-detail.component.*`).
 
 - Mismos controles que el bloque del POS (§6.2).
-- Si el pedido **es** `exact`, el campo **Motivo del cambio** es requerido (D7) y se muestra
-  el aviso `"Esta es una entrega comprometida. El cambio quedará registrado."`
+- Una entrega `exact` exige **sólo la fecha**; el horario es opcional (un regalo puede
+  tener el día cerrado y la hora por confirmar) y se captura después editando.
+- Si el pedido **es** `exact` se muestra el aviso y aparece el campo **Motivo del
+  cambio**, pero éste sólo es **obligatorio cuando se pisa una fecha u hora que ya
+  estaba fija**. Rellenar un horario que faltaba no lo exige (mismo criterio en el
+  backend, `logDeliveryChange`).
 - Si es `tentative`, no hay motivo ni aviso: se guarda y ya.
 - Al confirmar → `PATCH /seller/orders/:id/schedule`, toast de éxito, refresco de la agenda.
 - En el detalle de pedido, debajo del bloque de entrega, se lista la bitácora cuando existe:

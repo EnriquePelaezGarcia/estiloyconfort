@@ -577,6 +577,8 @@ const getOrder = asyncHandler(async (req, res) => {
   // Docs/plan-fabricante-notificaciones-y-aceptacion.md: estado de aceptación
   // del/los fabricante(s) del pedido, para el chip del detalle.
   order.manufacturerAcceptance = await ManufacturerAcceptance.forOrder(order.id);
+  // Historial del pedido (línea de tiempo de estatus + evidencia de entrega).
+  order.history = await Order.getHistory(order.id);
   // Docs/plan-descuentos.md: apaga el badge de "rechazado" si el admin mismo
   // había pedido un descuento que otro admin rechazó (caso raro, mismo trato).
   await discountEngine.acknowledgeRejected('order', order.id, req.user.id);

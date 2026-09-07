@@ -79,9 +79,11 @@
       </div>
     }
 
-    @if (requiresReason()) {
+    @if (wasExact()) {
       <div class="field">
-        <label for="rs-reason">Motivo del cambio <span class="req">*</span></label>
+        <label for="rs-reason">
+          Motivo del cambio @if (requiresReason()) { <span class="req">*</span> }
+        </label>
         <textarea
           id="rs-reason"
           formControlName="rescheduleReason"

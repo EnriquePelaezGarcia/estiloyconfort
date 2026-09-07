@@ -390,6 +390,38 @@ export interface Order {
    * del/los fabricante(s) del pedido (solo en el detalle de admin).
    */
   manufacturerAcceptance?: ManufacturerAcceptanceRow[];
+  /**
+   * Historial del pedido para el apartado del detalle: línea de tiempo de
+   * estatus y evidencia de entrega. Solo lo incluyen los endpoints de detalle
+   * (admin `getOrder` / vendedor `getOne`).
+   */
+  history?: OrderHistory | null;
+}
+
+/** Un cambio de estatus del pedido (`order_status_history`). */
+export interface OrderStatusHistoryEntry {
+  status: OrderStatus;
+  changedAt: string;
+}
+
+/**
+ * Evidencia de entrega (`deliveries`, 1:1 con el pedido). `null` mientras no se
+ * haya asignado repartidor.
+ */
+export interface OrderDeliveryProof {
+  deliveryStatus: string;
+  assignmentDate: string | null;
+  deliveredAt: string | null;
+  signatureImageUrl: string | null;
+  photoUrl: string | null;
+  /** Notas de la entrega; los intentos fallidos se anexan aquí como líneas. */
+  notes: string | null;
+  deliveryPersonName: string | null;
+}
+
+export interface OrderHistory {
+  statusHistory: OrderStatusHistoryEntry[];
+  delivery: OrderDeliveryProof | null;
 }
 
 export type ManufacturerAcceptanceStatus = 'pending' | 'accepted' | 'rejected';

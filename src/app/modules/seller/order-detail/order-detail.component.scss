@@ -509,6 +509,108 @@ $ticket-font: 'Courier New', monospace;
   &__reason { color: vars.$color-text-secondary; }
 }
 
+// ===== Historial del pedido =====
+.panel--full {
+  margin-top: 0;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: vars.$spacing-lg;
+  align-items: start;
+}
+
+.history-block {
+  .info-subtitle { margin-top: 0; }
+}
+
+.timeline {
+  list-style: none;
+  margin: vars.$spacing-sm 0 0;
+  padding: 0;
+
+  &__item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0 0 vars.$spacing-md 1.25rem;
+    border-left: 2px solid vars.$color-border;
+
+    &:last-child { border-left-color: transparent; padding-bottom: 0; }
+  }
+
+  &__dot {
+    position: absolute;
+    left: -6px;
+    top: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: vars.$color-border;
+
+    &--last { background: vars.$color-primary; }
+  }
+
+  &__label { font-weight: 600; font-size: 0.875rem; color: vars.$color-text; }
+  &__date { font-size: 0.75rem; color: vars.$color-text-secondary; }
+  &__empty { font-size: 0.85rem; color: vars.$color-text-secondary; }
+}
+
+.history-list {
+  list-style: none;
+  margin: vars.$spacing-sm 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+    font-size: 0.85rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid vars.$color-border;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  &__note,
+  &__date { display: block; color: vars.$color-text-secondary; font-size: 0.75rem; }
+}
+
+.evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-md;
+  margin-top: vars.$spacing-sm;
+
+  &__item {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+
+    figcaption { font-size: 0.75rem; color: vars.$color-text-secondary; }
+  }
+
+  &__btn {
+    padding: 0;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: none;
+    cursor: pointer;
+    line-height: 0;
+    overflow: hidden;
+
+    img { width: 140px; height: 140px; object-fit: cover; display: block; }
+  }
+
+  &__signature {
+    object-fit: contain !important;
+    background: #fff;
+  }
+}
+
 // Miniaturas de las imágenes de referencia para el fabricante.
 .ref-images {
   list-style: none;

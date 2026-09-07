@@ -511,25 +511,7 @@
         </button>
       }
 
-      <!-- Bitácora de reprogramaciones (D7): sólo aparece si hubo cambios. -->
-      @if (deliveryHistory().length) {
-        <h3 class="info-subtitle no-print">Cambios de fecha de entrega</h3>
-        <ul class="schedule-log no-print">
-          @for (c of deliveryHistory(); track c.id) {
-            <li class="schedule-log__item">
-              <span class="schedule-log__meta">
-                {{ c.changedAt | date:'dd/MM/yyyy' }} — {{ c.changedByName || 'Sistema' }}
-              </span>
-              <span class="schedule-log__change">
-                {{ changeFrom(c) }} → {{ changeTo(c) }}
-              </span>
-              @if (c.reason) {
-                <span class="schedule-log__reason">Motivo: {{ c.reason }}</span>
-              }
-            </li>
-          }
-        </ul>
-      }
+      <!-- La bitácora de reprogramaciones se muestra en "Historial del pedido". -->
 
       @if (o.payments && o.payments.length) {
         <h3 class="info-subtitle">Pagos registrados</h3>
@@ -574,6 +556,126 @@
             }
           }
         </ul>
+      }
+    </div>
+  </div>
+
+  <!-- ===== Historial del pedido ===== -->
+  <div class="panel panel--full no-print">
+    <h2 class="panel__title">Historial del pedido</h2>
+
+    <div class="history-grid">
+      <!-- Línea de tiempo de estatus -->
+      <div class="history-block">
+        <h3 class="info-subtitle">Línea de tiempo</h3>
+        <ol class="timeline">
+          @for (e of statusHistory(); track $index) {
+            <li class="timeline__item">
+              <span class="timeline__dot" [class.timeline__dot--last]="$last"></span>
+              <span class="timeline__label">{{ rawStatusLabel(e.status) }}</span>
+              <span class="timeline__date">{{ e.changedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+            </li>
+          } @empty {
+            <li class="timeline__empty">Sin movimientos registrados.</li>
+          }
+        </ol>
+      </div>
+
+      <!-- Fabricación: aceptación del/los fabricante(s) -->
+      @if (manufacturerAcceptance().length) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Fabricación</h3>
+          <ul class="history-list">
+            @for (a of manufacturerAcceptance(); track a.manufacturerId) {
+              <li>
+                <span>
+                  <strong>{{ a.manufacturerName }}</strong> — {{ acceptanceStatusLabel(a.status) }}
+                  @if (a.status === 'rejected' && a.rejectReason) {
+                    <span class="history-list__note">Motivo: {{ a.rejectReason }}</span>
+                  }
+                </span>
+                @if (a.reviewedAt) {
+                  <span class="history-list__date">{{ a.reviewedAt | date:'dd/MM/yyyy' }}</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Cambios de fecha de entrega (bitácora de reprogramaciones) -->
+      @if (deliveryHistory().length) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Cambios de fecha de entrega</h3>
+          <ul class="schedule-log">
+            @for (c of deliveryHistory(); track c.id) {
+              <li class="schedule-log__item">
+                <span class="schedule-log__meta">
+                  {{ c.changedAt | date:'dd/MM/yyyy' }} — {{ c.changedByName || 'Sistema' }}
+                </span>
+                <span class="schedule-log__change">{{ changeFrom(c) }} → {{ changeTo(c) }}</span>
+                @if (c.reason) {
+                  <span class="schedule-log__reason">Motivo: {{ c.reason }}</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Evidencia de entrega -->
+      @if (deliveryProof(); as d) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Entrega</h3>
+          <dl class="info">
+            @if (d.deliveredAt) {
+              <div><dt>Entregado</dt><dd>{{ d.deliveredAt | date:'dd/MM/yyyy HH:mm' }}</dd></div>
+            }
+            @if (d.deliveryPersonName) {
+              <div><dt>Repartidor</dt><dd>{{ d.deliveryPersonName }}</dd></div>
+            }
+          </dl>
+
+          @if (d.photoUrl || d.signatureImageUrl) {
+            <div class="evidence">
+              @if (d.photoUrl) {
+                <figure class="evidence__item">
+                  <button
+                    type="button"
+                    class="evidence__btn"
+                    title="Ver foto de la entrega"
+                    (click)="zoomedImage.set(d.photoUrl!)"
+                  >
+                    <img [src]="d.photoUrl!" alt="Foto de la entrega" />
+                  </button>
+                  <figcaption>Foto de la entrega</figcaption>
+                </figure>
+              }
+              @if (d.signatureImageUrl) {
+                <figure class="evidence__item">
+                  <button
+                    type="button"
+                    class="evidence__btn"
+                    title="Ver firma del cliente"
+                    (click)="zoomedImage.set(d.signatureImageUrl!)"
+                  >
+                    <img [src]="d.signatureImageUrl!" alt="Firma del cliente" class="evidence__signature" />
+                  </button>
+                  <figcaption>Firma del cliente</figcaption>
+                </figure>
+              }
+            </div>
+          }
+
+          @if (deliveryAttempts().length) {
+            <h4 class="info-subtitle">Intentos de entrega</h4>
+            <ul class="history-list">
+              @for (attempt of deliveryAttempts(); track $index) {
+                <li><span>{{ attempt }}</span></li>
+              }
+            </ul>
+          }
+        </div>
       }
     </div>
   </div>

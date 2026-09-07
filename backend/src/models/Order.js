@@ -927,6 +927,47 @@ const Order = {
   },
 
   /**
+   * Historial del pedido para el detalle (admin + vendedor): línea de tiempo de
+   * estatus y evidencia de entrega. Se llama SOLO desde los controladores de
+   * detalle — no se cuelga de `findById` porque esa vía la usan el ticket
+   * público por token y los hermanos de venta partida, que no deben cargar la
+   * firma ni la foto (data URLs pesadas).
+   *
+   * @param {number} id
+   * @returns {Promise<{statusHistory: Array<{status:string, changedAt:Date}>,
+   *   delivery: object|null}>}
+   */
+  async getHistory(id) {
+    const OrderStatusHistory = require('./OrderStatusHistory');
+    const statusHistory = await OrderStatusHistory.findByOrderId(id);
+
+    // `deliveries` es 1:1 con el pedido (ver Delivery.markFailed): a lo más una fila.
+    const [[dv]] = await pool.execute(
+      `SELECT dv.delivery_status, dv.assignment_date, dv.delivered_at,
+              dv.signature_image_url, dv.photo_url, dv.notes,
+              u.full_name AS delivery_person_name
+         FROM deliveries dv
+         LEFT JOIN users u ON u.id = dv.delivery_person_id
+        WHERE dv.order_id = ?`,
+      [id],
+    );
+
+    const delivery = dv
+      ? {
+        deliveryStatus: dv.delivery_status,
+        assignmentDate: dv.assignment_date ?? null,
+        deliveredAt: dv.delivered_at ?? null,
+        signatureImageUrl: dv.signature_image_url ?? null,
+        photoUrl: dv.photo_url ?? null,
+        notes: dv.notes ?? null,
+        deliveryPersonName: dv.delivery_person_name ?? null,
+      }
+      : null;
+
+    return { statusHistory, delivery };
+  },
+
+  /**
    * Todas las notas de una venta partida (Docs/plan-venta-multiesquema.md D9,
    * §7.1) — impresión conjunta y ticket digital de grupo. `null`/`''` no
    * cuenta como grupo: no se listan todos los pedidos sueltos por accidente.

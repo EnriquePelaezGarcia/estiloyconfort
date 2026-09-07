@@ -5,6 +5,7 @@ const Refund = require('../models/Refund');
 const PricingConfig = require('../models/PricingConfig');
 const SellerCommission = require('../models/SellerCommission');
 const discountEngine = require('../models/discountEngine');
+const ManufacturerAcceptance = require('../models/ManufacturerAcceptance');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { calculateCredit } = require('../utils/pricingCalculator');
@@ -90,6 +91,11 @@ const sellerController = {
   getOne: asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) throw ApiError.notFound('Pedido no encontrado');
+    // Estado de aceptación del/los fabricante(s) e historial del pedido (línea
+    // de tiempo de estatus + evidencia de entrega) — el vendedor los ve igual
+    // que el admin en el detalle.
+    order.manufacturerAcceptance = await ManufacturerAcceptance.forOrder(order.id);
+    order.history = await Order.getHistory(order.id);
     // Docs/plan-descuentos.md: al abrir el pedido se apaga el badge de
     // "descuento rechazado" de quien lo pidió, si era suyo.
     await discountEngine.acknowledgeRejected('order', order.id, req.user.id);

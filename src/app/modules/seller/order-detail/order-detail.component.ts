@@ -24,6 +24,7 @@ import {
 } from '../../../core/models/order.model';
 import {
   DELIVERY_TYPE_LABELS,
+  ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   PAYMENT_INSTRUMENT_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -239,6 +240,40 @@ export class OrderDetailComponent implements OnInit {
 
   /** Estado de aceptación del/los fabricante(s) del pedido (chip del detalle). */
   protected manufacturerAcceptance = computed(() => this.order()?.manufacturerAcceptance ?? []);
+
+  // ===== Historial del pedido (apartado del detalle) =====
+
+  /** Línea de tiempo de estatus (`order_status_history`), orden ascendente. */
+  protected statusHistory = computed(() => this.order()?.history?.statusHistory ?? []);
+
+  /** Evidencia de entrega (foto, firma, repartidor); null si aún no hay entrega. */
+  protected deliveryProof = computed(() => this.order()?.history?.delivery ?? null);
+
+  /**
+   * Intentos de entrega fallidos: el repartidor los anexa a `deliveries.notes`
+   * como líneas `[fecha] No se pudo entregar: motivo` (ver Delivery.markFailed).
+   */
+  protected deliveryAttempts = computed(() => {
+    const notes = this.deliveryProof()?.notes;
+    if (!notes) return [];
+    return notes
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /no se pudo entregar/i.test(l));
+  });
+
+  /** Etiqueta en español de un estatus crudo de la línea de tiempo. */
+  protected rawStatusLabel(status: OrderStatus): string {
+    return ORDER_STATUS_LABELS[status] ?? status;
+  }
+
+  protected acceptanceStatusLabel(status: 'pending' | 'accepted' | 'rejected'): string {
+    switch (status) {
+      case 'accepted': return 'Aceptó';
+      case 'rejected': return 'Rechazó';
+      default: return 'Pendiente de aceptar';
+    }
+  }
 
   /**
    * Ventana de gracia del "recoge en tienda" (Docs/plan-recoge-en-tienda.md
