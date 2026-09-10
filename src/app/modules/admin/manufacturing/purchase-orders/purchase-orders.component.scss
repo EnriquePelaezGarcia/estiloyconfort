@@ -77,6 +77,14 @@
   &__notes { margin: 0; font-size: 0.78rem; color: vars.$color-text-secondary; }
   &__mf { margin: 0; font-size: 0.85rem; font-weight: 600; color: vars.$color-text; }
   &__money { margin: 0; font-size: 0.8rem; color: vars.$color-text-secondary; }
+  &__pay {
+    display: inline-block;
+    margin-left: 0.35rem;
+    font-weight: 600;
+    color: vars.$color-primary;
+    cursor: pointer;
+    &:hover { text-decoration: underline; }
+  }
   &__date { display: flex; flex-direction: column; gap: 0.15rem; }
   &__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 }

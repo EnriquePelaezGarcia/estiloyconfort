@@ -652,6 +652,8 @@ const manufacturingController = {
       );
 
       // Nota de crédito sugerida por lo dañado/incompleto (si hay fabricante).
+      // Nace 'pending': la revisa el admin en Aprobaciones antes de que reste
+      // del saldo (Fase B — Docs/plan-oc-cuentas-por-pagar-devengo-anticipo.md).
       let creditNote = null;
       if (creditAmount > 0 && po.manufacturer_id) {
         const { id } = await ManufacturerPayable.addCharge({
@@ -660,7 +662,9 @@ const manufacturingController = {
           sourceId: poId,
           amount: -Math.round(creditAmount * 100) / 100,
           concept: `Nota de crédito sugerida — daño/faltante ${po.po_number}`,
-          notes: 'Generada automáticamente al recibir la orden. Revisa el monto.',
+          notes: 'Generada automáticamente al recibir la orden. Revisa el monto y apruébala.',
+          status: 'pending',
+          requestedByRole: 'system',
         }, req.user.id);
         creditNote = { id, amount: Math.round(creditAmount * 100) / 100 };
       } else if (creditAmount > 0) {

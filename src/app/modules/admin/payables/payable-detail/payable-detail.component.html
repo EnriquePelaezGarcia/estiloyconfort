@@ -193,7 +193,8 @@
           <p class="modal__note">
             <span class="material-symbols-outlined">info</span>
             Una sola salida de caja, repartida entre los documentos que marques.
-            Los que aún no se entregan quedan sin marcar: pagarlos es un anticipo.
+            Los que aún no llegan a bodega quedan sin marcar: pagarlos por
+            adelantado (anticipo o liquidación) es decisión tuya.
           </p>
 
           <div class="cut-list">
@@ -306,6 +307,10 @@
           <label class="field">
             <span class="field__label">Notas</span>
             <input type="text" formControlName="notes" />
+          </label>
+          <label class="field field--check">
+            <input type="checkbox" formControlName="approveNow" />
+            <span>Aprobar ahora (afecta el saldo de inmediato). Si lo desmarcas, queda pendiente en Aprobaciones.</span>
           </label>
           <p class="modal__note">
             <span class="material-symbols-outlined">info</span>

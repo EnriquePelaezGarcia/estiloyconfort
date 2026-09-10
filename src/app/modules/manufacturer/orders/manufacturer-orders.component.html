@@ -18,6 +18,9 @@
       <article class="panel order">
         <div class="order__head">
           <span class="order__ref">{{ o.ref }}</span>
+          @if (o.totalCost !== null) {
+            <span class="order__total" title="Total del encargo">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+          }
           @if (allReady(o)) {
             <span class="badge badge--green">Todo listo</span>
           }
@@ -174,6 +177,44 @@
           <p class="po-notes"><strong>Notas de la tienda:</strong> {{ o.notes }}</p>
         }
 
+        <!-- ===== Ajustes de precio pedidos por el fabricante (Fase B) ===== -->
+        @if (o.charges.length) {
+          <div class="charges">
+            <span class="order__status-label">Ajustes de precio</span>
+            @for (c of o.charges; track c.id) {
+              <div class="charge-row">
+                <span class="badge badge--sm" [class]="chargeStatusTone(c.status)">
+                  {{ chargeStatusLabel(c.status) }}
+                </span>
+                <span class="charge-row__amount">
+                  {{ c.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                  @if (c.originalAmount !== null) {
+                    <small>(pediste {{ c.originalAmount | currency:'MXN':'symbol-narrow':'1.2-2' }})</small>
+                  }
+                </span>
+                <span class="charge-row__concept">{{ c.concept }}</span>
+                @if (c.status === 'rejected' && c.reviewNote) {
+                  <span class="charge-row__note">Motivo: {{ c.reviewNote }}</span>
+                }
+                <span class="charge-row__actions">
+                  @if (c.status === 'pending') {
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="openEditCharge(o, c)">Editar</button>
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="cancelCharge(c)">Cancelar</button>
+                  } @else if (c.status === 'rejected' && !c.acknowledged) {
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="ackCharge(c)">Entendido</button>
+                  }
+                </span>
+              </div>
+            }
+          </div>
+        }
+
+        @if (o.acceptance.status === 'accepted') {
+          <button type="button" class="btn btn--ghost btn--sm order__charge" (click)="openCharge(o)">
+            <span class="material-symbols-outlined">request_quote</span> Solicitar ajuste de precio
+          </button>
+        }
+
         @if (o.canStart) {
           <button
             type="button"
@@ -223,6 +264,49 @@
         <button type="button" class="btn btn--danger"
                 [disabled]="isWorking(o)" (click)="submitReject()">
           Rechazar
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: solicitar ajuste de precio (Fase B) ===== -->
+@if (chargeTarget(); as o) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>{{ chargeEditingId() ? 'Editar solicitud' : 'Solicitar ajuste de precio' }} · {{ o.ref }}</h2>
+        <button type="button" class="icon-btn" (click)="closeCharge()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="muted">
+          La tienda tiene que aprobarlo antes de que cuente. Se paga junto con el resto del encargo.
+        </p>
+        <div class="field">
+          <label>¿Cuánto más? (MXN) *</label>
+          <input type="number" min="0" step="0.01" [value]="chargeAmount()"
+                 (input)="chargeAmount.set($any($event.target).value)"
+                 placeholder="0.00" />
+        </div>
+        <div class="field">
+          <label>Motivo *</label>
+          <textarea rows="3" [value]="chargeConcept()"
+                    (input)="chargeConcept.set($any($event.target).value)"
+                    placeholder="Ej. la modificación pide herrajes de primera línea y más MDF"></textarea>
+        </div>
+        <div class="field">
+          <label>Notas (opcional)</label>
+          <textarea rows="2" [value]="chargeNotes()"
+                    (input)="chargeNotes.set($any($event.target).value)"></textarea>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeCharge()">Cancelar</button>
+        <button type="button" class="btn btn--primary"
+                [disabled]="savingCharge()" (click)="submitCharge()">
+          {{ chargeEditingId() ? 'Guardar' : 'Enviar solicitud' }}
         </button>
       </div>
     </div>

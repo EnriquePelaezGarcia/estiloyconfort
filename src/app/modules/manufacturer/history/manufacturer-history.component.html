@@ -146,6 +146,22 @@
                   } @else {
                     <span class="state"><span class="spinner spinner--sm"></span> Cargando piezas...</span>
                   }
+
+                  @if (chargesOf(d).length) {
+                    <ul class="charge-list">
+                      @for (c of chargesOf(d); track c.id) {
+                        <li>
+                          <span class="badge badge--sm"
+                                [class]="c.status === 'approved' ? 'badge--green' : c.status === 'rejected' ? 'badge--red' : 'badge--amber'">
+                            {{ chargeStatusLabel(c.status) }}
+                          </span>
+                          <strong>{{ c.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+                          — {{ c.concept }}
+                          @if (c.status === 'rejected' && c.reviewNote) { · {{ c.reviewNote }} }
+                        </li>
+                      }
+                    </ul>
+                  }
                 </td>
               </tr>
             }

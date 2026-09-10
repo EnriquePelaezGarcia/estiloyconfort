@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CurrencyPipe, DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -41,7 +42,7 @@ type PoFilter = 'active' | 'received' | 'cancelled' | 'all';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './purchase-orders.component.html',
   styleUrl: './purchase-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective, MediaUrlPipe],
+  imports: [CurrencyPipe, DatePipe, RouterLink, ReactiveFormsModule, CurrencyInputDirective, MediaUrlPipe],
   host: {
     // Cierra el buscador de productos al hacer clic fuera (mismo patrón que
     // navbar/field-help). El clic dentro del buscador detiene la propagación.

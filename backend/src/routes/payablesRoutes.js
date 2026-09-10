@@ -19,6 +19,8 @@ router.post('/batches', payablesController.createBatch);
 router.delete('/batches/:id', payablesController.removeBatch);
 
 router.post('/charges', payablesController.addCharge);
+router.patch('/charges/:id/approve', payablesController.approveCharge);
+router.patch('/charges/:id/reject', payablesController.rejectCharge);
 router.delete('/charges/:id', payablesController.removeCharge);
 
 router.get('/', payablesController.summary);

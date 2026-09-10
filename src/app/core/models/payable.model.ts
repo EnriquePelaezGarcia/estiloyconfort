@@ -92,12 +92,22 @@ export interface PayableItem {
   deliveredAt: string | null;
 }
 
+export type PayableChargeStatus = 'pending' | 'approved' | 'rejected';
+
 export interface PayableCharge {
   id: number;
   amount: number;
+  /** Monto solicitado antes de que el admin lo ajustara al aprobar (null si no cambió). */
+  originalAmount: number | null;
   chargeDate: string;
   concept: string;
   notes: string | null;
+  /** Solo 'approved' suma al saldo. */
+  status: PayableChargeStatus;
+  reviewNote: string | null;
+  /** 'manufacturer' | 'admin' | 'system' | null (cargo viejo). */
+  requestedByRole: string | null;
+  requestedByName: string | null;
 }
 
 export interface PayablePaymentLine {
@@ -154,4 +164,6 @@ export interface CreateChargeRequest {
   chargeDate?: string;
   concept: string;
   notes?: string | null;
+  /** false = queda pendiente en Aprobaciones en vez de afectar el saldo ya. */
+  approveNow?: boolean;
 }

@@ -3,6 +3,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import {
+  PayableCharge,
   PayableDocument,
   PayableItem,
   PayableSummary,
@@ -127,6 +128,7 @@ export class ManufacturerHistoryComponent implements OnInit {
    * El cache vive en una señal para que el template reaccione al llegar.
    */
   private detailCache = signal<Record<string, PayableItem[]>>({});
+  private chargesCache = signal<Record<string, PayableCharge[]>>({});
 
   protected toggleExpand(doc: PayableDocument): void {
     const key = `${doc.sourceType}:${doc.sourceId}`;
@@ -137,8 +139,10 @@ export class ManufacturerHistoryComponent implements OnInit {
     this.expanded.set(key);
     if (this.detailCache()[key]) return;
     this.manufacturerService.historyDetail(doc.sourceType, doc.sourceId).subscribe({
-      next: (detail) =>
-        this.detailCache.update((cache) => ({ ...cache, [key]: detail.items })),
+      next: (detail) => {
+        this.detailCache.update((cache) => ({ ...cache, [key]: detail.items }));
+        this.chargesCache.update((cache) => ({ ...cache, [key]: detail.charges }));
+      },
       error: () => this.notification.error('No se pudo cargar el detalle'),
     });
   }
@@ -149,6 +153,14 @@ export class ManufacturerHistoryComponent implements OnInit {
 
   protected itemsOf(doc: PayableDocument): PayableItem[] {
     return this.detailCache()[`${doc.sourceType}:${doc.sourceId}`] ?? [];
+  }
+
+  protected chargesOf(doc: PayableDocument): PayableCharge[] {
+    return this.chargesCache()[`${doc.sourceType}:${doc.sourceId}`] ?? [];
+  }
+
+  protected chargeStatusLabel(s: string): string {
+    return s === 'approved' ? 'Aprobado' : s === 'rejected' ? 'Rechazado' : 'Pendiente';
   }
 
   protected print(): void {

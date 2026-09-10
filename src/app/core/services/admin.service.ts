@@ -275,6 +275,28 @@ export class AdminService {
     );
   }
 
+  // ===== Ajustes de precio del fabricante (Fase B — cuentas por pagar) =====
+
+  approveManufacturerCharge(
+    chargeId: number,
+    amount?: number,
+  ): Observable<{ data: { id: number }; message: string }> {
+    return this.api.patch<{ data: { id: number }; message: string }>(
+      `/payables/charges/${chargeId}/approve`,
+      amount != null ? { amount } : {},
+    );
+  }
+
+  rejectManufacturerCharge(
+    chargeId: number,
+    reviewNote: string,
+  ): Observable<{ data: { id: number }; message: string }> {
+    return this.api.patch<{ data: { id: number }; message: string }>(
+      `/payables/charges/${chargeId}/reject`,
+      { reviewNote },
+    );
+  }
+
   // ===== Reembolsos (auditoría contable sep-2026, h1) =====
 
   approveOrderRefund(

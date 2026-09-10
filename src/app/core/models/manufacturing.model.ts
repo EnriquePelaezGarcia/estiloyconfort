@@ -131,8 +131,25 @@ export interface ManufacturerPurchaseOrder {
   orderDate: string;
   expectedDate: string | null;
   notes: string | null;
+  /** Costo total del encargo — lo que se le pagará (su información, no precio de venta). */
+  totalCost: number;
   acceptance: { status: PoAcceptanceStatus; rejectReason: string | null };
   items: ManufacturerPoItem[];
+}
+
+/** Solicitud de ajuste de precio que hizo el fabricante (Fase B). */
+export interface ManufacturerChargeRequest {
+  id: number;
+  sourceType: 'order' | 'purchase_order';
+  sourceId: number;
+  amount: number;
+  originalAmount: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  concept: string;
+  notes: string | null;
+  reviewNote: string | null;
+  acknowledged: boolean;
+  createdAt: string;
 }
 
 /** Payload para crear una orden de compra. */

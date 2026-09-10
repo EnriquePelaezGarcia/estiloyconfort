@@ -111,6 +111,7 @@ export class PayableDetailComponent implements OnInit {
     chargeDate: ['', Validators.required],
     concept: ['', Validators.required],
     notes: [''],
+    approveNow: [true],
   });
 
   ngOnInit(): void {
@@ -269,6 +270,7 @@ export class PayableDetailComponent implements OnInit {
       chargeDate: this.todayStr(),
       concept: '',
       notes: '',
+      approveNow: true,
     });
     this.chargeOpen.set(true);
   }
@@ -292,10 +294,11 @@ export class PayableDetailComponent implements OnInit {
         chargeDate: value.chargeDate,
         concept: value.concept,
         notes: value.notes || null,
+        approveNow: value.approveNow,
       })
       .subscribe({
-        next: () => {
-          this.notification.success('Cargo registrado');
+        next: (res) => {
+          this.notification.success(res?.message ?? 'Cargo registrado');
           this.closeCharge();
           this.saving.set(false);
           this.load();

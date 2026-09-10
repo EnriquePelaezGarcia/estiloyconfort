@@ -1,10 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { forkJoin, Observable } from 'rxjs';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ManufacturerOrder } from '../../../core/models/order.model';
-import { ManufacturerPurchaseOrder } from '../../../core/models/manufacturing.model';
+import {
+  ManufacturerChargeRequest,
+  ManufacturerPurchaseOrder,
+} from '../../../core/models/manufacturing.model';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
@@ -47,6 +50,10 @@ interface WorkOrder {
   acceptance: { status: 'pending' | 'accepted' | 'rejected'; rejectReason: string | null };
   /** "Iniciar fabricación": solo pedidos de venta aún en 'pending'. */
   canStart: boolean;
+  /** Costo del encargo — solo en órdenes de compra (folio OC-). null en pedidos de venta. */
+  totalCost: number | null;
+  /** Ajustes de precio que este fabricante pidió sobre el encargo (Fase B). */
+  charges: ManufacturerChargeRequest[];
   items: WorkItem[];
 }
 
@@ -55,7 +62,7 @@ interface WorkOrder {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-orders.component.html',
   styleUrl: './manufacturer-orders.component.scss',
-  imports: [DatePipe, MediaUrlPipe, ImageLightboxComponent],
+  imports: [CurrencyPipe, DatePipe, MediaUrlPipe, ImageLightboxComponent],
 })
 export class ManufacturerOrdersComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -72,6 +79,15 @@ export class ManufacturerOrdersComponent implements OnInit {
 
   /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
   protected zoomedImage = signal<string | null>(null);
+
+  // ── Modal "Solicitar ajuste de precio" (Fase B) ────────────────────────────
+  protected chargeTarget = signal<WorkOrder | null>(null);
+  /** id de la solicitud en edición (null = nueva). */
+  protected chargeEditingId = signal<number | null>(null);
+  protected chargeAmount = signal('');
+  protected chargeConcept = signal('');
+  protected chargeNotes = signal('');
+  protected savingCharge = signal(false);
 
   ngOnInit(): void {
     this.load();
@@ -102,11 +118,24 @@ export class ManufacturerOrdersComponent implements OnInit {
     forkJoin({
       sales: this.manufacturerService.getOrders(),
       purchase: this.manufacturerService.getPurchaseOrders(),
+      charges: this.manufacturerService.getChargeRequests(),
     }).subscribe({
-      next: ({ sales, purchase }) => {
+      next: ({ sales, purchase, charges }) => {
+        const chargesFor = (kind: WorkKind, id: number) => charges.data.filter(
+          (c) => c.sourceId === id
+            && c.sourceType === (kind === 'sales' ? 'order' : 'purchase_order'),
+        );
         const merged: WorkOrder[] = [
-          ...sales.data.map((o) => this.fromSalesOrder(o)),
-          ...purchase.data.map((po) => this.fromPurchaseOrder(po)),
+          ...sales.data.map((o) => {
+            const w = this.fromSalesOrder(o);
+            w.charges = chargesFor('sales', o.id);
+            return w;
+          }),
+          ...purchase.data.map((po) => {
+            const w = this.fromPurchaseOrder(po);
+            w.charges = chargesFor('purchase', po.id);
+            return w;
+          }),
         ].sort((a, b) => this.byDueThenRef(a, b));
         this.orders.set(merged);
         this.loading.set(false);
@@ -139,6 +168,8 @@ export class ManufacturerOrdersComponent implements OnInit {
         rejectReason: o.acceptance?.rejectReason ?? null,
       },
       canStart: o.order_status === 'pending',
+      totalCost: null,
+      charges: [],
       items: o.items.map((it) => ({
         id: it.id,
         productName: it.productName,
@@ -169,6 +200,8 @@ export class ManufacturerOrdersComponent implements OnInit {
         rejectReason: po.acceptance.rejectReason,
       },
       canStart: false,
+      totalCost: po.totalCost ?? null,
+      charges: [],
       items: po.items.map((it) => ({
         id: it.id,
         productName: it.productName,
@@ -276,5 +309,80 @@ export class ManufacturerOrdersComponent implements OnInit {
       error: (err: { error?: { message?: string } }) =>
         this.notification.error(err?.error?.message ?? 'No se pudo actualizar'),
     });
+  }
+
+  // ── Solicitar ajuste de precio (Fase B) ─────────────────────────────────────
+  protected openCharge(w: WorkOrder): void {
+    this.chargeTarget.set(w);
+    this.chargeEditingId.set(null);
+    this.chargeAmount.set('');
+    this.chargeConcept.set('');
+    this.chargeNotes.set('');
+  }
+
+  protected openEditCharge(w: WorkOrder, c: ManufacturerChargeRequest): void {
+    this.chargeTarget.set(w);
+    this.chargeEditingId.set(c.id);
+    this.chargeAmount.set(String(c.amount));
+    this.chargeConcept.set(c.concept);
+    this.chargeNotes.set(c.notes ?? '');
+  }
+
+  protected closeCharge(): void {
+    this.chargeTarget.set(null);
+  }
+
+  protected submitCharge(): void {
+    const w = this.chargeTarget();
+    if (!w) return;
+    const amount = Math.round((Number(this.chargeAmount()) || 0) * 100) / 100;
+    const concept = this.chargeConcept().trim();
+    if (!(amount > 0)) { this.notification.error('El monto debe ser mayor a 0'); return; }
+    if (!concept) { this.notification.error('Escribe el motivo del ajuste'); return; }
+    const notes = this.chargeNotes().trim() || null;
+    this.savingCharge.set(true);
+
+    const editingId = this.chargeEditingId();
+    const req: Observable<{ message?: string }> = editingId != null
+      ? this.manufacturerService.updateChargeRequest(editingId, { amount, concept, notes })
+      : (w.kind === 'sales'
+        ? this.manufacturerService.requestOrderCharge(w.id, { amount, concept, notes })
+        : this.manufacturerService.requestPurchaseOrderCharge(w.id, { amount, concept, notes }));
+
+    req.subscribe({
+      next: (res) => {
+        this.savingCharge.set(false);
+        this.closeCharge();
+        this.notification.success(res?.message ?? 'Solicitud enviada');
+        this.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingCharge.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo enviar la solicitud');
+      },
+    });
+  }
+
+  protected cancelCharge(c: ManufacturerChargeRequest): void {
+    this.manufacturerService.cancelChargeRequest(c.id).subscribe({
+      next: () => { this.notification.success('Solicitud cancelada'); this.load(); },
+      error: (err: { error?: { message?: string } }) =>
+        this.notification.error(err?.error?.message ?? 'No se pudo cancelar'),
+    });
+  }
+
+  protected ackCharge(c: ManufacturerChargeRequest): void {
+    this.manufacturerService.acknowledgeChargeRejection(c.id).subscribe({
+      next: () => this.load(),
+      error: () => {},
+    });
+  }
+
+  protected chargeStatusLabel(s: ManufacturerChargeRequest['status']): string {
+    return s === 'approved' ? 'Aprobado' : s === 'rejected' ? 'Rechazado' : 'Pendiente';
+  }
+
+  protected chargeStatusTone(s: ManufacturerChargeRequest['status']): string {
+    return s === 'approved' ? 'badge--green' : s === 'rejected' ? 'badge--red' : 'badge--amber';
   }
 }

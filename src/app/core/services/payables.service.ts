@@ -85,10 +85,10 @@ export class PayablesService {
   }
 
   /** Cargo manual. Monto negativo = nota de crédito. */
-  addCharge(payload: CreateChargeRequest): Observable<{ id: number }> {
+  addCharge(payload: CreateChargeRequest): Observable<{ id: number; message: string }> {
     return this.api
-      .post<{ data: { id: number } }>('/payables/charges', payload)
-      .pipe(map((r) => r.data));
+      .post<{ data: { id: number }; message: string }>('/payables/charges', payload)
+      .pipe(map((r) => ({ ...r.data, message: r.message })));
   }
 
   removeCharge(id: number): Observable<{ message: string }> {

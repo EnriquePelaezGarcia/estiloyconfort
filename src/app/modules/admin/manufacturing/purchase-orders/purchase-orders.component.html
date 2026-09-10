@@ -87,6 +87,12 @@
                           {{ paymentStatusLabels[p.status] }}
                         </span>
                       }
+                      @if (o.manufacturerId && o.status !== 'draft' && o.status !== 'cancelled') {
+                        <a class="po-head__pay no-print"
+                           [routerLink]="['/admin/cuentas-por-pagar', o.manufacturerId]">
+                          Registrar pago / anticipo
+                        </a>
+                      }
                     </p>
 
                     @if (o.notes) { <p class="po-head__notes">{{ o.notes }}</p> }

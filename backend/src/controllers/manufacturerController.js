@@ -404,7 +404,7 @@ const manufacturerController = {
 
     const placeholders = PO_VISIBLE_STATUSES.map(() => '?').join(',');
     const [orders] = await pool.query(
-      `SELECT id, po_number, status, order_date, expected_date, notes,
+      `SELECT id, po_number, status, order_date, expected_date, notes, total_cost,
               acceptance_status, acceptance_reject_reason
          FROM purchase_orders
         WHERE manufacturer_id = ? AND status IN (${placeholders})
@@ -435,6 +435,9 @@ const manufacturerController = {
       orderDate: o.order_date,
       expectedDate: o.expected_date,
       notes: o.notes ?? null,
+      // Costo total del encargo — lo que se le pagará al fabricante. Es SU
+      // información (no el precio de venta), así que sí se expone (D14).
+      totalCost: o.total_cost != null ? Number(o.total_cost) : 0,
       acceptance: {
         status: o.acceptance_status,
         rejectReason: o.acceptance_reject_reason ?? null,
@@ -552,6 +555,85 @@ const manufacturerController = {
     });
   }),
 
+  // ─── SOLICITUD DE AJUSTE DE PRECIO (Fase B) ────────────────────────────────
+  // El fabricante pide un cargo extra sobre un encargo suyo (OC o pedido de
+  // fabricación) cuando una modificación le implica más trabajo/material.
+  // Queda 'pending' y NO suma a cuentas por pagar hasta que el admin lo aprueba
+  // en el módulo Aprobaciones (Docs/plan-oc-cuentas-por-pagar-devengo-anticipo.md).
+
+  // POST /api/manufacturer/purchase-orders/:id/charge-request  { amount, concept, notes? }
+  requestPurchaseOrderCharge: asyncHandler(async (req, res) => {
+    const poId = Number(req.params.id);
+    const po = await manufacturerController._requirePo(req, poId);
+    if (po.status === 'cancelled') throw ApiError.badRequest('Esta orden de compra está cancelada');
+    if (po.acceptance_status !== 'accepted') {
+      throw ApiError.badRequest('Primero acepta el encargo para poder pedir un ajuste.');
+    }
+    const { id } = await ManufacturerPayable.createChargeRequest({
+      manufacturerId: po.manufacturer_id,
+      sourceType: 'purchase_order',
+      sourceId: poId,
+      amount: req.body.amount,
+      concept: req.body.concept,
+      notes: req.body.notes,
+    }, req.user.id, 'manufacturer');
+    await notifyChargeRequested(po.manufacturer_id, po.po_number, req.body.amount, req.body.concept);
+    res.status(201).json({ data: { id }, message: 'Solicitud enviada. La tienda debe aprobarla.' });
+  }),
+
+  // POST /api/manufacturer/orders/:id/charge-request  { amount, concept, notes? }
+  requestOrderCharge: asyncHandler(async (req, res) => {
+    const orderId = Number(req.params.id);
+    const manufacturerId = await manufacturerController._manufacturerForRequest(req, orderId);
+    const [[order]] = await pool.execute(
+      'SELECT order_number, order_status FROM orders WHERE id = ?', [orderId],
+    );
+    if (!order) throw ApiError.notFound('Pedido no encontrado');
+    if (order.order_status === 'cancelled') throw ApiError.badRequest('Ese pedido está cancelado');
+    const acc = await ManufacturerAcceptance.statusFor(orderId, manufacturerId);
+    if (!acc || acc.status !== 'accepted') {
+      throw ApiError.badRequest('Primero acepta el pedido para poder pedir un ajuste.');
+    }
+    const { id } = await ManufacturerPayable.createChargeRequest({
+      manufacturerId,
+      sourceType: 'order',
+      sourceId: orderId,
+      amount: req.body.amount,
+      concept: req.body.concept,
+      notes: req.body.notes,
+    }, req.user.id, 'manufacturer');
+    await notifyChargeRequested(manufacturerId, order.order_number, req.body.amount, req.body.concept);
+    res.status(201).json({ data: { id }, message: 'Solicitud enviada. La tienda debe aprobarla.' });
+  }),
+
+  // GET /api/manufacturer/charge-requests — las que hizo este fabricante
+  myChargeRequests: asyncHandler(async (req, res) => {
+    const manufacturerId = await manufacturerIdOf(req.user.id);
+    if (!manufacturerId) return res.json({ data: [] });
+    const data = await ManufacturerPayable.chargeRequestsForManufacturer(manufacturerId);
+    res.json({ data });
+  }),
+
+  // PATCH /api/manufacturer/charge-requests/:id  { amount?, concept?, notes? }
+  updateChargeRequest: asyncHandler(async (req, res) => {
+    if (req.user.role !== 'manufacturer') throw ApiError.forbidden('Solo el fabricante edita su solicitud');
+    await ManufacturerPayable.updateChargeRequest(req.params.id, req.user.id, req.body);
+    res.json({ message: 'Solicitud actualizada' });
+  }),
+
+  // DELETE /api/manufacturer/charge-requests/:id
+  cancelChargeRequest: asyncHandler(async (req, res) => {
+    const ok = await ManufacturerPayable.cancelChargeRequest(req.params.id, req.user.id);
+    if (!ok) throw ApiError.badRequest('No se puede cancelar: la tienda ya la revisó o no es tuya');
+    res.json({ message: 'Solicitud cancelada' });
+  }),
+
+  // POST /api/manufacturer/charge-requests/:id/acknowledge
+  acknowledgeChargeRejection: asyncHandler(async (req, res) => {
+    await ManufacturerPayable.acknowledgeChargeRejection(req.params.id, req.user.id);
+    res.json({ message: 'Visto' });
+  }),
+
   // ─── HISTORIAL Y PAGOS ─────────────────────────────────────────────────────
 
   /**
@@ -648,6 +730,18 @@ function emptyHistoryMeta() {
     to: null,
     summary: { count: 0, pieces: 0, amount: 0, paid: 0, balance: 0 },
   };
+}
+
+/** Avisa al admin que un fabricante pidió un ajuste de precio. */
+async function notifyChargeRequested(manufacturerId, folio, amount, concept) {
+  const [[m]] = await pool.execute('SELECT name FROM manufacturers WHERE id = ?', [manufacturerId]);
+  const money = Math.abs(Number(amount) || 0).toFixed(2);
+  await Notification.create({
+    audience: 'admin',
+    type: 'manufacturer_charge_requested',
+    title: `${m?.name ?? 'Un fabricante'} pide un ajuste de $${money} en ${folio}`,
+    body: concept ? String(concept).slice(0, 500) : null,
+  });
 }
 
 module.exports = manufacturerController;
