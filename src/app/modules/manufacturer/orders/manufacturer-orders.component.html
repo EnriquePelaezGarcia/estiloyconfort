@@ -18,12 +18,14 @@
       <article class="panel order">
         <div class="order__head">
           <span class="order__ref">{{ o.ref }}</span>
-          @if (o.totalCost !== null) {
-            <span class="order__total" title="Total del encargo">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-          }
-          @if (allReady(o)) {
-            <span class="badge badge--green">Todo listo</span>
-          }
+          <div class="order__head-meta">
+            @if (o.totalCost !== null) {
+              <span class="order__total" title="Total del encargo">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            }
+            @if (allReady(o)) {
+              <span class="badge badge--green">Todo listo</span>
+            }
+          </div>
         </div>
 
         @if (o.acceptance.status === 'pending') {
@@ -65,8 +67,8 @@
           </div>
         }
 
-        <div class="order__due-date">
-          <span class="order__status-label">Fecha de entrega a la tienda:</span>
+        <div class="order__due">
+          <span class="spec__k">Fecha de entrega a la tienda</span>
           @if (o.dueDate) {
             <span class="badge badge--blue">{{ o.dueDate | date:'dd/MM/yyyy' }}</span>
           } @else {
@@ -74,35 +76,35 @@
           }
         </div>
 
-        <dl class="order__fields">
+        <div class="items">
           @for (it of o.items; track it.id) {
-            <div class="field">
-              @if (it.imageUrl) {
+            <div class="item">
+              @if (it.imageUrl && !brokenImages().has(it.id)) {
                 <button
                   type="button"
-                  class="prod-photo"
+                  class="item__photo"
                   title="Ver foto en grande"
                   (click)="zoomedImage.set(it.imageUrl!)"
                 >
-                  <img [src]="it.imageUrl | mediaUrl:'thumb'" [alt]="it.productName" loading="lazy" />
-                  <span class="prod-photo__hint material-symbols-outlined">zoom_in</span>
+                  <img [src]="it.imageUrl | mediaUrl:'thumb'" [alt]="it.productName" loading="lazy"
+                       (error)="markImageBroken(it.id)" />
+                  <span class="item__photo-hint material-symbols-outlined">zoom_in</span>
                 </button>
               }
-              <dt class="field__label">Nombre del producto</dt>
-              <dd class="field__value field__value--product">
+
+              <div class="item__title">
                 @if (it.quantity <= 1) {
-                  <label class="field__check">
+                  <label class="item__check">
                     <input
                       type="checkbox"
                       [checked]="it.isReady"
                       (change)="toggleItem(o, it.id, ($any($event.target).checked))"
                     />
-                    <span [class.field__value--done]="it.isReady">{{ it.productName }}</span>
+                    <span class="item__name" [class.item__name--done]="it.isReady">{{ it.productName }}</span>
                   </label>
                 } @else {
-                  <span [class.field__value--done]="it.isReady">{{ it.productName }}</span>
+                  <span class="item__name" [class.item__name--done]="it.isReady">{{ it.productName }}</span>
                 }
-                <span class="order__status-label">Estado del producto:</span>
                 @if (it.isReady) {
                   <span class="badge badge--green">Listo</span>
                 } @else if (it.readyQuantity > 0) {
@@ -110,23 +112,23 @@
                 } @else {
                   <span class="badge badge--amber">Por fabricar</span>
                 }
-              </dd>
+              </div>
 
               @if (it.fabricationNote) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Modificación:</span>
-                  <span class="field__qty">✏️ {{ it.fabricationNote || 'Ver fotos de referencia' }}</span>
-                </dd>
+                <div class="spec spec--callout">
+                  <span class="spec__k">✏️ Modificación</span>
+                  <p class="spec__v">{{ it.fabricationNote }}</p>
+                </div>
               }
               @if (it.specifications) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Especificaciones:</span>
-                  <span class="field__qty">{{ it.specifications }}</span>
-                </dd>
+                <div class="spec spec--callout">
+                  <span class="spec__k">Especificaciones</span>
+                  <p class="spec__v">{{ it.specifications }}</p>
+                </div>
               }
               @if (it.fabricationRefImages.length) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Referencia:</span>
+                <div class="spec">
+                  <span class="spec__k">Fotos de referencia</span>
                   <ul class="ref-images">
                     @for (img of it.fabricationRefImages; track img) {
                       <li>
@@ -136,42 +138,47 @@
                       </li>
                     }
                   </ul>
-                </dd>
+                </div>
               }
 
-              <dd class="field__qty-line">
-                <span class="order__status-label">Piezas a fabricar:</span>
-                <span class="field__qty">{{ it.quantity }}</span>
-              </dd>
-              @if (it.quantity > 1) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Piezas listas:</span>
-                  <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity"
-                         (change)="setReadyQuantity(o, it.id, $any($event.target).value)"
-                         style="width:4.5rem" />
-                </dd>
-              }
-              @if (it.materialLabel) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Material:</span>
-                  <span class="field__qty">{{ it.materialLabel }}</span>
-                </dd>
-              }
-              @if (it.sizeLabel) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Talla:</span>
-                  <span class="field__qty">{{ it.sizeLabel }}</span>
-                </dd>
-              }
-              @if (it.color) {
-                <dd class="field__qty-line">
-                  <span class="order__status-label">Color/Acabado:</span>
-                  <span class="field__qty">{{ it.color }}</span>
-                </dd>
-              }
+              <dl class="attrs">
+                <div class="attrs__cell">
+                  <dt>Piezas a fabricar</dt>
+                  <dd>{{ it.quantity }}</dd>
+                </div>
+                @if (it.quantity > 1) {
+                  <div class="attrs__cell">
+                    <dt>Piezas listas</dt>
+                    <dd>
+                      <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity"
+                             (change)="setReadyQuantity(o, it.id, $any($event.target).value)"
+                             class="attrs__num" />
+                      <span class="muted"> / {{ it.quantity }}</span>
+                    </dd>
+                  </div>
+                }
+                @if (it.materialLabel) {
+                  <div class="attrs__cell">
+                    <dt>Material</dt>
+                    <dd>{{ it.materialLabel }}</dd>
+                  </div>
+                }
+                @if (it.sizeLabel) {
+                  <div class="attrs__cell">
+                    <dt>Talla</dt>
+                    <dd>{{ it.sizeLabel }}</dd>
+                  </div>
+                }
+                @if (it.color) {
+                  <div class="attrs__cell">
+                    <dt>Color / Acabado</dt>
+                    <dd>{{ it.color }}</dd>
+                  </div>
+                }
+              </dl>
             </div>
           }
-        </dl>
+        </div>
 
         @if (o.notes) {
           <p class="po-notes"><strong>Notas de la tienda:</strong> {{ o.notes }}</p>
@@ -180,7 +187,7 @@
         <!-- ===== Ajustes de precio pedidos por el fabricante (Fase B) ===== -->
         @if (o.charges.length) {
           <div class="charges">
-            <span class="order__status-label">Ajustes de precio</span>
+            <span class="spec__k">Ajustes de precio</span>
             @for (c of o.charges; track c.id) {
               <div class="charge-row">
                 <span class="badge badge--sm" [class]="chargeStatusTone(c.status)">
@@ -209,23 +216,25 @@
           </div>
         }
 
-        @if (o.acceptance.status === 'accepted') {
-          <button type="button" class="btn btn--ghost btn--sm order__charge" (click)="openCharge(o)">
-            <span class="material-symbols-outlined">request_quote</span> Solicitar ajuste de precio
-          </button>
-        }
+        <div class="order__actions">
+          @if (o.acceptance.status === 'accepted') {
+            <button type="button" class="btn btn--ghost btn--block" (click)="openCharge(o)">
+              <span class="material-symbols-outlined">request_quote</span> Solicitar ajuste de precio
+            </button>
+          }
 
-        @if (o.canStart) {
-          <button
-            type="button"
-            class="btn btn--ghost order__start"
-            [disabled]="o.acceptance.status !== 'accepted'"
-            [title]="o.acceptance.status !== 'accepted' ? 'Acepta el encargo primero' : ''"
-            (click)="startFabrication(o)"
-          >
-            <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación
-          </button>
-        }
+          @if (o.canStart) {
+            <button
+              type="button"
+              class="btn btn--primary btn--block"
+              [disabled]="o.acceptance.status !== 'accepted'"
+              [title]="o.acceptance.status !== 'accepted' ? 'Acepta el encargo primero' : ''"
+              (click)="startFabrication(o)"
+            >
+              <span class="material-symbols-outlined">play_arrow</span> Iniciar fabricación
+            </button>
+          }
+        </div>
       </article>
     }
   </div>

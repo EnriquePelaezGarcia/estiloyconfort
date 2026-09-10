@@ -1,120 +1,251 @@
 @use '../../../../styles/variables' as vars;
 
-.orders { display: flex; flex-direction: column; gap: vars.$spacing-md; }
+// =====================================================================
+// Portal del fabricante · "Por fabricar"
+//
+// El fabricante trabaja SIEMPRE desde el celular. El layout es una sola
+// columna, con cada dato en su propio renglón: etiqueta chica arriba,
+// valor abajo. Nada de "etiqueta: valor" en la misma línea — en pantalla
+// angosta el valor se parte y la etiqueta queda flotando a media altura.
+// =====================================================================
+
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-lg;
+}
 
 .order {
   &__head {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: vars.$spacing-sm;
     flex-wrap: wrap;
+    padding-bottom: vars.$spacing-md;
+    border-bottom: 1px solid vars.$color-border;
     margin-bottom: vars.$spacing-md;
   }
-  &__date { font-size: 0.8rem; color: vars.$color-text-secondary; }
-  &__ref { font-size: 1.05rem; font-weight: 700; color: vars.$color-text; letter-spacing: 0.02em; }
+
+  &__head-meta {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    flex-wrap: wrap;
+  }
+
+  &__ref {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: vars.$color-primary;
+    letter-spacing: 0.02em;
+  }
+
   &__total {
-    margin-left: auto;
     font-size: 1rem;
     font-weight: 700;
     color: vars.$color-text;
   }
-  &__start { margin-top: vars.$spacing-sm; width: 100%; justify-content: center; }
 
-  &__due-date {
+  &__due {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.4rem;
-    margin-bottom: vars.$spacing-md;
+    gap: 0.4rem 0.6rem;
+    margin-bottom: vars.$spacing-lg;
+
+    .spec__k { margin: 0; }
   }
 
-  &__status-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: vars.$color-text-secondary;
-  }
-
-  &__fields {
+  &__actions {
     display: flex;
     flex-direction: column;
-    gap: vars.$spacing-md;
-    margin: 0;
+    gap: vars.$spacing-sm;
+    margin-top: vars.$spacing-lg;
   }
 }
 
-// Fila "etiqueta arriba, valor abajo": pensado para leerse rápido en pantalla
-// de celular, sin depender de columnas lado a lado que se aprietan en móvil.
-.field {
-  padding-bottom: vars.$spacing-sm;
-  border-bottom: 1px solid vars.$color-border;
+// ===== Etiqueta reutilizable (small-caps) + valor =====
+.spec {
+  margin: vars.$spacing-md 0 0;
 
-  &:last-child { border-bottom: none; padding-bottom: 0; }
-
-  &__label {
-    margin: 0 0 0.15rem;
+  &__k {
+    display: block;
+    margin-bottom: 0.3rem;
     font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     color: vars.$color-text-secondary;
   }
 
-  &__value {
+  &__v {
     margin: 0;
-    font-size: 1.05rem;
-    font-weight: 600;
-    line-height: 1.35;
+    font-size: 1rem;
+    line-height: 1.55;
     color: vars.$color-text;
+    white-space: pre-line;
+    word-break: break-word;
+  }
 
-    &--product {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.5rem;
+  // Instrucción de modificación / especificaciones: es lo más importante
+  // del encargo, va resaltado para que no se pase por alto.
+  &--callout {
+    padding: 0.8rem 0.9rem;
+    border-left: 3px solid vars.$color-gold;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-gold, 0.08);
+
+    .spec__k { color: #8a6d08; }
+    .spec__v { font-weight: 500; }
+  }
+}
+
+// ===== Producto(s) del encargo =====
+.items {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  padding: vars.$spacing-md 0;
+  border-top: 1px solid vars.$color-border;
+
+  &:first-child { border-top: none; padding-top: 0; }
+  &:last-child { padding-bottom: 0; }
+
+  &__photo {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 0 vars.$spacing-md;
+    padding: 0;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    overflow: hidden;
+    background: vars.$color-surface;
+    cursor: zoom-in;
+
+    img {
+      display: block;
+      width: 100%;
+      height: 190px;
+      object-fit: cover;
     }
+  }
+
+  &__photo-hint {
+    position: absolute;
+    right: 0.4rem;
+    bottom: 0.4rem;
+    padding: 0.2rem;
+    border-radius: 999px;
+    font-size: 1.1rem;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.65rem;
+    margin-bottom: 0.2rem;
+  }
+
+  &__check {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    cursor: pointer;
+
+    input {
+      width: 24px;
+      height: 24px;
+      accent-color: vars.$color-success;
+      flex-shrink: 0;
+    }
+  }
+
+  &__name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: vars.$color-text;
 
     &--done {
       text-decoration: line-through;
       color: vars.$color-text-secondary;
     }
   }
+}
 
-  &__check {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
+// ===== Atributos cortos en cuadrícula (Material, Talla, Color, Piezas) =====
+.attrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: vars.$spacing-sm;
+  margin: vars.$spacing-md 0 0;
 
-    input {
-      width: 22px;
-      height: 22px;
-      accent-color: vars.$color-success;
-      flex-shrink: 0;
+  &__cell {
+    padding: 0.55rem 0.7rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+
+    dt {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: vars.$color-text-secondary;
+      margin-bottom: 0.2rem;
+    }
+
+    dd {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: vars.$color-text;
     }
   }
 
-  &__qty {
+  &__num {
+    width: 4rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
     font-size: 0.95rem;
-    font-weight: 700;
-    color: vars.$color-text;
-  }
-
-  &__qty-line {
-    margin: 0.35rem 0 0;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    font-weight: 600;
   }
 }
 
+// ===== Miniaturas de referencia =====
+.ref-images {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+
+  img {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    display: block;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+  }
+}
+
+// ===== Banner de aceptación =====
 .accept-banner {
   display: flex;
   align-items: flex-start;
   gap: 0.65rem;
-  margin: 0.75rem 0;
-  padding: 0.75rem 0.9rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: 0.8rem 0.9rem;
   border-radius: vars.$radius-md;
   border: 1px solid transparent;
 
@@ -125,34 +256,37 @@
     flex-direction: column;
     gap: 2px;
     flex: 1;
-    font-size: 0.86rem;
+    font-size: 0.88rem;
   }
 
   &__actions {
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
-    align-self: center;
   }
 
   &--pending {
+    flex-wrap: wrap;
     background: rgba(vars.$color-gold, 0.12);
     border-color: rgba(vars.$color-gold, 0.4);
     color: vars.$color-text;
     .material-symbols-outlined { color: vars.$color-gold; }
+    .accept-banner__actions { flex: 1 0 100%; }
   }
 
   &--rejected {
+    flex-wrap: wrap;
     background: rgba(vars.$color-error, 0.08);
     border-color: rgba(vars.$color-error, 0.3);
     .material-symbols-outlined { color: vars.$color-error; }
+    .accept-banner__actions { flex: 1 0 100%; }
   }
 
   &--ok {
     align-items: center;
     background: rgba(vars.$color-success, 0.1);
     border-color: rgba(vars.$color-success, 0.3);
-    font-size: 0.86rem;
+    font-size: 0.88rem;
     .material-symbols-outlined { color: vars.$color-success; }
   }
 }
@@ -161,14 +295,18 @@
 .modal--sm { max-width: 440px; }
 
 .po-notes {
-  margin: vars.$spacing-sm 0 0;
-  font-size: 0.85rem;
+  margin: vars.$spacing-md 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: vars.$radius-sm;
+  background: vars.$color-bg;
+  font-size: 0.88rem;
+  line-height: 1.5;
   color: vars.$color-text-secondary;
 }
 
-// Ajustes de precio pedidos por el fabricante (Fase B).
+// ===== Ajustes de precio pedidos por el fabricante (Fase B) =====
 .charges {
-  margin-top: vars.$spacing-md;
+  margin-top: vars.$spacing-lg;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -179,7 +317,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 0.6rem;
-  padding: 0.5rem 0.65rem;
+  padding: 0.6rem 0.7rem;
   border: 1px solid vars.$color-border;
   border-radius: vars.$radius-sm;
   font-size: 0.85rem;
@@ -187,59 +325,5 @@
   &__amount { font-weight: 700; small { font-weight: 400; color: vars.$color-text-secondary; } }
   &__concept { flex: 1 1 100%; color: vars.$color-text-secondary; }
   &__note { flex: 1 1 100%; color: vars.$color-error; }
-  &__actions { margin-left: auto; display: flex; gap: 0.35rem; }
-}
-
-.order__charge { margin-top: vars.$spacing-sm; }
-
-// Foto del producto: miniatura clicable que abre el visor a tamaño completo.
-.prod-photo {
-  position: relative;
-  display: block;
-  width: 100%;
-  max-width: 220px;
-  margin: 0 0 vars.$spacing-sm;
-  padding: 0;
-  border: 1px solid vars.$color-border;
-  border-radius: vars.$radius-md;
-  overflow: hidden;
-  background: vars.$color-surface;
-  cursor: zoom-in;
-
-  img {
-    display: block;
-    width: 100%;
-    height: 160px;
-    object-fit: cover;
-  }
-
-  &__hint {
-    position: absolute;
-    right: 0.4rem;
-    bottom: 0.4rem;
-    padding: 0.2rem;
-    border-radius: 999px;
-    font-size: 1.1rem;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.55);
-  }
-}
-
-// Miniaturas de las fotos de referencia del mueble a fabricar.
-.ref-images {
-  list-style: none;
-  margin: 0.25rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: vars.$spacing-sm;
-
-  img {
-    width: 84px;
-    height: 84px;
-    object-fit: cover;
-    display: block;
-    border-radius: vars.$radius-sm;
-    border: 1px solid vars.$color-border;
-  }
+  &__actions { flex: 1 0 100%; display: flex; gap: 0.35rem; }
 }

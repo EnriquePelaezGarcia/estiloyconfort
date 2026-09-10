@@ -80,6 +80,13 @@ export class ManufacturerOrdersComponent implements OnInit {
   /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
   protected zoomedImage = signal<string | null>(null);
 
+  /** Ids de item cuya foto no cargó: se oculta el recuadro en vez de dejarlo vacío. */
+  protected brokenImages = signal<Set<number>>(new Set());
+
+  protected markImageBroken(itemId: number): void {
+    this.brokenImages.update((s) => new Set(s).add(itemId));
+  }
+
   // ── Modal "Solicitar ajuste de precio" (Fase B) ────────────────────────────
   protected chargeTarget = signal<WorkOrder | null>(null);
   /** id de la solicitud en edición (null = nueva). */
