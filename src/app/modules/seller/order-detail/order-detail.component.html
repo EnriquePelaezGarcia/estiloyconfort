@@ -510,27 +510,29 @@
              el fabricante son por mueble. -->
         @for (it of o.items; track it.id) {
           @if (it.isCustomModification) {
-            <div class="no-print">
+            <div class="no-print" [attr.id]="'item-' + it.id">
               <dt>Modificación · {{ it.productName }}</dt>
               <dd>
                 {{ it.fabricationNote || 'Sin nota' }}
                 @if (it.fabricationRefImages?.length) {
                   <ul class="ref-images">
-                    @for (img of it.fabricationRefImages; track img) {
+                    @for (img of it.fabricationRefImages; track img; let imgIndex = $index) {
                       <li>
                         <button
                           type="button"
                           class="ref-images__btn"
-                          title="Ver imagen de referencia"
+                          [title]="'Ver imagen de referencia ' + (imgIndex + 1)"
                           (click)="zoomedImage.set(img)"
                         >
-                          <img [src]="img | mediaUrl:'thumb'" alt="Referencia para el fabricante" />
+                          <span class="ref-images__num">{{ imgIndex + 1 }}</span>
+                          <img [src]="img | mediaUrl:'thumb'" [alt]="'Referencia ' + (imgIndex + 1) + ' para el fabricante'" />
                         </button>
                       </li>
                     }
                   </ul>
                 }
               </dd>
+              <app-item-messages [itemId]="it.id!" />
             </div>
           }
         }

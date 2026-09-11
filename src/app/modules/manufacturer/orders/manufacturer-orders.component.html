@@ -78,7 +78,12 @@
 
         <div class="items">
           @for (it of o.items; track it.id) {
-            <div class="item">
+            <div class="item" [attr.id]="'item-' + it.id">
+              <div class="item__qty-highlight">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <span>{{ it.quantity }} {{ it.quantity === 1 ? 'pieza por fabricar' : 'piezas por fabricar' }}</span>
+              </div>
+
               @if (it.imageUrl && !brokenImages().has(it.id)) {
                 <button
                   type="button"
@@ -130,10 +135,11 @@
                 <div class="spec">
                   <span class="spec__k">Fotos de referencia</span>
                   <ul class="ref-images">
-                    @for (img of it.fabricationRefImages; track img) {
+                    @for (img of it.fabricationRefImages; track img; let imgIndex = $index) {
                       <li>
                         <a [href]="img | mediaUrl" target="_blank" rel="noopener">
-                          <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble a fabricar" />
+                          <span class="ref-images__num">{{ imgIndex + 1 }}</span>
+                          <img [src]="img | mediaUrl:'thumb'" [alt]="'Referencia ' + (imgIndex + 1) + ' del mueble a fabricar'" />
                         </a>
                       </li>
                     }
@@ -142,10 +148,6 @@
               }
 
               <dl class="attrs">
-                <div class="attrs__cell">
-                  <dt>Piezas a fabricar</dt>
-                  <dd>{{ it.quantity }}</dd>
-                </div>
                 @if (it.quantity > 1) {
                   <div class="attrs__cell">
                     <dt>Piezas listas</dt>
@@ -176,6 +178,10 @@
                   </div>
                 }
               </dl>
+
+              @if (o.kind === 'sales') {
+                <app-item-messages [itemId]="it.id" [autoOpen]="focusItemId() === it.id" />
+              }
             </div>
           }
         </div>

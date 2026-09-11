@@ -10,6 +10,12 @@
         <option [value]="opt.value" [selected]="opt.value === filter()">{{ opt.label }}</option>
       }
     </select>
+    <select class="filter-select" (change)="onManufacturerFilterChange($event)">
+      <option value="">Todos los fabricantes</option>
+      @for (m of manufacturers(); track m.id) {
+        <option [value]="m.id">{{ m.name }}</option>
+      }
+    </select>
     @if (!loading() && orders().length > 0) {
       <button type="button" class="btn btn--ghost" (click)="print()">
         <span class="material-symbols-outlined">print</span> Imprimir
@@ -29,169 +35,173 @@
     <p>No hay órdenes de compra con este filtro.</p>
   </div>
 } @else {
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead>
-        <tr>
-          <th>Orden</th><th>Producto</th><th class="num">Cantidad</th>
-          <th>Fabricante reporta</th><th>Almacén</th><th class="num">Costo unit.</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (o of orders(); track o.id) {
-          @for (it of (o.items ?? []); track it.id; let first = $first) {
-            <tr>
-              @if (first) {
-                <td data-label="Orden" [attr.rowspan]="(o.items ?? []).length || 1">
-                  <div class="po-head">
-                    <span class="po-head__ref">{{ o.poNumber }}</span>
-                    @if (derivedStatusLabel(o); as lbl) {
-                      <span class="badge badge--sm" [class]="statusTone(o)">{{ lbl }}</span>
-                    }
+  <div class="orders">
+    @for (o of orders(); track o.id) {
+      <article class="panel po">
+        <header class="po__head">
+          <div class="po__head-main">
+            <span class="po__ref">{{ o.poNumber }}</span>
+            @if (derivedStatusLabel(o); as lbl) {
+              <span class="badge badge--sm" [class]="statusTone(o)">{{ lbl }}</span>
+            }
+          </div>
+          <div class="po__head-money">
+            <span class="po__cost">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            @if (paymentOf(o.id); as p) {
+              <span class="po__balance">
+                Saldo <strong>{{ p.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                <span class="badge badge--sm" [class]="paymentStatusTone[p.status]">{{ paymentStatusLabels[p.status] }}</span>
+              </span>
+            }
+          </div>
+        </header>
 
-                    @if (o.status === 'draft') {
-                      <p class="po-head__hint">Borrador — el fabricante aún no la ve.</p>
-                      <button type="button" class="btn btn--primary btn--sm no-print"
-                              [disabled]="working().has(o.id)" (click)="sendToManufacturer(o)">
-                        <span class="material-symbols-outlined">send</span> Enviar al fabricante
-                      </button>
-                    }
+        @if (o.status === 'draft') {
+          <div class="po__banner no-print">
+            <span class="material-symbols-outlined">info</span>
+            <span>Borrador — el fabricante aún no la ve.</span>
+            <button type="button" class="btn btn--primary btn--sm"
+                    [disabled]="working().has(o.id)" (click)="sendToManufacturer(o)">
+              <span class="material-symbols-outlined">send</span> Enviar al fabricante
+            </button>
+          </div>
+        }
 
-                    <p class="po-head__mf">
-                      {{ o.manufacturerName ?? 'Sin fabricante' }}
-                      @if (o.manufacturerId && o.status !== 'draft') {
-                        <span class="accept-chip" [class]="'accept-chip--' + (o.acceptanceStatus ?? 'pending')">
-                          @switch (o.acceptanceStatus) {
-                            @case ('accepted') { Aceptó el encargo }
-                            @case ('rejected') { Rechazó: {{ o.acceptanceRejectReason }} }
-                            @default { Pendiente de aceptar }
-                          }
-                        </span>
-                      }
-                    </p>
-
-                    <label class="po-head__date">
-                      <span class="order__status-label">Fecha esperada</span>
-                      <input type="date" class="due-date-input"
-                             [value]="o.expectedDate ?? ''"
-                             [disabled]="working().has(o.id)"
-                             (change)="onExpectedDateChange(o, $event)" />
-                    </label>
-
-                    <p class="po-head__money">
-                      Costo {{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}
-                      @if (paymentOf(o.id); as p) {
-                        · Saldo
-                        <strong>{{ p.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-                        <span class="badge badge--sm" [class]="paymentStatusTone[p.status]">
-                          {{ paymentStatusLabels[p.status] }}
-                        </span>
-                      }
-                      @if (o.manufacturerId && o.status !== 'draft' && o.status !== 'cancelled') {
-                        <a class="po-head__pay no-print"
-                           [routerLink]="['/admin/cuentas-por-pagar', o.manufacturerId]">
-                          Registrar pago / anticipo
-                        </a>
-                      }
-                    </p>
-
-                    @if (o.notes) { <p class="po-head__notes">{{ o.notes }}</p> }
-
-                    @if (o.status !== 'received' && o.status !== 'cancelled') {
-                      <div class="po-head__actions no-print">
-                        <button type="button" class="btn btn--ghost btn--sm"
-                                (click)="openEdit(o)">
-                          <span class="material-symbols-outlined">edit</span> Editar orden
-                        </button>
-                        <button type="button" class="btn btn--ghost btn--sm"
-                                [disabled]="working().has(o.id)" (click)="cancelOrder(o)">
-                          Cancelar orden
-                        </button>
-                      </div>
-                    }
-                  </div>
-                </td>
-              }
-
-              <td data-label="Producto">
-                <div class="po-cell">
-                  @if (it.imageUrl) {
-                    <img class="po-item-thumb" [src]="it.imageUrl | mediaUrl:'thumb'" alt="" width="44" height="44" />
+        <div class="po__meta">
+          <div class="spec">
+            <span class="spec__k">Fabricante</span>
+            <span class="spec__v">
+              {{ o.manufacturerName ?? 'Sin fabricante' }}
+              @if (o.manufacturerId && o.status !== 'draft') {
+                <span class="accept-chip" [class]="'accept-chip--' + (o.acceptanceStatus ?? 'pending')">
+                  @switch (o.acceptanceStatus) {
+                    @case ('accepted') { Aceptó el encargo }
+                    @case ('rejected') { Rechazó: {{ o.acceptanceRejectReason }} }
+                    @default { Pendiente de aceptar }
                   }
-                  <span>
-                    {{ it.productName }}
-                    @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
-                    @if (it.materialLabel) { <span class="muted"> · {{ it.materialLabel }}</span> }
-                    @if (it.sizeLabel) { <span class="muted"> · {{ it.sizeLabel }}</span> }
-                    @if (it.color) { <span class="muted"> / {{ it.color }}</span> }
-                    @if (it.specifications) { <span class="specs">{{ it.specifications }}</span> }
-                    @if (it.isNewProduct) {
-                      <button type="button" class="btn btn--ghost btn--sm no-print" (click)="openMaterialize(o.id, it)">
-                        <span class="material-symbols-outlined">add_box</span> Crear producto
-                      </button>
-                    }
-                  </span>
-                </div>
-              </td>
+                </span>
+              }
+            </span>
+          </div>
+          <div class="spec">
+            <span class="spec__k">Fecha esperada</span>
+            <input type="date" class="due-date-input"
+                   [value]="o.expectedDate ?? ''"
+                   [disabled]="working().has(o.id)"
+                   (change)="onExpectedDateChange(o, $event)" />
+          </div>
+        </div>
 
-              <td data-label="Cantidad" class="num">{{ it.quantity }}</td>
+        @if (o.notes) { <p class="po__notes">{{ o.notes }}</p> }
 
-              <td data-label="Fabricante reporta">
-                <button
-                  type="button"
-                  class="ready-toggle"
-                  [class.ready-toggle--done]="it.isReady"
-                  [disabled]="markingReady().has(it.id!) || o.status === 'draft' || o.status === 'cancelled'"
-                  [title]="it.isReady ? 'Marcar como pendiente' : 'Marcar como listo'"
-                  (click)="onReadyToggle(o, it)"
-                >
-                  <span class="material-symbols-outlined">
-                    {{ it.isReady ? 'check_circle' : 'radio_button_unchecked' }}
-                  </span>
-                  {{ it.isReady ? 'Listo' : ((it.readyQuantity ?? 0) > 0 ? (it.readyQuantity + '/' + it.quantity) : 'Pendiente') }}
-                </button>
-                @if (it.quantity > 1 && !it.isReady) {
-                  <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity ?? 0"
-                         class="ready-qty no-print"
-                         [disabled]="o.status === 'draft' || o.status === 'cancelled'"
-                         (change)="onReadyQty(o, it, $any($event.target).value)" />
-                }
-                @if (it.readyByName) {
-                  <span class="ready-by muted">
-                    {{ it.readyByName }}@if (it.readyAt) { · {{ it.readyAt | date:'d MMM' }} }
-                  </span>
-                }
-              </td>
+        @if (o.manufacturerId && o.status !== 'draft' && o.status !== 'cancelled') {
+          <a class="po__pay-link no-print" [routerLink]="['/admin/cuentas-por-pagar', o.manufacturerId]">
+            <span class="material-symbols-outlined">payments</span> Registrar pago / anticipo
+          </a>
+        }
 
-              <td data-label="Almacén">
-                @if ((it.receivedQuantity ?? 0) >= it.quantity && it.warehouseCondition !== 'damaged' && it.warehouseCondition !== 'incomplete') {
-                  <span class="badge badge--green">Recibido {{ it.receivedQuantity }}/{{ it.quantity }}</span>
-                } @else if (it.warehouseCondition === 'damaged' || it.warehouseCondition === 'incomplete') {
-                  <span class="badge badge--red">
-                    {{ it.warehouseCondition === 'damaged' ? 'Dañado' : 'Incompleto' }} ({{ it.receivedQuantity ?? 0 }}/{{ it.quantity }})
-                  </span>
-                } @else if ((it.receivedQuantity ?? 0) > 0) {
-                  <span class="badge badge--amber">Parcial {{ it.receivedQuantity }}/{{ it.quantity }}</span>
+        @if (o.status !== 'received' && o.status !== 'cancelled') {
+          <div class="po__actions no-print">
+            <button type="button" class="btn btn--ghost btn--sm" (click)="openEdit(o)">
+              <span class="material-symbols-outlined">edit</span> Editar orden
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm"
+                    [disabled]="working().has(o.id)" (click)="cancelOrder(o)">
+              Cancelar orden
+            </button>
+          </div>
+        }
+
+        <div class="items">
+          @for (it of (o.items ?? []); track it.id) {
+            <div class="item">
+              <div class="item__title">
+                @if (it.imageUrl) {
+                  <img class="item__thumb" [src]="it.imageUrl | mediaUrl:'thumb'" [alt]="it.productName" width="56" height="56" />
                 }
-                @if ((it.pendingQuantity ?? it.quantity) > 0 && o.status !== 'draft' && o.status !== 'cancelled') {
-                  <button type="button" class="btn btn--ghost btn--sm no-print" (click)="openWarehouseReceipt(o, it)">
-                    <span class="material-symbols-outlined">move_to_inbox</span> Recibir
+                <span class="item__name">
+                  {{ it.productName }}
+                  @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
+                </span>
+                @if (it.isNewProduct) {
+                  <button type="button" class="btn btn--ghost btn--sm no-print" (click)="openMaterialize(o.id, it)">
+                    <span class="material-symbols-outlined">add_box</span> Crear producto
                   </button>
                 }
-                @if (it.warehouseNote) { <span class="muted specs">{{ it.warehouseNote }}</span> }
-              </td>
+              </div>
 
-              <td data-label="Costo unit." class="num">{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
-            </tr>
+              @if (it.specifications) {
+                <div class="spec spec--callout">
+                  <span class="spec__k">Especificaciones</span>
+                  <p class="spec__v">{{ it.specifications }}</p>
+                </div>
+              }
+
+              <dl class="attrs">
+                <div class="attrs__cell"><dt>Cantidad</dt><dd>{{ it.quantity }}</dd></div>
+                @if (it.materialLabel) { <div class="attrs__cell"><dt>Material</dt><dd>{{ it.materialLabel }}</dd></div> }
+                @if (it.sizeLabel) { <div class="attrs__cell"><dt>Talla</dt><dd>{{ it.sizeLabel }}</dd></div> }
+                @if (it.color) { <div class="attrs__cell"><dt>Color</dt><dd>{{ it.color }}</dd></div> }
+                <div class="attrs__cell"><dt>Costo unit.</dt><dd>{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
+              </dl>
+
+              <div class="item__row">
+                <span class="spec__k">Fabricante reporta</span>
+                <div class="item__row-value">
+                  <button
+                    type="button"
+                    class="ready-toggle"
+                    [class.ready-toggle--done]="it.isReady"
+                    [disabled]="markingReady().has(it.id!) || o.status === 'draft' || o.status === 'cancelled'"
+                    [title]="it.isReady ? 'Marcar como pendiente' : 'Marcar como listo'"
+                    (click)="onReadyToggle(o, it)"
+                  >
+                    <span class="material-symbols-outlined">
+                      {{ it.isReady ? 'check_circle' : 'radio_button_unchecked' }}
+                    </span>
+                    {{ it.isReady ? 'Listo' : ((it.readyQuantity ?? 0) > 0 ? (it.readyQuantity + '/' + it.quantity) : 'Pendiente') }}
+                  </button>
+                  @if (it.quantity > 1 && !it.isReady) {
+                    <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity ?? 0"
+                           class="ready-qty no-print"
+                           [disabled]="o.status === 'draft' || o.status === 'cancelled'"
+                           (change)="onReadyQty(o, it, $any($event.target).value)" />
+                  }
+                  @if (it.readyByName) {
+                    <span class="ready-by muted">
+                      {{ it.readyByName }}@if (it.readyAt) { · {{ it.readyAt | date:'d MMM' }} }
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <div class="item__row">
+                <span class="spec__k">Almacén</span>
+                <div class="item__row-value">
+                  @if ((it.receivedQuantity ?? 0) >= it.quantity && it.warehouseCondition !== 'damaged' && it.warehouseCondition !== 'incomplete') {
+                    <span class="badge badge--green">Recibido {{ it.receivedQuantity }}/{{ it.quantity }}</span>
+                  } @else if (it.warehouseCondition === 'damaged' || it.warehouseCondition === 'incomplete') {
+                    <span class="badge badge--red">
+                      {{ it.warehouseCondition === 'damaged' ? 'Dañado' : 'Incompleto' }} ({{ it.receivedQuantity ?? 0 }}/{{ it.quantity }})
+                    </span>
+                  } @else if ((it.receivedQuantity ?? 0) > 0) {
+                    <span class="badge badge--amber">Parcial {{ it.receivedQuantity }}/{{ it.quantity }}</span>
+                  }
+                  @if ((it.pendingQuantity ?? it.quantity) > 0 && o.status !== 'draft' && o.status !== 'cancelled') {
+                    <button type="button" class="btn btn--ghost btn--sm no-print" (click)="openWarehouseReceipt(o, it)">
+                      <span class="material-symbols-outlined">move_to_inbox</span> Recibir
+                    </button>
+                  }
+                  @if (it.warehouseNote) { <span class="muted specs">{{ it.warehouseNote }}</span> }
+                </div>
+              </div>
+            </div>
           } @empty {
-            <tr>
-              <td data-label="Orden" class="strong">{{ o.poNumber }}</td>
-              <td colspan="5" class="muted">Sin renglones.</td>
-            </tr>
+            <p class="muted">Sin renglones.</p>
           }
-        }
-      </tbody>
-    </table>
+        </div>
+      </article>
+    }
   </div>
 }
 

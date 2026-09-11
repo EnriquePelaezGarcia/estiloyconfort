@@ -1,0 +1,145 @@
+@use '../../../../styles/variables' as vars;
+
+// =====================================================================
+// Chat por línea de pedido — compartido por vendedor, admin y fabricante.
+// Colapsado por defecto (no se cargan mensajes hasta abrirlo); mobile-first,
+// mismo lenguaje visual que el resto del panel (etiqueta arriba / valor
+// abajo, separadores claros, nada apretado).
+// =====================================================================
+
+:host {
+  display: block;
+  margin-top: vars.$spacing-md;
+  border-top: 1px solid vars.$color-border;
+  padding-top: vars.$spacing-md;
+}
+
+.item-chat {
+  &__toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-surface;
+    color: vars.$color-text;
+    font-family: vars.$font-body;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    .material-symbols-outlined:first-child { color: vars.$color-text-secondary; font-size: 1.2rem; }
+    &:hover { border-color: vars.$color-primary; }
+  }
+
+  &__toggle-label { }
+
+  &__chevron {
+    margin-left: auto;
+    font-size: 1.2rem !important;
+    color: vars.$color-text-secondary;
+    transition: transform vars.$transition-fast;
+
+    &--open { transform: rotate(180deg); }
+  }
+
+  &__panel {
+    margin-top: vars.$spacing-sm;
+    padding: vars.$spacing-md;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-bg;
+  }
+
+  &__empty {
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.85rem;
+  }
+
+  &__list {
+    list-style: none;
+    margin: 0 0 vars.$spacing-md;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$spacing-sm;
+  }
+
+  &__msg {
+    padding: 0.55rem 0.75rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-surface;
+    border-left: 3px solid vars.$color-border;
+
+    // Los mensajes propios se distinguen por el acento, no por alinearlos a
+    // la derecha: con textos largos de instrucciones, una burbuja tipo SMS
+    // se lee peor que una columna consistente.
+    &--mine {
+      background: color-mix(in srgb, vars.$color-primary 6%, white);
+      border-left-color: vars.$color-primary;
+    }
+  }
+
+  &__msg-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    margin-bottom: 0.2rem;
+  }
+
+  &__msg-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: vars.$color-text;
+  }
+
+  &__msg-role {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: vars.$color-text-secondary;
+  }
+
+  &__msg-time {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: vars.$color-text-tertiary;
+    white-space: nowrap;
+  }
+
+  &__msg-body {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: vars.$color-text;
+    white-space: pre-line;
+    word-break: break-word;
+  }
+
+  &__compose {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    textarea {
+      width: 100%;
+      resize: vertical;
+      min-height: 2.4rem;
+      padding: 0.55rem 0.7rem;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-md;
+      font-family: vars.$font-body;
+      font-size: 0.9rem;
+      color: vars.$color-text;
+      background: vars.$color-surface;
+
+      &:focus { outline: none; border-color: vars.$color-primary; }
+    }
+
+    .btn { align-self: flex-end; }
+  }
+}

@@ -74,6 +74,8 @@ export class PurchaseOrdersComponent implements OnInit {
   protected loading = signal(true);
 
   protected filter = signal<PoFilter>('active');
+  /** Filtro superior por fabricante: null = todos. */
+  protected manufacturerFilter = signal<number | null>(null);
   protected readonly filterOptions: Array<{ value: PoFilter; label: string }> = [
     { value: 'active', label: 'Activas' },
     { value: 'received', label: 'Recibidas' },
@@ -153,7 +155,7 @@ export class PurchaseOrdersComponent implements OnInit {
     this.loading.set(true);
     const f = this.filter();
     const status = f === 'active' ? undefined : f;
-    this.manufacturingService.getPurchaseOrders(status).subscribe({
+    this.manufacturingService.getPurchaseOrders(status, this.manufacturerFilter() ?? undefined).subscribe({
       next: (res) => {
         this.orders.set(res.data);
         this.loading.set(false);
@@ -167,6 +169,12 @@ export class PurchaseOrdersComponent implements OnInit {
 
   protected onFilterChange(event: Event): void {
     this.filter.set((event.target as HTMLSelectElement).value as PoFilter);
+    this.load();
+  }
+
+  protected onManufacturerFilterChange(event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    this.manufacturerFilter.set(raw ? Number(raw) : null);
     this.load();
   }
 

@@ -346,6 +346,26 @@
 
     img { border-radius: vars.$radius-sm; object-fit: cover; display: block; }
 
+    // Numeradas para poder decir "ver foto 2" en la instrucción sin ambigüedad.
+    .cart-line__mod-num {
+      position: absolute;
+      left: 2px;
+      bottom: 2px;
+      min-width: 15px;
+      height: 15px;
+      padding: 0 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.62);
+      color: #fff;
+      font-size: 0.62rem;
+      font-weight: 700;
+      line-height: 1;
+      pointer-events: none;
+    }
+
     button {
       position: absolute;
       top: -6px;

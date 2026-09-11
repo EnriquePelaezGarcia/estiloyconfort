@@ -5,6 +5,7 @@ const pricingController = require('../controllers/pricingController');
 const materialsController = require('../controllers/materialsController');
 const inventoryController = require('../controllers/inventoryController');
 const notificationsController = require('../controllers/notificationsController');
+const itemMessagesController = require('../controllers/itemMessagesController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -78,6 +79,10 @@ router.get('/notifications/unread-count', notificationsController.unreadCount);
 router.get('/notifications', notificationsController.list);
 router.patch('/notifications/read-all', notificationsController.markAllRead);
 router.patch('/notifications/:id/read', notificationsController.markRead);
+
+// Chat por línea de pedido (vendedor/admin/fabricante).
+router.get('/order-items/:itemId/messages', itemMessagesController.list);
+router.post('/order-items/:itemId/messages', itemMessagesController.create);
 router.patch('/orders/:id/manufacturer-due-date', adminController.updateManufacturerDueDate);
 // Fabricante que surte el item; al asignarlo se congela su costo.
 router.patch('/order-items/:id/manufacturer', adminController.assignOrderItemManufacturer);

@@ -612,6 +612,7 @@ $ticket-font: 'Courier New', monospace;
   gap: vars.$spacing-sm;
 
   &__btn {
+    position: relative;
     padding: 0;
     border: 1px solid vars.$color-border;
     border-radius: vars.$radius-sm;
@@ -621,5 +622,25 @@ $ticket-font: 'Courier New', monospace;
     overflow: hidden;
 
     img { width: 72px; height: 72px; object-fit: cover; display: block; }
+  }
+
+  &__num {
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
   }
 }

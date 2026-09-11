@@ -263,9 +263,10 @@
                   </label>
                   @if (mod.images.length) {
                     <ul class="cart-line__mod-grid">
-                      @for (img of mod.images; track img) {
+                      @for (img of mod.images; track img; let imgIndex = $index) {
                         <li class="cart-line__mod-thumb">
-                          <img [src]="img | mediaUrl:'thumb'" alt="Foto de referencia del mueble" width="48" height="48" />
+                          <span class="cart-line__mod-num">{{ imgIndex + 1 }}</span>
+                          <img [src]="img | mediaUrl:'thumb'" [alt]="'Foto de referencia ' + (imgIndex + 1)" width="48" height="48" />
                           <button
                             type="button"
                             aria-label="Quitar foto"

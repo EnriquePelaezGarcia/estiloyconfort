@@ -471,7 +471,21 @@ export interface AppNotification {
   body: string | null;
   orderId: number | null;
   orderNumber: string | null;
+  /** Solo en notificaciones tipo 'item_message': a qué línea del pedido lleva. */
+  orderItemId: number | null;
   read: boolean;
+  createdAt: string;
+}
+
+/** Un mensaje del chat de una línea de pedido (vendedor/admin/fabricante). */
+export interface ItemMessage {
+  id: number;
+  orderItemId: number;
+  orderId: number;
+  senderId: number;
+  senderRole: 'admin' | 'seller' | 'manufacturer';
+  senderName: string;
+  body: string;
   createdAt: string;
 }
 

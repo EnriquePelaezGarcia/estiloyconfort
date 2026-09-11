@@ -57,6 +57,18 @@
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
   overflow: hidden;
+
+  // `right: 0` es relativo a la campana, no a la pantalla: en celular la
+  // campana casi nunca está pegada al borde derecho (hay nombre + avatar a su
+  // lado), así que el panel se salía por la izquierda. Fijo al viewport
+  // evita el desbordamiento sin importar dónde caiga la campana.
+  @media (max-width: 480px) {
+    position: fixed;
+    top: 60px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
 }
 
 .bell__head,

@@ -114,6 +114,24 @@
   &:first-child { border-top: none; padding-top: 0; }
   &:last-child { padding-bottom: 0; }
 
+  // Lo primero que debe ver el fabricante en cada producto: cuántas piezas
+  // hacer. Va antes que la foto y el nombre — por eso azul, no verde (verde
+  // ya significa "listo" en el resto de la pantalla).
+  &__qty-highlight {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 vars.$spacing-sm;
+    padding: 0.4rem 0.75rem;
+    border-radius: vars.$radius-full;
+    background: rgba(#1565c0, 0.12);
+    color: #1565c0;
+    font-size: 0.9rem;
+    font-weight: 700;
+
+    .material-symbols-outlined { font-size: 1.15rem; }
+  }
+
   &__photo {
     position: relative;
     display: block;
@@ -229,6 +247,30 @@
   flex-wrap: wrap;
   gap: vars.$spacing-sm;
 
+  li { position: relative; }
+
+  // Discreta pero legible: para poder decir "ver foto 2" en la instrucción
+  // sin ambigüedad cuando hay varias fotos de referencia.
+  &__num {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
+  }
+
   img {
     width: 96px;
     height: 96px;
@@ -282,11 +324,13 @@
     .accept-banner__actions { flex: 1 0 100%; }
   }
 
+  // Discreto a propósito: ya se aceptó, no hay nada que decidir aquí — solo
+  // la palomita queda en verde, el resto es texto neutro (sin caja de color).
   &--ok {
     align-items: center;
-    background: rgba(vars.$color-success, 0.1);
-    border-color: rgba(vars.$color-success, 0.3);
-    font-size: 0.88rem;
+    padding: 0.4rem 0;
+    color: vars.$color-text-secondary;
+    font-size: 0.85rem;
     .material-symbols-outlined { color: vars.$color-success; }
   }
 }

@@ -3,6 +3,7 @@ const sellerController = require('../controllers/sellerController');
 const creditClientsController = require('../controllers/creditClientsController');
 const adminController = require('../controllers/adminController');
 const notificationsController = require('../controllers/notificationsController');
+const itemMessagesController = require('../controllers/itemMessagesController');
 const ticketsController = require('../controllers/ticketsController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
@@ -23,6 +24,10 @@ router.get('/notifications/unread-count', notificationsController.unreadCount);
 router.get('/notifications', notificationsController.list);
 router.patch('/notifications/read-all', notificationsController.markAllRead);
 router.patch('/notifications/:id/read', notificationsController.markRead);
+
+// Chat por línea de pedido (vendedor/admin/fabricante).
+router.get('/order-items/:itemId/messages', itemMessagesController.list);
+router.post('/order-items/:itemId/messages', itemMessagesController.create);
 router.get('/inventory', sellerController.inventory);
 router.get('/credit-config', sellerController.creditConfig);
 router.get('/assembly-rates', sellerController.assemblyRates);

@@ -18,6 +18,7 @@ import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/de
 import { ExtraChargePickerComponent } from '../../../shared/components/extra-charge-picker/extra-charge-picker.component';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { ActivityLogComponent } from '../../../shared/components/activity-log/activity-log.component';
+import { ItemMessagesComponent } from '../../../shared/components/item-messages/item-messages.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { DeliveryChangeLog } from '../../../core/models/delivery-schedule.model';
 import {
@@ -69,7 +70,7 @@ interface AbonoReceipt {
   imports: [
     CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective,
     DeliveryRescheduleComponent, ExtraChargePickerComponent,
-    ImageLightboxComponent, ActivityLogComponent, MediaUrlPipe,
+    ImageLightboxComponent, ActivityLogComponent, MediaUrlPipe, ItemMessagesComponent,
   ],
 })
 export class OrderDetailComponent implements OnInit {
@@ -88,6 +89,8 @@ export class OrderDetailComponent implements OnInit {
 
   protected order = signal<Order | null>(null);
   protected loading = signal(true);
+  /** Item al que apunta la notificación con la que se llegó (link "Mensajes"). */
+  protected focusItemId = signal<number | null>(null);
   protected paymentModalOpen = signal(false);
   protected cancelModalOpen = signal(false);
   /** Razón obligatoria al solicitar/hacer la cancelación. */
@@ -451,6 +454,8 @@ export class OrderDetailComponent implements OnInit {
 
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
+    const rawItem = this.route.snapshot.queryParamMap.get('item');
+    this.focusItemId.set(rawItem ? Number(rawItem) : null);
     this.load(id);
 
     this.sellerService.getCreditConfig().subscribe({
@@ -526,12 +531,22 @@ export class OrderDetailComponent implements OnInit {
         // El backend ya marcó como vistos los descuentos rechazados de quien
         // los pidió al abrir el pedido — se refresca el badge del sidebar.
         this.discountsService.refreshMyRejectedCount().subscribe({ error: () => {} });
+        this.scrollToFocusedItem();
       },
       error: () => {
         this.loading.set(false);
         this.notification.error('No se pudo cargar el pedido');
       },
     });
+  }
+
+  /** Aterriza sobre el producto de la notificación (link "Mensajes"). */
+  private scrollToFocusedItem(): void {
+    const itemId = this.focusItemId();
+    if (!itemId) return;
+    setTimeout(() => {
+      document.getElementById(`item-${itemId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   }
 
   /**

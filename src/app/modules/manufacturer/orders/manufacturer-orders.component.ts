@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 import { forkJoin, Observable } from 'rxjs';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -10,6 +11,7 @@ import {
 } from '../../../core/models/manufacturing.model';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { ItemMessagesComponent } from '../../../shared/components/item-messages/item-messages.component';
 
 /**
  * "Por fabricar" — vista unificada del portal del fabricante.
@@ -62,11 +64,15 @@ interface WorkOrder {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-orders.component.html',
   styleUrl: './manufacturer-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, MediaUrlPipe, ImageLightboxComponent],
+  imports: [CurrencyPipe, DatePipe, MediaUrlPipe, ImageLightboxComponent, ItemMessagesComponent],
 })
 export class ManufacturerOrdersComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
   private notification = inject(NotificationService);
+  private route = inject(ActivatedRoute);
+
+  /** Item al que apunta la notificación con la que se llegó (link "Mensajes"). */
+  protected focusItemId = signal<number | null>(null);
 
   protected orders = signal<WorkOrder[]>([]);
   protected loading = signal(true);
@@ -97,6 +103,8 @@ export class ManufacturerOrdersComponent implements OnInit {
   protected savingCharge = signal(false);
 
   ngOnInit(): void {
+    const raw = this.route.snapshot.queryParamMap.get('item');
+    this.focusItemId.set(raw ? Number(raw) : null);
     this.load();
   }
 
@@ -146,6 +154,7 @@ export class ManufacturerOrdersComponent implements OnInit {
         ].sort((a, b) => this.byDueThenRef(a, b));
         this.orders.set(merged);
         this.loading.set(false);
+        this.scrollToFocusedItem();
       },
       error: () => {
         this.loading.set(false);
@@ -391,5 +400,14 @@ export class ManufacturerOrdersComponent implements OnInit {
 
   protected chargeStatusTone(s: ManufacturerChargeRequest['status']): string {
     return s === 'approved' ? 'badge--green' : s === 'rejected' ? 'badge--red' : 'badge--amber';
+  }
+
+  /** Aterriza sobre el producto de la notificación (link "Mensajes"), ya con el hilo abierto. */
+  private scrollToFocusedItem(): void {
+    const id = this.focusItemId();
+    if (!id) return;
+    setTimeout(() => {
+      document.getElementById(`item-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   }
 }

@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const manufacturerController = require('../controllers/manufacturerController');
 const notificationsController = require('../controllers/notificationsController');
+const itemMessagesController = require('../controllers/itemMessagesController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
 
@@ -18,6 +19,10 @@ router.get('/notifications/unread-count', notificationsController.unreadCount);
 router.get('/notifications', notificationsController.list);
 router.patch('/notifications/read-all', notificationsController.markAllRead);
 router.patch('/notifications/:id/read', notificationsController.markRead);
+
+// Chat por línea de pedido (vendedor/admin/fabricante).
+router.get('/order-items/:itemId/messages', itemMessagesController.list);
+router.post('/order-items/:itemId/messages', itemMessagesController.create);
 // Historial y pagos: lo que el portal no tenía. Van ANTES de '/orders/:id'
 // para que 'history' no se interprete como un id de pedido.
 router.get('/history/:sourceType/:sourceId', manufacturerController.historyDetail);
