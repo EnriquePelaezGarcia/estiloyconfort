@@ -310,4 +310,136 @@ async function sendContactMessage({ name, email, phone, message }) {
   });
 }
 
-module.exports = { sendMail, sendPasswordResetEmail, sendContactMessage };
+/**
+ * Recibo de pago a un fabricante, con el PDF adjunto (Docs de la conversación
+ * "recibo de pago al liquidar una OC"). Botón manual en Cuentas por Pagar —
+ * nunca se manda automático al cerrar el corte.
+ */
+async function sendManufacturerPaymentReceipt({
+  to, manufacturerName, receiptNumber, totalAmount, pdfBuffer,
+}) {
+  const greeting = manufacturerName ? `Hola, equipo de ${manufacturerName}:` : 'Hola,';
+  const amount = Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+  const text = [
+    greeting,
+    '',
+    `Adjuntamos el recibo de tu pago ${receiptNumber} por $${amount} MXN.`,
+    '',
+    'Mueblería Estilo y Confort',
+  ].join('\n');
+
+  const html = `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND_LAVENDER_BG};padding:32px 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid ${BRAND_LAVENDER_BORDER};border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="background:${BRAND_PURPLE};height:6px;line-height:6px;font-size:1px">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:32px 32px 8px">
+            <img src="cid:${LOGO_CID}" alt="Mueblería Estilo y Confort" width="220" height="64" style="display:block;width:220px;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 36px 28px">
+            <p style="margin:0 0 16px;font-size:16px;color:${BRAND_PURPLE_DARK}">${escapeHtml(greeting)}</p>
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#3f3247">
+              Adjuntamos el recibo de tu pago <strong>${escapeHtml(receiptNumber)}</strong> por
+              <strong>$${escapeHtml(amount)} MXN</strong>.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 36px 32px">
+            <p style="margin:0;font-size:13px;color:${BRAND_PURPLE};font-weight:bold">
+              Mueblería Estilo y Confort
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`.trim();
+
+  return sendMail({
+    to,
+    subject: `Recibo de pago ${receiptNumber} — Estilo y Confort`,
+    text,
+    html,
+    attachments: [
+      ...(logoAttachment ? [logoAttachment] : []),
+      { filename: `${receiptNumber}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
+    ],
+  });
+}
+
+/** Estado de cuenta de un fabricante por un periodo, con el PDF adjunto. */
+async function sendManufacturerAccountStatement({
+  to, manufacturerName, statementNumber, periodFrom, periodTo, pdfBuffer,
+}) {
+  const greeting = manufacturerName ? `Hola, equipo de ${manufacturerName}:` : 'Hola,';
+  const period = `${periodFrom} al ${periodTo}`;
+
+  const text = [
+    greeting,
+    '',
+    `Adjuntamos tu estado de cuenta ${statementNumber} del periodo ${period}.`,
+    '',
+    'Mueblería Estilo y Confort',
+  ].join('\n');
+
+  const html = `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND_LAVENDER_BG};padding:32px 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid ${BRAND_LAVENDER_BORDER};border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="background:${BRAND_PURPLE};height:6px;line-height:6px;font-size:1px">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:32px 32px 8px">
+            <img src="cid:${LOGO_CID}" alt="Mueblería Estilo y Confort" width="220" height="64" style="display:block;width:220px;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 36px 28px">
+            <p style="margin:0 0 16px;font-size:16px;color:${BRAND_PURPLE_DARK}">${escapeHtml(greeting)}</p>
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#3f3247">
+              Adjuntamos tu estado de cuenta <strong>${escapeHtml(statementNumber)}</strong> del periodo
+              <strong>${escapeHtml(period)}</strong>.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 36px 32px">
+            <p style="margin:0;font-size:13px;color:${BRAND_PURPLE};font-weight:bold">
+              Mueblería Estilo y Confort
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`.trim();
+
+  return sendMail({
+    to,
+    subject: `Estado de cuenta ${statementNumber} — Estilo y Confort`,
+    text,
+    html,
+    attachments: [
+      ...(logoAttachment ? [logoAttachment] : []),
+      { filename: `${statementNumber}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
+    ],
+  });
+}
+
+module.exports = {
+  sendMail,
+  sendPasswordResetEmail,
+  sendContactMessage,
+  sendManufacturerPaymentReceipt,
+  sendManufacturerAccountStatement,
+};

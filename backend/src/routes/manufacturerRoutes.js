@@ -28,6 +28,7 @@ router.post('/order-items/:itemId/messages', itemMessagesController.create);
 router.get('/history/:sourceType/:sourceId', manufacturerController.historyDetail);
 router.get('/history', manufacturerController.history);
 router.get('/payments', manufacturerController.payments);
+router.get('/statements', manufacturerController.myStatements);
 
 // Solicitudes de ajuste de precio (Fase B). ANTES de '/orders/:id' para que
 // 'charge-requests' no se lea como un id de pedido.

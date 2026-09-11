@@ -191,6 +191,7 @@
             <th>Referencia</th>
             <th>Aplicado a</th>
             <th class="table__num">Monto</th>
+            <th>Recibo</th>
           </tr>
         </thead>
         <tbody>
@@ -210,6 +211,13 @@
                 </span>
               </td>
               <td class="table__num"><strong>{{ p.totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+              <td>
+                @if (p.receiptPdfUrl) {
+                  <a [href]="mediaUrl(p.receiptPdfUrl)" target="_blank" class="folio-chip">{{ p.receiptNumber }}</a>
+                } @else {
+                  <span class="table__hint">—</span>
+                }
+              </td>
             </tr>
           }
         </tbody>
@@ -217,5 +225,33 @@
     </div>
   } @else {
     <p class="empty">Sin pagos registrados en este período.</p>
+  }
+</section>
+
+<section class="panel">
+  <div class="panel__title"><span>Estados de cuenta</span></div>
+  @if (statements().length) {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Periodo</th>
+            <th class="table__num">Saldo final</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (s of statements(); track s.id) {
+            <tr>
+              <td><a [href]="mediaUrl(s.pdfUrl)" target="_blank" class="folio-chip">{{ s.statementNumber }}</a></td>
+              <td>{{ s.periodFrom | date: 'dd/MM/yyyy' }} — {{ s.periodTo | date: 'dd/MM/yyyy' }}</td>
+              <td class="table__num"><strong>{{ s.closingBalance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <p class="empty">La tienda todavía no te ha generado ningún estado de cuenta.</p>
   }
 </section>

@@ -107,6 +107,33 @@ const payablesController = {
     res.json({ message: 'Pago eliminado' });
   }),
 
+  // POST /api/payables/batches/:id/send-receipt — botón manual, nunca automático.
+  sendReceipt: asyncHandler(async (req, res) => {
+    await ManufacturerPayable.emailReceipt(req.params.id);
+    res.json({ message: 'Recibo enviado por correo' });
+  }),
+
+  // POST /api/payables/statements — genera y archiva el estado de cuenta del periodo.
+  createStatement: asyncHandler(async (req, res) => {
+    if (!req.body.manufacturerId) throw ApiError.badRequest('Falta el fabricante');
+    if (!req.body.periodFrom || !req.body.periodTo) throw ApiError.badRequest('Falta el periodo');
+    const statement = await ManufacturerPayable.createStatement(req.body, req.user.id);
+    res.status(201).json({ data: statement, message: 'Estado de cuenta generado' });
+  }),
+
+  // GET /api/payables/statements?manufacturerId= — historial archivado
+  listStatements: asyncHandler(async (req, res) => {
+    if (!req.query.manufacturerId) throw ApiError.badRequest('Falta el fabricante');
+    const data = await ManufacturerPayable.listStatements(req.query.manufacturerId);
+    res.json({ data });
+  }),
+
+  // POST /api/payables/statements/:id/send-email — botón manual.
+  sendStatementEmail: asyncHandler(async (req, res) => {
+    await ManufacturerPayable.emailStatement(req.params.id);
+    res.json({ message: 'Estado de cuenta enviado por correo' });
+  }),
+
   // POST /api/payables/charges — cargo manual o nota de crédito
   // `approveNow` (default true para el admin): lo aplica al saldo de inmediato.
   // Si va en false, queda 'pending' y aparece en el módulo Aprobaciones.

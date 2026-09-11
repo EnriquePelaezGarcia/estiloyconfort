@@ -140,8 +140,29 @@ export interface PaymentBatch {
   periodFrom: string | null;
   periodTo: string | null;
   notes: string | null;
+  /** Recibo PDF generado al registrar el pago (null si aún no se generó). */
+  receiptNumber: string | null;
+  receiptPdfUrl: string | null;
+  receiptEmailedAt: string | null;
   lineCount: number;
   lines: { sourceType: PayableSourceType; sourceId: number; amount: number; folio: string }[];
+}
+
+/** Estado de cuenta archivado: historial acumulado de un fabricante por periodo. */
+export interface AccountStatement {
+  id: number;
+  manufacturerId: number;
+  manufacturerName: string | null;
+  /** `EDC-2026-0001`. */
+  statementNumber: string;
+  periodFrom: string;
+  periodTo: string;
+  openingBalance: number;
+  closingBalance: number;
+  pdfUrl: string;
+  createdByName: string | null;
+  createdAt: string;
+  emailedAt: string | null;
 }
 
 export interface CreateBatchRequest {

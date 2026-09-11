@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { mediaUrl } from '../../../core/utils/media-url';
 import {
+  AccountStatement,
   PayableCharge,
   PayableDocument,
   PayableItem,
@@ -51,8 +53,11 @@ export class ManufacturerHistoryComponent implements OnInit {
   protected readonly typeTone = SOURCE_TYPE_TONE;
   protected readonly methodLabels = PAYABLE_METHOD_LABELS;
 
+  protected readonly mediaUrl = mediaUrl;
+
   protected documents = signal<PayableDocument[]>([]);
   protected payments = signal<PaymentBatch[]>([]);
+  protected statements = signal<AccountStatement[]>([]);
   protected summary = signal<PayableSummary>({
     count: 0,
     pieces: 0,
@@ -77,6 +82,12 @@ export class ManufacturerHistoryComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    // Independiente del filtro de período: es el archivo completo de estados
+    // de cuenta que la tienda le ha generado, no algo que cambie por semana/mes.
+    this.manufacturerService.statements().subscribe({
+      next: (data) => this.statements.set(data),
+      error: () => {},
+    });
   }
 
   protected load(): void {

@@ -17,7 +17,7 @@ COPY src ./src
 
 # Carpeta de imágenes subidas. En el servidor se monta un volumen encima,
 # de modo que las fotos sobreviven a cada redespliegue.
-RUN mkdir -p uploads/products uploads/categories
+RUN mkdir -p uploads/products uploads/categories uploads/receipts uploads/statements
 
 # No correr como root: si alguien logra ejecutar código, queda sin privilegios.
 RUN chown -R node:node /app

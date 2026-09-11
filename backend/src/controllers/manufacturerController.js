@@ -707,6 +707,18 @@ const manufacturerController = {
     const total = data.reduce((sum, b) => sum + b.totalAmount, 0);
     res.json({ data, meta: { total: Math.round(total * 100) / 100, count: data.length } });
   }),
+
+  /**
+   * GET /api/manufacturer/statements — sus estados de cuenta archivados.
+   * Solo lectura: generarlo y reenviarlo por correo es acción del admin (ver
+   * payablesController). Mismo aislamiento por manufacturerId que el resto.
+   */
+  myStatements: asyncHandler(async (req, res) => {
+    const manufacturerId = await resolveManufacturerScope(req);
+    if (!manufacturerId) return res.json({ data: [] });
+    const data = await ManufacturerPayable.listStatements(manufacturerId);
+    res.json({ data });
+  }),
 };
 
 /**

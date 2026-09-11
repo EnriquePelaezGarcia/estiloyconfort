@@ -6,6 +6,7 @@ import {
   ManufacturerOrder, ManufacturerOwnCatalogItem, Order, WeeklyListRow,
 } from '../models/order.model';
 import {
+  AccountStatement,
   PayableDocumentDetail,
   PayableDocumentsResponse,
   PayableSourceType,
@@ -186,5 +187,12 @@ export class ManufacturerService {
       '/manufacturer/payments',
       toParams(filters),
     );
+  }
+
+  /** Sus estados de cuenta archivados. Solo lectura: generarlo y reenviarlo es del admin. */
+  statements(): Observable<AccountStatement[]> {
+    return this.api
+      .get<{ data: AccountStatement[] }>('/manufacturer/statements')
+      .pipe(map((r) => r.data));
   }
 }

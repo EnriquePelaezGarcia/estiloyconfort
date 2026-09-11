@@ -1,4 +1,8 @@
 const { pool } = require('../config/database');
+const DocumentSequence = require('./DocumentSequence');
+const mailer = require('../utils/mailer');
+const { buildPaymentReceiptPdf, buildAccountStatementPdf } = require('../utils/pdfDocuments');
+const { savePdf, readStoredFile } = require('../utils/fileStorage');
 
 /**
  * Cuentas por pagar a fabricantes.
@@ -548,6 +552,7 @@ const ManufacturerPayable = {
     const total = Math.round(cleanLines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
 
     const conn = await pool.getConnection();
+    let batchId;
     try {
       await conn.beginTransaction();
       const [res] = await conn.execute(
@@ -567,7 +572,7 @@ const ManufacturerPayable = {
           createdById,
         ],
       );
-      const batchId = res.insertId;
+      batchId = res.insertId;
       for (const line of cleanLines) {
         await conn.execute(
           `INSERT INTO manufacturer_payment_lines (batch_id, source_type, source_id, amount)
@@ -576,13 +581,114 @@ const ManufacturerPayable = {
         );
       }
       await conn.commit();
-      return this.findBatch(batchId);
     } catch (err) {
       await conn.rollback();
       throw err;
     } finally {
       conn.release();
     }
+
+    // El recibo se genera FUERA de la transacción del pago: el pago ya quedó
+    // registrado (lo crítico); si pdfkit o el disco fallan, el batch no se
+    // pierde, solo queda sin recibo (se puede reintentar a mano después).
+    const batch = await this.findBatch(batchId);
+    try {
+      await this._generateBatchReceipt(batch);
+    } catch (err) {
+      console.error(`No se pudo generar el recibo del pago #${batchId}:`, err.message);
+    }
+    return this.findBatch(batchId);
+  },
+
+  /** Folio + PDF del recibo de un pago recién creado. Ver createBatch(). */
+  async _generateBatchReceipt(batch) {
+    const receiptNumber = await DocumentSequence.generateDocumentNumber('receipt', 'REC');
+    const lines = await Promise.all((batch.lines || []).map(async (line) => ({
+      ...line,
+      items: await this._lineItemsWithPhotos(line.sourceType, line.sourceId, batch.manufacturerId),
+    })));
+    const pdfBuffer = await buildPaymentReceiptPdf({ ...batch, lines }, receiptNumber);
+    const pdfPath = savePdf('receipts', `${receiptNumber}.pdf`, pdfBuffer);
+    await pool.execute(
+      `UPDATE manufacturer_payment_batches
+          SET receipt_number = ?, receipt_pdf_path = ?
+        WHERE id = ?`,
+      [receiptNumber, pdfPath, batch.id],
+    );
+  },
+
+  /**
+   * Piezas de un documento con su foto, para el detalle de "Documentos
+   * cubiertos" del recibo en PDF. Deliberadamente aparte de documentDetail()
+   * (que ya trae items, pero sin foto y con cargos/pagos que el PDF no
+   * necesita): así no se le agrega una columna nueva a un DTO que ya
+   * consumen el admin y el portal del fabricante.
+   *
+   * Guardarraíl: la foto priorizada es la del MATERIAL de la línea
+   * (product_images.material_id = material_id de la línea); si no hay
+   * ninguna así, cae a la foto principal (is_primary). Un producto NUEVO de
+   * una OC (sin product_id) nunca tiene foto en BD — queda null a propósito.
+   */
+  async _lineItemsWithPhotos(sourceType, sourceId, manufacturerId) {
+    if (sourceType === 'order') {
+      const [rows] = await pool.execute(
+        `SELECT oi.product_name, oi.quantity, oi.color,
+                (SELECT image_url FROM product_images
+                   WHERE product_id = oi.product_id
+                   ORDER BY (material_id = oi.material_id) DESC, is_primary DESC, order_display, id
+                   LIMIT 1) AS image_url
+           FROM order_items oi
+          WHERE oi.order_id = ? AND oi.manufacturer_id = ?`,
+        [Number(sourceId), Number(manufacturerId)],
+      );
+      return rows.map((r) => ({
+        productName: r.product_name, quantity: Number(r.quantity), color: r.color ?? null,
+        imageUrl: r.image_url ?? null,
+      }));
+    }
+    const [rows] = await pool.execute(
+      `SELECT poi.product_name, poi.quantity, poi.color,
+              CASE WHEN poi.product_id IS NOT NULL THEN (
+                SELECT image_url FROM product_images
+                 WHERE product_id = poi.product_id
+                 ORDER BY (material_id = poi.material_id) DESC, is_primary DESC, order_display, id
+                 LIMIT 1
+              ) ELSE NULL END AS image_url
+         FROM purchase_order_items poi
+        WHERE poi.purchase_order_id = ?`,
+      [Number(sourceId)],
+    );
+    return rows.map((r) => ({
+      productName: r.product_name, quantity: Number(r.quantity), color: r.color ?? null,
+      imageUrl: r.image_url ?? null,
+    }));
+  },
+
+  /** Envía por correo el recibo ya generado de un pago. Botón manual (nunca automático). */
+  async emailReceipt(batchId) {
+    const batch = await this.findBatch(batchId);
+    if (!batch) { const e = new Error('Pago no encontrado'); e.statusCode = 404; throw e; }
+    if (!batch.receiptPdfUrl) {
+      const e = new Error('Este pago todavía no tiene recibo generado'); e.statusCode = 400; throw e;
+    }
+    const [[mfr]] = await pool.execute(
+      'SELECT email FROM manufacturers WHERE id = ?', [batch.manufacturerId],
+    );
+    if (!mfr?.email) {
+      const e = new Error('El fabricante no tiene correo registrado'); e.statusCode = 400; throw e;
+    }
+    const pdfBuffer = readStoredFile(batch.receiptPdfUrl);
+    await mailer.sendManufacturerPaymentReceipt({
+      to: mfr.email,
+      manufacturerName: batch.manufacturerName,
+      receiptNumber: batch.receiptNumber,
+      totalAmount: batch.totalAmount,
+      pdfBuffer,
+    });
+    await pool.execute(
+      'UPDATE manufacturer_payment_batches SET receipt_emailed_at = NOW() WHERE id = ?', [batchId],
+    );
+    return true;
   },
 
   async findBatch(id) {
@@ -595,8 +701,15 @@ const ManufacturerPayable = {
       [id],
     );
     if (!row) return null;
+    // Folios de las líneas, igual que listBatches: sin esto el recibo en PDF
+    // solo podría mostrar "#12" en vez de "EC-2026-0012".
     const [lines] = await pool.execute(
-      'SELECT id, source_type, source_id, amount FROM manufacturer_payment_lines WHERE batch_id = ?',
+      `SELECT l.id, l.source_type, l.source_id, l.amount,
+              COALESCE(o.order_number, po.po_number) AS folio
+         FROM manufacturer_payment_lines l
+         LEFT JOIN orders o          ON l.source_type = 'order'          AND o.id  = l.source_id
+         LEFT JOIN purchase_orders po ON l.source_type = 'purchase_order' AND po.id = l.source_id
+        WHERE l.batch_id = ?`,
       [id],
     );
     return {
@@ -610,6 +723,9 @@ const ManufacturerPayable = {
       periodFrom: row.period_from ?? null,
       periodTo: row.period_to ?? null,
       notes: row.notes ?? null,
+      receiptNumber: row.receipt_number ?? null,
+      receiptPdfUrl: row.receipt_pdf_path ?? null,
+      receiptEmailedAt: row.receipt_emailed_at ?? null,
       createdByName: row.created_by_name ?? null,
       createdAt: row.created_at,
       lines: lines.map((l) => ({
@@ -617,6 +733,7 @@ const ManufacturerPayable = {
         sourceType: l.source_type,
         sourceId: l.source_id,
         amount: Number(l.amount),
+        folio: l.folio ?? `#${l.source_id}`,
       })),
     };
   },
@@ -675,6 +792,9 @@ const ManufacturerPayable = {
       periodFrom: r.period_from ?? null,
       periodTo: r.period_to ?? null,
       notes: r.notes ?? null,
+      receiptNumber: r.receipt_number ?? null,
+      receiptPdfUrl: r.receipt_pdf_path ?? null,
+      receiptEmailedAt: r.receipt_emailed_at ?? null,
       lineCount: Number(r.line_count),
       lines: linesByBatch.get(r.id) ?? [],
     }));
@@ -956,7 +1076,139 @@ const ManufacturerPayable = {
       createdAt: r.created_at,
     }));
   },
+
+  // ─── ESTADO DE CUENTA (historial acumulado, archivado con folio) ───────────
+  // A diferencia del recibo (nace solo con cada pago), este se genera bajo
+  // demanda desde Cuentas por Pagar con un rango de fechas, y queda archivado
+  // para poder consultarlo o reenviarlo después.
+
+  /**
+   * Genera y archiva el estado de cuenta de un fabricante para un periodo.
+   *
+   * `openingBalance`/`closingBalance` usan la MISMA semántica de "saldo" que
+   * el resto del módulo (documentsFor/summarize): el saldo de un documento es
+   * lo pagado A LA FECHA, no lo pagado dentro del periodo. Por eso el saldo
+   * inicial es "documentos devengados antes del periodo, con lo pagado hasta
+   * hoy" y no un corte contable exacto al día anterior — igual de preciso que
+   * lo que ya muestra summaryByManufacturer, solo que fijado en un PDF.
+   */
+  async createStatement({ manufacturerId, periodFrom, periodTo } = {}, createdById = null) {
+    if (!manufacturerId) { const e = new Error('El fabricante es obligatorio'); e.statusCode = 400; throw e; }
+    if (!periodFrom || !periodTo) { const e = new Error('El periodo es obligatorio'); e.statusCode = 400; throw e; }
+
+    const dayBefore = new Date(`${periodFrom}T00:00:00`);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    const openingTo = dayBefore.toISOString().slice(0, 10);
+
+    const [openingDocs, closingDocs, periodDocs, periodPayments, [[manufacturer]]] = await Promise.all([
+      this.documentsFor({ manufacturerId, to: openingTo }),
+      this.documentsFor({ manufacturerId, to: periodTo }),
+      this.documentsFor({ manufacturerId, from: periodFrom, to: periodTo }),
+      this.listBatches({ manufacturerId, from: periodFrom, to: periodTo }),
+      pool.execute('SELECT name FROM manufacturers WHERE id = ?', [Number(manufacturerId)]),
+    ]);
+
+    const openingBalance = this.summarize(openingDocs).balance;
+    const closingBalance = this.summarize(closingDocs).balance;
+    const statementNumber = await DocumentSequence.generateDocumentNumber('statement', 'EDC');
+
+    const statement = {
+      manufacturerId: Number(manufacturerId),
+      manufacturerName: manufacturer?.name ?? null,
+      statementNumber,
+      periodFrom,
+      periodTo,
+      openingBalance,
+      closingBalance,
+      documents: periodDocs,
+      payments: periodPayments,
+    };
+
+    const pdfBuffer = await buildAccountStatementPdf(statement);
+    const pdfPath = savePdf('statements', `${statementNumber}.pdf`, pdfBuffer);
+
+    const [res] = await pool.execute(
+      `INSERT INTO manufacturer_account_statements
+         (manufacturer_id, statement_number, period_from, period_to,
+          opening_balance, closing_balance, pdf_path, created_by_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        Number(manufacturerId), statementNumber, periodFrom, periodTo,
+        openingBalance, closingBalance, pdfPath, createdById,
+      ],
+    );
+    return this.findStatement(res.insertId);
+  },
+
+  async findStatement(id) {
+    const [[row]] = await pool.execute(
+      `SELECT s.*, m.name AS manufacturer_name, u.full_name AS created_by_name
+         FROM manufacturer_account_statements s
+         LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+         LEFT JOIN users u ON u.id = s.created_by_id
+        WHERE s.id = ?`,
+      [id],
+    );
+    return row ? mapStatement(row) : null;
+  },
+
+  /** Historial de estados de cuenta archivados de un fabricante. */
+  async listStatements(manufacturerId) {
+    const [rows] = await pool.execute(
+      `SELECT s.*, m.name AS manufacturer_name, u.full_name AS created_by_name
+         FROM manufacturer_account_statements s
+         LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+         LEFT JOIN users u ON u.id = s.created_by_id
+        WHERE s.manufacturer_id = ?
+        ORDER BY s.period_to DESC, s.id DESC`,
+      [Number(manufacturerId)],
+    );
+    return rows.map(mapStatement);
+  },
+
+  /** Envía por correo un estado de cuenta ya archivado. Botón manual. */
+  async emailStatement(id) {
+    const statement = await this.findStatement(id);
+    if (!statement) { const e = new Error('Estado de cuenta no encontrado'); e.statusCode = 404; throw e; }
+    const [[mfr]] = await pool.execute(
+      'SELECT email FROM manufacturers WHERE id = ?', [statement.manufacturerId],
+    );
+    if (!mfr?.email) {
+      const e = new Error('El fabricante no tiene correo registrado'); e.statusCode = 400; throw e;
+    }
+    const pdfBuffer = readStoredFile(statement.pdfUrl);
+    await mailer.sendManufacturerAccountStatement({
+      to: mfr.email,
+      manufacturerName: statement.manufacturerName,
+      statementNumber: statement.statementNumber,
+      periodFrom: statement.periodFrom,
+      periodTo: statement.periodTo,
+      pdfBuffer,
+    });
+    await pool.execute(
+      'UPDATE manufacturer_account_statements SET emailed_at = NOW() WHERE id = ?', [id],
+    );
+    return true;
+  },
 };
+
+/** Mapea una fila de manufacturer_account_statements a su DTO. */
+function mapStatement(row) {
+  return {
+    id: row.id,
+    manufacturerId: row.manufacturer_id,
+    manufacturerName: row.manufacturer_name ?? null,
+    statementNumber: row.statement_number,
+    periodFrom: row.period_from,
+    periodTo: row.period_to,
+    openingBalance: Number(row.opening_balance),
+    closingBalance: Number(row.closing_balance),
+    pdfUrl: row.pdf_path,
+    createdByName: row.created_by_name ?? null,
+    createdAt: row.created_at,
+    emailedAt: row.emailed_at ?? null,
+  };
+}
 
 /** Solo para tests unitarios (sin BD). */
 ManufacturerPayable._internals = { poPayableAccrual };

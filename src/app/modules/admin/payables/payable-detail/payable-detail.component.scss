@@ -35,6 +35,30 @@
   }
 }
 
+// ── Selección manual de documentos a pagar ──────────────────────────────────
+.panel__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: vars.$color-text-secondary;
+  flex-wrap: wrap;
+}
+
+.btn--sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+}
+
 .table__num { text-align: right; }
 .table__actions { text-align: right; white-space: nowrap; }
 
@@ -148,6 +172,21 @@
     font-family: vars.$font-headline;
     font-size: 1.4rem;
     color: vars.$color-primary;
+  }
+}
+
+// ── Estado de cuenta ────────────────────────────────────────────────────────
+.statement-form {
+  grid-template-columns: auto auto 1fr;
+  align-items: end;
+  margin-bottom: vars.$spacing-md;
+
+  .btn { white-space: nowrap; }
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr 1fr;
+
+    .btn { grid-column: 1 / -1; }
   }
 }
 
