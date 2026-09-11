@@ -99,10 +99,19 @@
 
   &__title {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.5rem 0.65rem;
     margin-bottom: 0.2rem;
+  }
+
+  &__thumb {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
   }
 
   &__name { font-size: 1rem; font-weight: 700; line-height: 1.3; color: vars.$color-text; }

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
@@ -28,6 +29,7 @@ export class FactoryOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
   private route = inject(ActivatedRoute);
+  private destroyRef = inject(DestroyRef);
 
   protected rows = signal<FactoryOrderItemRow[]>([]);
   protected manufacturers = signal<Manufacturer[]>([]);
@@ -120,8 +122,16 @@ export class FactoryOrdersComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const raw = this.route.snapshot.queryParamMap.get('item');
-    this.focusItemId.set(raw ? Number(raw) : null);
+    // El link "Mensajes" de una notificación apunta a esta misma ruta con solo
+    // el query param distinto: si ya estabas en /admin/fabricante/pedidos-fabrica,
+    // Angular reutiliza el componente y ngOnInit no vuelve a correr. Suscribirse
+    // al observable (no solo leer el snapshot) hace que el segundo click también
+    // aterrice y abra el hilo, no solo la primera navegación.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const raw = params.get('item');
+      this.focusItemId.set(raw ? Number(raw) : null);
+      if (!this.loading()) this.scrollToFocusedItem();
+    });
     this.load();
   }
 

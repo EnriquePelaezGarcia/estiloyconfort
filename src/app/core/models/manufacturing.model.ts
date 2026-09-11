@@ -180,6 +180,7 @@ export interface FactoryOrderItemRow {
   productId: number | null;
   productName: string;
   productSku: string | null;
+  imageUrl: string | null;
   /** Material y color de la línea (M4/M7) — ya no del pedido completo. */
   materialId: number;
   materialLabel: string;

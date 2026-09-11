@@ -46,6 +46,9 @@
           @for (r of g.items; track r.itemId) {
             <div class="item" [attr.id]="'item-' + r.itemId">
               <div class="item__title">
+                @if (r.imageUrl) {
+                  <img class="item__thumb" [src]="r.imageUrl | mediaUrl:'thumb'" [alt]="r.productName" width="56" height="56" />
+                }
                 <span class="item__name">{{ r.productName }}</span>
                 <span class="muted">{{ r.productSku }}</span>
               </div>

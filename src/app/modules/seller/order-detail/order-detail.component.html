@@ -532,7 +532,7 @@
                   </ul>
                 }
               </dd>
-              <app-item-messages [itemId]="it.id!" />
+              <app-item-messages [itemId]="it.id!" [autoOpen]="focusItemId() === it.id" />
             </div>
           }
         }

@@ -776,7 +776,11 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
             wr.full_name AS warehouse_received_by_name, oi.warehouse_received_at,
             rb.full_name AS ready_by_name,
             oi.product_id, oi.unit_price, oi.unit_cost,
-            oi.manufacturer_id, m.name AS manufacturer_name
+            oi.manufacturer_id, m.name AS manufacturer_name,
+            (SELECT pi.image_url FROM product_images pi
+              WHERE pi.product_id = oi.product_id
+              ORDER BY (pi.material_id = oi.material_id) DESC, pi.is_primary DESC, pi.order_display, pi.id
+              LIMIT 1) AS image_url
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
@@ -811,6 +815,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         productId: r.product_id ?? null,
         productName: r.product_name,
         productSku: r.product_sku,
+        imageUrl: r.image_url ?? null,
         materialId: r.material_id,
         materialLabel: r.material_label,
         sizeId: r.size_id ?? null,

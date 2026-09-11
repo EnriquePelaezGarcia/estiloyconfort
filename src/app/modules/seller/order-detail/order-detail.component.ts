@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { combineLatest } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -86,6 +87,7 @@ export class OrderDetailComponent implements OnInit {
   private router = inject(Router);
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
+  private destroyRef = inject(DestroyRef);
 
   protected order = signal<Order | null>(null);
   protected loading = signal(true);
@@ -453,10 +455,25 @@ export class OrderDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    const id = Number(this.route.snapshot.paramMap.get('id'));
-    const rawItem = this.route.snapshot.queryParamMap.get('item');
-    this.focusItemId.set(rawItem ? Number(rawItem) : null);
-    this.load(id);
+    // El link "Mensajes" de una notificación puede apuntar a otro pedido (o a
+    // otro producto del mismo pedido) mientras ya estás en /pedidos/:id:
+    // Angular reutiliza el componente y ngOnInit no vuelve a correr. Suscribirse
+    // a los observables (no solo leer el snapshot) hace que ese segundo click
+    // también recargue y aterrice, no solo la primera navegación.
+    let lastId: number | null = null;
+    combineLatest([this.route.paramMap, this.route.queryParamMap])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([params, query]) => {
+        const id = Number(params.get('id'));
+        const rawItem = query.get('item');
+        this.focusItemId.set(rawItem ? Number(rawItem) : null);
+        if (id !== lastId) {
+          lastId = id;
+          this.load(id);
+        } else if (!this.loading()) {
+          this.scrollToFocusedItem();
+        }
+      });
 
     this.sellerService.getCreditConfig().subscribe({
       next: ({ data }) => {
