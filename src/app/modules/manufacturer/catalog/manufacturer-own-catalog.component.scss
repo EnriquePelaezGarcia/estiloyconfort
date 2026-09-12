@@ -1,4 +1,41 @@
-// Sin estilos propios: reutiliza las clases globales de tabla/página (_business.scss).
+@use '../../../../styles/variables' as vars;
+
+// ===== Miniatura en la columna "Producto" =====
+.product-cell {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+}
+
+.product-cell__thumb-btn {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  flex-shrink: 0;
+
+  &:hover .product-cell__thumb { opacity: 0.85; }
+}
+
+.product-cell__thumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: vars.$radius-sm;
+  border: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+
+  &--empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1.2rem; }
+  }
+}
 
 .cost-chip {
   display: inline-block;

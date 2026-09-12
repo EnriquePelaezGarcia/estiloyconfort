@@ -964,6 +964,8 @@ export interface ManufacturerOwnCatalogItem {
   productId: number;
   name: string;
   sku: string | null;
+  /** Imagen principal del producto (ruta relativa; usar el pipe `mediaUrl`). null si no tiene fotos. */
+  primaryImage: string | null;
   costs: Array<{ materialId: number; materialCode: string; materialLabel: string; cost: number }>;
 }
 

@@ -32,7 +32,30 @@
       <tbody>
         @for (item of filteredItems(); track item.productId) {
           <tr>
-            <td data-label="Producto" class="strong">{{ item.name }}</td>
+            <td data-label="Producto" class="strong">
+              <div class="product-cell">
+                @if (item.primaryImage) {
+                  <button
+                    type="button"
+                    class="product-cell__thumb-btn"
+                    (click)="openZoom(item.primaryImage, item.name)"
+                    title="Ver imagen en grande"
+                  >
+                    <img
+                      class="product-cell__thumb"
+                      [src]="item.primaryImage | mediaUrl: 'thumb'"
+                      [alt]="item.name"
+                      loading="lazy"
+                    />
+                  </button>
+                } @else {
+                  <span class="product-cell__thumb product-cell__thumb--empty">
+                    <span class="material-symbols-outlined">image</span>
+                  </span>
+                }
+                <span>{{ item.name }}</span>
+              </div>
+            </td>
             <td data-label="SKU" class="muted">{{ item.sku ?? '—' }}</td>
             <td data-label="Costos por material">
               @for (c of item.costs; track c.materialId) {
@@ -48,4 +71,9 @@
       </tbody>
     </table>
   </div>
+}
+
+<!-- ===== Ver foto en grande ===== -->
+@if (zoomedImage(); as zoomed) {
+  <app-image-lightbox [src]="(zoomed.src | mediaUrl) ?? ''" [alt]="zoomed.alt" (closed)="zoomedImage.set(null)" />
 }

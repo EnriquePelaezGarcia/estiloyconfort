@@ -258,7 +258,9 @@ const manufacturerController = {
     // Sin JOIN a product_material_prices ni a las vistas: si la consulta no
     // puede alcanzar los precios de venta, no puede filtrarlos por error.
     const [rows] = await pool.execute(
-      `SELECT p.id AS product_id, p.name, p.sku, pmc.material_id, mat.code, mat.label, pmc.cost
+      `SELECT p.id AS product_id, p.name, p.sku, pmc.material_id, mat.code, mat.label, pmc.cost,
+              (SELECT image_url FROM product_images WHERE product_id = p.id
+                 ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
          FROM product_manufacturer_costs pmc
          JOIN products p ON p.id = pmc.product_id
          JOIN materials mat ON mat.id = pmc.material_id
@@ -269,7 +271,13 @@ const manufacturerController = {
     const byProduct = new Map();
     for (const r of rows) {
       if (!byProduct.has(r.product_id)) {
-        byProduct.set(r.product_id, { productId: r.product_id, name: r.name, sku: r.sku, costs: [] });
+        byProduct.set(r.product_id, {
+          productId: r.product_id,
+          name: r.name,
+          sku: r.sku,
+          primaryImage: r.primary_image ?? null,
+          costs: [],
+        });
       }
       byProduct.get(r.product_id).costs.push({
         materialId: r.material_id,

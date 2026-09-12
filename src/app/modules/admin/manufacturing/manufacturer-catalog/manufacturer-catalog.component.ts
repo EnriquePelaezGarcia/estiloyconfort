@@ -10,13 +10,15 @@ import {
 } from '../../../../core/models/manufacturing.model';
 import { MaterialsStore } from '../../../../core/services/materials.store';
 import { formatPhoneDigits, formatPhoneForDisplay, normalizePhone, phoneValidator } from '../../../../core/utils/phone';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../../shared/components/image-lightbox/image-lightbox.component';
 
 @Component({
   selector: 'app-manufacturer-catalog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-catalog.component.html',
   styleUrl: './manufacturer-catalog.component.scss',
-  imports: [CurrencyPipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, ReactiveFormsModule, MediaUrlPipe, ImageLightboxComponent],
 })
 export class ManufacturerCatalogComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
@@ -29,6 +31,9 @@ export class ManufacturerCatalogComponent implements OnInit {
   protected loading = signal(true);
   protected selectedManufacturer = signal<number | null>(null);
   protected readonly materials = this.materialsStore.active;
+
+  /** Foto del listado abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
 
   /** Fabricante en edición (null = formulario cerrado, 0 = alta nueva). */
   protected editing = signal<number | null>(null);
@@ -73,6 +78,11 @@ export class ManufacturerCatalogComponent implements OnInit {
         this.notification.error('No se pudo cargar el catálogo');
       },
     });
+  }
+
+  // ===== Ver foto en grande =====
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
   }
 
   protected onFilterChange(event: Event): void {

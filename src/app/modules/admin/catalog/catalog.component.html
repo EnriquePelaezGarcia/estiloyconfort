@@ -47,12 +47,19 @@
             <td data-label="Producto" class="strong">
               <div class="product-cell">
                 @if (product.primary_image) {
-                  <img
-                    class="product-cell__thumb"
-                    [src]="product.primary_image | mediaUrl: 'thumb'"
-                    [alt]="product.name"
-                    loading="lazy"
-                  />
+                  <button
+                    type="button"
+                    class="product-cell__thumb-btn"
+                    (click)="openZoom(product.primary_image, product.name)"
+                    title="Ver imagen en grande"
+                  >
+                    <img
+                      class="product-cell__thumb"
+                      [src]="product.primary_image | mediaUrl: 'thumb'"
+                      [alt]="product.name"
+                      loading="lazy"
+                    />
+                  </button>
                 } @else {
                   <span class="product-cell__thumb product-cell__thumb--empty">
                     <span class="material-symbols-outlined">image</span>
@@ -640,4 +647,9 @@
       </div>
     </div>
   </div>
+}
+
+<!-- ===== Ver foto en grande ===== -->
+@if (zoomedImage(); as zoomed) {
+  <app-image-lightbox [src]="(zoomed.src | mediaUrl) ?? ''" [alt]="zoomed.alt" (closed)="zoomedImage.set(null)" />
 }

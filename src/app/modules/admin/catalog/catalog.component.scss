@@ -26,6 +26,17 @@
   gap: vars.$spacing-sm;
 }
 
+.product-cell__thumb-btn {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  flex-shrink: 0;
+
+  &:hover .product-cell__thumb { opacity: 0.85; }
+}
+
 .product-cell__thumb {
   width: 44px;
   height: 44px;

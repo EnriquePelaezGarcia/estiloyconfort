@@ -3,6 +3,8 @@ import { CurrencyPipe } from '@angular/common';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ManufacturerOwnCatalogItem } from '../../../core/models/order.model';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 /**
  * "Mis precios" (Fase 6bis.2, D14): el fabricante ve SOLO sus tres costos por
@@ -14,7 +16,7 @@ import { ManufacturerOwnCatalogItem } from '../../../core/models/order.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-own-catalog.component.html',
   styleUrl: './manufacturer-own-catalog.component.scss',
-  imports: [CurrencyPipe],
+  imports: [CurrencyPipe, MediaUrlPipe, ImageLightboxComponent],
 })
 export class ManufacturerOwnCatalogComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -23,6 +25,13 @@ export class ManufacturerOwnCatalogComponent implements OnInit {
   protected items = signal<ManufacturerOwnCatalogItem[]>([]);
   protected loading = signal(true);
   protected search = signal('');
+
+  /** Foto del listado abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
+
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
+  }
 
   protected filteredItems = computed(() => {
     const term = this.search().trim().toLowerCase();
