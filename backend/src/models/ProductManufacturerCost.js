@@ -169,9 +169,49 @@ const ProductManufacturerCost = {
            cost = VALUES(cost), affects_base_cost = VALUES(affects_base_cost), is_active = TRUE`,
         [productId, manufacturerId, materialId, sid, cost, affectsBaseCost ? 1 : 0],
       );
+      await this._propagateCostToOpenOrderItems(productId, manufacturerId, materialId, sid, cost);
     }
     await syncMaterialPricesAndReprice(productId);
     return this.findByProduct(productId);
+  },
+
+  /**
+   * Empuja el costo nuevo del catálogo a los `order_items` de ESTE fabricante
+   * que todavía NO son una deuda cerrada: sin recibir en bodega
+   * (`manufacturer_delivered_at IS NULL`) y sin ningún pago aplicado a su
+   * pedido. Antes de eso el costo es "vigente", no un compromiso ya
+   * liquidado — decisión explícita de negocio (2026-09-12): si el catálogo
+   * cambia, esos pedidos deben reflejarlo tanto para el admin (cuentas por
+   * pagar) como para el fabricante (su historial), que leen `unit_cost` de
+   * aquí sin más lógica propia.
+   *
+   * En cuanto bodega lo recibe o se le paga algo (aunque sea un anticipo), el
+   * costo se congela para siempre: ya es historia y no debe moverse solo.
+   *
+   * Nunca toca órdenes de compra (`purchase_order_items`): son un documento
+   * aparte, no un pedido de cliente.
+   */
+  async _propagateCostToOpenOrderItems(productId, manufacturerId, materialId, sizeId, cost) {
+    await pool.execute(
+      `UPDATE order_items oi
+          JOIN orders o ON o.id = oi.order_id
+          SET oi.unit_cost = ?
+        WHERE oi.product_id = ?
+          AND oi.manufacturer_id = ?
+          AND oi.material_id = ?
+          AND COALESCE(oi.size_id, 0) = ?
+          AND oi.manufacturer_delivered_at IS NULL
+          AND o.order_status <> 'cancelled'
+          AND NOT EXISTS (
+            SELECT 1
+              FROM manufacturer_payment_lines l
+              JOIN manufacturer_payment_batches b ON b.id = l.batch_id
+             WHERE l.source_type = 'order'
+               AND l.source_id = oi.order_id
+               AND b.manufacturer_id = oi.manufacturer_id
+          )`,
+      [cost, productId, manufacturerId, materialId, sizeId],
+    );
   },
 
   /** Quita un fabricante del producto (todas sus celdas) y reprecia. */
