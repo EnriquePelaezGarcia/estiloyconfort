@@ -22,54 +22,47 @@
 } @else if (filteredItems().length === 0) {
   <p class="empty">Aún no tienes costos registrados.</p>
 } @else {
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead>
-        <tr>
-          <th>Producto</th><th>SKU</th><th>Costos por material</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (item of filteredItems(); track item.productId) {
-          <tr>
-            <td data-label="Producto" class="strong">
-              <div class="product-cell">
-                @if (item.primaryImage) {
-                  <button
-                    type="button"
-                    class="product-cell__thumb-btn"
-                    (click)="openZoom(item.primaryImage, item.name)"
-                    title="Ver imagen en grande"
-                  >
-                    <img
-                      class="product-cell__thumb"
-                      [src]="item.primaryImage | mediaUrl: 'thumb'"
-                      [alt]="item.name"
-                      loading="lazy"
-                    />
-                  </button>
-                } @else {
-                  <span class="product-cell__thumb product-cell__thumb--empty">
-                    <span class="material-symbols-outlined">image</span>
-                  </span>
-                }
-                <span>{{ item.name }}</span>
+  <div class="products">
+    @for (item of filteredItems(); track item.productId) {
+      <article class="panel product-card">
+        <div class="product-card__head">
+          @if (item.primaryImage) {
+            <button
+              type="button"
+              class="product-card__photo"
+              title="Ver imagen en grande"
+              (click)="openZoom(item.primaryImage, item.name)"
+            >
+              <img [src]="item.primaryImage | mediaUrl: 'thumb'" [alt]="item.name" loading="lazy" />
+              <span class="product-card__photo-hint material-symbols-outlined">zoom_in</span>
+            </button>
+          } @else {
+            <span class="product-card__photo product-card__photo--empty">
+              <span class="material-symbols-outlined">image</span>
+            </span>
+          }
+          <div class="product-card__title">
+            <span class="product-card__name">{{ item.name }}</span>
+            @if (item.sku) {
+              <span class="product-card__sku">{{ item.sku }}</span>
+            }
+          </div>
+        </div>
+
+        @if (item.costs.length) {
+          <dl class="costs-grid">
+            @for (c of item.costs; track c.materialId) {
+              <div class="costs-grid__cell">
+                <dt>{{ c.materialLabel }}</dt>
+                <dd>{{ c.cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd>
               </div>
-            </td>
-            <td data-label="SKU" class="muted">{{ item.sku ?? '—' }}</td>
-            <td data-label="Costos por material">
-              @for (c of item.costs; track c.materialId) {
-                <span class="cost-chip">
-                  {{ c.materialLabel }}: {{ c.cost | currency:'MXN':'symbol-narrow':'1.2-2' }}
-                </span>
-              } @empty {
-                <span class="muted">No aplica</span>
-              }
-            </td>
-          </tr>
+            }
+          </dl>
+        } @else {
+          <p class="muted product-card__no-costs">Sin costos capturados.</p>
         }
-      </tbody>
-    </table>
+      </article>
+    }
   </div>
 }
 

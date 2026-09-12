@@ -77,6 +77,7 @@
         <thead>
           <tr>
             <th></th>
+            <th></th>
             <th>Tipo</th>
             <th>Folio</th>
             <th>Referencia</th>
@@ -92,6 +93,19 @@
         <tbody>
           @for (d of documents(); track d.sourceType + d.sourceId) {
             <tr>
+              <td>
+                <button
+                  type="button"
+                  class="icon-btn expand-toggle"
+                  (click)="toggleExpand(d)"
+                  [attr.aria-expanded]="isExpanded(d)"
+                  [title]="isExpanded(d) ? 'Ocultar piezas' : 'Ver piezas'"
+                >
+                  <span class="material-symbols-outlined">
+                    {{ isExpanded(d) ? 'expand_less' : 'expand_more' }}
+                  </span>
+                </button>
+              </td>
               <td>
                 @if (d.balance > 0.005) {
                   <input
@@ -141,9 +155,53 @@
                 }
               </td>
             </tr>
+            @if (isExpanded(d)) {
+              <tr class="detail-row">
+                <td [attr.colspan]="12">
+                  @if (isLoadingItems(d)) {
+                    <div class="state state--sm"><span class="spinner spinner--sm"></span> Cargando piezas...</div>
+                  } @else if (itemsFor(d).length) {
+                    <div class="items-grid">
+                      @for (it of itemsFor(d); track it.id) {
+                        <div class="item-row">
+                          @if (it.imageUrl) {
+                            <button
+                              type="button"
+                              class="item-row__photo"
+                              title="Ver foto en grande"
+                              (click)="zoomedImage.set(it.imageUrl)"
+                            >
+                              <img [src]="it.imageUrl | mediaUrl: 'thumb'" [alt]="it.productName" loading="lazy" />
+                            </button>
+                          } @else {
+                            <span class="item-row__photo item-row__photo--empty">
+                              <span class="material-symbols-outlined">inventory_2</span>
+                            </span>
+                          }
+                          <div class="item-row__info">
+                            <strong class="item-row__name">{{ it.productName }}</strong>
+                            <span class="item-row__meta">
+                              @if (it.materialLabel) { <span>{{ it.materialLabel }}</span> }
+                              @if (it.color) { <span>{{ it.color }}</span> }
+                              @if (!it.materialLabel && !it.color) { <span class="table__hint">Sin color/material</span> }
+                            </span>
+                          </div>
+                          <div class="item-row__price">
+                            <span>{{ it.unitCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }} c/u × {{ it.quantity }}</span>
+                            <strong>{{ it.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="empty">Este documento no tiene piezas registradas.</p>
+                  }
+                </td>
+              </tr>
+            }
           } @empty {
             <tr>
-              <td colspan="11" class="empty">Sin documentos en este período.</td>
+              <td colspan="12" class="empty">Sin documentos en este período.</td>
             </tr>
           }
         </tbody>
@@ -436,4 +494,9 @@
       </form>
     </div>
   </div>
+}
+
+<!-- ── FOTO AMPLIADA DE UNA PIEZA ────────────────────────────────────────── -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox [src]="(img | mediaUrl) ?? ''" (closed)="zoomedImage.set(null)" />
 }

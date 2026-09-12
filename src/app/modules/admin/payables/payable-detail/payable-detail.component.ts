@@ -3,12 +3,15 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../../shared/components/image-lightbox/image-lightbox.component';
 import { PayablesService } from '../../../../core/services/payables.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { mediaUrl } from '../../../../core/utils/media-url';
 import {
   AccountStatement,
   PayableDocument,
+  PayableItem,
   PayablePaymentMethod,
   PaymentBatch,
 } from '../../../../core/models/payable.model';
@@ -43,7 +46,15 @@ interface CutLine {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './payable-detail.component.html',
   styleUrl: './payable-detail.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, CurrencyInputDirective],
+  imports: [
+    CurrencyPipe,
+    DatePipe,
+    ReactiveFormsModule,
+    RouterLink,
+    CurrencyInputDirective,
+    MediaUrlPipe,
+    ImageLightboxComponent,
+  ],
 })
 export class PayableDetailComponent implements OnInit {
   /** Viene de la ruta `cuentas-por-pagar/:manufacturerId`. */
@@ -126,6 +137,66 @@ export class PayableDetailComponent implements OnInit {
 
   protected clearSelection(): void {
     this.selectedKeys.set(new Set());
+  }
+
+  // ─── FILA EXPANDIBLE: PIEZAS DEL DOCUMENTO ──────────────────────────────────
+  // Se pide bajo demanda (no viene en `documents()`) para no cargar fotos de
+  // TODAS las OC/pedidos del período de una sola vez. Se cachea por clave de
+  // documento para no repetir la llamada si se pliega y se vuelve a abrir.
+  protected expandedKeys = signal<Set<string>>(new Set());
+  protected itemsCache = signal<Record<string, PayableItem[]>>({});
+  protected loadingItemsKeys = signal<Set<string>>(new Set());
+  /** Foto ampliada de una pieza (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
+
+  protected isExpanded(d: PayableDocument): boolean {
+    return this.expandedKeys().has(this.docKey(d));
+  }
+
+  protected isLoadingItems(d: PayableDocument): boolean {
+    return this.loadingItemsKeys().has(this.docKey(d));
+  }
+
+  protected itemsFor(d: PayableDocument): PayableItem[] {
+    return this.itemsCache()[this.docKey(d)] ?? [];
+  }
+
+  protected toggleExpand(d: PayableDocument): void {
+    const key = this.docKey(d);
+    const isOpen = this.expandedKeys().has(key);
+    this.expandedKeys.update((keys) => {
+      const next = new Set(keys);
+      if (isOpen) next.delete(key); else next.add(key);
+      return next;
+    });
+    if (!isOpen && !this.itemsCache()[key]) {
+      this.loadItems(d);
+    }
+  }
+
+  private loadItems(d: PayableDocument): void {
+    const key = this.docKey(d);
+    this.loadingItemsKeys.update((keys) => new Set(keys).add(key));
+    this.payablesService
+      .documentDetail(d.sourceType, d.sourceId, Number(this.manufacturerId()))
+      .subscribe({
+        next: (detail) => {
+          this.itemsCache.update((cache) => ({ ...cache, [key]: detail.items }));
+          this.loadingItemsKeys.update((keys) => {
+            const next = new Set(keys);
+            next.delete(key);
+            return next;
+          });
+        },
+        error: () => {
+          this.notification.error('No se pudieron cargar las piezas del documento');
+          this.loadingItemsKeys.update((keys) => {
+            const next = new Set(keys);
+            next.delete(key);
+            return next;
+          });
+        },
+      });
   }
 
   /** Abre el modal de pago con los documentos que el admin acaba de marcar. */

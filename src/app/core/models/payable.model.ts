@@ -82,6 +82,7 @@ export interface PayableItem {
   id: number;
   productName: string;
   productSku: string | null;
+  imageUrl: string | null;
   materialLabel: string | null;
   color: string | null;
   quantity: number;

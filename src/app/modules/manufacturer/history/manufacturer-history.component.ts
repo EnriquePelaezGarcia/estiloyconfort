@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { mediaUrl } from '../../../core/utils/media-url';
+import { mediaUrl, mediaThumbUrl } from '../../../core/utils/media-url';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import {
   AccountStatement,
   PayableCharge,
@@ -39,7 +40,7 @@ type Period = 'week' | 'month' | 'year';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-history.component.html',
   styleUrl: './manufacturer-history.component.scss',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent],
 })
 export class ManufacturerHistoryComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -54,6 +55,14 @@ export class ManufacturerHistoryComponent implements OnInit {
   protected readonly methodLabels = PAYABLE_METHOD_LABELS;
 
   protected readonly mediaUrl = mediaUrl;
+  protected readonly mediaThumbUrl = mediaThumbUrl;
+
+  /** Foto de la pieza abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
+
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
+  }
 
   protected documents = signal<PayableDocument[]>([]);
   protected payments = signal<PaymentBatch[]>([]);

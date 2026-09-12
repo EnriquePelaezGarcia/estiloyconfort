@@ -1,9 +1,21 @@
 @use '../../../../styles/variables' as vars;
 
+// =====================================================================
+// "Historial y pagos" — el fabricante lo abre SIEMPRE desde el celular.
+// Las tres tablas (Detalle, Pagos recibidos, Estados de cuenta) se
+// reemplazan por tarjetas, una sola columna, mismo lenguaje visual que
+// "Por fabricar" y "Mis precios": etiqueta chica arriba, valor abajo
+// (nunca "etiqueta: valor" en la misma línea).
+// =====================================================================
+
+.muted { color: vars.$color-text-secondary; }
+
 .toolbar__filters {
   display: flex;
   gap: vars.$spacing-sm;
   flex-wrap: wrap;
+
+  .filter-select { flex: 1 1 200px; }
 }
 
 .filters__periods {
@@ -45,13 +57,6 @@
   &__hint { font-size: 0.78rem; }
 }
 
-.table__num { text-align: right; }
-
-.table__hint {
-  font-size: 0.75rem;
-  color: vars.$color-text-secondary;
-}
-
 .badge--sm {
   display: inline-block;
   margin-top: 0.2rem;
@@ -59,58 +64,300 @@
   padding: 0.1rem 0.4rem;
 }
 
-.row--clickable {
-  cursor: pointer;
-
-  &:hover { background: vars.$color-bg; }
-}
-
 .expand-icon {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   color: vars.$color-text-secondary;
+  flex-shrink: 0;
 }
 
-.row--detail > td {
-  background: vars.$color-bg;
-  padding: vars.$spacing-sm vars.$spacing-md;
-}
+// ===== Etiqueta chica arriba + valor abajo, en cuadrícula (igual que
+// "Por fabricar" / "Mis precios") =====
+.attrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: vars.$spacing-sm;
+  margin: vars.$spacing-md 0 0;
 
-.subtable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-
-  th {
-    text-align: left;
-    padding: 0.3rem 0.5rem;
-    color: vars.$color-text-secondary;
-    font-weight: 600;
-    border-bottom: 1px solid vars.$color-border;
+  &--compact {
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.6rem;
   }
 
-  td {
-    padding: 0.35rem 0.5rem;
-    border-bottom: 1px solid rgba(vars.$color-border, 0.5);
+  &__cell {
+    padding: 0.5rem 0.65rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+
+    dt {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: vars.$color-text-secondary;
+      margin-bottom: 0.2rem;
+    }
+
+    dd {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: vars.$color-text;
+      word-break: break-word;
+    }
+
+    &--highlight {
+      background: rgba(vars.$color-gold, 0.12);
+
+      dt { color: #8a6d08; }
+      dd { color: vars.$color-primary; font-weight: 700; }
+    }
+  }
+}
+
+// ===== Detalle: una tarjeta por documento =====
+.docs {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.doc-card {
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  padding: vars.$spacing-sm vars.$spacing-md vars.$spacing-md;
+  background: vars.$color-surface;
+
+  &--open { border-color: rgba(vars.$color-primary, 0.35); }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+    width: 100%;
+    padding: 0.3rem 0;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  &__head-text {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  &__folio {
+    font-size: 1rem;
+    font-weight: 700;
+    color: vars.$color-primary;
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.3rem;
+  }
+
+  &__detail {
+    margin-top: vars.$spacing-md;
+    padding-top: vars.$spacing-md;
+    border-top: 1px solid vars.$color-border;
+  }
+}
+
+// ===== Piezas del documento, dentro del detalle expandido =====
+.pieces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.piece {
+  padding: vars.$spacing-sm 0;
+  border-top: 1px solid vars.$color-border;
+
+  &:first-child { border-top: none; padding-top: 0; }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+  }
+
+  &__photo {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    overflow: hidden;
+    background: vars.$color-surface;
+    cursor: zoom-in;
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    &--empty {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: vars.$color-text-secondary;
+      cursor: default;
+
+      .material-symbols-outlined { font-size: 1.2rem; }
+    }
+  }
+
+  &__name {
+    font-weight: 600;
+    color: vars.$color-text;
+  }
+}
+
+.charge-list {
+  list-style: none;
+  margin: vars.$spacing-md 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+
+  li {
+    padding: 0.5rem 0.65rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+  }
+}
+
+// ===== Pagos recibidos =====
+.payments {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.payment-card {
+  display: block;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  padding: vars.$spacing-md;
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+  }
+
+  &__date {
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__amount {
+    font-size: 1.05rem;
+    color: vars.$color-primary;
   }
 }
 
 .folios {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
 }
 
 .folio-chip {
   display: inline-flex;
   align-items: baseline;
   gap: 0.25rem;
-  padding: 0.15rem 0.45rem;
+  padding: 0.2rem 0.5rem;
   background: vars.$color-bg;
   border: 1px solid vars.$color-border;
   border-radius: vars.$radius-sm;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
 
   small { color: vars.$color-text-secondary; }
+}
+
+// ===== Estados de cuenta =====
+.statements {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+}
+
+.statement-card {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  padding: vars.$spacing-md;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color vars.$transition-base;
+
+  &:hover { border-color: vars.$color-primary; }
+
+  &__icon {
+    flex-shrink: 0;
+    color: vars.$color-error;
+    font-size: 1.6rem;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__folio {
+    font-weight: 700;
+    color: vars.$color-primary;
+  }
+
+  &__period {
+    font-size: 0.82rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__balance {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    text-align: right;
+    flex-shrink: 0;
+
+    strong { font-size: 1rem; color: vars.$color-text; }
+  }
+}
+
+.attrs__cell-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: vars.$color-text-secondary;
 }
 
 // El fabricante imprime este estado de cuenta para cobrar: los filtros y
@@ -118,4 +365,51 @@
 @media print {
   .no-print,
   .toolbar { display: none !important; }
+}
+
+// ===== Stat cards en celular: las 4 (Documentos, Piezas, Monto del período,
+// Saldo por cobrar) caben en una sola fila en vez de apilarse una por
+// renglón. Compacta solo para esta pantalla — .stat-grid/.stat-card son
+// clases compartidas, pero al vivir en el SCSS de este componente (encapsulado
+// por Angular) el ajuste no se filtra a otras páginas que también las usan. =====
+@media (max-width: vars.$bp-tablet) {
+  .stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.4rem;
+  }
+
+  .stat-card {
+    // width:100% + box-sizing explícitos: la tarjeta debe llenar su columna
+    // del grid sí o sí, no depender de que el "stretch" por defecto del grid
+    // se comporte como se espera. Documentos/Piezas (2 renglones, texto
+    // corto) fue donde se notó que sin esto la tarjeta se encogía a su
+    // contenido en vez de ocupar el ancho completo de la columna.
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    // La tarjeta con más renglones (Monto del período trae hint) estira la
+    // altura de toda la fila del grid; sin esto, las tarjetas más cortas
+    // (Documentos/Piezas, sin hint) quedaban pegadas arriba dentro de esa
+    // altura de más en vez de centrar su contenido en ella.
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0.5rem 0.3rem;
+    text-align: center;
+
+    &__icon { display: none; }
+    &__label,
+    &__value,
+    &__hint {
+      display: block;
+      width: 100%;
+      text-align: center;
+    }
+    &__label {
+      font-size: 0.58rem;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+    }
+    &__value { font-size: 0.92rem; line-height: 1.2; }
+    &__hint { font-size: 0.6rem; line-height: 1.15; }
+  }
 }

@@ -386,7 +386,11 @@ const ManufacturerPayable = {
     if (sourceType === 'order') {
       const [rows] = await pool.execute(
         `SELECT oi.id, oi.product_name, oi.product_sku, oi.material_label, oi.color,
-                oi.quantity, oi.unit_cost, oi.is_ready, oi.manufacturer_delivered_at
+                oi.quantity, oi.unit_cost, oi.is_ready, oi.manufacturer_delivered_at,
+                (SELECT image_url FROM product_images
+                   WHERE product_id = oi.product_id
+                   ORDER BY (material_id = oi.material_id) DESC, is_primary DESC, order_display, id
+                   LIMIT 1) AS image_url
            FROM order_items oi
           WHERE oi.order_id = ? AND oi.manufacturer_id = ?`,
         [Number(sourceId), Number(manufacturerId)],
@@ -395,6 +399,7 @@ const ManufacturerPayable = {
         id: r.id,
         productName: r.product_name,
         productSku: r.product_sku ?? null,
+        imageUrl: r.image_url ?? null,
         materialLabel: r.material_label ?? null,
         color: r.color ?? null,
         quantity: Number(r.quantity),
@@ -405,14 +410,21 @@ const ManufacturerPayable = {
       }));
     } else {
       const [rows] = await pool.execute(
-        `SELECT id, product_name, product_sku, quantity, unit_cost, subtotal
-           FROM purchase_order_items WHERE purchase_order_id = ?`,
+        `SELECT poi.id, poi.product_name, poi.product_sku, poi.quantity, poi.unit_cost, poi.subtotal,
+                CASE WHEN poi.product_id IS NOT NULL THEN (
+                  SELECT image_url FROM product_images
+                   WHERE product_id = poi.product_id
+                   ORDER BY (material_id = poi.material_id) DESC, is_primary DESC, order_display, id
+                   LIMIT 1
+                ) ELSE NULL END AS image_url
+           FROM purchase_order_items poi WHERE poi.purchase_order_id = ?`,
         [Number(sourceId)],
       );
       items = rows.map((r) => ({
         id: r.id,
         productName: r.product_name,
         productSku: r.product_sku ?? null,
+        imageUrl: r.image_url ?? null,
         materialLabel: null,
         color: null,
         quantity: Number(r.quantity),

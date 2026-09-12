@@ -61,197 +61,221 @@
   </div>
 </section>
 
+<!-- ===== Detalle: un documento (pedido/OC) por tarjeta ===== -->
 <section class="panel">
   <div class="panel__title"><span>Detalle</span></div>
 
   @if (loading()) {
     <div class="state"><span class="spinner"></span> Cargando...</div>
+  } @else if (documents().length === 0) {
+    <p class="empty">Sin movimientos en este período.</p>
   } @else {
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th></th>
-            <th>Tipo</th>
-            <th>Folio</th>
-            <th>Entrega</th>
-            <th class="table__num">Piezas</th>
-            <th class="table__num">Monto</th>
-            <th class="table__num">Pagado</th>
-            <th class="table__num">Saldo</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (d of documents(); track d.sourceType + d.sourceId) {
-            <tr class="row--clickable" (click)="toggleExpand(d)">
-              <td>
-                <span class="material-symbols-outlined expand-icon">
-                  {{ isExpanded(d) ? 'expand_less' : 'expand_more' }}
-                </span>
-              </td>
-              <td><span class="badge" [class]="typeTone[d.sourceType]">{{ typeLabels[d.sourceType] }}</span></td>
-              <td><strong>{{ d.folio }}</strong></td>
-              <td>
+    <div class="docs">
+      @for (d of documents(); track d.sourceType + d.sourceId) {
+        <article class="doc-card" [class.doc-card--open]="isExpanded(d)">
+          <button type="button" class="doc-card__head" (click)="toggleExpand(d)">
+            <div class="doc-card__head-text">
+              <span class="badge" [class]="typeTone[d.sourceType]">{{ typeLabels[d.sourceType] }}</span>
+              <span class="doc-card__folio">{{ d.folio }}</span>
+            </div>
+            <span class="material-symbols-outlined expand-icon">
+              {{ isExpanded(d) ? 'expand_less' : 'expand_more' }}
+            </span>
+          </button>
+
+          <div class="doc-card__status">
+            <span class="badge" [class]="statusTone[d.paymentStatus]">
+              {{ statusLabels[d.paymentStatus] }}
+              @if (d.paymentStatus === 'anticipo') {
+                {{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
+              }
+            </span>
+            <span class="badge badge--sm" [class]="fabTone[d.fabricationStatus]">
+              {{ fabLabels[d.fabricationStatus] }}
+            </span>
+          </div>
+
+          <dl class="attrs">
+            <div class="attrs__cell">
+              <dt>Entrega</dt>
+              <dd>
                 @if (d.deliveredAt) {
                   {{ d.deliveredAt | date: 'dd/MM/yyyy' }}
                 } @else {
-                  <span class="table__hint">sin entregar</span>
+                  <span class="muted">Sin entregar</span>
                 }
-              </td>
-              <td class="table__num">{{ d.pieces }}</td>
-              <td class="table__num">{{ d.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
-              <td class="table__num">{{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
-              <td class="table__num"><strong>{{ d.balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
-              <td>
-                <span class="badge" [class]="statusTone[d.paymentStatus]">
-                  {{ statusLabels[d.paymentStatus] }}
-                  @if (d.paymentStatus === 'anticipo') {
-                    {{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}
-                  }
-                </span>
-                <small class="badge badge--sm" [class]="fabTone[d.fabricationStatus]">
-                  {{ fabLabels[d.fabricationStatus] }}
-                </small>
-              </td>
-            </tr>
-            @if (isExpanded(d)) {
-              <tr class="row--detail">
-                <td colspan="9">
-                  @if (itemsOf(d).length) {
-                    <table class="subtable">
-                      <thead>
-                        <tr>
-                          <th>Producto</th>
-                          <th>Material</th>
-                          <th>Color</th>
-                          <th class="table__num">Cantidad</th>
-                          <th class="table__num">Costo unitario</th>
-                          <th class="table__num">Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (item of itemsOf(d); track item.id) {
-                          <tr>
-                            <td>{{ item.productName }}</td>
-                            <td>{{ item.materialLabel ?? '—' }}</td>
-                            <td>{{ item.color ?? '—' }}</td>
-                            <td class="table__num">{{ item.quantity }}</td>
-                            <td class="table__num">{{ item.unitCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
-                            <td class="table__num">{{ item.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  } @else {
-                    <span class="state"><span class="spinner spinner--sm"></span> Cargando piezas...</span>
-                  }
+              </dd>
+            </div>
+            <div class="attrs__cell">
+              <dt>Piezas</dt>
+              <dd>{{ d.pieces }}</dd>
+            </div>
+            <div class="attrs__cell">
+              <dt>Monto</dt>
+              <dd>{{ d.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</dd>
+            </div>
+            <div class="attrs__cell">
+              <dt>Pagado</dt>
+              <dd>{{ d.paid | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</dd>
+            </div>
+            <div class="attrs__cell attrs__cell--highlight">
+              <dt>Saldo</dt>
+              <dd>{{ d.balance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</dd>
+            </div>
+          </dl>
 
-                  @if (chargesOf(d).length) {
-                    <ul class="charge-list">
-                      @for (c of chargesOf(d); track c.id) {
-                        <li>
-                          <span class="badge badge--sm"
-                                [class]="c.status === 'approved' ? 'badge--green' : c.status === 'rejected' ? 'badge--red' : 'badge--amber'">
-                            {{ chargeStatusLabel(c.status) }}
+          @if (isExpanded(d)) {
+            <div class="doc-card__detail">
+              @if (itemsOf(d).length) {
+                <ul class="pieces">
+                  @for (item of itemsOf(d); track item.id) {
+                    <li class="piece">
+                      <div class="piece__head">
+                        @if (item.imageUrl) {
+                          <button
+                            type="button"
+                            class="piece__photo"
+                            title="Ver imagen en grande"
+                            (click)="openZoom(item.imageUrl, item.productName)"
+                          >
+                            <img [src]="mediaThumbUrl(item.imageUrl)" [alt]="item.productName" loading="lazy" />
+                          </button>
+                        } @else {
+                          <span class="piece__photo piece__photo--empty">
+                            <span class="material-symbols-outlined">image</span>
                           </span>
-                          <strong>{{ c.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
-                          — {{ c.concept }}
-                          @if (c.status === 'rejected' && c.reviewNote) { · {{ c.reviewNote }} }
-                        </li>
-                      }
-                    </ul>
+                        }
+                        <span class="piece__name">{{ item.productName }}</span>
+                      </div>
+                      <dl class="attrs attrs--compact">
+                        @if (item.materialLabel) {
+                          <div class="attrs__cell">
+                            <dt>Material</dt>
+                            <dd>{{ item.materialLabel }}</dd>
+                          </div>
+                        }
+                        @if (item.color) {
+                          <div class="attrs__cell">
+                            <dt>Color</dt>
+                            <dd>{{ item.color }}</dd>
+                          </div>
+                        }
+                        <div class="attrs__cell">
+                          <dt>Cantidad</dt>
+                          <dd>{{ item.quantity }}</dd>
+                        </div>
+                        <div class="attrs__cell">
+                          <dt>Costo unitario</dt>
+                          <dd>{{ item.unitCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</dd>
+                        </div>
+                        <div class="attrs__cell">
+                          <dt>Subtotal</dt>
+                          <dd>{{ item.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</dd>
+                        </div>
+                      </dl>
+                    </li>
                   }
-                </td>
-              </tr>
-            }
-          } @empty {
-            <tr>
-              <td colspan="9" class="empty">Sin movimientos en este período.</td>
-            </tr>
+                </ul>
+              } @else {
+                <span class="state"><span class="spinner spinner--sm"></span> Cargando piezas...</span>
+              }
+
+              @if (chargesOf(d).length) {
+                <ul class="charge-list">
+                  @for (c of chargesOf(d); track c.id) {
+                    <li>
+                      <span class="badge badge--sm"
+                            [class]="c.status === 'approved' ? 'badge--green' : c.status === 'rejected' ? 'badge--red' : 'badge--amber'">
+                        {{ chargeStatusLabel(c.status) }}
+                      </span>
+                      <strong>{{ c.amount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+                      — {{ c.concept }}
+                      @if (c.status === 'rejected' && c.reviewNote) { · {{ c.reviewNote }} }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
           }
-        </tbody>
-      </table>
+        </article>
+      }
     </div>
   }
 </section>
 
+<!-- ===== Pagos recibidos ===== -->
 <section class="panel">
   <div class="panel__title">
     <span>Pagos recibidos</span>
     <strong>{{ paymentsTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
   </div>
   @if (payments().length) {
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Método</th>
-            <th>Referencia</th>
-            <th>Aplicado a</th>
-            <th class="table__num">Monto</th>
-            <th>Recibo</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (p of payments(); track p.id) {
-            <tr>
-              <td>{{ p.paymentDate | date: 'dd/MM/yyyy' }}</td>
-              <td>{{ methodLabels[p.paymentMethod] }}</td>
-              <td>{{ p.reference || '—' }}</td>
-              <td>
-                <span class="folios">
-                  @for (l of p.lines; track l.sourceType + l.sourceId) {
-                    <span class="folio-chip">
-                      {{ l.folio }}
-                      <small>{{ l.amount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}</small>
-                    </span>
-                  }
-                </span>
-              </td>
-              <td class="table__num"><strong>{{ p.totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
-              <td>
-                @if (p.receiptPdfUrl) {
-                  <a [href]="mediaUrl(p.receiptPdfUrl)" target="_blank" class="folio-chip">{{ p.receiptNumber }}</a>
-                } @else {
-                  <span class="table__hint">—</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <div class="payments">
+      @for (p of payments(); track p.id) {
+        <article class="payment-card">
+          <div class="payment-card__head">
+            <span class="payment-card__date">{{ p.paymentDate | date: 'dd/MM/yyyy' }}</span>
+            <strong class="payment-card__amount">{{ p.totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+          </div>
+
+          <dl class="attrs attrs--compact">
+            <div class="attrs__cell">
+              <dt>Método</dt>
+              <dd>{{ methodLabels[p.paymentMethod] }}</dd>
+            </div>
+            <div class="attrs__cell">
+              <dt>Referencia</dt>
+              <dd>{{ p.reference || '—' }}</dd>
+            </div>
+            @if (p.receiptPdfUrl) {
+              <div class="attrs__cell">
+                <dt>Recibo</dt>
+                <dd><a [href]="mediaUrl(p.receiptPdfUrl)" target="_blank" class="folio-chip">{{ p.receiptNumber }}</a></dd>
+              </div>
+            }
+          </dl>
+
+          <div class="folios">
+            @for (l of p.lines; track l.sourceType + l.sourceId) {
+              <span class="folio-chip">
+                {{ l.folio }}
+                <small>{{ l.amount | currency: 'MXN' : 'symbol-narrow' : '1.0-0' }}</small>
+              </span>
+            }
+          </div>
+        </article>
+      }
     </div>
   } @else {
     <p class="empty">Sin pagos registrados en este período.</p>
   }
 </section>
 
+<!-- ===== Estados de cuenta ===== -->
 <section class="panel">
   <div class="panel__title"><span>Estados de cuenta</span></div>
   @if (statements().length) {
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Folio</th>
-            <th>Periodo</th>
-            <th class="table__num">Saldo final</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (s of statements(); track s.id) {
-            <tr>
-              <td><a [href]="mediaUrl(s.pdfUrl)" target="_blank" class="folio-chip">{{ s.statementNumber }}</a></td>
-              <td>{{ s.periodFrom | date: 'dd/MM/yyyy' }} — {{ s.periodTo | date: 'dd/MM/yyyy' }}</td>
-              <td class="table__num"><strong>{{ s.closingBalance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <div class="statements">
+      @for (s of statements(); track s.id) {
+        <a [href]="mediaUrl(s.pdfUrl)" target="_blank" class="statement-card">
+          <span class="material-symbols-outlined statement-card__icon">picture_as_pdf</span>
+          <div class="statement-card__body">
+            <span class="statement-card__folio">{{ s.statementNumber }}</span>
+            <span class="statement-card__period">{{ s.periodFrom | date: 'dd/MM/yyyy' }} — {{ s.periodTo | date: 'dd/MM/yyyy' }}</span>
+          </div>
+          <span class="statement-card__balance">
+            <span class="attrs__cell-label">Saldo final</span>
+            <strong>{{ s.closingBalance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+          </span>
+        </a>
+      }
     </div>
   } @else {
     <p class="empty">La tienda todavía no te ha generado ningún estado de cuenta.</p>
   }
 </section>
+
+<!-- ===== Ver foto en grande ===== -->
+@if (zoomedImage(); as zoomed) {
+  <app-image-lightbox [src]="mediaUrl(zoomed.src) ?? ''" [alt]="zoomed.alt" (closed)="zoomedImage.set(null)" />
+}
