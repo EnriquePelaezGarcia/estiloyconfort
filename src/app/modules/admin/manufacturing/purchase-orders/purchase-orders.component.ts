@@ -111,6 +111,13 @@ export class PurchaseOrdersComponent implements OnInit {
     // El total se deriva del form, no de listeners (input) en la plantilla: así no
     // depende del orden en que corran los listeners de appCurrencyInput.
     this.items.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.recalcTotal());
+    // El costo de un producto es POR FABRICANTE (M3): el catálogo del
+    // buscador se recarga filtrado al fabricante elegido en el encabezado,
+    // para no ofrecer/costear con el fabricante equivocado (bug visto en
+    // OC-2026-0002: sugería el costo de otro fabricante para el mismo producto).
+    this.form.controls.manufacturerId.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((manufacturerId) => this.loadCatalog(manufacturerId));
   }
 
   ngOnInit(): void {
@@ -119,12 +126,37 @@ export class PurchaseOrdersComponent implements OnInit {
     this.manufacturingService.getManufacturers().subscribe({
       next: (res) => this.manufacturers.set(res.data),
     });
-    this.manufacturingService.getCatalog().subscribe({
-      next: (res) => this.products.set(res.data),
-    });
+    this.loadCatalog(this.form.controls.manufacturerId.value);
     this.categoryService.getAllAdmin().subscribe({
       next: (cats) => this.categories.set(cats),
       error: () => {},
+    });
+  }
+
+  /** Recarga el catálogo del buscador acotado al fabricante elegido en el
+   *  encabezado. Sin fabricante no hay costo sensato que sugerir, así que el
+   *  buscador queda vacío hasta que se elija uno. Las líneas ya capturadas
+   *  cuyo producto no le aplique al nuevo fabricante se limpian: su costo
+   *  sugerido dejó de ser válido. */
+  private loadCatalog(manufacturerId: number | null): void {
+    if (!manufacturerId) {
+      this.products.set([]);
+      return;
+    }
+    this.manufacturingService.getCatalog(manufacturerId).subscribe({
+      next: (res) => {
+        this.products.set(res.data);
+        const validIds = new Set(res.data.map((p) => p.id));
+        for (const group of this.items.controls) {
+          const productId = Number(group.get('productId')?.value) || null;
+          if (productId && !validIds.has(productId)) {
+            group.patchValue({
+              productId: null, productSearch: '', productName: '', productSku: '',
+              materialId: null, sizeId: null, unitCost: 0,
+            });
+          }
+        }
+      },
     });
   }
 
@@ -461,20 +493,17 @@ export class PurchaseOrdersComponent implements OnInit {
   }
 
   /**
-   * Catálogo filtrado por el texto del renglón. Un producto aparece una sola
-   * vez aunque se le compre a varios fabricantes (igual que `find` por id en
-   * el resto del componente).
+   * Catálogo filtrado por el texto del renglón. `this.products()` ya viene
+   * acotado al fabricante elegido en el encabezado (ver `loadCatalog`), así
+   * que cada producto aparece a lo más una vez con SU costo real.
    */
   protected filteredProducts(index: number): ManufacturerCatalogProduct[] {
     const term = (this.items.at(index).get('productSearch')?.value ?? '').trim().toLowerCase();
-    const seen = new Set<number>();
     const out: ManufacturerCatalogProduct[] = [];
     for (const p of this.products()) {
-      if (seen.has(p.id)) continue;
       if (term && !p.name.toLowerCase().includes(term) && !(p.sku ?? '').toLowerCase().includes(term)) {
         continue;
       }
-      seen.add(p.id);
       out.push(p);
       if (out.length >= 30) break;
     }

@@ -287,7 +287,9 @@
                           </button>
                         </li>
                       } @empty {
-                        <li class="product-picker__empty">Sin resultados</li>
+                        <li class="product-picker__empty">
+                          {{ form.controls.manufacturerId.value ? 'Sin resultados' : 'Elige un fabricante primero' }}
+                        </li>
                       }
                     </ul>
                   }
