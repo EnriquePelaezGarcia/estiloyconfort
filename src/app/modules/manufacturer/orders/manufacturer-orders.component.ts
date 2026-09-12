@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
@@ -103,6 +103,17 @@ export class ManufacturerOrdersComponent implements OnInit {
   protected chargeConcept = signal('');
   protected chargeNotes = signal('');
   protected savingCharge = signal(false);
+  /**
+   * Precio actual del encargo (referencia) + lo que quedaría si se aprueba el
+   * ajuste. Solo existe en órdenes de compra: los pedidos de venta no le
+   * muestran precio al fabricante (D14).
+   */
+  protected chargeCurrentTotal = computed(() => this.chargeTarget()?.totalCost ?? null);
+  protected chargeNewTotal = computed(() => {
+    const current = this.chargeCurrentTotal();
+    if (current === null) return null;
+    return current + (Number(this.chargeAmount()) || 0);
+  });
 
   ngOnInit(): void {
     // El link "Mensajes" de una notificación apunta a esta misma ruta con solo

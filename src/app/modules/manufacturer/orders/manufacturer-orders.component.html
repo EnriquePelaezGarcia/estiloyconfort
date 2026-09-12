@@ -299,8 +299,16 @@
         <p class="muted">
           La tienda tiene que aprobarlo antes de que cuente. Se paga junto con el resto del encargo.
         </p>
+        @if (chargeCurrentTotal(); as current) {
+          <p class="po-notes">
+            Precio actual del encargo: <strong>{{ current | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+            @if (chargeNewTotal(); as newTotal) {
+              <br>Con este ajuste quedaría en: <strong>{{ newTotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+            }
+          </p>
+        }
         <div class="field">
-          <label>¿Cuánto más? (MXN) *</label>
+          <label>¿Cuánto más sobre el precio actual? (MXN) *</label>
           <input type="number" min="0" step="0.01" [value]="chargeAmount()"
                  (input)="chargeAmount.set($any($event.target).value)"
                  placeholder="0.00" />
