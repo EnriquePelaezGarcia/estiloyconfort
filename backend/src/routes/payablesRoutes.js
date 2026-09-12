@@ -17,8 +17,16 @@ router.get('/cut', payablesController.cut);
 router.get('/batches', payablesController.listBatches);
 router.post('/batches', payablesController.createBatch);
 router.delete('/batches/:id', payablesController.removeBatch);
+router.post('/batches/:id/send-receipt', payablesController.sendReceipt);
+
+// Estado de cuenta: historial acumulado por periodo, archivado con folio.
+router.get('/statements', payablesController.listStatements);
+router.post('/statements', payablesController.createStatement);
+router.post('/statements/:id/send-email', payablesController.sendStatementEmail);
 
 router.post('/charges', payablesController.addCharge);
+router.patch('/charges/:id/approve', payablesController.approveCharge);
+router.patch('/charges/:id/reject', payablesController.rejectCharge);
 router.delete('/charges/:id', payablesController.removeCharge);
 
 router.get('/', payablesController.summary);

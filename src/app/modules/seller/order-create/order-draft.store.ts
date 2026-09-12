@@ -15,7 +15,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
 import { isPickupWithinGrace, PICKUP_PAYMENT_METHODS } from '../../../core/utils/pickup';
 import { availableOf, colorMismatch, reservationsTooltip } from '../../../core/utils/stock-availability';
-import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
+import { formatPhoneDigits, normalizePhone, phoneValidator } from '../../../core/utils/phone';
 import { isSupportedImageFile, toUploadableImage } from '../../../core/utils/image-file';
 import {
   AssemblyRates, CreateOrderRequest, DeliveryCommitment, DeliveryPerson, DeliverySlot,
@@ -97,6 +97,14 @@ export interface OrderDraftSnapshot {
   discountReasonCategory: DiscountReasonCategory | null;
   discountReasonText: string;
   submitAttempted: boolean;
+  /** D7: bloque de entrega al abrir el pedido; null al crear. */
+  originalDelivery: {
+    commitment: DeliveryCommitment;
+    date: string;
+    windowStart: string;
+    windowEnd: string;
+  } | null;
+  originalSlotChoice: string;
 }
 
 /**
@@ -434,7 +442,7 @@ export class OrderDraftStore {
   readonly form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
     customerEmail: ['', [Validators.email]],
-    customerPhone: ['', [Validators.required, Validators.pattern(PHONE_PATTERN)]],
+    customerPhone: ['', [Validators.required, phoneValidator]],
     deliveryAddress: ['', Validators.required],
     googleMapsUrl: [''],
     /**
@@ -457,6 +465,11 @@ export class OrderDraftStore {
     deliverySlotChoice: [''],
     deliveryWindowStart: [''],
     deliveryWindowEnd: [''],
+    /**
+     * Motivo del cambio de entrega (D7). Sólo aparece al editar un pedido con
+     * entrega 'exact' y sólo se exige cuando se pisa una fecha/hora ya fija.
+     */
+    deliveryChangeReason: [''],
     notasPedido: [''],
     instruccionesEntrega: [''],
     deliveryPersonId: [null as number | null],
@@ -475,6 +488,54 @@ export class OrderDraftStore {
   });
   private expectedDeliveryDateSig = toSignal(this.form.controls.expectedDeliveryDate.valueChanges, {
     initialValue: this.form.controls.expectedDeliveryDate.value,
+  });
+  private windowStartSig = toSignal(this.form.controls.deliveryWindowStart.valueChanges, {
+    initialValue: this.form.controls.deliveryWindowStart.value,
+  });
+  private windowEndSig = toSignal(this.form.controls.deliveryWindowEnd.valueChanges, {
+    initialValue: this.form.controls.deliveryWindowEnd.value,
+  });
+
+  /**
+   * Bloque de entrega tal como estaba al abrir el pedido para editar (D7).
+   * Decide si mover la fecha/hora exige "motivo del cambio": sólo cuando el
+   * pedido ya estaba comprometido como 'exact' y se PISA un dato que ya
+   * tenía valor. `null` al crear.
+   */
+  private originalDelivery: {
+    commitment: DeliveryCommitment;
+    date: string;
+    windowStart: string;
+    windowEnd: string;
+  } | null = null;
+  /** Valor de `deliverySlotChoice` con el que se abrió el pedido a editar. */
+  private originalSlotChoice = '';
+
+  /** El pedido en edición nació con entrega comprometida ('exact'). */
+  readonly wasExactCommitment = computed(
+    () => this.isEditing() && this.originalDelivery?.commitment === 'exact',
+  );
+
+  /**
+   * Hay que capturar el motivo antes de guardar: se está pisando una fecha u
+   * hora que ya estaba fija en una entrega comprometida. Rellenar un horario
+   * que faltaba (el caso del regalo) no cuenta.
+   */
+  readonly deliveryChangeReasonRequired = computed(() => {
+    const orig = this.originalDelivery;
+    if (!orig || orig.commitment !== 'exact') return false;
+    const date = (this.expectedDeliveryDateSig() ?? '').slice(0, 10);
+    const start = this.isCustomWindow() ? (this.windowStartSig() ?? '').slice(0, 5) : '';
+    const end = this.isCustomWindow() ? (this.windowEndSig() ?? '').slice(0, 5) : '';
+    const slotChanged = String(this.slotChoiceSig() ?? '') !== this.originalSlotChoice;
+    return (
+      (!!orig.date && !!date && orig.date !== date)
+      || (!!orig.windowStart && orig.windowStart !== start)
+      || (!!orig.windowEnd && orig.windowEnd !== end)
+      // Cambiar de una franja del catálogo comprometida a otra (o a "sin
+      // horario") también es reprogramar.
+      || (!!this.originalSlotChoice && slotChanged)
+    );
   });
 
   // ===== Modificación por línea (Docs/plan-fabricacion-y-notas-por-linea.md) =====
@@ -505,6 +566,12 @@ export class OrderDraftStore {
   });
   /** El cliente se lleva el mueble de la tienda ahora mismo. */
   readonly isPickup = computed(() => !!this.pickupSig());
+
+  /**
+   * La ubicación de Google Maps es obligatoria para CREAR un pedido con envío
+   * a domicilio. No al editar (pedidos viejos pueden no tenerla) ni en pickup.
+   */
+  readonly googleMapsRequired = computed(() => !this.isEditing() && !this.pickupSig());
   /**
    * RN-P1: solo se puede recoger lo que YA está en tienda. Un mueble sobre
    * pedido o agotado no se lo puede llevar nadie hoy.
@@ -878,6 +945,8 @@ export class OrderDraftStore {
     this.discountReasonCategory.set(snap.discountReasonCategory);
     this.discountReasonText.set(snap.discountReasonText);
     this.submitAttempted.set(snap.submitAttempted);
+    this.originalDelivery = snap.originalDelivery;
+    this.originalSlotChoice = snap.originalSlotChoice;
     return true;
   }
 
@@ -902,6 +971,8 @@ export class OrderDraftStore {
       discountReasonCategory: this.discountReasonCategory(),
       discountReasonText: this.discountReasonText(),
       submitAttempted: this.submitAttempted(),
+      originalDelivery: this.originalDelivery,
+      originalSlotChoice: this.originalSlotChoice,
     };
   }
 
@@ -961,6 +1032,15 @@ export class OrderDraftStore {
       materialIds.forEach((id) => this.ensureColorsLoaded(id));
     });
 
+    // La ubicación de Google Maps es obligatoria al CREAR un pedido con envío a
+    // domicilio. No se exige en "recoge en tienda" ni al editar un pedido viejo
+    // (que puede haberse levantado antes de esta regla).
+    effect(() => {
+      const ctrl = this.form.controls.googleMapsUrl;
+      ctrl.setValidators(this.googleMapsRequired() ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+
     // §11.3: contador de saturación del horario — solo aplica a "Día preciso"
     // con fecha y una franja del catálogo elegidas (no 'custom', que no tiene id).
     effect(() => {
@@ -1014,8 +1094,11 @@ export class OrderDraftStore {
     const { expectedDeliveryDate, deliverySlotChoice, deliveryWindowStart, deliveryWindowEnd } =
       this.form.controls;
 
+    // 'exact' exige la fecha; el horario es opcional (regalo con día cerrado y
+    // hora por confirmar — se captura después editando). Sólo la ventana LIBRE
+    // ("Otro horario…"), si se elige, necesita sus dos horas completas.
     expectedDeliveryDate.setValidators(isExact ? [Validators.required] : []);
-    deliverySlotChoice.setValidators(isExact ? [Validators.required] : []);
+    deliverySlotChoice.setValidators([]);
 
     const needsCustomTimes = deliverySlotChoice.value === 'custom';
     const timeValidators = needsCustomTimes ? [Validators.required] : [];
@@ -1135,6 +1218,17 @@ export class OrderDraftStore {
           deliveryPersonId: data.deliveryPersonId ?? null,
         });
         this.initialDeliveryPersonId = data.deliveryPersonId ?? null;
+        // D7: foto del bloque de entrega al abrir — con esto se sabe si un
+        // guardado posterior está pisando una fecha/hora ya comprometida.
+        this.originalSlotChoice = data.deliverySlotId != null
+          ? String(data.deliverySlotId)
+          : data.deliveryWindowStart ? 'custom' : '';
+        this.originalDelivery = {
+          commitment: data.deliveryCommitment ?? 'tentative',
+          date: data.expectedDeliveryDate ? String(data.expectedDeliveryDate).slice(0, 10) : '',
+          windowStart: data.deliveryWindowStart ? String(data.deliveryWindowStart).slice(0, 5) : '',
+          windowEnd: data.deliveryWindowEnd ? String(data.deliveryWindowEnd).slice(0, 5) : '',
+        };
         // Docs/plan-descuentos.md: descuentos ya guardados de este pedido —
         // el de dinero (si sigue activo) bloquea la captura; los de producto
         // se usan abajo para marcar sus líneas como regaladas.
@@ -1710,6 +1804,16 @@ export class OrderDraftStore {
       this.goToStep(2);
       return;
     }
+    // D7: mover una fecha/hora ya comprometida deja rastro. El backend aplica
+    // la misma regla; esto es la primera defensa y evita el viaje al servidor.
+    if (this.deliveryChangeReasonRequired()
+      && !this.form.controls.deliveryChangeReason.value?.trim()) {
+      this.form.controls.deliveryChangeReason.markAsTouched();
+      this.notification.error('Esta es una entrega comprometida: indica el motivo del cambio.');
+      this._lastInvalidStep.set(2);
+      this.goToStep(2);
+      return;
+    }
     // RN-CRE1: crédito en tienda no admite cargos extra por modificación.
     if (this.creditBlockedByExtraCharge()) {
       this.notification.info(
@@ -1756,7 +1860,7 @@ export class OrderDraftStore {
     const payload: CreateOrderRequest = {
       customerName: raw.customerName!,
       customerEmail: raw.customerEmail || null,
-      customerPhone: raw.customerPhone ? raw.customerPhone.replace(/\D/g, '') : null,
+      customerPhone: raw.customerPhone ? normalizePhone(raw.customerPhone) : null,
       deliveryAddress: raw.deliveryAddress || null,
       deliveryType: !pickup && raw.assemblyService ? 'with_installation' : 'standard',
       // RN-P2/RN-P4: el backend vuelve a forzar todo esto; mandarlo ya limpio
@@ -1768,6 +1872,10 @@ export class OrderDraftStore {
       initialPayment: this.needsInitialDeposit() ? this.initialDeposit() : null,
       initialPaymentMethod: this.needsInitialDeposit() ? this.initialDepositMethod() : null,
       ...this.deliverySchedulePayload(raw),
+      // D7: sólo tiene sentido al editar; el backend lo ignora al crear.
+      rescheduleReason: this.isEditing()
+        ? raw.deliveryChangeReason?.trim() || null
+        : null,
       shippingCost: pickup ? null : this.shippingCost() || null,
       shippingPostalCode: pickup ? null : this.shippingCp() || null,
       // El servidor calcula el costo del armado con las tarifas vigentes.

@@ -839,11 +839,11 @@ const Quote = {
   },
 
   /**
-   * Lista para el panel interno. El admin ve todas; el vendedor solo las
-   * suyas (mismo criterio de alcance que usa el módulo de pedidos).
+   * Lista para el panel interno. Vendedores y admin ven TODAS las cotizaciones
+   * vigentes: cualquier vendedor puede dar seguimiento a la cotización de otro
+   * (la tarjeta muestra de quién es). Las ediciones quedan en `activity_log`.
    */
-  async findAllForUser({ id, role }) {
-    const isAdmin = role === 'admin';
+  async findAllForUser() {
     // El listado no necesita las líneas completas, solo cuántas son.
     const LIST_SELECT = `
       SELECT q.*, u.full_name AS seller_name, qr.id AS web_order_folio_id,
@@ -852,14 +852,9 @@ const Quote = {
       LEFT JOIN users u ON u.id = q.seller_id
       LEFT JOIN quote_requests qr ON qr.quote_id = q.id
     `;
-    const [rows] = isAdmin
-      ? await pool.execute(
-          `${LIST_SELECT} WHERE q.expires_at > NOW() ORDER BY q.created_at DESC`,
-        )
-      : await pool.execute(
-          `${LIST_SELECT} WHERE q.seller_id = ? AND q.expires_at > NOW() ORDER BY q.created_at DESC`,
-          [id],
-        );
+    const [rows] = await pool.execute(
+      `${LIST_SELECT} WHERE q.expires_at > NOW() ORDER BY q.created_at DESC`,
+    );
     return rows.map(mapQuote);
   },
 

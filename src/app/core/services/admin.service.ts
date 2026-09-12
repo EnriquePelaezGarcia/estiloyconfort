@@ -275,6 +275,28 @@ export class AdminService {
     );
   }
 
+  // ===== Ajustes de precio del fabricante (Fase B — cuentas por pagar) =====
+
+  approveManufacturerCharge(
+    chargeId: number,
+    amount?: number,
+  ): Observable<{ data: { id: number }; message: string }> {
+    return this.api.patch<{ data: { id: number }; message: string }>(
+      `/payables/charges/${chargeId}/approve`,
+      amount != null ? { amount } : {},
+    );
+  }
+
+  rejectManufacturerCharge(
+    chargeId: number,
+    reviewNote: string,
+  ): Observable<{ data: { id: number }; message: string }> {
+    return this.api.patch<{ data: { id: number }; message: string }>(
+      `/payables/charges/${chargeId}/reject`,
+      { reviewNote },
+    );
+  }
+
   // ===== Reembolsos (auditoría contable sep-2026, h1) =====
 
   approveOrderRefund(
@@ -295,6 +317,29 @@ export class AdminService {
   ): Observable<{ data: Order; message: string }> {
     return this.api.patch<{ data: Order; message: string }>(
       `/admin/orders/${orderId}/refunds/${refundId}/reject`,
+      { reviewNote },
+    );
+  }
+
+  // ===== Cancelación de pedido (aprobación del admin) =====
+
+  approveOrderCancellation(
+    orderId: number,
+    cancellationId: number,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/cancellation/${cancellationId}/approve`,
+      {},
+    );
+  }
+
+  rejectOrderCancellation(
+    orderId: number,
+    cancellationId: number,
+    reviewNote: string,
+  ): Observable<{ data: Order; message: string }> {
+    return this.api.patch<{ data: Order; message: string }>(
+      `/admin/orders/${orderId}/cancellation/${cancellationId}/reject`,
       { reviewNote },
     );
   }

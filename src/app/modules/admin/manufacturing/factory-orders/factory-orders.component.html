@@ -1,10 +1,18 @@
 <div class="section-head">
   <p class="muted">Items de fabricación pendientes de los pedidos de clientes activos. Asigna un fabricante a cada uno para que le aparezca en su portal.</p>
-  @if (!loading() && rows().length > 0) {
-    <button type="button" class="btn btn--ghost no-print" (click)="print()">
-      <span class="material-symbols-outlined">print</span> Imprimir
-    </button>
-  }
+  <div class="section-head__actions no-print">
+    <select class="filter-select" (change)="onManufacturerFilterChange($event)">
+      <option value="">Todos los fabricantes</option>
+      @for (m of manufacturers(); track m.id) {
+        <option [value]="m.id">{{ m.name }}</option>
+      }
+    </select>
+    @if (!loading() && rows().length > 0) {
+      <button type="button" class="btn btn--ghost" (click)="print()">
+        <span class="material-symbols-outlined">print</span> Imprimir
+      </button>
+    }
+  </div>
 </div>
 
 @if (loading()) {
@@ -15,130 +23,159 @@
     <p>No hay items pendientes de fabricación.</p>
   </div>
 } @else {
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead>
-        <tr>
-          <th>Pedido</th><th>Cliente</th><th>Entrega a tienda</th><th>Producto</th><th class="num">Cantidad</th>
-          <th>Fabricante reporta</th><th>Almacén</th><th>Surte</th><th class="num">Utilidad</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (g of groups(); track g.orderId) {
-          @for (r of g.items; track r.itemId; let first = $first) {
-            <tr>
-              @if (first) {
-                <td data-label="Pedido" [attr.rowspan]="g.items.length">
-                  <a class="strong order-link" [routerLink]="['/admin/pedidos', g.orderId]">{{ g.orderNumber }}</a>
-                </td>
-                <td data-label="Cliente" [attr.rowspan]="g.items.length">{{ g.customerName }}</td>
-                <td data-label="Entrega a tienda" [attr.rowspan]="g.items.length">
-                  <input
-                    type="date"
-                    class="due-date-input"
-                    [value]="g.manufacturerDueDate ?? ''"
-                    [disabled]="savingDueDate().has(g.orderId)"
-                    (change)="onDueDateChange(g, $event)"
-                  />
-                </td>
+  <div class="orders">
+    @for (g of groups(); track g.orderId) {
+      <article class="panel order-group">
+        <header class="order-group__head">
+          <a class="order-group__ref" [routerLink]="['/admin/pedidos', g.orderId]">{{ g.orderNumber }}</a>
+          <span class="order-group__customer">{{ g.customerName }}</span>
+        </header>
+
+        <div class="spec">
+          <span class="spec__k">Entrega a tienda</span>
+          <input
+            type="date"
+            class="due-date-input"
+            [value]="g.manufacturerDueDate ?? ''"
+            [disabled]="savingDueDate().has(g.orderId)"
+            (change)="onDueDateChange(g, $event)"
+          />
+        </div>
+
+        <div class="items">
+          @for (r of g.items; track r.itemId) {
+            <div class="item" [attr.id]="'item-' + r.itemId">
+              <div class="item__title">
+                @if (r.imageUrl) {
+                  <img class="item__thumb" [src]="r.imageUrl | mediaUrl:'thumb'" [alt]="r.productName" width="56" height="56" />
+                }
+                <span class="item__name">{{ r.productName }}</span>
+                <span class="muted">{{ r.productSku }}</span>
+              </div>
+
+              <dl class="attrs">
+                <div class="attrs__cell"><dt>Cantidad</dt><dd>{{ r.quantity }}</dd></div>
+                @if (r.sizeLabel) { <div class="attrs__cell"><dt>Talla</dt><dd>{{ r.sizeLabel }}</dd></div> }
+                @if (r.color) { <div class="attrs__cell"><dt>Color</dt><dd>{{ r.color }}</dd></div> }
+              </dl>
+
+              @if (r.isCustomModification || r.fabricationNote) {
+                <div class="spec spec--callout">
+                  <span class="spec__k">✏️ Modificación</span>
+                  <p class="spec__v">{{ r.fabricationNote || 'Ver fotos de referencia' }}</p>
+                </div>
               }
-              <td data-label="Producto">
-                {{ r.productName }}
-                <span class="muted"> · {{ r.productSku }}</span>
-                @if (r.sizeLabel) { <span class="muted"> · {{ r.sizeLabel }}</span> }
-                @if (r.color) { <span class="muted"> / {{ r.color }}</span> }
-                @if (r.isCustomModification || r.fabricationNote) {
-                  <span class="specs">✏️ {{ r.fabricationNote || 'Ver fotos de referencia' }}</span>
-                }
-                @if (r.fabricationRefImages.length) {
-                  <span class="ref-thumbs">
-                    @for (img of r.fabricationRefImages; track img) {
-                      <a [href]="img | mediaUrl" target="_blank" rel="noopener">
-                        <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble" width="36" height="36" />
-                      </a>
+              @if (r.fabricationRefImages.length) {
+                <div class="spec">
+                  <span class="spec__k">Fotos de referencia</span>
+                  <ul class="ref-images">
+                    @for (img of r.fabricationRefImages; track img; let imgIndex = $index) {
+                      <li>
+                        <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                          <span class="ref-images__num">{{ imgIndex + 1 }}</span>
+                          <img [src]="img | mediaUrl:'thumb'" [alt]="'Referencia ' + (imgIndex + 1) + ' del mueble'" />
+                        </a>
+                      </li>
                     }
-                  </span>
-                }
-              </td>
-              <td data-label="Cantidad" class="num">{{ r.quantity }}</td>
-              <td data-label="Fabricante reporta">
-                <button
-                  type="button"
-                  class="ready-toggle"
-                  [class.ready-toggle--done]="r.isReady"
-                  [disabled]="markingReady().has(r.itemId)"
-                  [title]="r.isReady ? 'Marcar como pendiente' : 'Marcar como listo'"
-                  (click)="onReadyToggle(r)"
-                >
-                  <span class="material-symbols-outlined">
-                    {{ r.isReady ? 'check_circle' : 'radio_button_unchecked' }}
-                  </span>
-                  {{ r.isReady ? 'Listo' : (r.readyQuantity > 0 ? r.readyQuantity + '/' + r.quantity : 'Pendiente') }}
-                </button>
-                @if (r.readyByName) {
-                  <span class="ready-by muted">
-                    {{ r.readyByName }}@if (r.readyAt) { · {{ r.readyAt | date:'d MMM' }} }
-                  </span>
-                }
-              </td>
-              <td data-label="Almacén">
-                @if (r.receivedQuantity >= r.quantity && r.warehouseCondition === 'ok') {
-                  <span class="badge badge--green">Recibido {{ r.receivedQuantity }}/{{ r.quantity }}</span>
-                } @else if (r.warehouseCondition === 'damaged' || r.warehouseCondition === 'incomplete') {
-                  <span class="badge badge--red">
-                    {{ r.warehouseCondition === 'damaged' ? 'Dañado' : 'Incompleto' }} ({{ r.receivedQuantity }}/{{ r.quantity }})
-                  </span>
-                } @else if (r.receivedQuantity > 0) {
-                  <span class="badge badge--amber">Parcial {{ r.receivedQuantity }}/{{ r.quantity }}</span>
-                }
-                <button type="button" class="btn btn--ghost btn--sm" (click)="openWarehouseReceipt(r)">
-                  <span class="material-symbols-outlined">move_to_inbox</span> Recibir
-                </button>
-                @if (r.warehouseNote) { <span class="muted specs">{{ r.warehouseNote }}</span> }
-              </td>
-              <td data-label="Surte">
-                @if (r.manufacturerOptions.length) {
-                  <select
-                    (change)="onManufacturerChange(r, $event)"
-                    [disabled]="assigning().has(r.itemId)"
+                  </ul>
+                </div>
+              }
+
+              <div class="item__row">
+                <span class="spec__k">Fabricante reporta</span>
+                <div class="item__row-value">
+                  <button
+                    type="button"
+                    class="ready-toggle"
+                    [class.ready-toggle--done]="r.isReady"
+                    [disabled]="markingReady().has(r.itemId)"
+                    [title]="r.isReady ? 'Marcar como pendiente' : 'Marcar como listo'"
+                    (click)="onReadyToggle(r)"
                   >
-                    <option value="" [selected]="r.manufacturerId === null">Sin asignar</option>
-                    @for (m of r.manufacturerOptions; track m.manufacturerId) {
-                      <option [value]="m.manufacturerId" [selected]="r.manufacturerId === m.manufacturerId">
-                        {{ m.manufacturerName }} — {{ money(m.cost) }}
-                      </option>
-                    }
-                  </select>
-                } @else {
-                  <span class="no-costs muted">
-                    Sin costo capturado.
-                    <a [routerLink]="['/admin/catalogo']">Captura el costo en Catálogo</a>
-                    para poder asignarlo.
-                  </span>
-                }
-                @if (r.manufacturerId && r.acceptanceStatus) {
-                  <span class="accept-chip" [class]="'accept-chip--' + r.acceptanceStatus">
-                    @switch (r.acceptanceStatus) {
-                      @case ('accepted') { Aceptado por el fabricante }
-                      @case ('rejected') { Rechazado: {{ r.acceptanceRejectReason }} }
-                      @default { Pendiente de aceptar }
-                    }
-                  </span>
-                }
-              </td>
-              <td data-label="Utilidad" class="num">
-                @if (r.unitProfit !== null) {
-                  {{ money(r.unitProfit) }}
-                  <span class="muted"> c/u</span>
-                } @else {
-                  <span class="muted">—</span>
-                }
-              </td>
-            </tr>
+                    <span class="material-symbols-outlined">
+                      {{ r.isReady ? 'check_circle' : 'radio_button_unchecked' }}
+                    </span>
+                    {{ r.isReady ? 'Listo' : (r.readyQuantity > 0 ? r.readyQuantity + '/' + r.quantity : 'Pendiente') }}
+                  </button>
+                  @if (r.readyByName) {
+                    <span class="ready-by muted">
+                      {{ r.readyByName }}@if (r.readyAt) { · {{ r.readyAt | date:'d MMM' }} }
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <div class="item__row">
+                <span class="spec__k">Almacén</span>
+                <div class="item__row-value">
+                  @if (r.receivedQuantity >= r.quantity && r.warehouseCondition === 'ok') {
+                    <span class="badge badge--green">Recibido {{ r.receivedQuantity }}/{{ r.quantity }}</span>
+                  } @else if (r.warehouseCondition === 'damaged' || r.warehouseCondition === 'incomplete') {
+                    <span class="badge badge--red">
+                      {{ r.warehouseCondition === 'damaged' ? 'Dañado' : 'Incompleto' }} ({{ r.receivedQuantity }}/{{ r.quantity }})
+                    </span>
+                  } @else if (r.receivedQuantity > 0) {
+                    <span class="badge badge--amber">Parcial {{ r.receivedQuantity }}/{{ r.quantity }}</span>
+                  }
+                  <button type="button" class="btn btn--ghost btn--sm" (click)="openWarehouseReceipt(r)">
+                    <span class="material-symbols-outlined">move_to_inbox</span> Recibir
+                  </button>
+                  @if (r.warehouseNote) { <span class="muted specs">{{ r.warehouseNote }}</span> }
+                </div>
+              </div>
+
+              <div class="item__row">
+                <span class="spec__k">Surte</span>
+                <div class="item__row-value item__row-value--stack">
+                  @if (r.manufacturerOptions.length) {
+                    <select
+                      (change)="onManufacturerChange(r, $event)"
+                      [disabled]="assigning().has(r.itemId)"
+                    >
+                      <option value="" [selected]="r.manufacturerId === null">Sin asignar</option>
+                      @for (m of r.manufacturerOptions; track m.manufacturerId) {
+                        <option [value]="m.manufacturerId" [selected]="r.manufacturerId === m.manufacturerId">
+                          {{ m.manufacturerName }} — {{ money(m.cost) }}
+                        </option>
+                      }
+                    </select>
+                  } @else {
+                    <span class="no-costs muted">
+                      Sin costo capturado.
+                      <a [routerLink]="['/admin/catalogo']">Captura el costo en Catálogo</a>
+                      para poder asignarlo.
+                    </span>
+                  }
+                  @if (r.manufacturerId && r.acceptanceStatus) {
+                    <span class="accept-chip" [class]="'accept-chip--' + r.acceptanceStatus">
+                      @switch (r.acceptanceStatus) {
+                        @case ('accepted') { Aceptado por el fabricante }
+                        @case ('rejected') { Rechazado: {{ r.acceptanceRejectReason }} }
+                        @default { Pendiente de aceptar }
+                      }
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <div class="item__row">
+                <span class="spec__k">Utilidad</span>
+                <div class="item__row-value">
+                  @if (r.unitProfit !== null) {
+                    {{ money(r.unitProfit) }}
+                    <span class="muted"> c/u</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </div>
+              </div>
+
+              <app-item-messages [itemId]="r.itemId" [autoOpen]="focusItemId() === r.itemId" />
+            </div>
           }
-        }
-      </tbody>
-    </table>
+        </div>
+      </article>
+    }
   </div>
 }
 

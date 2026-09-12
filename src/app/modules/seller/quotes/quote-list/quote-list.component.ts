@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { QuotesService } from '../../../../core/services/quotes.service';
 import { QuoteRequestsService } from '../../../../core/services/quote-requests.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { ApprovalsService } from '../../../../core/services/approvals.service';
 import { Quote, QuoteDiscount, QuoteExtraCharge, QuoteStatus } from '../../../../core/models/quote.model';
 import { SaleScheme } from '../../../../core/models/order.model';
+import { waPhone } from '../../../../core/utils/phone';
 
 type FilterTab = 'all' | QuoteStatus;
 
@@ -35,6 +37,7 @@ export class QuoteListComponent implements OnInit {
   private quoteRequestsService = inject(QuoteRequestsService);
   private notification = inject(NotificationService);
   private approvalsService = inject(ApprovalsService);
+  private auth = inject(AuthService);
   private router = inject(Router);
 
   protected loading = signal(true);
@@ -45,6 +48,10 @@ export class QuoteListComponent implements OnInit {
   protected copiedId = signal<number | null>(null);
   /** Cotización pendiente de confirmar borrado. */
   protected pendingDelete = signal<Quote | null>(null);
+  /** Cotización pendiente de confirmar "Crear pedido" (evita el clic accidental). */
+  protected pendingCreateOrder = signal<Quote | null>(null);
+  /** Cotización pendiente de confirmar "Marcar confirmada". */
+  protected pendingConfirmQuote = signal<Quote | null>(null);
 
   /** Docs/plan-descuentos.md: descuento que el admin está por rechazar (pide motivo). */
   protected pendingReject = signal<{ quote: Quote; discount: QuoteDiscount } | null>(null);
@@ -144,18 +151,42 @@ export class QuoteListComponent implements OnInit {
     this.router.navigate([this.panelBase, 'cotizaciones', 'nueva']);
   }
 
+  /**
+   * Todos los vendedores pueden ver y editar cualquier cotización, pero
+   * eliminarla sigue siendo del dueño (quien la creó) o de un admin.
+   */
+  protected canDelete(quote: Quote): boolean {
+    return this.isAdmin || quote.sellerId === this.auth.currentUser()?.id;
+  }
+
   /** Editable mientras no se haya convertido en pedido. */
   protected editQuote(quote: Quote): void {
     this.router.navigate([this.panelBase, 'cotizaciones', quote.id, 'editar']);
   }
 
+  /** Pide confirmar antes de saltar al POS: el clic accidental era demasiado fácil. */
+  protected askCreateOrder(quote: Quote): void {
+    this.pendingCreateOrder.set(quote);
+  }
+
   /** Abre el POS con la cotización precargada para levantar el pedido. */
-  protected createOrder(quote: Quote): void {
+  protected confirmCreateOrder(): void {
+    const quote = this.pendingCreateOrder();
+    if (!quote) return;
+    this.pendingCreateOrder.set(null);
     const target = this.panelBase === '/admin' ? 'punto-venta' : 'nuevo';
     this.router.navigate([this.panelBase, target], { queryParams: { fromQuote: quote.id } });
   }
 
-  protected confirm(quote: Quote): void {
+  /** Pide confirmar antes de marcar la cotización como confirmada. */
+  protected askConfirmQuote(quote: Quote): void {
+    this.pendingConfirmQuote.set(quote);
+  }
+
+  protected confirmQuote(): void {
+    const quote = this.pendingConfirmQuote();
+    if (!quote) return;
+    this.pendingConfirmQuote.set(null);
     this.quotesService.confirm(quote.id).subscribe({
       next: () => {
         this.notification.success('Cotización confirmada — ya puedes levantar el pedido');
@@ -316,11 +347,11 @@ export class QuoteListComponent implements OnInit {
   }
 
   protected whatsappUrl(quote: Quote): string {
-    const phone = (quote.customerPhone ?? '').replace(/\D/g, '');
+    const phone = waPhone(quote.customerPhone);
     const text = encodeURIComponent(
       `Hola ${quote.customerName}, aquí está tu cotización de Mueblería Estilo y Confort:\n${quote.shareUrl}`,
     );
-    return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 
   /** Días naturales que le quedan de vigencia (para avisar de las que están por vencer). */

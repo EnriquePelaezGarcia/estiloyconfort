@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
-import { FactoryOrderItemRow } from '../../../../core/models/manufacturing.model';
+import { FactoryOrderItemRow, Manufacturer } from '../../../../core/models/manufacturing.model';
 import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
+import { ItemMessagesComponent } from '../../../../shared/components/item-messages/item-messages.component';
 
 /** Un pedido con todos sus items de fabricación agrupados. */
 export interface FactoryOrderGroup {
@@ -21,14 +23,21 @@ export interface FactoryOrderGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './factory-orders.component.html',
   styleUrl: './factory-orders.component.scss',
-  imports: [RouterLink, DatePipe, MediaUrlPipe],
+  imports: [RouterLink, DatePipe, MediaUrlPipe, ItemMessagesComponent],
 })
 export class FactoryOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
   private notification = inject(NotificationService);
+  private route = inject(ActivatedRoute);
+  private destroyRef = inject(DestroyRef);
 
   protected rows = signal<FactoryOrderItemRow[]>([]);
+  protected manufacturers = signal<Manufacturer[]>([]);
+  /** Filtro superior: null = todos los fabricantes. */
+  protected manufacturerFilter = signal<number | null>(null);
   protected loading = signal(true);
+  /** Item al que apunta la notificación con la que se llegó (link "Mensajes"). */
+  protected focusItemId = signal<number | null>(null);
   /** Ids de items con una asignación de fabricante en curso. */
   protected assigning = signal<Set<number>>(new Set());
   /** Ids de items con un cambio de estado (listo/pendiente) en curso. */
@@ -84,10 +93,17 @@ export class FactoryOrdersComponent implements OnInit {
       });
   }
 
-  /** Agrupa los items planos por pedido, para que cada pedido aparezca una sola vez. */
+  /**
+   * Agrupa los items planos por pedido, para que cada pedido aparezca una sola
+   * vez. El filtro por fabricante es por ITEM (cada línea puede tener un
+   * fabricante distinto dentro del mismo pedido): se filtra antes de agrupar y
+   * los pedidos que se quedan sin líneas visibles simplemente no aparecen.
+   */
   protected groups = computed<FactoryOrderGroup[]>(() => {
+    const mf = this.manufacturerFilter();
+    const filtered = mf === null ? this.rows() : this.rows().filter((r) => r.manufacturerId === mf);
     const map = new Map<number, FactoryOrderGroup>();
-    for (const r of this.rows()) {
+    for (const r of filtered) {
       let group = map.get(r.orderId);
       if (!group) {
         group = {
@@ -106,6 +122,16 @@ export class FactoryOrdersComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // El link "Mensajes" de una notificación apunta a esta misma ruta con solo
+    // el query param distinto: si ya estabas en /admin/fabricante/pedidos-fabrica,
+    // Angular reutiliza el componente y ngOnInit no vuelve a correr. Suscribirse
+    // al observable (no solo leer el snapshot) hace que el segundo click también
+    // aterrice y abra el hilo, no solo la primera navegación.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const raw = params.get('item');
+      this.focusItemId.set(raw ? Number(raw) : null);
+      if (!this.loading()) this.scrollToFocusedItem();
+    });
     this.load();
   }
 
@@ -115,12 +141,31 @@ export class FactoryOrdersComponent implements OnInit {
       next: (res) => {
         this.rows.set(res.data);
         this.loading.set(false);
+        this.scrollToFocusedItem();
       },
       error: () => {
         this.loading.set(false);
         this.notification.error('No se pudo cargar la lista de pedidos a fábrica');
       },
     });
+    this.manufacturingService.getManufacturers(true).subscribe({
+      next: (res) => this.manufacturers.set(res.data),
+      error: () => {},
+    });
+  }
+
+  /** Aterriza sobre el producto de la notificación (link "Mensajes"), ya con el hilo abierto. */
+  private scrollToFocusedItem(): void {
+    const id = this.focusItemId();
+    if (!id) return;
+    setTimeout(() => {
+      document.getElementById(`item-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }
+
+  protected onManufacturerFilterChange(event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    this.manufacturerFilter.set(raw ? Number(raw) : null);
   }
 
   /**

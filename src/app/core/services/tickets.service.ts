@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { PublicTicket } from '../models/ticket.model';
+import { waPhone } from '../utils/phone';
 
 /** Lo mínimo que necesita el mensaje de WhatsApp, venga de un pedido o de una entrega. */
 export interface TicketShareInfo {
@@ -67,12 +68,10 @@ export class TicketsService {
       `Rastrea tu pedido:\n${trackUrl}`,
     );
 
-    // Normaliza como el resto del proyecto (requestWhatsappUrl / whatsappUrl):
-    // se queda con los últimos 10 dígitos, así un teléfono guardado con lada,
-    // `+52` o espacios igual resuelve al chat directo en vez de caer al
-    // selector de contactos de WhatsApp.
-    const digits = (info.customerPhone ?? '').replace(/\D/g, '');
-    const phone = digits.length >= 10 ? digits.slice(-10) : '';
-    return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    // `waPhone` arma los dígitos con lada: 52 + 10 para un número nacional, o la
+    // lada internacional tal cual si se guardó en E.164 ("+1…"). Sin teléfono
+    // completo cae al selector de contactos de WhatsApp.
+    const phone = waPhone(info.customerPhone);
+    return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 }

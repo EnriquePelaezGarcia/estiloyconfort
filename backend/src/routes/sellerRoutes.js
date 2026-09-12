@@ -3,6 +3,7 @@ const sellerController = require('../controllers/sellerController');
 const creditClientsController = require('../controllers/creditClientsController');
 const adminController = require('../controllers/adminController');
 const notificationsController = require('../controllers/notificationsController');
+const itemMessagesController = require('../controllers/itemMessagesController');
 const ticketsController = require('../controllers/ticketsController');
 const authenticate = require('../middleware/auth');
 const authorize = require('../middleware/roleValidator');
@@ -23,6 +24,10 @@ router.get('/notifications/unread-count', notificationsController.unreadCount);
 router.get('/notifications', notificationsController.list);
 router.patch('/notifications/read-all', notificationsController.markAllRead);
 router.patch('/notifications/:id/read', notificationsController.markRead);
+
+// Chat por línea de pedido (vendedor/admin/fabricante).
+router.get('/order-items/:itemId/messages', itemMessagesController.list);
+router.post('/order-items/:itemId/messages', itemMessagesController.create);
 router.get('/inventory', sellerController.inventory);
 router.get('/credit-config', sellerController.creditConfig);
 router.get('/assembly-rates', sellerController.assemblyRates);
@@ -40,7 +45,9 @@ router.post(
 );
 router.post('/orders/split', sellerController.createSplit);
 router.patch('/orders/:id', sellerController.update);
-router.delete('/orders/:id', sellerController.remove);
+// Cancelar un pedido pasa por aprobación del admin: el vendedor SOLICITA con
+// una razón; el admin (o el propio flujo si lo pide un admin) lo cancela.
+router.post('/orders/:id/cancellation', sellerController.requestCancellation);
 // Docs/plan-aprobaciones-admin.md RN-EC6: cargo extra sobre un pedido ya existente.
 router.post('/orders/:id/extra-charges', sellerController.applyExtraCharge);
 // h1 — solicitud de reembolso (vendedor sobre cualquier pedido; admin auto-aprueba).

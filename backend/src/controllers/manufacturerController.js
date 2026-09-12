@@ -47,6 +47,10 @@ function mapPoItemForPortal(r) {
     materialLabel: r.material_label ?? null,
     sizeLabel: r.size_label ?? null,
     color: r.color ?? null,
+    // Foto del producto (la del material de la línea si la hay, si no la
+    // principal); null en renglones de producto nuevo. Ruta relativa: el front
+    // la resuelve con el pipe `mediaUrl`.
+    imageUrl: r.primary_image ?? null,
     quantity: Number(r.quantity),
     isReady: !!r.is_ready,
     readyQuantity: Number(r.ready_quantity ?? 0),
@@ -71,22 +75,37 @@ const manufacturerController = {
     const manufacturerId = await manufacturerIdOf(req.user.id);
     if (!manufacturerId) return res.json({ data: [] });
 
+    // La lista semanal es "haz N de estos": suma piezas de los pedidos de venta
+    // a fabricar Y de las órdenes de compra activas — para el fabricante son lo
+    // mismo (ver la vista unificada del portal).
     const placeholders = FABRICATION_STATUSES.map(() => '?').join(',');
+    const poPlaceholders = PO_VISIBLE_STATUSES.map(() => '?').join(',');
     const [rows] = await pool.execute(
-      `SELECT oi.product_id, oi.product_name, oi.product_sku,
-              SUM(oi.quantity) AS total_quantity,
-              SUM(oi.is_ready = FALSE) AS pending_lines,
-              SUM(oi.is_ready = TRUE) AS ready_lines,
+      `SELECT u.product_id, u.product_name, u.product_sku,
+              SUM(u.quantity) AS total_quantity,
+              SUM(u.is_ready = FALSE) AS pending_lines,
+              SUM(u.is_ready = TRUE) AS ready_lines,
               COUNT(*) AS line_count
-       FROM order_items oi
-       JOIN orders o ON o.id = oi.order_id
-       WHERE o.order_status IN (${placeholders})
-         AND oi.requires_fabrication = 1
-         AND oi.manufacturer_id = ?
-         ${DEPOSIT_GATE}
-       GROUP BY oi.product_id, oi.product_name, oi.product_sku
-       ORDER BY oi.product_name`,
-      [...FABRICATION_STATUSES, manufacturerId],
+       FROM (
+         SELECT oi.product_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready
+           FROM order_items oi
+           JOIN orders o ON o.id = oi.order_id
+          WHERE o.order_status IN (${placeholders})
+            AND oi.requires_fabrication = 1
+            AND oi.manufacturer_id = ?
+            ${DEPOSIT_GATE}
+         UNION ALL
+         SELECT poi.product_id, poi.product_name, poi.product_sku, poi.quantity, poi.is_ready
+           FROM purchase_order_items poi
+           JOIN purchase_orders po ON po.id = poi.purchase_order_id
+          WHERE po.status IN (${poPlaceholders})
+            AND po.manufacturer_id = ?
+            AND po.acceptance_status <> 'rejected'
+            AND poi.product_id IS NOT NULL
+       ) u
+       GROUP BY u.product_id, u.product_name, u.product_sku
+       ORDER BY u.product_name`,
+      [...FABRICATION_STATUSES, manufacturerId, ...PO_VISIBLE_STATUSES, manufacturerId],
     );
     res.json({
       data: rows.map((r) => ({
@@ -113,7 +132,11 @@ const manufacturerController = {
       `SELECT oi.id, oi.order_id, oi.product_name, oi.product_sku, oi.quantity, oi.is_ready,
               oi.ready_quantity, oi.fabrication_note, oi.fabrication_ref_images,
               oi.is_custom_modification,
-              oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color
+              oi.material_id, oi.material_label, oi.size_id, oi.size_label, oi.color,
+              (SELECT image_url FROM product_images
+                WHERE product_id = oi.product_id
+                ORDER BY (material_id = oi.material_id) DESC, is_primary DESC, order_display, id
+                LIMIT 1) AS primary_image
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        WHERE o.order_status IN (${placeholders})
@@ -165,6 +188,9 @@ const manufacturerController = {
         isCustomModification: !!it.is_custom_modification,
         fabricationNote: it.fabrication_note ?? null,
         fabricationRefImages: refImages.parse(it.fabrication_ref_images),
+        // Foto del producto (la del material de esta línea si la hay, si no la
+        // principal). Ruta relativa: el front la resuelve con el pipe `mediaUrl`.
+        imageUrl: it.primary_image ?? null,
         materialId: it.material_id,
         materialLabel: it.material_label,
         sizeId: it.size_id ?? null,
@@ -232,7 +258,9 @@ const manufacturerController = {
     // Sin JOIN a product_material_prices ni a las vistas: si la consulta no
     // puede alcanzar los precios de venta, no puede filtrarlos por error.
     const [rows] = await pool.execute(
-      `SELECT p.id AS product_id, p.name, p.sku, pmc.material_id, mat.code, mat.label, pmc.cost
+      `SELECT p.id AS product_id, p.name, p.sku, pmc.material_id, mat.code, mat.label, pmc.cost,
+              (SELECT image_url FROM product_images WHERE product_id = p.id
+                 ORDER BY is_primary DESC, order_display, id LIMIT 1) AS primary_image
          FROM product_manufacturer_costs pmc
          JOIN products p ON p.id = pmc.product_id
          JOIN materials mat ON mat.id = pmc.material_id
@@ -243,7 +271,13 @@ const manufacturerController = {
     const byProduct = new Map();
     for (const r of rows) {
       if (!byProduct.has(r.product_id)) {
-        byProduct.set(r.product_id, { productId: r.product_id, name: r.name, sku: r.sku, costs: [] });
+        byProduct.set(r.product_id, {
+          productId: r.product_id,
+          name: r.name,
+          sku: r.sku,
+          primaryImage: r.primary_image ?? null,
+          costs: [],
+        });
       }
       byProduct.get(r.product_id).costs.push({
         materialId: r.material_id,
@@ -378,7 +412,7 @@ const manufacturerController = {
 
     const placeholders = PO_VISIBLE_STATUSES.map(() => '?').join(',');
     const [orders] = await pool.query(
-      `SELECT id, po_number, status, order_date, expected_date, notes,
+      `SELECT id, po_number, status, order_date, expected_date, notes, total_cost,
               acceptance_status, acceptance_reject_reason
          FROM purchase_orders
         WHERE manufacturer_id = ? AND status IN (${placeholders})
@@ -389,7 +423,12 @@ const manufacturerController = {
 
     const poIds = orders.map((o) => o.id);
     const [items] = await pool.query(
-      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label
+      `SELECT poi.*, mat.label AS material_label, sz.label AS size_label,
+              (SELECT pi.image_url FROM product_images pi
+                WHERE pi.product_id = poi.product_id
+                ORDER BY (pi.material_id = poi.material_id) DESC, pi.is_primary DESC,
+                         pi.order_display, pi.id
+                LIMIT 1) AS primary_image
          FROM purchase_order_items poi
          LEFT JOIN materials mat ON mat.id = poi.material_id
          LEFT JOIN sizes sz ON sz.id = poi.size_id
@@ -404,6 +443,9 @@ const manufacturerController = {
       orderDate: o.order_date,
       expectedDate: o.expected_date,
       notes: o.notes ?? null,
+      // Costo total del encargo — lo que se le pagará al fabricante. Es SU
+      // información (no el precio de venta), así que sí se expone (D14).
+      totalCost: o.total_cost != null ? Number(o.total_cost) : 0,
       acceptance: {
         status: o.acceptance_status,
         rejectReason: o.acceptance_reject_reason ?? null,
@@ -521,6 +563,85 @@ const manufacturerController = {
     });
   }),
 
+  // ─── SOLICITUD DE AJUSTE DE PRECIO (Fase B) ────────────────────────────────
+  // El fabricante pide un cargo extra sobre un encargo suyo (OC o pedido de
+  // fabricación) cuando una modificación le implica más trabajo/material.
+  // Queda 'pending' y NO suma a cuentas por pagar hasta que el admin lo aprueba
+  // en el módulo Aprobaciones (Docs/plan-oc-cuentas-por-pagar-devengo-anticipo.md).
+
+  // POST /api/manufacturer/purchase-orders/:id/charge-request  { amount, concept, notes? }
+  requestPurchaseOrderCharge: asyncHandler(async (req, res) => {
+    const poId = Number(req.params.id);
+    const po = await manufacturerController._requirePo(req, poId);
+    if (po.status === 'cancelled') throw ApiError.badRequest('Esta orden de compra está cancelada');
+    if (po.acceptance_status !== 'accepted') {
+      throw ApiError.badRequest('Primero acepta el encargo para poder pedir un ajuste.');
+    }
+    const { id } = await ManufacturerPayable.createChargeRequest({
+      manufacturerId: po.manufacturer_id,
+      sourceType: 'purchase_order',
+      sourceId: poId,
+      amount: req.body.amount,
+      concept: req.body.concept,
+      notes: req.body.notes,
+    }, req.user.id, 'manufacturer');
+    await notifyChargeRequested(po.manufacturer_id, po.po_number, req.body.amount, req.body.concept);
+    res.status(201).json({ data: { id }, message: 'Solicitud enviada. La tienda debe aprobarla.' });
+  }),
+
+  // POST /api/manufacturer/orders/:id/charge-request  { amount, concept, notes? }
+  requestOrderCharge: asyncHandler(async (req, res) => {
+    const orderId = Number(req.params.id);
+    const manufacturerId = await manufacturerController._manufacturerForRequest(req, orderId);
+    const [[order]] = await pool.execute(
+      'SELECT order_number, order_status FROM orders WHERE id = ?', [orderId],
+    );
+    if (!order) throw ApiError.notFound('Pedido no encontrado');
+    if (order.order_status === 'cancelled') throw ApiError.badRequest('Ese pedido está cancelado');
+    const acc = await ManufacturerAcceptance.statusFor(orderId, manufacturerId);
+    if (!acc || acc.status !== 'accepted') {
+      throw ApiError.badRequest('Primero acepta el pedido para poder pedir un ajuste.');
+    }
+    const { id } = await ManufacturerPayable.createChargeRequest({
+      manufacturerId,
+      sourceType: 'order',
+      sourceId: orderId,
+      amount: req.body.amount,
+      concept: req.body.concept,
+      notes: req.body.notes,
+    }, req.user.id, 'manufacturer');
+    await notifyChargeRequested(manufacturerId, order.order_number, req.body.amount, req.body.concept);
+    res.status(201).json({ data: { id }, message: 'Solicitud enviada. La tienda debe aprobarla.' });
+  }),
+
+  // GET /api/manufacturer/charge-requests — las que hizo este fabricante
+  myChargeRequests: asyncHandler(async (req, res) => {
+    const manufacturerId = await manufacturerIdOf(req.user.id);
+    if (!manufacturerId) return res.json({ data: [] });
+    const data = await ManufacturerPayable.chargeRequestsForManufacturer(manufacturerId);
+    res.json({ data });
+  }),
+
+  // PATCH /api/manufacturer/charge-requests/:id  { amount?, concept?, notes? }
+  updateChargeRequest: asyncHandler(async (req, res) => {
+    if (req.user.role !== 'manufacturer') throw ApiError.forbidden('Solo el fabricante edita su solicitud');
+    await ManufacturerPayable.updateChargeRequest(req.params.id, req.user.id, req.body);
+    res.json({ message: 'Solicitud actualizada' });
+  }),
+
+  // DELETE /api/manufacturer/charge-requests/:id
+  cancelChargeRequest: asyncHandler(async (req, res) => {
+    const ok = await ManufacturerPayable.cancelChargeRequest(req.params.id, req.user.id);
+    if (!ok) throw ApiError.badRequest('No se puede cancelar: la tienda ya la revisó o no es tuya');
+    res.json({ message: 'Solicitud cancelada' });
+  }),
+
+  // POST /api/manufacturer/charge-requests/:id/acknowledge
+  acknowledgeChargeRejection: asyncHandler(async (req, res) => {
+    await ManufacturerPayable.acknowledgeChargeRejection(req.params.id, req.user.id);
+    res.json({ message: 'Visto' });
+  }),
+
   // ─── HISTORIAL Y PAGOS ─────────────────────────────────────────────────────
 
   /**
@@ -594,6 +715,18 @@ const manufacturerController = {
     const total = data.reduce((sum, b) => sum + b.totalAmount, 0);
     res.json({ data, meta: { total: Math.round(total * 100) / 100, count: data.length } });
   }),
+
+  /**
+   * GET /api/manufacturer/statements — sus estados de cuenta archivados.
+   * Solo lectura: generarlo y reenviarlo por correo es acción del admin (ver
+   * payablesController). Mismo aislamiento por manufacturerId que el resto.
+   */
+  myStatements: asyncHandler(async (req, res) => {
+    const manufacturerId = await resolveManufacturerScope(req);
+    if (!manufacturerId) return res.json({ data: [] });
+    const data = await ManufacturerPayable.listStatements(manufacturerId);
+    res.json({ data });
+  }),
 };
 
 /**
@@ -617,6 +750,18 @@ function emptyHistoryMeta() {
     to: null,
     summary: { count: 0, pieces: 0, amount: 0, paid: 0, balance: 0 },
   };
+}
+
+/** Avisa al admin que un fabricante pidió un ajuste de precio. */
+async function notifyChargeRequested(manufacturerId, folio, amount, concept) {
+  const [[m]] = await pool.execute('SELECT name FROM manufacturers WHERE id = ?', [manufacturerId]);
+  const money = Math.abs(Number(amount) || 0).toFixed(2);
+  await Notification.create({
+    audience: 'admin',
+    type: 'manufacturer_charge_requested',
+    title: `${m?.name ?? 'Un fabricante'} pide un ajuste de $${money} en ${folio}`,
+    body: concept ? String(concept).slice(0, 500) : null,
+  });
 }
 
 module.exports = manufacturerController;

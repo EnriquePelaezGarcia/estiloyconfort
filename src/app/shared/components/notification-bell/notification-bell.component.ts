@@ -56,7 +56,7 @@ export class NotificationBellComponent {
     }
     this.close();
     if (n.orderId) {
-      const target = this.store.orderTarget(n.orderId);
+      const target = this.store.orderTarget(n.orderId, n.orderItemId);
       this.router.navigate(target.commands, { queryParams: target.queryParams });
     }
   }

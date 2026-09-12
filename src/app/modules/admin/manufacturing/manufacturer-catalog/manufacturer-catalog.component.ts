@@ -9,14 +9,16 @@ import {
   ManufacturerInput,
 } from '../../../../core/models/manufacturing.model';
 import { MaterialsStore } from '../../../../core/services/materials.store';
-import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../../core/utils/phone';
+import { formatPhoneDigits, formatPhoneForDisplay, normalizePhone, phoneValidator } from '../../../../core/utils/phone';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../../shared/components/image-lightbox/image-lightbox.component';
 
 @Component({
   selector: 'app-manufacturer-catalog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-catalog.component.html',
   styleUrl: './manufacturer-catalog.component.scss',
-  imports: [CurrencyPipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, ReactiveFormsModule, MediaUrlPipe, ImageLightboxComponent],
 })
 export class ManufacturerCatalogComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
@@ -30,6 +32,9 @@ export class ManufacturerCatalogComponent implements OnInit {
   protected selectedManufacturer = signal<number | null>(null);
   protected readonly materials = this.materialsStore.active;
 
+  /** Foto del listado abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
+
   /** Fabricante en edición (null = formulario cerrado, 0 = alta nueva). */
   protected editing = signal<number | null>(null);
   protected saving = signal(false);
@@ -37,8 +42,8 @@ export class ManufacturerCatalogComponent implements OnInit {
   protected readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(255)]],
     contactName: [''],
-    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
-    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
+    // Opcional; 10 dígitos ("222 123 4567") o "+lada" internacional. Vacío pasa.
+    phone: ['', [phoneValidator]],
     email: ['', [Validators.email]],
     address: [''],
     notes: [''],
@@ -73,6 +78,11 @@ export class ManufacturerCatalogComponent implements OnInit {
         this.notification.error('No se pudo cargar el catálogo');
       },
     });
+  }
+
+  // ===== Ver foto en grande =====
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
   }
 
   protected onFilterChange(event: Event): void {
@@ -117,7 +127,7 @@ export class ManufacturerCatalogComponent implements OnInit {
     const input: ManufacturerInput = {
       name: (v.name ?? '').trim(),
       contactName: v.contactName || null,
-      phone: v.phone || null,
+      phone: v.phone ? normalizePhone(v.phone) : null,
       email: v.email || null,
       address: v.address || null,
       notes: v.notes || null,

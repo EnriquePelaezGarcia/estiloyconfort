@@ -8,10 +8,25 @@ const Product = {
     const conditions = includeInactive ? [] : ['p.is_active = TRUE'];
     const params = [];
 
-    if (categoryId) { conditions.push('p.category_id = ?'); params.push(categoryId); }
+    if (categoryId) {
+      // El catálogo público filtra por SLUG (?categoria=tocadores-vanity) — un
+      // `p.category_id = 'tocadores-vanity'` nunca casa y devolvía 0 productos.
+      // Se acepta también el id numérico por si algún otro llamador lo pasa.
+      if (/^\d+$/.test(String(categoryId))) {
+        conditions.push('p.category_id = ?');
+        params.push(Number(categoryId));
+      } else {
+        conditions.push('c.slug = ?');
+        params.push(categoryId);
+      }
+    }
     if (featured !== undefined) { conditions.push('p.is_featured = ?'); params.push(featured ? 1 : 0); }
     if (search) {
-      conditions.push('(p.name LIKE ? OR p.description LIKE ?)');
+      // Solo por NOMBRE del producto y NOMBRE de la categoría: un mueble con
+      // nombre de fantasía ("Grand Holli") no se encuentra tecleándolo, pero sí
+      // por su categoría ("tocador"). La descripción se dejó fuera a propósito
+      // (traía ruido: coincidencias en textos largos que el cliente no busca).
+      conditions.push('(p.name LIKE ? OR c.name LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
     }
     // D7: el precio público es un rango (hasta 3 materiales); minPrice/maxPrice
@@ -58,6 +73,7 @@ const Product = {
 
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN product_public_prices pp ON pp.product_id = p.id
        ${where}`, params
     );

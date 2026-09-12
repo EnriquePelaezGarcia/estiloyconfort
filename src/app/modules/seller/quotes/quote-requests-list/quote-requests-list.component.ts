@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { QuoteRequestsService } from '../../../../core/services/quote-requests.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { QuoteRequestDetail } from '../../../../core/models/quote-request.model';
+import { waPhone } from '../../../../core/utils/phone';
 
 /**
  * Bandeja de solicitudes de cotización que los clientes armaron en el
@@ -90,8 +91,8 @@ export class QuoteRequestsListComponent implements OnInit {
 
   /** Link directo al cliente. El teléfono viene sin validar desde el carrito. */
   protected requestWhatsappUrl(phone: string | null): string | null {
-    const digits = (phone ?? '').replace(/\D/g, '');
-    return digits.length >= 10 ? `https://wa.me/52${digits.slice(-10)}` : null;
+    const n = waPhone(phone);
+    return n ? `https://wa.me/${n}` : null;
   }
 
   protected dismissRequest(token: string): void {

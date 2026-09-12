@@ -56,7 +56,18 @@
 </section>
 
 <section class="panel">
-  <div class="panel__title"><span>Documentos</span></div>
+  <div class="panel__title">
+    <span>Documentos</span>
+    @if (selectedDocs().length) {
+      <span class="selection-bar">
+        <span>{{ selectedDocs().length }} seleccionado(s) · {{ selectedTotal() | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</span>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="clearSelection()">Quitar selección</button>
+        <button type="button" class="btn btn--primary btn--sm" (click)="paySelected()">
+          <span class="material-symbols-outlined">payments</span> Pagar seleccionados
+        </button>
+      </span>
+    }
+  </div>
 
   @if (loading()) {
     <div class="state"><span class="spinner"></span> Cargando...</div>
@@ -65,6 +76,8 @@
       <table class="table">
         <thead>
           <tr>
+            <th></th>
+            <th></th>
             <th>Tipo</th>
             <th>Folio</th>
             <th>Referencia</th>
@@ -80,6 +93,29 @@
         <tbody>
           @for (d of documents(); track d.sourceType + d.sourceId) {
             <tr>
+              <td>
+                <button
+                  type="button"
+                  class="icon-btn expand-toggle"
+                  (click)="toggleExpand(d)"
+                  [attr.aria-expanded]="isExpanded(d)"
+                  [title]="isExpanded(d) ? 'Ocultar piezas' : 'Ver piezas'"
+                >
+                  <span class="material-symbols-outlined">
+                    {{ isExpanded(d) ? 'expand_less' : 'expand_more' }}
+                  </span>
+                </button>
+              </td>
+              <td>
+                @if (d.balance > 0.005) {
+                  <input
+                    type="checkbox"
+                    [checked]="isSelected(d)"
+                    (change)="toggleSelection(d)"
+                    [attr.aria-label]="'Seleccionar ' + d.folio"
+                  />
+                }
+              </td>
               <td><span class="badge" [class]="typeTone[d.sourceType]">{{ typeLabels[d.sourceType] }}</span></td>
               <td><strong>{{ d.folio }}</strong></td>
               <td>{{ d.reference || '—' }}</td>
@@ -119,9 +155,53 @@
                 }
               </td>
             </tr>
+            @if (isExpanded(d)) {
+              <tr class="detail-row">
+                <td [attr.colspan]="12">
+                  @if (isLoadingItems(d)) {
+                    <div class="state state--sm"><span class="spinner spinner--sm"></span> Cargando piezas...</div>
+                  } @else if (itemsFor(d).length) {
+                    <div class="items-grid">
+                      @for (it of itemsFor(d); track it.id) {
+                        <div class="item-row">
+                          @if (it.imageUrl) {
+                            <button
+                              type="button"
+                              class="item-row__photo"
+                              title="Ver foto en grande"
+                              (click)="zoomedImage.set(it.imageUrl)"
+                            >
+                              <img [src]="it.imageUrl | mediaUrl: 'thumb'" [alt]="it.productName" loading="lazy" />
+                            </button>
+                          } @else {
+                            <span class="item-row__photo item-row__photo--empty">
+                              <span class="material-symbols-outlined">inventory_2</span>
+                            </span>
+                          }
+                          <div class="item-row__info">
+                            <strong class="item-row__name">{{ it.productName }}</strong>
+                            <span class="item-row__meta">
+                              @if (it.materialLabel) { <span>{{ it.materialLabel }}</span> }
+                              @if (it.color) { <span>{{ it.color }}</span> }
+                              @if (!it.materialLabel && !it.color) { <span class="table__hint">Sin color/material</span> }
+                            </span>
+                          </div>
+                          <div class="item-row__price">
+                            <span>{{ it.unitCost | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }} c/u × {{ it.quantity }}</span>
+                            <strong>{{ it.subtotal | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="empty">Este documento no tiene piezas registradas.</p>
+                  }
+                </td>
+              </tr>
+            }
           } @empty {
             <tr>
-              <td colspan="10" class="empty">Sin documentos en este período.</td>
+              <td colspan="12" class="empty">Sin documentos en este período.</td>
             </tr>
           }
         </tbody>
@@ -143,6 +223,7 @@
             <th>Referencia</th>
             <th>Aplicado a</th>
             <th class="table__num">Total</th>
+            <th>Recibo</th>
             <th></th>
           </tr>
         </thead>
@@ -163,6 +244,25 @@
                 </span>
               </td>
               <td class="table__num"><strong>{{ b.totalAmount | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+              <td>
+                @if (b.receiptPdfUrl) {
+                  <a [href]="mediaUrl(b.receiptPdfUrl)" target="_blank" class="folio-chip">{{ b.receiptNumber }}</a>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    [disabled]="sendingReceiptId() === b.id"
+                    (click)="sendReceipt(b)"
+                    title="Enviar recibo por correo"
+                  >
+                    <span class="material-symbols-outlined">mail</span>
+                  </button>
+                  @if (b.receiptEmailedAt) {
+                    <small class="table__hint">enviado {{ b.receiptEmailedAt | date: 'dd/MM/yyyy' }}</small>
+                  }
+                } @else {
+                  <span class="table__hint">sin recibo</span>
+                }
+              </td>
               <td class="table__actions">
                 <button type="button" class="icon-btn icon-btn--danger" (click)="removeBatch(b)" title="Eliminar pago">
                   <span class="material-symbols-outlined">delete</span>
@@ -175,6 +275,73 @@
     </div>
   } @else {
     <p class="empty">Todavía no se le registra ningún pago.</p>
+  }
+</section>
+
+<!-- ── ESTADO DE CUENTA ──────────────────────────────────────────────────── -->
+<section class="panel">
+  <div class="panel__title"><span>Estado de cuenta</span></div>
+
+  <form [formGroup]="statementForm" (ngSubmit)="generateStatement()" class="field-row statement-form">
+    <label class="field">
+      <span class="field__label">Del</span>
+      <input type="date" formControlName="periodFrom" />
+    </label>
+    <label class="field">
+      <span class="field__label">Al</span>
+      <input type="date" formControlName="periodTo" />
+    </label>
+    <button type="submit" class="btn btn--primary" [disabled]="statementForm.invalid || generatingStatement()">
+      @if (generatingStatement()) {
+        <span class="spinner spinner--sm"></span> Generando...
+      } @else {
+        <span class="material-symbols-outlined">description</span> Generar estado de cuenta
+      }
+    </button>
+  </form>
+
+  @if (statements().length) {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Periodo</th>
+            <th class="table__num">Saldo inicial</th>
+            <th class="table__num">Saldo final</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (s of statements(); track s.id) {
+            <tr>
+              <td>
+                <a [href]="mediaUrl(s.pdfUrl)" target="_blank" class="folio-chip">{{ s.statementNumber }}</a>
+              </td>
+              <td>{{ s.periodFrom | date: 'dd/MM/yyyy' }} — {{ s.periodTo | date: 'dd/MM/yyyy' }}</td>
+              <td class="table__num">{{ s.openingBalance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</td>
+              <td class="table__num"><strong>{{ s.closingBalance | currency: 'MXN' : 'symbol-narrow' : '1.2-2' }}</strong></td>
+              <td class="table__actions">
+                <button
+                  type="button"
+                  class="icon-btn"
+                  [disabled]="sendingStatementId() === s.id"
+                  (click)="sendStatement(s)"
+                  title="Enviar por correo"
+                >
+                  <span class="material-symbols-outlined">mail</span>
+                </button>
+                @if (s.emailedAt) {
+                  <small class="table__hint">enviado {{ s.emailedAt | date: 'dd/MM/yyyy' }}</small>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <p class="empty">Todavía no se ha generado ningún estado de cuenta.</p>
   }
 </section>
 
@@ -193,7 +360,8 @@
           <p class="modal__note">
             <span class="material-symbols-outlined">info</span>
             Una sola salida de caja, repartida entre los documentos que marques.
-            Los que aún no se entregan quedan sin marcar: pagarlos es un anticipo.
+            Los que aún no llegan a bodega quedan sin marcar: pagarlos por
+            adelantado (anticipo o liquidación) es decisión tuya.
           </p>
 
           <div class="cut-list">
@@ -307,6 +475,10 @@
             <span class="field__label">Notas</span>
             <input type="text" formControlName="notes" />
           </label>
+          <label class="field field--check">
+            <input type="checkbox" formControlName="approveNow" />
+            <span>Aprobar ahora (afecta el saldo de inmediato). Si lo desmarcas, queda pendiente en Aprobaciones.</span>
+          </label>
           <p class="modal__note">
             <span class="material-symbols-outlined">info</span>
             Usa un monto <strong>negativo</strong> para una nota de crédito o un descuento
@@ -322,4 +494,9 @@
       </form>
     </div>
   </div>
+}
+
+<!-- ── FOTO AMPLIADA DE UNA PIEZA ────────────────────────────────────────── -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox [src]="(img | mediaUrl) ?? ''" (closed)="zoomedImage.set(null)" />
 }

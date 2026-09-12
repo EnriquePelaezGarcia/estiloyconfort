@@ -239,11 +239,12 @@ function normalizeDate(value) {
 /**
  * Valida y normaliza el bloque de entrega (Docs/plan-fecha-hora-entrega.md §5.1).
  *
- * Regla única (§3.2): una entrega 'exact' —cumpleaños, XV años— exige fecha
- * Y ventana horaria completa, porque el compromiso con el cliente es llegar
- * dentro de ese rango. Una 'tentative' no exige nada, pero una ventana a
- * medias (inicio sin fin) nunca se acepta en ningún caso: no significa nada
- * para quien la lee después.
+ * Regla única (§3.2): una entrega 'exact' —cumpleaños, XV años— exige la
+ * FECHA, porque el compromiso con el cliente es el día. La ventana horaria es
+ * opcional: un regalo puede tener el día cerrado y la hora aún por confirmar,
+ * y se captura después editando el pedido. Una 'tentative' no exige nada, pero
+ * una ventana a medias (inicio sin fin) nunca se acepta en ningún caso: no
+ * significa nada para quien la lee después.
  *
  * Si viene `deliverySlotId`, las horas se leen del catálogo `delivery_slots`
  * y se IGNORA lo que mande el cliente: si no, un request manipulado podría
@@ -296,9 +297,12 @@ async function normalizeDeliverySchedule(data, executor = pool, blockExact = fal
     throw badRequest('La hora final debe ser posterior a la hora inicial.');
   }
 
-  if (commitment === 'exact') {
-    if (!date) throw badRequest('Selecciona la fecha de entrega. En una entrega exacta es obligatoria.');
-    if (!start) throw badRequest('Selecciona el horario de entrega. En una entrega exacta es obligatorio.');
+  // Una entrega 'exact' exige la FECHA —el compromiso con el cliente es el día—,
+  // pero el horario es opcional: es común que un regalo (cumpleaños, XV) tenga
+  // el día cerrado y la hora todavía por confirmar. Ese horario se captura
+  // después editando el pedido.
+  if (commitment === 'exact' && !date) {
+    throw badRequest('Selecciona la fecha de entrega. En una entrega exacta es obligatoria.');
   }
 
   return {
@@ -312,20 +316,32 @@ async function normalizeDeliverySchedule(data, executor = pool, blockExact = fal
 
 /**
  * Registra una reprogramación en `order_delivery_changes` si algo del bloque
- * de entrega cambió (D7). El motivo sólo se EXIGE cuando el pedido ya estaba
- * comprometido como 'exact': mover una entrega de XV años tiene que dejar
- * rastro de quién y por qué; mover una tentativa es la operación normal del
- * negocio y no debe estorbar.
+ * de entrega cambió (D7). El motivo sólo se EXIGE cuando en una entrega 'exact'
+ * se PISA un dato ya comprometido: cambiar una fecha por otra, o cambiar/borrar
+ * una ventana horaria que ya estaba fija. Mover una tentativa —o simplemente
+ * rellenar el horario que faltaba en un regalo del que ya se sabía el día— es
+ * la operación normal del negocio y no debe estorbar.
  */
 async function logDeliveryChange(executor, orderId, existing, next, reason, userId) {
+  const oldDate = normalizeDate(existing.expectedDeliveryDate);
+  const oldStart = existing.deliveryWindowStart ?? null;
+  const oldEnd = existing.deliveryWindowEnd ?? null;
+
   const changed = existing.deliveryCommitment !== next.deliveryCommitment
-    || normalizeDate(existing.expectedDeliveryDate) !== next.expectedDeliveryDate
-    || (existing.deliveryWindowStart ?? null) !== next.deliveryWindowStart
-    || (existing.deliveryWindowEnd ?? null) !== next.deliveryWindowEnd;
+    || oldDate !== next.expectedDeliveryDate
+    || oldStart !== next.deliveryWindowStart
+    || oldEnd !== next.deliveryWindowEnd;
   if (!changed) return;
 
+  // Pisar un compromiso = había un valor y ahora hay otro (o se borró). Pasar
+  // de "sin horario" a "con horario" no cuenta: es completar, no reprogramar.
+  const overwritesCommitment =
+    (oldDate && next.expectedDeliveryDate && oldDate !== next.expectedDeliveryDate)
+    || (oldStart && oldStart !== next.deliveryWindowStart)
+    || (oldEnd && oldEnd !== next.deliveryWindowEnd);
+
   const trimmedReason = (reason ?? '').trim();
-  if (existing.deliveryCommitment === 'exact' && !trimmedReason) {
+  if (existing.deliveryCommitment === 'exact' && overwritesCommitment && !trimmedReason) {
     throw badRequest('Esta es una entrega comprometida: indica el motivo del cambio.');
   }
 
@@ -908,6 +924,50 @@ const Order = {
       order.groupSiblings = [];
     }
     return order;
+  },
+
+  /**
+   * Historial del pedido para el detalle (admin + vendedor): línea de tiempo de
+   * estatus y evidencia de entrega. Se llama SOLO desde los controladores de
+   * detalle — no se cuelga de `findById` porque esa vía la usan el ticket
+   * público por token y los hermanos de venta partida, que no deben cargar la
+   * firma ni la foto (data URLs pesadas).
+   *
+   * @param {number} id
+   * @returns {Promise<{statusHistory: Array<{status:string, changedAt:Date}>,
+   *   delivery: object|null}>}
+   */
+  async getHistory(id) {
+    const OrderStatusHistory = require('./OrderStatusHistory');
+    const ActivityLog = require('./ActivityLog');
+    const statusHistory = await OrderStatusHistory.findByOrderId(id);
+    // Bitácora de ediciones: quién tocó el pedido y qué cambió.
+    const activity = await ActivityLog.findForEntity('order', id);
+
+    // `deliveries` es 1:1 con el pedido (ver Delivery.markFailed): a lo más una fila.
+    const [[dv]] = await pool.execute(
+      `SELECT dv.delivery_status, dv.assignment_date, dv.delivered_at,
+              dv.signature_image_url, dv.photo_url, dv.notes,
+              u.full_name AS delivery_person_name
+         FROM deliveries dv
+         LEFT JOIN users u ON u.id = dv.delivery_person_id
+        WHERE dv.order_id = ?`,
+      [id],
+    );
+
+    const delivery = dv
+      ? {
+        deliveryStatus: dv.delivery_status,
+        assignmentDate: dv.assignment_date ?? null,
+        deliveredAt: dv.delivered_at ?? null,
+        signatureImageUrl: dv.signature_image_url ?? null,
+        photoUrl: dv.photo_url ?? null,
+        notes: dv.notes ?? null,
+        deliveryPersonName: dv.delivery_person_name ?? null,
+      }
+      : null;
+
+    return { statusHistory, delivery, activity };
   },
 
   /**

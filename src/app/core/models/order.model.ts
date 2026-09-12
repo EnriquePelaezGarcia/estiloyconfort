@@ -1,3 +1,5 @@
+import { ActivityEntry } from './activity.model';
+import { ApprovalStatus } from './approval.model';
 import { ManufacturerOption } from './manufacturing.model';
 
 export type OrderStatus =
@@ -390,6 +392,64 @@ export interface Order {
    * del/los fabricante(s) del pedido (solo en el detalle de admin).
    */
   manufacturerAcceptance?: ManufacturerAcceptanceRow[];
+  /**
+   * Historial del pedido para el apartado del detalle: línea de tiempo de
+   * estatus y evidencia de entrega. Solo lo incluyen los endpoints de detalle
+   * (admin `getOrder` / vendedor `getOne`).
+   */
+  history?: OrderHistory | null;
+  /**
+   * Solicitud de cancelación pendiente, si la hay. Mientras exista, el pedido
+   * está congelado (no se edita ni se asigna a reparto) hasta que el admin la
+   * apruebe o rechace. Solo en los endpoints de detalle.
+   */
+  pendingCancellation?: OrderCancellationRequest | null;
+}
+
+/** Solicitud de cancelación de pedido (`order_cancellations`). */
+export interface OrderCancellationRequest {
+  id: number;
+  orderId: number;
+  orderNumber: string | null;
+  customerName: string | null;
+  reason: string;
+  status: ApprovalStatus;
+  requestedBy: number | null;
+  requestedByName: string | null;
+  requestedByRole: string | null;
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+/** Un cambio de estatus del pedido (`order_status_history`). */
+export interface OrderStatusHistoryEntry {
+  status: OrderStatus;
+  changedAt: string;
+}
+
+/**
+ * Evidencia de entrega (`deliveries`, 1:1 con el pedido). `null` mientras no se
+ * haya asignado repartidor.
+ */
+export interface OrderDeliveryProof {
+  deliveryStatus: string;
+  assignmentDate: string | null;
+  deliveredAt: string | null;
+  signatureImageUrl: string | null;
+  photoUrl: string | null;
+  /** Notas de la entrega; los intentos fallidos se anexan aquí como líneas. */
+  notes: string | null;
+  deliveryPersonName: string | null;
+}
+
+export interface OrderHistory {
+  statusHistory: OrderStatusHistoryEntry[];
+  delivery: OrderDeliveryProof | null;
+  /** Bitácora de ediciones: quién tocó el pedido y qué cambió. */
+  activity?: ActivityEntry[];
 }
 
 export type ManufacturerAcceptanceStatus = 'pending' | 'accepted' | 'rejected';
@@ -411,7 +471,21 @@ export interface AppNotification {
   body: string | null;
   orderId: number | null;
   orderNumber: string | null;
+  /** Solo en notificaciones tipo 'item_message': a qué línea del pedido lleva. */
+  orderItemId: number | null;
   read: boolean;
+  createdAt: string;
+}
+
+/** Un mensaje del chat de una línea de pedido (vendedor/admin/fabricante). */
+export interface ItemMessage {
+  id: number;
+  orderItemId: number;
+  orderId: number;
+  senderId: number;
+  senderRole: 'admin' | 'seller' | 'manufacturer';
+  senderName: string;
+  body: string;
   createdAt: string;
 }
 
@@ -448,11 +522,20 @@ export interface CreateOrderRequest {
   /** Instrumento del abono inicial: sólo efectivo o transferencia. */
   initialPaymentMethod?: 'cash' | 'transfer' | null;
   expectedDeliveryDate?: string | null;
-  /** 'exact' exige fecha y ventana horaria; el backend rechaza lo contrario. */
+  /**
+   * 'exact' exige la FECHA; el horario es opcional (un regalo puede tener el
+   * día cerrado y la hora por confirmar) y se captura después editando.
+   */
   deliveryCommitment?: DeliveryCommitment;
   deliveryWindowStart?: string | null;
   deliveryWindowEnd?: string | null;
   deliverySlotId?: number | null;
+  /**
+   * Motivo de la reprogramación (D7). Sólo se exige al EDITAR cuando en una
+   * entrega 'exact' se pisa una fecha u hora que ya estaba fija; rellenar un
+   * horario que faltaba no lo necesita.
+   */
+  rescheduleReason?: string | null;
   notes?: string | null;
   shippingCost?: number | null;
   shippingPostalCode?: string | null;
@@ -756,6 +839,8 @@ export interface ManufacturerOrder {
     isCustomModification?: boolean;
     fabricationNote?: string | null;
     fabricationRefImages?: string[];
+    /** Foto del producto (ruta relativa, resolver con `mediaUrl`). */
+    imageUrl?: string | null;
     materialId?: number | null;
     materialLabel?: string | null;
     sizeId?: number | null;
@@ -879,6 +964,8 @@ export interface ManufacturerOwnCatalogItem {
   productId: number;
   name: string;
   sku: string | null;
+  /** Imagen principal del producto (ruta relativa; usar el pipe `mediaUrl`). null si no tiene fotos. */
+  primaryImage: string | null;
   costs: Array<{ materialId: number; materialCode: string; materialLabel: string; cost: number }>;
 }
 

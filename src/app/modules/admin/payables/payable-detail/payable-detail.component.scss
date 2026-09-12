@@ -35,6 +35,30 @@
   }
 }
 
+// ── Selección manual de documentos a pagar ──────────────────────────────────
+.panel__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: vars.$color-text-secondary;
+  flex-wrap: wrap;
+}
+
+.btn--sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+}
+
 .table__num { text-align: right; }
 .table__actions { text-align: right; white-space: nowrap; }
 
@@ -53,6 +77,104 @@
   margin-top: 0.2rem;
   font-size: 0.68rem;
   padding: 0.1rem 0.4rem;
+}
+
+// ── Fila expandible: piezas del documento ───────────────────────────────────
+.expand-toggle {
+  .material-symbols-outlined { font-size: 1.2rem; }
+}
+
+.detail-row {
+  background: vars.$color-bg;
+
+  > td { padding: vars.$spacing-sm vars.$spacing-md; }
+}
+
+.state--sm {
+  padding: vars.$spacing-sm 0;
+  font-size: 0.85rem;
+}
+
+.items-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: 0.4rem;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+
+  @media (max-width: vars.$bp-tablet) {
+    flex-wrap: wrap;
+  }
+}
+
+.item-row__photo {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  overflow: hidden;
+  background: vars.$color-bg;
+  cursor: zoom-in;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: vars.$color-text-secondary;
+    cursor: default;
+
+    .material-symbols-outlined { font-size: 0.9rem; }
+  }
+}
+
+.item-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.item-row__name {
+  font-size: 0.88rem;
+}
+
+.item-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: vars.$color-text-secondary;
+}
+
+.item-row__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  text-align: right;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  white-space: nowrap;
+
+  strong { font-size: 0.9rem; color: vars.$color-text; }
 }
 
 // ── Folios del historial de pagos ──────────────────────────────────────────
@@ -148,6 +270,21 @@
     font-family: vars.$font-headline;
     font-size: 1.4rem;
     color: vars.$color-primary;
+  }
+}
+
+// ── Estado de cuenta ────────────────────────────────────────────────────────
+.statement-form {
+  grid-template-columns: auto auto 1fr;
+  align-items: end;
+  margin-bottom: vars.$spacing-md;
+
+  .btn { white-space: nowrap; }
+
+  @media (max-width: vars.$bp-tablet) {
+    grid-template-columns: 1fr 1fr;
+
+    .btn { grid-column: 1 / -1; }
   }
 }
 

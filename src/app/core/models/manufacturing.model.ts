@@ -8,11 +8,6 @@ export type PurchaseOrderStatus =
   | 'received'
   | 'cancelled';
 
-/** Estatus que el admin sí puede poner a mano (los de recepción los pone el flujo de recepción). */
-export const PURCHASE_ORDER_MANUAL_STATUSES: PurchaseOrderStatus[] = [
-  'draft', 'sent', 'in_production', 'cancelled',
-];
-
 export interface Manufacturer {
   id: number;
   name: string;
@@ -48,6 +43,8 @@ export interface PurchaseOrderItem {
   productSku: string | null;
   isNewProduct: boolean;
   specifications: string | null;
+  /** Foto principal vigente del producto; null en renglones de producto nuevo. */
+  imageUrl?: string | null;
   materialId?: number | null;
   materialLabel?: string | null;
   /** Talla del renglón (D5). null = producto sin talla. */
@@ -63,6 +60,12 @@ export interface PurchaseOrderItem {
   /** Lo que el FABRICANTE reporta (distinto de `receivedQuantity`, que pone bodega). */
   isReady?: boolean;
   readyQuantity?: number;
+  /** Quién marcó listo el renglón (fabricante o admin en su nombre) y cuándo. */
+  readyByName?: string | null;
+  readyAt?: string | null;
+  /** Condición de la última recepción en bodega (null = aún no se recibe). */
+  warehouseCondition?: 'ok' | 'damaged' | 'incomplete' | null;
+  warehouseNote?: string | null;
 }
 
 /** Un evento de recepción de una OC. */
@@ -96,6 +99,7 @@ export interface PurchaseOrder {
   notes: string | null;
   createdByName?: string | null;
   itemCount?: number;
+  /** El listado del panel ya trae los renglones (tabla agrupada, sin expandir). */
   items?: PurchaseOrderItem[];
   receipts?: PurchaseOrderReceipt[];
   /** Solo se pide desde que la OC se manda ('sent' en adelante). */
@@ -109,6 +113,8 @@ export interface ManufacturerPoItem {
   productName: string;
   productSku: string | null;
   specifications: string | null;
+  /** Foto del producto (ruta relativa); null en renglones de producto nuevo. */
+  imageUrl: string | null;
   materialLabel: string | null;
   sizeLabel: string | null;
   color: string | null;
@@ -125,8 +131,25 @@ export interface ManufacturerPurchaseOrder {
   orderDate: string;
   expectedDate: string | null;
   notes: string | null;
+  /** Costo total del encargo — lo que se le pagará (su información, no precio de venta). */
+  totalCost: number;
   acceptance: { status: PoAcceptanceStatus; rejectReason: string | null };
   items: ManufacturerPoItem[];
+}
+
+/** Solicitud de ajuste de precio que hizo el fabricante (Fase B). */
+export interface ManufacturerChargeRequest {
+  id: number;
+  sourceType: 'order' | 'purchase_order';
+  sourceId: number;
+  amount: number;
+  originalAmount: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  concept: string;
+  notes: string | null;
+  reviewNote: string | null;
+  acknowledged: boolean;
+  createdAt: string;
 }
 
 /** Payload para crear una orden de compra. */
@@ -157,6 +180,7 @@ export interface FactoryOrderItemRow {
   productId: number | null;
   productName: string;
   productSku: string | null;
+  imageUrl: string | null;
   /** Material y color de la línea (M4/M7) — ya no del pedido completo. */
   materialId: number;
   materialLabel: string;
@@ -224,6 +248,8 @@ export interface ManufacturerCatalogProduct {
   name: string;
   sku: string | null;
   stockQuantity: number;
+  /** Imagen principal del producto (ruta relativa; usar el pipe `mediaUrl`). null si no tiene fotos. */
+  primaryImage: string | null;
   manufacturerId: number | null;
   manufacturerName: string | null;
   categoryName: string | null;

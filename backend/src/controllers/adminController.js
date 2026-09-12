@@ -9,6 +9,7 @@ const PricingConfig = require('../models/PricingConfig');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
 const Refund = require('../models/Refund');
+const OrderCancellation = require('../models/OrderCancellation');
 const refImages = require('../utils/orderRefImages');
 const { calculateCredit, profitByCost, wholesaleProfit } = require('../utils/pricingCalculator');
 
@@ -577,10 +578,28 @@ const getOrder = asyncHandler(async (req, res) => {
   // Docs/plan-fabricante-notificaciones-y-aceptacion.md: estado de aceptación
   // del/los fabricante(s) del pedido, para el chip del detalle.
   order.manufacturerAcceptance = await ManufacturerAcceptance.forOrder(order.id);
+  // Historial del pedido (línea de tiempo de estatus + evidencia de entrega).
+  order.history = await Order.getHistory(order.id);
+  // Solicitud de cancelación pendiente (el admin la aprueba/rechaza aquí mismo).
+  order.pendingCancellation = await OrderCancellation.findPendingForOrder(order.id);
   // Docs/plan-descuentos.md: apaga el badge de "rechazado" si el admin mismo
   // había pedido un descuento que otro admin rechazó (caso raro, mismo trato).
   await discountEngine.acknowledgeRejected('order', order.id, req.user.id);
   res.json({ data: order });
+});
+
+// PATCH /api/admin/orders/:id/cancellation/:cancellationId/approve
+const approveOrderCancellation = asyncHandler(async (req, res) => {
+  await OrderCancellation.approve(req.params.cancellationId, req.user.id);
+  const order = await Order.findById(req.params.id);
+  res.json({ data: order, message: 'Cancelación aprobada, pedido cancelado' });
+});
+
+// PATCH /api/admin/orders/:id/cancellation/:cancellationId/reject
+const rejectOrderCancellation = asyncHandler(async (req, res) => {
+  await OrderCancellation.reject(req.params.cancellationId, req.user.id, req.body.reviewNote);
+  const order = await Order.findById(req.params.id);
+  res.json({ data: order, message: 'Solicitud de cancelación rechazada' });
 });
 
 // PATCH /api/admin/orders/:id/discounts/:discountId/approve
@@ -661,6 +680,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 const assignDelivery = asyncHandler(async (req, res) => {
   const { deliveryPersonId, assignmentDate } = req.body;
   if (!deliveryPersonId) throw ApiError.badRequest('deliveryPersonId es obligatorio');
+  if (await OrderCancellation.hasPending(req.params.id)) {
+    throw ApiError.badRequest(
+      'Este pedido tiene una solicitud de cancelación pendiente. Resuélvela antes de asignar reparto.',
+    );
+  }
   const order = await Order.assignDeliveryPerson(req.params.id, deliveryPersonId, assignmentDate);
   res.json({ data: order, message: 'Repartidor asignado' });
 });
@@ -752,7 +776,11 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
             wr.full_name AS warehouse_received_by_name, oi.warehouse_received_at,
             rb.full_name AS ready_by_name,
             oi.product_id, oi.unit_price, oi.unit_cost,
-            oi.manufacturer_id, m.name AS manufacturer_name
+            oi.manufacturer_id, m.name AS manufacturer_name,
+            (SELECT pi.image_url FROM product_images pi
+              WHERE pi.product_id = oi.product_id
+              ORDER BY (pi.material_id = oi.material_id) DESC, pi.is_primary DESC, pi.order_display, pi.id
+              LIMIT 1) AS image_url
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      LEFT JOIN manufacturers m ON m.id = oi.manufacturer_id
@@ -787,6 +815,7 @@ const getFactoryOrderItems = asyncHandler(async (req, res) => {
         productId: r.product_id ?? null,
         productName: r.product_name,
         productSku: r.product_sku,
+        imageUrl: r.image_url ?? null,
         materialId: r.material_id,
         materialLabel: r.material_label,
         sizeId: r.size_id ?? null,
@@ -1242,6 +1271,8 @@ module.exports = {
   rejectOrderExtraCharge,
   approveOrderRefund,
   rejectOrderRefund,
+  approveOrderCancellation,
+  rejectOrderCancellation,
   approveOrderShipping,
   rejectOrderShipping,
   getDeliveryPeople,

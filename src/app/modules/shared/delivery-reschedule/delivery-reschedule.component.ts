@@ -68,11 +68,45 @@ export class DeliveryRescheduleComponent implements OnInit {
   private slotChoiceSig = toSignal(this.form.controls.deliverySlotChoice.valueChanges, {
     initialValue: this.form.controls.deliverySlotChoice.value,
   });
+  private dateSig = toSignal(this.form.controls.expectedDeliveryDate.valueChanges, {
+    initialValue: this.form.controls.expectedDeliveryDate.value,
+  });
+  private windowStartSig = toSignal(this.form.controls.deliveryWindowStart.valueChanges, {
+    initialValue: this.form.controls.deliveryWindowStart.value,
+  });
+  private windowEndSig = toSignal(this.form.controls.deliveryWindowEnd.valueChanges, {
+    initialValue: this.form.controls.deliveryWindowEnd.value,
+  });
 
   protected isExact = computed(() => this.commitmentSig() === 'exact');
   protected isCustomWindow = computed(() => this.slotChoiceSig() === 'custom');
-  /** El aviso y el campo de motivo dependen de cómo estaba el pedido, no de cómo va a quedar. */
-  protected requiresReason = computed(() => this.currentCommitment() === 'exact');
+  /** El pedido nació comprometido: se ofrece el campo de motivo (aunque no siempre obligatorio). */
+  protected wasExact = computed(() => this.currentCommitment() === 'exact');
+
+  /**
+   * El motivo sólo se EXIGE cuando se pisa una fecha u hora que ya estaba fija
+   * en una entrega comprometida. Rellenar un horario que faltaba (regalo con el
+   * día cerrado y la hora por confirmar) no lo necesita. El backend aplica la
+   * misma regla.
+   */
+  protected requiresReason = computed(() => {
+    if (this.currentCommitment() !== 'exact') return false;
+    const origDate = this.expectedDeliveryDate() ? String(this.expectedDeliveryDate()).slice(0, 10) : '';
+    const origStart = this.windowStart() ? String(this.windowStart()).slice(0, 5) : '';
+    const origEnd = this.windowEnd() ? String(this.windowEnd()).slice(0, 5) : '';
+    const origSlot = this.slotId() != null ? String(this.slotId()) : (this.windowStart() ? 'custom' : '');
+    const isCustom = this.isCustomWindow();
+    const curDate = (this.dateSig() ?? '').slice(0, 10);
+    const curStart = isCustom ? (this.windowStartSig() ?? '').slice(0, 5) : '';
+    const curEnd = isCustom ? (this.windowEndSig() ?? '').slice(0, 5) : '';
+    const curSlot = String(this.slotChoiceSig() ?? '');
+    return (
+      (!!origDate && !!curDate && origDate !== curDate)
+      || (!!origStart && origStart !== curStart)
+      || (!!origEnd && origEnd !== curEnd)
+      || (!!origSlot && origSlot !== curSlot)
+    );
+  });
 
   constructor() {
     // Mismas reglas que el POS: 'exact' exige fecha y horario; "Otro horario…"
@@ -83,8 +117,10 @@ export class DeliveryRescheduleComponent implements OnInit {
       const { expectedDeliveryDate, deliverySlotChoice, deliveryWindowStart, deliveryWindowEnd } =
         this.form.controls;
 
+      // 'exact' exige la fecha; el horario es opcional (se puede capturar
+      // después). Sólo "Otro horario…" necesita sus dos horas completas.
       expectedDeliveryDate.setValidators(isExact ? [Validators.required] : []);
-      deliverySlotChoice.setValidators(isExact ? [Validators.required] : []);
+      deliverySlotChoice.setValidators([]);
       deliveryWindowStart.setValidators(isCustom ? [Validators.required] : []);
       deliveryWindowEnd.setValidators(isCustom ? [Validators.required] : []);
 

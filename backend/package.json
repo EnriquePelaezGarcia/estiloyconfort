@@ -13,12 +13,14 @@
     "db:migrate:image-urls": "node src/database/migrate_relative_image_urls.js",
     "db:migrate:price-list": "node src/database/migrate_product_list_price.js",
     "db:migrate:order-number-yearly": "node src/database/backfill_order_number_yearly.js",
+    "db:migrate:po-number-yearly": "node src/database/backfill_po_number_yearly.js",
     "db:remove-melamina-blanca": "node src/database/remove_melamina_blanca.js",
     "db:rename-melamina": "node src/database/rename_melamina_color.js",
     "content:push": "node src/database/push_content_to_env.js",
     "db:schema:fase4": "node src/database/run-schema.js schema_fase4.sql",
     "db:schema:passwords": "node src/database/run-schema.js schema_password_reset.sql",
-    "db:schema:quote-requests": "node src/database/run-schema.js schema_quote_requests.sql"
+    "db:schema:quote-requests": "node src/database/run-schema.js schema_quote_requests.sql",
+    "db:schema:payment-documents": "node src/database/run-schema.js schema_manufacturer_payment_documents.sql"
   },
   "keywords": [
     "express",
@@ -39,6 +41,7 @@
     "multer": "^2.2.0",
     "mysql2": "^3.11.5",
     "node-cron": "^4.6.0",
+    "pdfkit": "^0.20.2",
     "sharp": "^0.35.4",
     "stream-json": "^3.5.0"
   },

@@ -64,6 +64,14 @@ export class CatalogComponent implements OnInit {
   pageNumbers = computed(() => Array.from({ length: this.totalPages() }, (_, i) => i + 1));
 
   searchValue = '';
+  /**
+   * `true` mientras el cursor está dentro del buscador. La suscripción de abajo
+   * NO reasigna `searchValue` en ese caso: hacerlo mientras alguien escribe le
+   * reinicia el cursor y en móvil corta el teclado (se sentía como que "se
+   * traba y no deja escribir"). Con foco, lo que el usuario teclea manda; la
+   * URL ya se mantiene sincronizada desde el propio input.
+   */
+  searchFocused = false;
   private searchSubject = new Subject<string>();
 
   ngOnInit(): void {
@@ -74,14 +82,25 @@ export class CatalogComponent implements OnInit {
       // compartido con ?orden=price_asc mostraba el selector en un valor y la
       // lista ordenada en otro. Un valor desconocido cae al default.
       const orden = params['orden'] as CatalogSort | undefined;
-      this.filters.update(f => ({
-        ...f,
+      const next: Partial<ProductFilters> = {
         category: params['categoria'] || undefined,
         search: params['q'] || undefined,
         page: Number(params['pagina'] || 1),
         sort: orden && VALID_SORTS.includes(orden) ? orden : DEFAULT_SORT,
-      }));
-      this.searchValue = params['q'] || '';
+      };
+
+      // Cuando el cambio nace de esta misma pantalla, `applyFilter()` ya dejó
+      // `filters` en su valor final ANTES de navegar; el eco de queryParams no
+      // debe disparar una segunda carga idéntica ni tocar el input.
+      const c = this.filters();
+      const echo =
+        c.category === next.category && c.search === next.search &&
+        (c.page ?? 1) === next.page && c.sort === next.sort &&
+        this.result() !== null;
+      if (echo) return;
+
+      this.filters.update(f => ({ ...f, ...next }));
+      if (!this.searchFocused) this.searchValue = params['q'] || '';
       this.loadProducts();
     });
 

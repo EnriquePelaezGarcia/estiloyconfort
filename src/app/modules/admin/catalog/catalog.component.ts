@@ -18,6 +18,7 @@ import { Category } from '../../../core/models/category.model';
 import { CalculatedPrices, DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../core/models/pricing-config.model';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { ADMIN_QUILL_MODULES } from '../quill-config';
 
 function slugify(value: string): string {
@@ -106,7 +107,14 @@ type PriceMode = 'margin' | 'price';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './catalog.component.html',
   styleUrl: './catalog.component.scss',
-  imports: [ReactiveFormsModule, RouterLink, CurrencyInputDirective, MediaUrlPipe, QuillEditorComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    CurrencyInputDirective,
+    MediaUrlPipe,
+    QuillEditorComponent,
+    ImageLightboxComponent,
+  ],
 })
 export class CatalogComponent implements OnInit {
   /** Módulos del editor "Detalles (ficha pública)" — ver quill-config.ts. */
@@ -333,6 +341,9 @@ export class CatalogComponent implements OnInit {
   protected loading = signal(true);
   protected saving = signal(false);
   protected search = signal('');
+
+  /** Foto del listado abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
 
   protected editing = signal<Product | null | undefined>(undefined);
   protected deleting = signal<Product | null>(null);
@@ -871,6 +882,11 @@ export class CatalogComponent implements OnInit {
         ),
       error: () => this.notification.error('No se pudo establecer como imagen principal'),
     });
+  }
+
+  // ===== Ver foto en grande =====
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
   }
 
   // ===== Activar / desactivar =====

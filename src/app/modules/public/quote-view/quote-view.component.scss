@@ -168,6 +168,19 @@
     color: vars.$color-text;
   }
 
+  // El nombre enlaza a la ficha pública del producto; se abre en una pestaña
+  // nueva para no perder la cotización.
+  &__name--link {
+    display: inline-block;
+    align-self: flex-start;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+
+    &:hover { text-decoration-color: currentColor; }
+  }
+
   &__detail,
   &__unit {
     font-size: 0.76rem;

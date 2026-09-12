@@ -3,6 +3,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const discountEngine = require('../models/discountEngine');
 const extraChargeEngine = require('../models/extraChargeEngine');
 const Refund = require('../models/Refund');
+const OrderCancellation = require('../models/OrderCancellation');
+const ManufacturerPayable = require('../models/ManufacturerPayable');
 
 /**
  * Módulo "Aprobaciones" (Docs/plan-aprobaciones-admin.md) — agrega en un solo
@@ -221,6 +223,58 @@ async function fetchQuoteShipping(statuses) {
   }));
 }
 
+/** Solicitudes de cancelación de pedido — sin monto (`amount: 0`). */
+async function fetchOrderCancellations(statuses) {
+  const rows = await OrderCancellation.findByStatus(statuses);
+  return rows.map((r) => ({
+    id: `ocn-${r.id}`,
+    rawId: r.id,
+    kind: 'order',
+    documentId: r.orderId,
+    type: 'cancellation',
+    documentLabel: r.orderNumber,
+    customerName: r.customerName,
+    amount: 0,
+    originalAmount: null,
+    label: r.reason ? `Cancelación · ${r.reason}` : 'Cancelación de pedido',
+    requestedByName: r.requestedByName ?? r.requestedByRole,
+    requestedAt: r.createdAt,
+    status: r.status,
+    reviewedByName: r.reviewedByName ?? null,
+    reviewedAt: r.reviewedAt ?? null,
+    reviewNote: r.reviewNote ?? null,
+  }));
+}
+
+/**
+ * Solicitudes de ajuste de precio del fabricante (Fase B). `kind: 'manufacturer'`
+ * — el `customerName` lleva el nombre del FABRICANTE (no un cliente); el front
+ * lo rotula distinto según el kind.
+ */
+async function fetchManufacturerCharges(statuses) {
+  const rows = await ManufacturerPayable.listChargeRequests(statuses);
+  const ROLE_LABEL = { manufacturer: 'Fabricante', admin: 'Tienda', system: 'Automático' };
+  return rows.map((c) => ({
+    id: `mfc-${c.id}`,
+    rawId: c.id,
+    kind: 'manufacturer',
+    documentId: c.source_id,
+    // El folio dice si es OC- o EC-; el front arma el link con eso.
+    type: 'manufacturer_charge',
+    documentLabel: c.folio ?? `#${c.source_id}`,
+    customerName: c.manufacturer_name ?? '—',
+    amount: Number(c.amount),
+    originalAmount: c.original_amount != null ? Number(c.original_amount) : null,
+    label: c.concept,
+    requestedByName: c.requested_by_name ?? ROLE_LABEL[c.requested_by_role] ?? null,
+    requestedAt: c.created_at,
+    status: c.status,
+    reviewedByName: c.reviewed_by_name ?? null,
+    reviewedAt: c.reviewed_at ?? null,
+    reviewNote: c.review_note ?? null,
+  }));
+}
+
 /** Reembolsos a clientes (h1) — solo aplican a pedidos, no a cotizaciones. */
 async function fetchOrderRefunds(statuses) {
   const rows = await Refund.findByStatus(statuses);
@@ -251,7 +305,7 @@ const getApprovals = asyncHandler(async (req, res) => {
 
   const [
     orderDiscounts, quoteDiscounts, orderCharges, quoteCharges,
-    orderShipping, quoteShipping, orderRefunds,
+    orderShipping, quoteShipping, orderRefunds, orderCancellations, manufacturerCharges,
   ] = await Promise.all([
     fetchOrderDiscounts(statuses),
     fetchQuoteDiscounts(statuses),
@@ -260,11 +314,14 @@ const getApprovals = asyncHandler(async (req, res) => {
     fetchOrderShipping(statuses),
     fetchQuoteShipping(statuses),
     fetchOrderRefunds(statuses),
+    fetchOrderCancellations(statuses),
+    fetchManufacturerCharges(statuses),
   ]);
 
   let all = [
     ...orderDiscounts, ...quoteDiscounts, ...orderCharges, ...quoteCharges,
-    ...orderShipping, ...quoteShipping, ...orderRefunds,
+    ...orderShipping, ...quoteShipping, ...orderRefunds, ...orderCancellations,
+    ...manufacturerCharges,
   ];
 
   if (isPending) {
@@ -285,19 +342,26 @@ const getApprovals = asyncHandler(async (req, res) => {
 // Aparte de /admin/discounts/pending-count (que no se toca, D6 del plan) para
 // no arriesgar el badge que ya está en producción.
 const getApprovalsPendingCount = asyncHandler(async (req, res) => {
-  const [discounts, extraCharges, [[orderShipping]], [[quoteShipping]], refunds] = await Promise.all([
+  const [
+    discounts, extraCharges, [[orderShipping]], [[quoteShipping]],
+    refunds, cancellations, manufacturerCharges,
+  ] = await Promise.all([
     discountEngine.countPending(),
     extraChargeEngine.countPending(),
     pool.query(`SELECT COUNT(*) AS n FROM orders WHERE shipping_cost_status = 'pending'`),
     pool.query(`SELECT COUNT(*) AS n FROM quotes WHERE shipping_cost_status = 'pending'`),
     Refund.countPending(),
+    OrderCancellation.countPending(),
+    ManufacturerPayable.countPendingChargeRequests(),
   ]);
   const shipping = { orders: Number(orderShipping.n), quotes: Number(quoteShipping.n) };
   const total = discounts.orders + discounts.quotes
     + extraCharges.orders + extraCharges.quotes
     + shipping.orders + shipping.quotes
-    + refunds;
-  res.json({ data: { discounts, extraCharges, shipping, refunds, total } });
+    + refunds + cancellations + manufacturerCharges;
+  res.json({
+    data: { discounts, extraCharges, shipping, refunds, cancellations, manufacturerCharges, total },
+  });
 });
 
 module.exports = { getApprovals, getApprovalsPendingCount };

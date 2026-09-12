@@ -47,7 +47,17 @@
               </span>
             }
             <div class="item__info">
-              <span class="item__name">{{ it.productName }}</span>
+              @if (it.productSlug; as slug) {
+                <a
+                  class="item__name item__name--link"
+                  [routerLink]="['/producto', slug]"
+                  target="_blank"
+                  rel="noopener"
+                  >{{ it.productName }}</a
+                >
+              } @else {
+                <span class="item__name">{{ it.productName }}</span>
+              }
               <span class="item__detail">
                 {{ it.materialLabel }}@if (it.color) { · {{ it.color }} }
               </span>

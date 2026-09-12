@@ -20,27 +20,18 @@
 
     .material-symbols-outlined { color: #dc2626; }
   }
-}
 
-// El verde de WhatsApp rompe la paleta a propósito (regla 4 del sistema):
-// señala "esto sale de la aplicación". No usarlo en ningún otro botón.
-.btn--whatsapp {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid transparent;
-  background: #25d366;
-  color: #ffffff;
+  &:has(.banner__actions) { align-items: flex-start; }
 
-  &:hover:not(:disabled) { background: #128c7e; }
-  &:disabled { opacity: 0.65; cursor: default; }
-
-  .btn__wa-icon {
-    width: 1.05rem;
-    height: 1.05rem;
-    fill: currentColor;
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$spacing-sm;
+    margin-top: vars.$spacing-sm;
   }
 }
+
+// El estilo de `.btn--whatsapp` vive en styles/_business.scss (global).
 
 .detail-grid {
   display: grid;
@@ -509,14 +500,89 @@ $ticket-font: 'Courier New', monospace;
   &__reason { color: vars.$color-text-secondary; }
 }
 
-// Miniaturas de las imágenes de referencia para el fabricante.
-.ref-images {
+// ===== Historial del pedido =====
+.panel--full {
+  margin-top: 0;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: vars.$spacing-lg;
+  align-items: start;
+}
+
+.history-block {
+  .info-subtitle { margin-top: 0; }
+}
+
+.timeline {
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: vars.$spacing-sm 0 0;
   padding: 0;
+
+  &__item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0 0 vars.$spacing-md 1.25rem;
+    border-left: 2px solid vars.$color-border;
+
+    &:last-child { border-left-color: transparent; padding-bottom: 0; }
+  }
+
+  &__dot {
+    position: absolute;
+    left: -6px;
+    top: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: vars.$color-border;
+
+    &--last { background: vars.$color-primary; }
+  }
+
+  &__label { font-weight: 600; font-size: 0.875rem; color: vars.$color-text; }
+  &__date { font-size: 0.75rem; color: vars.$color-text-secondary; }
+  &__empty { font-size: 0.85rem; color: vars.$color-text-secondary; }
+}
+
+.history-list {
+  list-style: none;
+  margin: vars.$spacing-sm 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+    font-size: 0.85rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid vars.$color-border;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  &__note,
+  &__date { display: block; color: vars.$color-text-secondary; font-size: 0.75rem; }
+}
+
+.evidence {
   display: flex;
   flex-wrap: wrap;
-  gap: vars.$spacing-sm;
+  gap: vars.$spacing-md;
+  margin-top: vars.$spacing-sm;
+
+  &__item {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+
+    figcaption { font-size: 0.75rem; color: vars.$color-text-secondary; }
+  }
 
   &__btn {
     padding: 0;
@@ -527,6 +593,54 @@ $ticket-font: 'Courier New', monospace;
     line-height: 0;
     overflow: hidden;
 
+    img { width: 140px; height: 140px; object-fit: cover; display: block; }
+  }
+
+  &__signature {
+    object-fit: contain !important;
+    background: #fff;
+  }
+}
+
+// Miniaturas de las imágenes de referencia para el fabricante.
+.ref-images {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+
+  &__btn {
+    position: relative;
+    padding: 0;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-sm;
+    background: none;
+    cursor: pointer;
+    line-height: 0;
+    overflow: hidden;
+
     img { width: 72px; height: 72px; object-fit: cover; display: block; }
+  }
+
+  &__num {
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
   }
 }

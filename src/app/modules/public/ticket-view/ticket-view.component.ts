@@ -1,14 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TicketsService } from '../../../core/services/tickets.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
 import { PublicTicket } from '../../../core/models/ticket.model';
 import { DeliveryType, OrderStatus, SaleScheme } from '../../../core/models/order.model';
-import {
-  ORDER_STATUS_PUBLIC_LABELS,
-  TENTATIVE_DELIVERY_NOTICE,
-} from '../../../core/models/order-public-labels';
+import { ORDER_STATUS_PUBLIC_LABELS } from '../../../core/models/order-public-labels';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { formatPhoneForDisplay } from '../../../core/utils/phone';
@@ -44,7 +41,7 @@ const DELIVERY_LABELS: Record<DeliveryType, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ticket-view.component.html',
   styleUrl: './ticket-view.component.scss',
-  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent, MediaUrlPipe],
+  imports: [CurrencyPipe, DatePipe, RouterLink, ImageLightboxComponent, MediaUrlPipe],
 })
 export class TicketViewComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -108,18 +105,6 @@ export class TicketViewComponent implements OnInit {
   });
 
   protected isExactCommitment = computed(() => this.ticket()?.deliveryCommitment === 'exact');
-
-  /** ¿Alguna línea del pedido está agotada o se fabrica sobre pedido? */
-  protected hasFabricationItems = computed(() =>
-    (this.ticket()?.items ?? []).some((it) => it.requiresFabrication),
-  );
-
-  /** El aviso de fecha estimada solo aplica mientras el compromiso siga siendo Tentativa. */
-  protected showTentativeDeliveryNotice = computed(
-    () => this.hasFabricationItems() && !this.isExactCommitment(),
-  );
-
-  protected readonly tentativeDeliveryNotice = TENTATIVE_DELIVERY_NOTICE;
 
   /** Teléfono del cliente en formato "222 123 4567"; '' si no hay. */
   protected customerPhone = computed(() => formatPhoneForDisplay(this.ticket()?.customerPhone ?? ''));

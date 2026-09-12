@@ -2,7 +2,11 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ManufacturerService } from '../../../core/services/manufacturer.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { mediaUrl, mediaThumbUrl } from '../../../core/utils/media-url';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import {
+  AccountStatement,
+  PayableCharge,
   PayableDocument,
   PayableItem,
   PayableSummary,
@@ -36,7 +40,7 @@ type Period = 'week' | 'month' | 'year';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manufacturer-history.component.html',
   styleUrl: './manufacturer-history.component.scss',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, DatePipe, ImageLightboxComponent],
 })
 export class ManufacturerHistoryComponent implements OnInit {
   private manufacturerService = inject(ManufacturerService);
@@ -50,8 +54,19 @@ export class ManufacturerHistoryComponent implements OnInit {
   protected readonly typeTone = SOURCE_TYPE_TONE;
   protected readonly methodLabels = PAYABLE_METHOD_LABELS;
 
+  protected readonly mediaUrl = mediaUrl;
+  protected readonly mediaThumbUrl = mediaThumbUrl;
+
+  /** Foto de la pieza abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
+
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
+  }
+
   protected documents = signal<PayableDocument[]>([]);
   protected payments = signal<PaymentBatch[]>([]);
+  protected statements = signal<AccountStatement[]>([]);
   protected summary = signal<PayableSummary>({
     count: 0,
     pieces: 0,
@@ -76,6 +91,12 @@ export class ManufacturerHistoryComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    // Independiente del filtro de período: es el archivo completo de estados
+    // de cuenta que la tienda le ha generado, no algo que cambie por semana/mes.
+    this.manufacturerService.statements().subscribe({
+      next: (data) => this.statements.set(data),
+      error: () => {},
+    });
   }
 
   protected load(): void {
@@ -127,6 +148,7 @@ export class ManufacturerHistoryComponent implements OnInit {
    * El cache vive en una señal para que el template reaccione al llegar.
    */
   private detailCache = signal<Record<string, PayableItem[]>>({});
+  private chargesCache = signal<Record<string, PayableCharge[]>>({});
 
   protected toggleExpand(doc: PayableDocument): void {
     const key = `${doc.sourceType}:${doc.sourceId}`;
@@ -137,8 +159,10 @@ export class ManufacturerHistoryComponent implements OnInit {
     this.expanded.set(key);
     if (this.detailCache()[key]) return;
     this.manufacturerService.historyDetail(doc.sourceType, doc.sourceId).subscribe({
-      next: (detail) =>
-        this.detailCache.update((cache) => ({ ...cache, [key]: detail.items })),
+      next: (detail) => {
+        this.detailCache.update((cache) => ({ ...cache, [key]: detail.items }));
+        this.chargesCache.update((cache) => ({ ...cache, [key]: detail.charges }));
+      },
       error: () => this.notification.error('No se pudo cargar el detalle'),
     });
   }
@@ -149,6 +173,14 @@ export class ManufacturerHistoryComponent implements OnInit {
 
   protected itemsOf(doc: PayableDocument): PayableItem[] {
     return this.detailCache()[`${doc.sourceType}:${doc.sourceId}`] ?? [];
+  }
+
+  protected chargesOf(doc: PayableDocument): PayableCharge[] {
+    return this.chargesCache()[`${doc.sourceType}:${doc.sourceId}`] ?? [];
+  }
+
+  protected chargeStatusLabel(s: string): string {
+    return s === 'approved' ? 'Aprobado' : s === 'rejected' ? 'Rechazado' : 'Pendiente';
   }
 
   protected print(): void {

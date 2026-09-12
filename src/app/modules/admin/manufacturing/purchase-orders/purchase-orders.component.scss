@@ -3,13 +3,22 @@
 .section-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: vars.$spacing-sm;
   margin-bottom: vars.$spacing-md;
+
+  p { margin: 0; max-width: 46rem; }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: vars.$spacing-sm;
+  }
 }
 
-.status-select {
+.filter-select {
   padding: 0.35rem 0.5rem;
   border: 1px solid vars.$color-border;
   border-radius: vars.$radius-md;
@@ -40,6 +49,278 @@
   font-size: 0.8rem;
 }
 
+// =====================================================================
+// Órdenes de compra — una tarjeta por OC (mismo patrón que el portal del
+// fabricante: etiqueta arriba / valor abajo, para que se lea igual de bien
+// en celular que en escritorio; ver manufacturer-orders.component.scss).
+// =====================================================================
+
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-lg;
+}
+
+.po {
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+    flex-wrap: wrap;
+    padding-bottom: vars.$spacing-md;
+    border-bottom: 1px solid vars.$color-border;
+    margin-bottom: vars.$spacing-md;
+  }
+
+  &__head-main,
+  &__head-money {
+    display: flex;
+    align-items: center;
+    gap: vars.$spacing-sm;
+    flex-wrap: wrap;
+  }
+
+  &__ref { font-size: 1.1rem; font-weight: 700; color: vars.$color-primary; letter-spacing: 0.02em; }
+  &__cost { font-size: 1rem; font-weight: 700; color: vars.$color-text; }
+  &__balance { font-size: 0.85rem; color: vars.$color-text-secondary; strong { color: vars.$color-text; } }
+
+  &__banner {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0 0 vars.$spacing-md;
+    padding: 0.7rem 0.9rem;
+    border-radius: vars.$radius-md;
+    background: rgba(vars.$color-gold, 0.12);
+    border: 1px solid rgba(vars.$color-gold, 0.4);
+    font-size: 0.88rem;
+
+    .material-symbols-outlined { color: vars.$color-gold; }
+    span:nth-child(2) { flex: 1 1 auto; }
+  }
+
+  &__meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: vars.$spacing-md;
+    margin-bottom: vars.$spacing-md;
+  }
+
+  &__notes {
+    margin: 0 0 vars.$spacing-md;
+    padding: 0.7rem 0.85rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: vars.$color-text-secondary;
+  }
+
+  &__pay-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: vars.$spacing-md;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: vars.$color-primary;
+    cursor: pointer;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+    &:hover { text-decoration: underline; }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: vars.$spacing-md;
+  }
+}
+
+// ===== Etiqueta reutilizable (small-caps) + valor =====
+.spec {
+  &__k {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: vars.$color-text-secondary;
+  }
+
+  &__v {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: vars.$color-text;
+  }
+
+  // Especificaciones de un producto nuevo: lo más importante del renglón.
+  &--callout {
+    margin-top: vars.$spacing-sm;
+    padding: 0.7rem 0.85rem;
+    border-left: 3px solid vars.$color-gold;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-gold, 0.08);
+
+    .spec__k { color: #8a6d08; }
+    .spec__v { font-weight: 500; white-space: pre-line; }
+  }
+}
+
+// ===== Producto(s) de la OC =====
+.items {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  padding: vars.$spacing-md 0;
+  border-top: 1px solid vars.$color-border;
+
+  &:first-child { border-top: none; padding-top: 0; }
+  &:last-child { padding-bottom: 0; }
+
+  &__thumb {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.65rem;
+    margin-bottom: 0.2rem;
+  }
+
+  &__name {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: vars.$color-text;
+  }
+
+  &__row {
+    margin-top: vars.$spacing-sm;
+
+    .spec__k { margin-bottom: 0.25rem; }
+  }
+
+  &__row-value {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+}
+
+// ===== Atributos cortos en cuadrícula (Cantidad, Material, Talla, Color, Costo) =====
+.attrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: vars.$spacing-sm;
+  margin: vars.$spacing-md 0 0;
+
+  &__cell {
+    padding: 0.5rem 0.65rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+
+    dt {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: vars.$color-text-secondary;
+      margin-bottom: 0.2rem;
+    }
+
+    dd {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: vars.$color-text;
+    }
+  }
+}
+
+.due-date-input {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid vars.$color-border;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.ready-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid vars.$color-border;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  .material-symbols-outlined { font-size: 1.125rem; }
+
+  &:hover:not(:disabled) { border-color: vars.$color-primary; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+  &--done { border-color: vars.$color-success; color: vars.$color-success; }
+}
+
+.ready-qty {
+  width: 4rem;
+  margin-left: 0.4rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid vars.$color-border;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.ready-by {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+}
+
+.accept-chip {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+
+  &--accepted { background: rgba(46, 125, 50, 0.14); color: #2e7d32; }
+  &--pending  { background: rgba(198, 156, 44, 0.18); color: #8a6d1d; }
+  &--rejected { background: rgba(179, 0, 25, 0.1); color: #b30019; }
+}
+
+// ── Buscador de "Producto existente" (modal de creación) ──
+.item-card {
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  background: vars.$color-bg;
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+  }
+}
+
 .items-head {
   display: flex;
   align-items: center;
@@ -53,20 +334,6 @@
   display: flex;
   flex-direction: column;
   gap: vars.$spacing-sm;
-}
-
-.item-card {
-  border: 1px solid vars.$color-border;
-  border-radius: vars.$radius-md;
-  padding: vars.$spacing-sm vars.$spacing-md;
-  background: vars.$color-bg;
-
-  &__top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.4rem;
-  }
 }
 
 .check {
@@ -86,23 +353,118 @@
   strong { color: vars.$color-primary; }
 }
 
-// ── Fila de detalle (items de la OC) ──
-.detail-row > td {
-  background: rgba(vars.$color-primary, 0.02);
-}
+.product-picker {
+  position: relative;
 
-.subtable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
+  &__input {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0 0.5rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-surface;
 
-  th, td {
-    padding: 0.4rem 0.6rem;
-    text-align: left;
-    border-bottom: 1px solid vars.$color-border;
+    .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-text-secondary; }
+
+    input {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      padding: 0.5rem 0;
+      font-family: vars.$font-body;
+      font-size: 0.9rem;
+      color: vars.$color-text;
+
+      &:focus { outline: none; }
+    }
+
+    .icon-btn { padding: 0.15rem; }
   }
-  .num { text-align: right; }
+
+  &__list {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    max-height: 16rem;
+    overflow-y: auto;
+    background: vars.$color-surface;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  &__opt {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: 0;
+    border-radius: vars.$radius-sm;
+    background: transparent;
+    text-align: left;
+    font-size: 0.88rem;
+    color: vars.$color-text;
+    cursor: pointer;
+
+    &:hover, &:focus-visible { background: rgba(vars.$color-primary, 0.08); }
+
+    img { border-radius: vars.$radius-sm; object-fit: cover; flex-shrink: 0; }
+  }
+
+  &__opt-text { line-height: 1.25; }
+
+  &__thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-primary, 0.06);
+    color: vars.$color-text-secondary;
+
+    &--lg { width: 72px; height: 72px; }
+  }
+
+  &__empty {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+    text-align: center;
+  }
+
+  &__selected {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    padding: 0.4rem;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-bg;
+
+    img { border-radius: vars.$radius-sm; object-fit: cover; }
+  }
+
+  &__selected-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.88rem;
+
+    .muted { font-size: 0.8rem; }
+  }
 }
+
+.muted { color: vars.$color-text-secondary; }
 
 .specs {
   display: block;
@@ -111,17 +473,19 @@
   margin-top: 0.15rem;
 }
 
-.po-notes {
-  margin: vars.$spacing-sm 0 0;
-  font-size: 0.85rem;
-  color: vars.$color-text-secondary;
-}
-
-// Estado de pago de la OC, leído de cuentas por pagar (no se guarda aquí).
 .badge--sm {
   display: inline-block;
   margin-left: 0.3rem;
   font-size: 0.66rem;
   padding: 0.1rem 0.35rem;
   vertical-align: middle;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .ready-toggle {
+    border: none;
+    padding: 0;
+    .material-symbols-outlined { display: none; }
+  }
 }

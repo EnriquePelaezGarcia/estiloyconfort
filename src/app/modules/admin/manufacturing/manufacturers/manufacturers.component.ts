@@ -3,7 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { AdminService } from '../../../../core/services/admin.service';
 import { NotificationService } from '../../../../core/services/notification.service';
-import { PHONE_PATTERN, formatPhoneDigits, formatPhoneForDisplay } from '../../../../core/utils/phone';
+import { formatPhoneDigits, formatPhoneForDisplay, normalizePhone, phoneValidator } from '../../../../core/utils/phone';
 import { Manufacturer, ManufacturerInput } from '../../../../core/models/manufacturing.model';
 import { CreateUserResponse } from '../../../../core/models/admin.model';
 
@@ -41,8 +41,8 @@ export class ManufacturersComponent implements OnInit {
   protected form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(3)]],
     contactName: [''],
-    // Opcional; si lo capturan, 10 dígitos ("222 123 4567"). Vacío pasa el pattern.
-    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
+    // Opcional; 10 dígitos ("222 123 4567") o "+lada" internacional. Vacío pasa.
+    phone: ['', [phoneValidator]],
     email: [''],
     address: [''],
     notes: [''],
@@ -173,7 +173,7 @@ export class ManufacturersComponent implements OnInit {
     const payload: ManufacturerInput = {
       name: raw.name!.trim(),
       contactName: raw.contactName?.trim() || null,
-      phone: raw.phone?.trim() || null,
+      phone: raw.phone?.trim() ? normalizePhone(raw.phone) : null,
       email: raw.email?.trim() || null,
       address: raw.address?.trim() || null,
       notes: raw.notes?.trim() || null,
@@ -223,7 +223,7 @@ export class ManufacturersComponent implements OnInit {
       .createUser({
         fullName: raw.accessFullName!.trim(),
         email: raw.accessEmail!.trim(),
-        phone: raw.phone?.trim() || null,
+        phone: raw.phone?.trim() ? normalizePhone(raw.phone) : null,
         roleId,
         manufacturerId: manufacturer.id,
       })

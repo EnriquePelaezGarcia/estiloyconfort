@@ -14,24 +14,34 @@ export interface NotificationTarget {
 interface RoleConfig {
   base: string;
   page: string;
-  orderLink: (orderId: number) => NotificationTarget;
+  orderLink: (orderId: number, itemId?: number | null) => NotificationTarget;
 }
 
 const ROLE_CONFIG: Record<string, RoleConfig> = {
   admin: {
     base: '/admin/notifications',
     page: '/admin/notificaciones',
-    orderLink: (id) => ({ commands: ['/admin/pedidos', id] }),
+    // Si la notificación es de un mensaje en un producto (item_message), va
+    // directo a esa línea del pedido a fábrica en vez de al detalle del pedido.
+    orderLink: (id, itemId) => (itemId
+      ? { commands: ['/admin/fabricante/pedidos-fabrica'], queryParams: { item: itemId } }
+      : { commands: ['/admin/pedidos', id] }),
   },
   seller: {
     base: '/seller/notifications',
     page: '/vendedor/notificaciones',
-    orderLink: (id) => ({ commands: ['/vendedor/pedidos', id] }),
+    orderLink: (id, itemId) => ({
+      commands: ['/vendedor/pedidos', id],
+      ...(itemId ? { queryParams: { item: itemId } } : {}),
+    }),
   },
   manufacturer: {
     base: '/manufacturer/notifications',
     page: '/fabricante/notificaciones',
-    orderLink: (id) => ({ commands: ['/fabricante/pedidos'], queryParams: { pedido: id } }),
+    orderLink: (id, itemId) => ({
+      commands: ['/fabricante/pedidos'],
+      queryParams: (itemId ? { item: itemId } : { pedido: id }) as Record<string, string | number>,
+    }),
   },
 };
 
@@ -61,9 +71,9 @@ export class NotificationCenterStore {
     return this.cfg?.page ?? '/';
   }
 
-  /** A dónde lleva el click de una notificación ligada a un pedido. */
-  orderTarget(orderId: number): NotificationTarget {
-    return this.cfg?.orderLink(orderId) ?? { commands: ['/'] };
+  /** A dónde lleva el click de una notificación ligada a un pedido (o a un producto puntual, si trae `itemId`). */
+  orderTarget(orderId: number, itemId?: number | null): NotificationTarget {
+    return this.cfg?.orderLink(orderId, itemId) ?? { commands: ['/'] };
   }
 
   /** Llamar una vez desde el layout del panel. */

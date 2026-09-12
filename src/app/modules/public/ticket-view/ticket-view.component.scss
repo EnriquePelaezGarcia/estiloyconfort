@@ -234,7 +234,10 @@ $fp-num-lg:  18pt;
     &:hover { opacity: 0.85; }
   }
 
-  &__main { min-width: 0; }
+  // flex: 1 hace que la columna del nombre absorba el espacio libre; si no,
+  // se encoge a su contenido y `justify-content: space-between` la centra
+  // entre la miniatura y el importe — los nombres cortos quedaban recorridos.
+  &__main { flex: 1; min-width: 0; }
 
   &__name {
     margin: 0;
@@ -242,6 +245,18 @@ $fp-num-lg:  18pt;
     font-weight: 600;
     line-height: 1.35;
     color: $text-primary;
+  }
+
+  // El nombre es un enlace a la ficha pública del producto. Se abre en una
+  // pestaña nueva para no perder el comprobante.
+  &__name--link {
+    display: inline-block;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+
+    &:hover { text-decoration-color: currentColor; }
   }
 
   &__spec {
@@ -373,15 +388,6 @@ $fp-num-lg:  18pt;
     line-height: 1.5;
     color: $text-primary;
     white-space: pre-line;
-  }
-
-  // Deslinde de fecha tentativa (Docs/plan-fecha-hora-entrega.md §6.6):
-  // mismo texto que en el ticket térmico, en tono discreto de nota al pie.
-  &__notice {
-    margin: 0.375rem 0 0;
-    font-size: $fs-fine;
-    line-height: 1.6;
-    color: $text-tertiary;
   }
 }
 
@@ -570,6 +576,8 @@ $fp-num-lg:  18pt;
   .line { padding: 1.5mm 0; }
   .line__thumb { width: 11mm; height: 11mm; }
   .line__name { font-size: $fp-name; }
+  // En papel el enlace no aporta: se imprime como texto normal.
+  .line__name--link { text-decoration: none; color: $text-primary; }
   .line__spec { font-size: $fp-meta; }
   .line__amount { font-size: $fp-name; }
 
@@ -595,7 +603,6 @@ $fp-num-lg:  18pt;
     margin-bottom: 4mm;
   }
   .fact__value { font-size: $fp-body; }
-  .fact__notice { font-size: $fp-fine; }
 
   .history__row { font-size: $fp-meta; padding: 1mm 0; }
 

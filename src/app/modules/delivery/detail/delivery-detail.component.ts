@@ -20,6 +20,7 @@ import { TicketsService } from '../../../core/services/tickets.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { DiscountsService } from '../../../core/services/discounts.service';
 import { formatWindow } from '../../../core/services/delivery-schedule.service';
+import { waPhone } from '../../../core/utils/phone';
 import {
   DeliveryAssignment, DiscountReasonCategory, PaymentInstrument, PaymentStatus, SaleScheme,
 } from '../../../core/models/order.model';
@@ -31,6 +32,7 @@ import {
 } from '../../../core/models/order-labels';
 import { DiscountReasonPickerComponent } from '../../../shared/components/discount-reason-picker/discount-reason-picker.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 @Component({
   selector: 'app-delivery-detail',
@@ -44,6 +46,7 @@ import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
     CurrencyInputDirective,
     DiscountReasonPickerComponent,
     MediaUrlPipe,
+    ImageLightboxComponent,
   ],
 })
 export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -61,6 +64,9 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   protected assignment = signal<DeliveryAssignment | null>(null);
   protected loading = signal(true);
+
+  /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
 
   /** '1:00pm – 3:00pm', o '' si el pedido no tiene ventana capturada. */
   protected windowOf(a: DeliveryAssignment): string {
@@ -103,6 +109,15 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
+
+  /**
+   * Una vez que la entrega está 'completed', la firma queda congelada: no se
+   * puede volver a trazar sobre ella, agregar una nueva ni borrarla. El canvas
+   * sólo se usa para MOSTRAR la firma que se guardó al cerrar la entrega.
+   */
+  protected signatureLocked = computed(
+    () => this.assignment()?.deliveryStatus === 'completed',
+  );
 
   protected balance = computed(() => {
     const a = this.assignment();
@@ -223,6 +238,10 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   private initCanvas(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas || this.ctx) return;
+    // Sin ancho todavía (layout no aplicado): no se fija el contexto para que
+    // un intento posterior (onPointerDown, restoreSignature) lo reintente con
+    // el canvas ya medido — si no, el bitmap quedaría de 0px.
+    if (!canvas.offsetWidth) return;
     this.sizeCanvas(canvas);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -265,8 +284,12 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   /** Primer toque sobre la firma en celular: expande a pantalla completa en vez de dibujar. */
   protected onCanvasPointerDown(event: PointerEvent): void {
-    const completed = this.assignment()?.deliveryStatus === 'completed';
-    if (!completed && !this.signatureExpanded() && this.isMobileViewport()) {
+    // Entrega cerrada: la firma está congelada, ignora cualquier toque.
+    if (this.signatureLocked()) {
+      event.preventDefault();
+      return;
+    }
+    if (!this.signatureExpanded() && this.isMobileViewport()) {
       event.preventDefault();
       this.openSignatureFullscreen();
       return;
@@ -359,13 +382,37 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     this.mediaStream = null;
   }
 
+  /**
+   * Vuelve a pintar la firma guardada sobre el canvas.
+   *
+   * En una entrega ya completada, al recargar la página el canvas puede
+   * existir en el DOM pero todavía sin ancho real: se acaba de cambiar de la
+   * vista "Cargando…" a la del detalle y el layout aún no se aplica. Si se
+   * dibujaba en ese instante, el bitmap quedaba de 0px y la firma
+   * "desaparecía". Se espera (por frames) a que el canvas mida, luego se
+   * (re)dimensiona y se dibuja la imagen.
+   */
   private restoreSignature(dataUrl: string): void {
-    const canvas = this.canvasRef()?.nativeElement;
-    if (!canvas || !this.ctx) return;
     const img = new Image();
     img.onload = () => {
-      this.ctx!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      this.hasSignature.set(true);
+      let tries = 0;
+      const draw = () => {
+        const canvas = this.canvasRef()?.nativeElement;
+        if (!canvas) return;
+        if (!canvas.offsetWidth && tries++ < 30) {
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(draw);
+          else setTimeout(draw, 50);
+          return;
+        }
+        this.sizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        this.configureCtx(ctx);
+        this.ctx = ctx;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        this.hasSignature.set(true);
+      };
+      draw();
     };
     img.src = dataUrl;
   }
@@ -390,6 +437,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   protected onPointerDown(event: PointerEvent): void {
+    if (this.signatureLocked()) return;
     this.initCanvas();
     if (!this.ctx) return;
     this.drawing = true;
@@ -400,7 +448,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   protected onPointerMove(event: PointerEvent): void {
-    if (!this.drawing || !this.ctx) return;
+    if (this.signatureLocked() || !this.drawing || !this.ctx) return;
     const { x, y } = this.pos(event);
     this.ctx.lineTo(x, y);
     this.ctx.stroke();
@@ -412,6 +460,7 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   protected clearSignature(): void {
+    if (this.signatureLocked()) return;
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas || !this.ctx) return;
     this.ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -839,11 +888,10 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
     try {
       localStorage.setItem(this.enRouteStorageKey, message);
     } catch { /* modo privado / SSR: el texto sólo aplica a este envío */ }
-    const digits = (a.customerPhone ?? '').replace(/\D/g, '');
-    const phone = digits.length >= 10 ? digits.slice(-10) : '';
+    const phone = waPhone(a.customerPhone);
     const text = encodeURIComponent(message);
     window.open(
-      phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`,
+      phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`,
       '_blank',
     );
     this.enRouteModalOpen.set(false);

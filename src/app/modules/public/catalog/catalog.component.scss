@@ -107,6 +107,12 @@
       justify-content: space-between;
 
       select { flex: 1; }
+
+      // Al buscar, en el teléfono el bloque "Ordenar por" quedaba pegado bajo
+      // el contador ocupando una fila entera; con una búsqueda activa el orden
+      // por relevancia del nombre es lo natural, así que se oculta. En
+      // escritorio sí cabe en la misma fila, ahí se deja.
+      &.catalog__sort--search-hidden { display: none; }
     }
   }
 

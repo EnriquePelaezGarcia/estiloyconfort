@@ -58,7 +58,17 @@
               }
             </div>
             <div class="qr-item__main">
-              <span class="qr-item__name">{{ item.productName }}</span>
+              @if (item.productSlug; as slug) {
+                <a
+                  class="qr-item__name qr-item__name--link"
+                  [routerLink]="['/producto', slug]"
+                  target="_blank"
+                  rel="noopener"
+                  >{{ item.productName }}</a
+                >
+              } @else {
+                <span class="qr-item__name">{{ item.productName }}</span>
+              }
               <span class="qr-item__detail">
                 {{ item.materialLabel || 'Material por confirmar' }}@if (item.sizeLabel) { · {{ item.sizeLabel }} }
                 @if (item.color) { · {{ item.color }} }

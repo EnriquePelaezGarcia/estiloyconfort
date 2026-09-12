@@ -787,3 +787,14 @@
 
   .material-symbols-outlined { font-size: 1.1rem; color: vars.$color-primary; }
 }
+
+// Bitácora de ediciones de la cotización (modo edición).
+.history-panel {
+  margin-top: vars.$spacing-lg;
+
+  &__owner {
+    margin: 0 0 vars.$spacing-sm;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+  }
+}

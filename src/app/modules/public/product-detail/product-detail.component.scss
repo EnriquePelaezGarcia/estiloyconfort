@@ -289,6 +289,20 @@
       text-decoration: underline;
     }
 
+    // Imagen pegada/subida desde el editor de "Detalles". El HTML llega tal
+    // cual del editor y suele traer `width`/`height` fijos (o la imagen a
+    // tamaño natural), así que se desborda del panel. Se fuerza a que sea
+    // proporcional al ancho del campo: `width: auto` anula el atributo fijo,
+    // `max-width: 100%` la acota al panel y `height: auto` conserva el aspecto.
+    img {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      height: auto;
+      margin: v.$spacing-sm 0;
+      border-radius: v.$radius-sm;
+    }
+
     // Tabla capturada en "Detalles" (pegada de Word/Excel o armada con el
     // editor). `display: block` + `overflow-x: auto` en la propia tabla
     // (no en un wrapper aparte, porque el HTML llega tal cual del editor)

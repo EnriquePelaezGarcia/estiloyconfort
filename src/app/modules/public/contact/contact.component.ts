@@ -4,7 +4,7 @@ import { NgOptimizedImage } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ContactService } from '../../../core/services/contact.service';
 import { ContactRequest } from '../../../core/models/contact.model';
-import { PHONE_PATTERN, formatPhoneDigits } from '../../../core/utils/phone';
+import { formatPhoneDigits, normalizePhone, phoneValidator } from '../../../core/utils/phone';
 import { environment } from '../../../../environments/environment';
 import { ReviewsBadgeComponent } from '../../../shared/components/reviews-badge/reviews-badge.component';
 
@@ -54,9 +54,9 @@ export class ContactComponent {
   protected form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
     email: ['', [Validators.required, Validators.email]],
-    // Opcional, pero si lo dejan tiene que ser un teléfono a 10 dígitos:
-    // `Validators.pattern` da por válido el campo vacío.
-    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
+    // Opcional; si lo dejan, 10 dígitos nacionales o "+lada" internacional.
+    // `phoneValidator` da por válido el campo vacío.
+    phone: ['', [phoneValidator]],
     message: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(4000)]],
   });
 
@@ -78,7 +78,7 @@ export class ContactComponent {
       name: raw.name!,
       email: raw.email!,
       message: raw.message!,
-      ...(raw.phone ? { phone: raw.phone } : {}),
+      ...(raw.phone ? { phone: normalizePhone(raw.phone) } : {}),
     };
 
     this.contactService.send(payload).subscribe({

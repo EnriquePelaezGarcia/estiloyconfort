@@ -6,12 +6,13 @@ import {
   ManufacturerOrder, ManufacturerOwnCatalogItem, Order, WeeklyListRow,
 } from '../models/order.model';
 import {
+  AccountStatement,
   PayableDocumentDetail,
   PayableDocumentsResponse,
   PayableSourceType,
   PaymentBatch,
 } from '../models/payable.model';
-import { ManufacturerPurchaseOrder } from '../models/manufacturing.model';
+import { ManufacturerChargeRequest, ManufacturerPurchaseOrder } from '../models/manufacturing.model';
 
 /** Filtros del historial. El backend fuerza el fabricante desde el token. */
 export interface ManufacturerHistoryFilters {
@@ -93,6 +94,47 @@ export class ManufacturerService {
     );
   }
 
+  // ─── SOLICITUD DE AJUSTE DE PRECIO (Fase B) ────────────────────────────────
+  /** Las solicitudes que ha hecho este fabricante (todas, con su estado). */
+  getChargeRequests(): Observable<{ data: ManufacturerChargeRequest[] }> {
+    return this.api.get<{ data: ManufacturerChargeRequest[] }>('/manufacturer/charge-requests');
+  }
+
+  /** Pide un cargo extra sobre una OC suya — queda pendiente de que la tienda apruebe. */
+  requestPurchaseOrderCharge(
+    poId: number,
+    body: { amount: number; concept: string; notes?: string | null },
+  ): Observable<{ data: { id: number }; message: string }> {
+    return this.api.post<{ data: { id: number }; message: string }>(
+      `/manufacturer/purchase-orders/${poId}/charge-request`, body,
+    );
+  }
+
+  /** Pide un cargo extra sobre un pedido de fabricación suyo. */
+  requestOrderCharge(
+    orderId: number,
+    body: { amount: number; concept: string; notes?: string | null },
+  ): Observable<{ data: { id: number }; message: string }> {
+    return this.api.post<{ data: { id: number }; message: string }>(
+      `/manufacturer/orders/${orderId}/charge-request`, body,
+    );
+  }
+
+  updateChargeRequest(
+    id: number,
+    body: { amount?: number; concept?: string; notes?: string | null },
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(`/manufacturer/charge-requests/${id}`, body);
+  }
+
+  cancelChargeRequest(id: number): Observable<{ message: string }> {
+    return this.api.delete<{ message: string }>(`/manufacturer/charge-requests/${id}`);
+  }
+
+  acknowledgeChargeRejection(id: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>(`/manufacturer/charge-requests/${id}/acknowledge`, {});
+  }
+
   markItemReady(
     orderId: number,
     itemId: number,
@@ -145,5 +187,12 @@ export class ManufacturerService {
       '/manufacturer/payments',
       toParams(filters),
     );
+  }
+
+  /** Sus estados de cuenta archivados. Solo lectura: generarlo y reenviarlo es del admin. */
+  statements(): Observable<AccountStatement[]> {
+    return this.api
+      .get<{ data: AccountStatement[] }>('/manufacturer/statements')
+      .pipe(map((r) => r.data));
   }
 }

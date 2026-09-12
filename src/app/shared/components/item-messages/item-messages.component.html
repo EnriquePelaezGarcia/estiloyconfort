@@ -1,0 +1,45 @@
+<div class="item-chat">
+  <button type="button" class="item-chat__toggle" (click)="toggle()" [attr.aria-expanded]="open()">
+    <span class="material-symbols-outlined">forum</span>
+    <span class="item-chat__toggle-label">Mensajes</span>
+    @if (messages().length) {
+      <span class="badge badge--gray">{{ messages().length }}</span>
+    }
+    <span class="material-symbols-outlined item-chat__chevron" [class.item-chat__chevron--open]="open()">expand_more</span>
+  </button>
+
+  @if (open()) {
+    <div class="item-chat__panel">
+      @if (loading()) {
+        <p class="muted item-chat__empty">Cargando…</p>
+      } @else if (messages().length === 0) {
+        <p class="muted item-chat__empty">Todavía no hay mensajes en este producto.</p>
+      } @else {
+        <ul class="item-chat__list">
+          @for (m of messages(); track m.id) {
+            <li class="item-chat__msg" [class.item-chat__msg--mine]="m.senderId === currentUserId">
+              <div class="item-chat__msg-head">
+                <span class="item-chat__msg-name">{{ m.senderName }}</span>
+                <span class="item-chat__msg-role">{{ roleLabel(m.senderRole) }}</span>
+                <span class="item-chat__msg-time">{{ m.createdAt | date:'d MMM, HH:mm' }}</span>
+              </div>
+              <p class="item-chat__msg-body">{{ m.body }}</p>
+            </li>
+          }
+        </ul>
+      }
+
+      <div class="item-chat__compose">
+        <textarea
+          rows="2"
+          placeholder="Escribe un mensaje…"
+          [value]="draft()"
+          (input)="draft.set($any($event.target).value)"
+        ></textarea>
+        <button type="button" class="btn btn--primary btn--sm" [disabled]="sending() || !draft().trim()" (click)="send()">
+          <span class="material-symbols-outlined">send</span> {{ sending() ? 'Enviando…' : 'Enviar' }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

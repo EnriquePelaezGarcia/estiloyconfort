@@ -16,6 +16,8 @@ const TYPE_LABELS: Record<ApprovalType, string> = {
   shipping: 'Envío manual',
   extra_charge: 'Cargo extra',
   refund: 'Reembolso',
+  cancellation: 'Cancelación',
+  manufacturer_charge: 'Ajuste fabricante',
 };
 
 const TYPE_ICONS: Record<ApprovalType, string> = {
@@ -24,6 +26,8 @@ const TYPE_ICONS: Record<ApprovalType, string> = {
   shipping: 'local_shipping',
   extra_charge: 'build',
   refund: 'undo',
+  cancellation: 'cancel',
+  manufacturer_charge: 'engineering',
 };
 
 /**
@@ -49,7 +53,12 @@ export class ApprovalsComponent implements OnInit {
 
   protected readonly typeLabels = TYPE_LABELS;
   protected readonly typeIcons = TYPE_ICONS;
-  protected readonly typeOptions: ApprovalType[] = ['discount_money', 'discount_product', 'shipping', 'extra_charge', 'refund'];
+  protected readonly typeOptions: ApprovalType[] = ['discount_money', 'discount_product', 'shipping', 'extra_charge', 'refund', 'cancellation', 'manufacturer_charge'];
+
+  /** La cancelación no lleva monto: cambia la UI de la fila y del modal. */
+  protected isAmountless(item: ApprovalItem): boolean {
+    return item.type === 'cancellation';
+  }
 
   protected activeTab = signal<Tab>('pending');
   protected loading = signal(true);
@@ -129,6 +138,9 @@ export class ApprovalsComponent implements OnInit {
 
   /** Despacha al endpoint correcto según `kind`/`type` — mismos servicios que order-detail/quote-list. */
   private dispatchApprove(item: ApprovalItem, amount?: number): Observable<unknown> {
+    if (item.kind === 'manufacturer') {
+      return this.adminService.approveManufacturerCharge(item.rawId, amount);
+    }
     if (item.kind === 'order') {
       switch (item.type) {
         case 'discount_money':
@@ -138,6 +150,8 @@ export class ApprovalsComponent implements OnInit {
           return this.adminService.approveOrderExtraCharge(item.documentId, item.rawId, amount);
         case 'refund':
           return this.adminService.approveOrderRefund(item.documentId, item.rawId, amount);
+        case 'cancellation':
+          return this.adminService.approveOrderCancellation(item.documentId, item.rawId);
         case 'shipping':
           return this.adminService.approveOrderShipping(item.documentId, amount);
       }
@@ -157,6 +171,9 @@ export class ApprovalsComponent implements OnInit {
   }
 
   private dispatchReject(item: ApprovalItem, reviewNote: string): Observable<unknown> {
+    if (item.kind === 'manufacturer') {
+      return this.adminService.rejectManufacturerCharge(item.rawId, reviewNote);
+    }
     if (item.kind === 'order') {
       switch (item.type) {
         case 'discount_money':
@@ -166,6 +183,8 @@ export class ApprovalsComponent implements OnInit {
           return this.adminService.rejectOrderExtraCharge(item.documentId, item.rawId, reviewNote);
         case 'refund':
           return this.adminService.rejectOrderRefund(item.documentId, item.rawId, reviewNote);
+        case 'cancellation':
+          return this.adminService.rejectOrderCancellation(item.documentId, item.rawId, reviewNote);
         case 'shipping':
           return this.adminService.rejectOrderShipping(item.documentId, reviewNote);
       }
@@ -225,6 +244,12 @@ export class ApprovalsComponent implements OnInit {
 
   /** Link al detalle del documento; las cotizaciones no tienen pantalla de detalle propia, solo el listado. */
   protected detailLink(item: ApprovalItem): string[] {
+    if (item.kind === 'manufacturer') {
+      // El folio dice si el ajuste es de un pedido (EC-) o de una OC (OC-).
+      return item.documentLabel.startsWith('OC-')
+        ? ['/admin/fabricante/ordenes-compra']
+        : ['/admin/pedidos', String(item.documentId)];
+    }
     return item.kind === 'order' ? ['/admin/pedidos', String(item.documentId)] : ['/admin/cotizaciones'];
   }
 

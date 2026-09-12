@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { QuoteRequestsService } from '../../../core/services/quote-requests.service';
 import { PublicQuoteRequest, QuoteRequestItem } from '../../../core/models/quote-request.model';
+import { waPhone } from '../../../core/utils/phone';
 
 /**
  * Pantalla que el asesor abre desde el link de WhatsApp (/precotizacion/:token).
@@ -72,13 +73,13 @@ export class QuoteRequestReviewComponent implements OnInit {
 
   /**
    * Link directo para contestarle al cliente (D7). El teléfono viene tal cual
-   * lo escribió — puede traer espacios, guiones o basura —, así que se limpia
-   * aquí y se antepone la lada de México, igual que en el resto del panel.
-   * Devuelve null si no quedan dígitos suficientes para marcar.
+   * lo escribió; `waPhone` lo limpia y le pone la lada (52 para un nacional, o
+   * la internacional si se guardó en E.164). Devuelve null si no hay dígitos
+   * suficientes para marcar.
    */
   protected whatsappUrl(phone: string | null): string | null {
-    const digits = (phone ?? '').replace(/\D/g, '');
-    return digits.length >= 10 ? `https://wa.me/52${digits.slice(-10)}` : null;
+    const n = waPhone(phone);
+    return n ? `https://wa.me/${n}` : null;
   }
 
   protected variantText(item: QuoteRequestItem): string {

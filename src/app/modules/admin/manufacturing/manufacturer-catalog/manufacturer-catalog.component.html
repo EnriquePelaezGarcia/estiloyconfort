@@ -80,7 +80,30 @@
         <tbody>
           @for (p of products(); track p.id) {
             <tr>
-              <td data-label="Producto" class="strong">{{ p.name }}</td>
+              <td data-label="Producto" class="strong">
+                <div class="product-cell">
+                  @if (p.primaryImage) {
+                    <button
+                      type="button"
+                      class="product-cell__thumb-btn"
+                      (click)="openZoom(p.primaryImage, p.name)"
+                      title="Ver imagen en grande"
+                    >
+                      <img
+                        class="product-cell__thumb"
+                        [src]="p.primaryImage | mediaUrl: 'thumb'"
+                        [alt]="p.name"
+                        loading="lazy"
+                      />
+                    </button>
+                  } @else {
+                    <span class="product-cell__thumb product-cell__thumb--empty">
+                      <span class="material-symbols-outlined">image</span>
+                    </span>
+                  }
+                  <span>{{ p.name }}</span>
+                </div>
+              </td>
               <td data-label="SKU" class="muted">{{ p.sku ?? '—' }}</td>
               <td data-label="Fabricante">{{ p.manufacturerName ?? '—' }}</td>
               <td data-label="Categoría" class="muted">{{ p.categoryName ?? '—' }}</td>
@@ -130,14 +153,14 @@
             <input
               id="phone"
               type="tel"
-              inputmode="numeric"
-              maxlength="12"
+              inputmode="tel"
+              maxlength="24"
               formControlName="phone"
               placeholder="222 123 4567"
               (input)="onPhoneInput($event)"
             />
             @if (form.controls.phone.touched && form.controls.phone.invalid) {
-              <p class="field__error">Ingresa un teléfono a 10 dígitos.</p>
+              <p class="field__error">Ingresa un teléfono a 10 dígitos, o con lada internacional (+1 646 275 7126).</p>
             }
           </div>
         </div>
@@ -165,4 +188,9 @@
       </form>
     </div>
   </div>
+}
+
+<!-- ===== Ver foto en grande ===== -->
+@if (zoomedImage(); as zoomed) {
+  <app-image-lightbox [src]="(zoomed.src | mediaUrl) ?? ''" [alt]="zoomed.alt" (closed)="zoomedImage.set(null)" />
 }

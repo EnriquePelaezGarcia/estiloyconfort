@@ -54,8 +54,9 @@ export class ManufacturingService {
   }
 
   // ── Órdenes de compra ────────────────────────────────────────────────────
+  /** `status` sin valor = solo OCs activas; 'all' / 'received' / 'cancelled' para el resto. */
   getPurchaseOrders(
-    status?: PurchaseOrderStatus,
+    status?: PurchaseOrderStatus | 'all',
     manufacturerId?: number,
   ): Observable<{ data: PurchaseOrder[] }> {
     const params: Record<string, string> = {};
@@ -64,22 +65,49 @@ export class ManufacturingService {
     return this.api.get<{ data: PurchaseOrder[] }>('/manufacturing/purchase-orders', params);
   }
 
+  /** Enviar al fabricante (draft→sent) o cancelar. */
+  setPurchaseOrderStatus(id: number, status: 'sent' | 'cancelled'): Observable<{ data: PurchaseOrder; message: string }> {
+    return this.api.patch<{ data: PurchaseOrder; message: string }>(
+      `/manufacturing/purchase-orders/${id}/status`,
+      { status },
+    );
+  }
+
+  /**
+   * Cabecera editable de la OC desde el panel: fecha esperada, notas y reasignar
+   * fabricante (`manufacturerId`). Cada campo es opcional; el backend solo toca
+   * los que llegan. Cambiar el fabricante deja la aceptación en 'pending'.
+   */
+  updatePurchaseOrder(
+    id: number,
+    patch: { expectedDate?: string | null; notes?: string | null; manufacturerId?: number | null },
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(`/manufacturing/purchase-orders/${id}`, patch);
+  }
+
+  /**
+   * El admin marca (o desmarca) listo un renglón de la OC por los fabricantes
+   * que no entran al sistema. Mismo endpoint que usa el portal del fabricante
+   * (autoriza rol admin).
+   */
+  markPurchaseOrderItemReady(
+    poId: number,
+    itemId: number,
+    isReady: boolean,
+    readyQuantity?: number,
+  ): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>(
+      `/manufacturer/purchase-orders/${poId}/items/${itemId}/ready`,
+      readyQuantity != null ? { readyQuantity } : { isReady },
+    );
+  }
+
   getPurchaseOrder(id: number): Observable<{ data: PurchaseOrder }> {
     return this.api.get<{ data: PurchaseOrder }>(`/manufacturing/purchase-orders/${id}`);
   }
 
   createPurchaseOrder(input: PurchaseOrderInput): Observable<{ data: PurchaseOrder }> {
     return this.api.post<{ data: PurchaseOrder }>('/manufacturing/purchase-orders', input);
-  }
-
-  updatePurchaseOrderStatus(
-    id: number,
-    status: PurchaseOrderStatus,
-  ): Observable<{ data: PurchaseOrder }> {
-    return this.api.patch<{ data: PurchaseOrder }>(
-      `/manufacturing/purchase-orders/${id}/status`,
-      { status },
-    );
   }
 
   /** Registra una recepción parcial: suma lo bueno a inventario. */

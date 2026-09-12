@@ -7,19 +7,202 @@
   justify-content: space-between;
   gap: vars.$spacing-sm;
   margin-bottom: vars.$spacing-md;
-}
 
-.order-link {
-  color: vars.$color-primary;
-
-  &:hover {
-    text-decoration: underline;
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: vars.$spacing-sm;
   }
 }
 
-.table--cards td[rowspan] {
-  vertical-align: top;
-  border-right: 1px solid vars.$color-border;
+// =====================================================================
+// Pedidos a fábrica — una tarjeta por pedido (mismo patrón que el portal
+// del fabricante y que Órdenes de compra: etiqueta arriba / valor abajo).
+// =====================================================================
+
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-lg;
+}
+
+.order-group {
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: vars.$spacing-sm;
+    flex-wrap: wrap;
+    padding-bottom: vars.$spacing-md;
+    border-bottom: 1px solid vars.$color-border;
+    margin-bottom: vars.$spacing-md;
+  }
+
+  &__ref {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: vars.$color-primary;
+    letter-spacing: 0.02em;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  &__customer { font-size: 0.9rem; color: vars.$color-text-secondary; }
+}
+
+// ===== Etiqueta reutilizable (small-caps) + valor =====
+.spec {
+  margin: vars.$spacing-md 0 0;
+
+  &__k {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: vars.$color-text-secondary;
+  }
+
+  &__v {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: vars.$color-text;
+  }
+
+  // Instrucción de modificación: lo más importante del renglón.
+  &--callout {
+    padding: 0.7rem 0.85rem;
+    border-left: 3px solid vars.$color-gold;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-gold, 0.08);
+
+    .spec__k { color: #8a6d08; }
+    .spec__v { font-weight: 500; white-space: pre-line; }
+  }
+}
+
+// ===== Producto(s) del pedido =====
+.items {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  padding: vars.$spacing-md 0;
+  border-top: 1px solid vars.$color-border;
+
+  &:first-child { border-top: none; padding-top: 0; }
+  &:last-child { padding-bottom: 0; }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.65rem;
+    margin-bottom: 0.2rem;
+  }
+
+  &__thumb {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+  }
+
+  &__name { font-size: 1rem; font-weight: 700; line-height: 1.3; color: vars.$color-text; }
+
+  &__row {
+    margin-top: vars.$spacing-sm;
+
+    .spec__k { margin-bottom: 0.25rem; }
+  }
+
+  &__row-value {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+
+    &--stack { flex-direction: column; align-items: stretch; }
+
+    select { max-width: 22rem; }
+  }
+}
+
+// ===== Atributos cortos en cuadrícula (Cantidad, Talla, Color) =====
+.attrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: vars.$spacing-sm;
+  margin: vars.$spacing-md 0 0;
+
+  &__cell {
+    padding: 0.5rem 0.65rem;
+    border-radius: vars.$radius-sm;
+    background: vars.$color-bg;
+
+    dt {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: vars.$color-text-secondary;
+      margin-bottom: 0.2rem;
+    }
+
+    dd {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: vars.$color-text;
+    }
+  }
+}
+
+// ===== Miniaturas de referencia =====
+.ref-images {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+
+  li { position: relative; }
+
+  &__num {
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    display: block;
+    border-radius: vars.$radius-sm;
+    border: 1px solid vars.$color-border;
+  }
 }
 
 .due-date-input {

@@ -60,6 +60,8 @@ export interface QuoteRequestItem {
   unitPriceCash: number | null;
   /** Foto principal vigente del producto; null si no tiene ninguna. */
   imageUrl?: string | null;
+  /** Slug vigente del producto, para abrir su ficha pública (/producto/:slug). */
+  productSlug?: string | null;
 }
 
 /** Vista pública: pantalla de revisión abierta desde el link, sin sesión. */

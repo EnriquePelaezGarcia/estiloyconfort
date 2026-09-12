@@ -62,7 +62,7 @@ export class NotificationsPageComponent implements OnInit {
       this.items.update((list) => list.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     }
     if (n.orderId) {
-      const target = this.store.orderTarget(n.orderId);
+      const target = this.store.orderTarget(n.orderId, n.orderItemId);
       this.router.navigate(target.commands, { queryParams: target.queryParams });
     }
   }
@@ -79,6 +79,8 @@ export class NotificationsPageComponent implements OnInit {
       case 'order_rejected':
       case 'po_rejected':
         return 'cancel';
+      case 'item_message':
+        return 'forum';
       default:
         return 'info';
     }

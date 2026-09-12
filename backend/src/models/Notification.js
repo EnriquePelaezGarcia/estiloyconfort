@@ -17,6 +17,7 @@ function mapRow(r) {
     body: r.body ?? null,
     orderId: r.order_id ?? null,
     orderNumber: r.order_number ?? null,
+    orderItemId: r.order_item_id ?? null,
     read: r.read_at != null,
     readAt: r.read_at ?? null,
     createdAt: r.created_at,
@@ -29,12 +30,12 @@ const Notification = {
    * transacción de quien llama (asignación / edición de pedido).
    * @param {{audience:'manufacturer'|'admin'|'seller', manufacturerId?:number|null,
    *   userId?:number|null, type:string, title:string, body?:string|null,
-   *   orderId?:number|null}} n
+   *   orderId?:number|null, orderItemId?:number|null}} n
    */
   async create(n, executor = pool) {
     const [res] = await executor.execute(
-      `INSERT INTO notifications (audience, manufacturer_id, user_id, type, title, body, order_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notifications (audience, manufacturer_id, user_id, type, title, body, order_id, order_item_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         n.audience,
         n.audience === 'manufacturer' ? (n.manufacturerId ?? null) : null,
@@ -43,6 +44,7 @@ const Notification = {
         String(n.title).slice(0, 160),
         n.body != null ? String(n.body).slice(0, 500) : null,
         n.orderId ?? null,
+        n.orderItemId ?? null,
       ],
     );
     return res.insertId;

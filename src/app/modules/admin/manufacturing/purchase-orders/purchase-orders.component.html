@@ -1,12 +1,30 @@
 <div class="section-head">
-  <select class="filter-select" (change)="onFilterChange($event)">
-    @for (opt of statusOptions; track opt.value) {
-      <option [value]="opt.value">{{ opt.label }}</option>
+  <p class="muted">
+    Encargos directos al fabricante (compra a stock, sin cliente detrás). Se
+    trabajan igual que "Pedidos a fábrica": el fabricante acepta, reporta avance
+    por producto y bodega recibe.
+  </p>
+  <div class="section-head__actions no-print">
+    <select class="filter-select" (change)="onFilterChange($event)">
+      @for (opt of filterOptions; track opt.value) {
+        <option [value]="opt.value" [selected]="opt.value === filter()">{{ opt.label }}</option>
+      }
+    </select>
+    <select class="filter-select" (change)="onManufacturerFilterChange($event)">
+      <option value="">Todos los fabricantes</option>
+      @for (m of manufacturers(); track m.id) {
+        <option [value]="m.id">{{ m.name }}</option>
+      }
+    </select>
+    @if (!loading() && orders().length > 0) {
+      <button type="button" class="btn btn--ghost" (click)="print()">
+        <span class="material-symbols-outlined">print</span> Imprimir
+      </button>
     }
-  </select>
-  <button type="button" class="btn btn--primary" (click)="openCreate()">
-    <span class="material-symbols-outlined">add</span> Nueva orden
-  </button>
+    <button type="button" class="btn btn--primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span> Nueva orden
+    </button>
+  </div>
 </div>
 
 @if (loading()) {
@@ -17,168 +35,173 @@
     <p>No hay órdenes de compra con este filtro.</p>
   </div>
 } @else {
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead>
-        <tr>
-          <th>Orden</th><th>Fabricante</th><th class="num">Items</th><th class="num">Total</th>
-          <th class="num">Pagado</th><th class="num">Saldo</th>
-          <th>Fecha</th><th>Estado</th><th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (o of orders(); track o.id) {
-          <tr>
-            <td data-label="Orden" class="strong">{{ o.poNumber }}</td>
-            <td data-label="Fabricante">{{ o.manufacturerName ?? '—' }}</td>
-            <td data-label="Items" class="num">{{ o.itemCount ?? 0 }}</td>
-            <td data-label="Total" class="num">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
-            <!-- Saldo leído de cuentas por pagar: una OC recibida ya es deuda. -->
-            <td data-label="Pagado" class="num">
-              @if (paymentOf(o.id); as p) {
-                {{ p.paid | currency:'MXN':'symbol-narrow':'1.2-2' }}
-                <small class="badge badge--sm" [class]="paymentStatusTone[p.status]">
-                  {{ paymentStatusLabels[p.status] }}
-                </small>
-              } @else {
-                <span class="muted">—</span>
-              }
-            </td>
-            <td data-label="Saldo" class="num">
-              @if (paymentOf(o.id); as p) {
-                <strong>{{ p.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-              } @else {
-                <span class="muted">—</span>
-              }
-            </td>
-            <td data-label="Fecha" class="muted">{{ o.orderDate | date:'dd/MM/yyyy' }}</td>
-            <td data-label="Estado">
-              @if (o.status === 'received' || o.status === 'partially_received') {
-                <span class="badge" [class]="statusTone(o.status)">{{ statusLabel(o.status) }}</span>
-              } @else {
-                <select class="status-select" (change)="changeStatus(o, $event)">
-                  @for (s of manualStatuses; track s) {
-                    <option [value]="s" [selected]="s === o.status">{{ statusLabel(s) }}</option>
+  <div class="orders">
+    @for (o of orders(); track o.id) {
+      <article class="panel po">
+        <header class="po__head">
+          <div class="po__head-main">
+            <span class="po__ref">{{ o.poNumber }}</span>
+            @if (derivedStatusLabel(o); as lbl) {
+              <span class="badge badge--sm" [class]="statusTone(o)">{{ lbl }}</span>
+            }
+          </div>
+          <div class="po__head-money">
+            <span class="po__cost">{{ o.totalCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+            @if (paymentOf(o.id); as p) {
+              <span class="po__balance">
+                Saldo <strong>{{ p.balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                <span class="badge badge--sm" [class]="paymentStatusTone[p.status]">{{ paymentStatusLabels[p.status] }}</span>
+              </span>
+            }
+          </div>
+        </header>
+
+        @if (o.status === 'draft') {
+          <div class="po__banner no-print">
+            <span class="material-symbols-outlined">info</span>
+            <span>Borrador — el fabricante aún no la ve.</span>
+            <button type="button" class="btn btn--primary btn--sm"
+                    [disabled]="working().has(o.id)" (click)="sendToManufacturer(o)">
+              <span class="material-symbols-outlined">send</span> Enviar al fabricante
+            </button>
+          </div>
+        }
+
+        <div class="po__meta">
+          <div class="spec">
+            <span class="spec__k">Fabricante</span>
+            <span class="spec__v">
+              {{ o.manufacturerName ?? 'Sin fabricante' }}
+              @if (o.manufacturerId && o.status !== 'draft') {
+                <span class="accept-chip" [class]="'accept-chip--' + (o.acceptanceStatus ?? 'pending')">
+                  @switch (o.acceptanceStatus) {
+                    @case ('accepted') { Aceptó el encargo }
+                    @case ('rejected') { Rechazó: {{ o.acceptanceRejectReason }} }
+                    @default { Pendiente de aceptar }
                   }
-                </select>
-              }
-              <!-- Aceptación del fabricante: solo aplica desde que se manda (no en Borrador). -->
-              @if (o.status !== 'draft' && o.acceptanceStatus === 'pending') {
-                <div><small class="badge badge--sm badge--amber">Pendiente de aceptar</small></div>
-              } @else if (o.status !== 'draft' && o.acceptanceStatus === 'rejected') {
-                <div><small class="badge badge--sm badge--red" [title]="o.acceptanceRejectReason ?? ''">Rechazada por el fabricante</small></div>
-              } @else if (o.status !== 'draft' && o.acceptanceStatus === 'accepted') {
-                <div><small class="badge badge--sm badge--green">Aceptada</small></div>
-              }
-            </td>
-            <td class="actions">
-              @if (canReceive(o)) {
-                <button type="button" class="icon-btn" (click)="openReceipt(o)" title="Registrar recepción">
-                  <span class="material-symbols-outlined">move_to_inbox</span>
-                </button>
-              }
-              <button type="button" class="icon-btn" (click)="toggle(o)" aria-label="Ver items">
-                <span class="material-symbols-outlined">
-                  {{ expanded() === o.id ? 'expand_less' : 'expand_more' }}
                 </span>
-              </button>
-            </td>
-          </tr>
-          @if (expanded() === o.id) {
-            <tr class="detail-row">
-              <td colspan="9">
-                @if (expandedItems().length === 0) {
-                  <p class="empty">Cargando items…</p>
-                } @else {
-                  <table class="subtable">
-                    <thead>
-                      <tr>
-                        <th>Producto</th><th>Material</th><th>Tipo</th>
-                        <th class="num">Cant.</th><th>Fabricante reporta</th><th class="num">Recibido</th>
-                        <th class="num">Costo unit.</th><th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (it of expandedItems(); track it.id) {
-                        <tr>
-                          <td>
-                            {{ it.productName }}
-                            @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
-                            @if (it.specifications) {
-                              <span class="specs">{{ it.specifications }}</span>
-                            }
-                          </td>
-                          <td>
-                            {{ it.materialLabel ?? '—' }}
-                            @if (it.sizeLabel) { <span class="muted"> · {{ it.sizeLabel }}</span> }
-                            @if (it.color) { <span class="muted"> / {{ it.color }}</span> }
-                          </td>
-                          <td>
-                            <span class="badge" [class]="it.isNewProduct ? 'badge--amber' : 'badge--gray'">
-                              {{ it.isNewProduct ? 'Nuevo' : 'Existente' }}
-                            </span>
-                          </td>
-                          <td class="num">{{ it.quantity }}</td>
-                          <td>
-                            @if (it.isReady) {
-                              <span class="badge badge--green">Listo</span>
-                            } @else if ((it.readyQuantity ?? 0) > 0) {
-                              <span class="badge badge--amber">{{ it.readyQuantity }}/{{ it.quantity }}</span>
-                            } @else {
-                              <span class="muted">Sin reportar</span>
-                            }
-                          </td>
-                          <td class="num">
-                            {{ it.receivedQuantity ?? 0 }}/{{ it.quantity }}
-                            @if ((it.pendingQuantity ?? it.quantity) > 0) {
-                              <span class="muted"> (faltan {{ it.pendingQuantity ?? it.quantity }})</span>
-                            }
-                          </td>
-                          <td class="num">{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</td>
-                          <td>
-                            @if (it.isNewProduct) {
-                              <button type="button" class="btn btn--ghost btn--sm" (click)="openMaterialize(o.id, it)">
-                                <span class="material-symbols-outlined">add_box</span> Crear producto
-                              </button>
-                            }
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                  @if (o.notes) { <p class="po-notes"><strong>Notas:</strong> {{ o.notes }}</p> }
+              }
+            </span>
+          </div>
+          <div class="spec">
+            <span class="spec__k">Fecha esperada</span>
+            <input type="date" class="due-date-input"
+                   [value]="o.expectedDate ?? ''"
+                   [disabled]="working().has(o.id)"
+                   (change)="onExpectedDateChange(o, $event)" />
+          </div>
+        </div>
 
-                  @if (expandedReceipts().length > 0) {
-                    <div class="receipts">
-                      <h4>Recepciones</h4>
-                      @for (r of expandedReceipts(); track r.id) {
-                        <p class="receipt-line">
-                          <span class="muted">{{ r.createdAt | date:'dd/MM/yyyy HH:mm' }}</span>
-                          @for (l of r.lines; track l.itemId) {
-                            <span class="badge badge--sm"
-                              [class]="l.condition === 'ok' ? 'badge--green' : 'badge--red'">
-                              {{ l.quantity }} {{ l.condition === 'ok' ? 'ok' : (l.condition === 'damaged' ? 'dañadas' : 'incompletas') }}
-                            </span>
-                          }
-                          @if (r.receivedByName) { <span class="muted"> · {{ r.receivedByName }}</span> }
-                          @if (r.note) { <span> — {{ r.note }}</span> }
-                        </p>
-                      }
-                    </div>
+        @if (o.notes) { <p class="po__notes">{{ o.notes }}</p> }
+
+        @if (o.manufacturerId && o.status !== 'draft' && o.status !== 'cancelled') {
+          <a class="po__pay-link no-print" [routerLink]="['/admin/cuentas-por-pagar', o.manufacturerId]">
+            <span class="material-symbols-outlined">payments</span> Registrar pago / anticipo
+          </a>
+        }
+
+        @if (o.status !== 'received' && o.status !== 'cancelled') {
+          <div class="po__actions no-print">
+            <button type="button" class="btn btn--ghost btn--sm" (click)="openEdit(o)">
+              <span class="material-symbols-outlined">edit</span> Editar orden
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm"
+                    [disabled]="working().has(o.id)" (click)="cancelOrder(o)">
+              Cancelar orden
+            </button>
+          </div>
+        }
+
+        <div class="items">
+          @for (it of (o.items ?? []); track it.id) {
+            <div class="item">
+              <div class="item__title">
+                @if (it.imageUrl) {
+                  <img class="item__thumb" [src]="it.imageUrl | mediaUrl:'thumb'" [alt]="it.productName" width="56" height="56" />
+                }
+                <span class="item__name">
+                  {{ it.productName }}
+                  @if (it.productSku) { <span class="muted"> · {{ it.productSku }}</span> }
+                </span>
+                @if (it.isNewProduct) {
+                  <button type="button" class="btn btn--ghost btn--sm no-print" (click)="openMaterialize(o.id, it)">
+                    <span class="material-symbols-outlined">add_box</span> Crear producto
+                  </button>
+                }
+              </div>
+
+              @if (it.specifications) {
+                <div class="spec spec--callout">
+                  <span class="spec__k">Especificaciones</span>
+                  <p class="spec__v">{{ it.specifications }}</p>
+                </div>
+              }
+
+              <dl class="attrs">
+                <div class="attrs__cell"><dt>Cantidad</dt><dd>{{ it.quantity }}</dd></div>
+                @if (it.materialLabel) { <div class="attrs__cell"><dt>Material</dt><dd>{{ it.materialLabel }}</dd></div> }
+                @if (it.sizeLabel) { <div class="attrs__cell"><dt>Talla</dt><dd>{{ it.sizeLabel }}</dd></div> }
+                @if (it.color) { <div class="attrs__cell"><dt>Color</dt><dd>{{ it.color }}</dd></div> }
+                <div class="attrs__cell"><dt>Costo unit.</dt><dd>{{ it.unitCost | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
+              </dl>
+
+              <div class="item__row">
+                <span class="spec__k">Fabricante reporta</span>
+                <div class="item__row-value">
+                  <button
+                    type="button"
+                    class="ready-toggle"
+                    [class.ready-toggle--done]="it.isReady"
+                    [disabled]="markingReady().has(it.id!) || o.status === 'draft' || o.status === 'cancelled'"
+                    [title]="it.isReady ? 'Marcar como pendiente' : 'Marcar como listo'"
+                    (click)="onReadyToggle(o, it)"
+                  >
+                    <span class="material-symbols-outlined">
+                      {{ it.isReady ? 'check_circle' : 'radio_button_unchecked' }}
+                    </span>
+                    {{ it.isReady ? 'Listo' : ((it.readyQuantity ?? 0) > 0 ? (it.readyQuantity + '/' + it.quantity) : 'Pendiente') }}
+                  </button>
+                  @if (it.quantity > 1 && !it.isReady) {
+                    <input type="number" min="0" [max]="it.quantity" [value]="it.readyQuantity ?? 0"
+                           class="ready-qty no-print"
+                           [disabled]="o.status === 'draft' || o.status === 'cancelled'"
+                           (change)="onReadyQty(o, it, $any($event.target).value)" />
                   }
+                  @if (it.readyByName) {
+                    <span class="ready-by muted">
+                      {{ it.readyByName }}@if (it.readyAt) { · {{ it.readyAt | date:'d MMM' }} }
+                    </span>
+                  }
+                </div>
+              </div>
 
-                  @if (canReceive(o)) {
-                    <button type="button" class="btn btn--primary btn--sm" (click)="openReceipt(o)">
-                      <span class="material-symbols-outlined">move_to_inbox</span> Registrar recepción
+              <div class="item__row">
+                <span class="spec__k">Almacén</span>
+                <div class="item__row-value">
+                  @if ((it.receivedQuantity ?? 0) >= it.quantity && it.warehouseCondition !== 'damaged' && it.warehouseCondition !== 'incomplete') {
+                    <span class="badge badge--green">Recibido {{ it.receivedQuantity }}/{{ it.quantity }}</span>
+                  } @else if (it.warehouseCondition === 'damaged' || it.warehouseCondition === 'incomplete') {
+                    <span class="badge badge--red">
+                      {{ it.warehouseCondition === 'damaged' ? 'Dañado' : 'Incompleto' }} ({{ it.receivedQuantity ?? 0 }}/{{ it.quantity }})
+                    </span>
+                  } @else if ((it.receivedQuantity ?? 0) > 0) {
+                    <span class="badge badge--amber">Parcial {{ it.receivedQuantity }}/{{ it.quantity }}</span>
+                  }
+                  @if ((it.pendingQuantity ?? it.quantity) > 0 && o.status !== 'draft' && o.status !== 'cancelled') {
+                    <button type="button" class="btn btn--ghost btn--sm no-print" (click)="openWarehouseReceipt(o, it)">
+                      <span class="material-symbols-outlined">move_to_inbox</span> Recibir
                     </button>
                   }
-                }
-              </td>
-            </tr>
+                  @if (it.warehouseNote) { <span class="muted specs">{{ it.warehouseNote }}</span> }
+                </div>
+              </div>
+            </div>
+          } @empty {
+            <p class="muted">Sin renglones.</p>
           }
-        }
-      </tbody>
-    </table>
+        </div>
+      </article>
+    }
   </div>
 }
 
@@ -230,14 +253,61 @@
               </div>
 
               @if (!item.get('isNewProduct')?.value) {
-                <div class="field">
+                <div class="field product-picker">
                   <label>Producto existente</label>
-                  <select (change)="onProductSelected(i, $event)" [value]="item.get('productId')?.value ?? ''">
-                    <option value="">Selecciona un producto…</option>
-                    @for (p of products(); track p.id) {
-                      <option [value]="p.id">{{ p.name }} @if (p.sku) { ({{ p.sku }}) }</option>
+                  <div class="product-picker__input" (click)="openProductPicker(i, $event)">
+                    <span class="material-symbols-outlined">search</span>
+                    <input type="text" formControlName="productSearch" autocomplete="off"
+                           placeholder="Busca por nombre o SKU…"
+                           (focus)="onProductFocus(i)"
+                           (input)="onProductSearch(i)" />
+                    @if (item.get('productId')?.value) {
+                      <button type="button" class="icon-btn" (click)="clearProduct(i); $event.stopPropagation()"
+                              aria-label="Quitar producto">
+                        <span class="material-symbols-outlined">close</span>
+                      </button>
                     }
-                  </select>
+                  </div>
+                  @if (productPickerOpen() === i) {
+                    <ul class="product-picker__list">
+                      @for (p of filteredProducts(i); track p.id) {
+                        <li>
+                          <button type="button" class="product-picker__opt" (click)="selectProduct(i, p)">
+                            @if (p.primaryImage) {
+                              <img [src]="p.primaryImage | mediaUrl:'thumb'" [alt]="p.name" width="40" height="40" />
+                            } @else {
+                              <span class="product-picker__thumb product-picker__thumb--empty">
+                                <span class="material-symbols-outlined">chair</span>
+                              </span>
+                            }
+                            <span class="product-picker__opt-text">
+                              {{ p.name }}
+                              @if (p.sku) { <span class="muted"> · {{ p.sku }}</span> }
+                            </span>
+                          </button>
+                        </li>
+                      } @empty {
+                        <li class="product-picker__empty">
+                          {{ form.controls.manufacturerId.value ? 'Sin resultados' : 'Elige un fabricante primero' }}
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (selectedProduct(i); as sp) {
+                    <div class="product-picker__selected">
+                      @if (sp.primaryImage) {
+                        <img [src]="sp.primaryImage | mediaUrl:'thumb'" [alt]="sp.name" width="72" height="72" />
+                      } @else {
+                        <span class="product-picker__thumb product-picker__thumb--empty product-picker__thumb--lg">
+                          <span class="material-symbols-outlined">chair</span>
+                        </span>
+                      }
+                      <div class="product-picker__selected-info">
+                        <strong>{{ sp.name }}</strong>
+                        @if (sp.sku) { <span class="muted">{{ sp.sku }}</span> }
+                      </div>
+                    </div>
+                  }
                 </div>
                 <div class="grid-2">
                   <div class="field">
@@ -316,63 +386,96 @@
   </div>
 }
 
-<!-- ===== Modal: registrar recepción ===== -->
-@if (receiving(); as po) {
+<!-- ===== Modal: editar cabecera de la OC ===== -->
+@if (editing(); as o) {
   <div class="modal-backdrop">
-    <div class="modal modal--lg">
+    <div class="modal modal--sm">
       <div class="modal__head">
-        <h2>Registrar recepción — {{ po.poNumber }}</h2>
-        <button type="button" class="icon-btn" (click)="closeReceipt()" aria-label="Cerrar">
+        <h2>Editar orden {{ o.poNumber }}</h2>
+        <button type="button" class="icon-btn" (click)="closeEdit()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form class="modal__body" [formGroup]="editForm" (ngSubmit)="submitEdit()">
+        <div class="field">
+          <label for="edit-mf">Fabricante</label>
+          <select id="edit-mf" formControlName="manufacturerId">
+            <option [ngValue]="null">Sin asignar</option>
+            @for (m of activeManufacturers(); track m.id) {
+              <option [ngValue]="m.id">{{ m.name }}</option>
+            }
+          </select>
+          @if (canReassignManufacturer(o)) {
+            <p class="field__hint">
+              Si el fabricante rechazó el encargo, asígnalo a otro aquí. El nuevo fabricante
+              tendrá que aceptarlo de nuevo.
+            </p>
+          } @else {
+            <p class="field__hint">
+              La orden ya está en producción o con recepciones: el fabricante no se puede cambiar.
+            </p>
+          }
+        </div>
+        <div class="field">
+          <label for="edit-ed">Fecha esperada</label>
+          <input id="edit-ed" type="date" formControlName="expectedDate" />
+        </div>
+        <div class="field">
+          <label for="edit-notes">Notas</label>
+          <textarea id="edit-notes" rows="2" formControlName="notes"></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="closeEdit()">Cancelar</button>
+          <button type="submit" class="btn btn--primary" [disabled]="savingEdit()">
+            {{ savingEdit() ? 'Guardando…' : 'Guardar cambios' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: recepción en bodega (por renglón) ===== -->
+@if (receiving(); as ctx) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Recepción en almacén</h2>
+        <button type="button" class="icon-btn" (click)="closeWarehouseReceipt()" aria-label="Cerrar">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal__body">
-        @if (receiptRows().length === 0) {
-          <p class="empty">Esta orden ya no tiene piezas pendientes de recibir.</p>
-        } @else {
-          <table class="subtable">
-            <thead>
-              <tr><th>Producto</th><th class="num">Falta</th><th class="num">Recibí</th><th>Condición</th><th>Nota</th></tr>
-            </thead>
-            <tbody>
-              @for (r of receiptRows(); track r.itemId; let i = $index) {
-                <tr>
-                  <td>{{ r.productName }}</td>
-                  <td class="num">{{ r.pending }}</td>
-                  <td class="num">
-                    <input type="number" min="0" [max]="r.pending" [value]="r.quantity"
-                           (input)="setReceiptQty(i, $any($event.target).value)" style="width:5rem" />
-                  </td>
-                  <td>
-                    <select [value]="r.condition" (change)="setReceiptCondition(i, $any($event.target).value)">
-                      <option value="ok">OK</option>
-                      <option value="damaged">Dañada</option>
-                      <option value="incomplete">Incompleta</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input type="text" [value]="r.note" (input)="setReceiptNote(i, $any($event.target).value)"
-                           placeholder="Ej. rayón en puerta" />
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-          <p class="field__hint">
-            Lo marcado OK se suma a inventario. Lo dañado/incompleto genera una nota de crédito sugerida al fabricante.
-          </p>
-          <div class="field">
-            <label for="receiptNote">Nota de la recepción (opcional)</label>
-            <input id="receiptNote" type="text" [value]="receiptNote()"
-                   (input)="receiptNote.set($any($event.target).value)" />
-          </div>
-        }
+        <p class="strong">{{ ctx.po.poNumber }} — {{ ctx.item.productName }}</p>
+        <p class="muted">
+          {{ ctx.item.materialLabel }}@if (ctx.item.color) { / {{ ctx.item.color }} }
+          · pedidas {{ ctx.item.quantity }}, ya recibidas {{ ctx.item.receivedQuantity ?? 0 }}
+        </p>
+        @if (ctx.item.specifications) { <p class="specs">{{ ctx.item.specifications }}</p> }
+
+        <div class="field">
+          <label>Piezas recibidas ahora</label>
+          <input type="number" min="1" [max]="ctx.item.pendingQuantity ?? ctx.item.quantity"
+                 [value]="receiptQty()" (input)="receiptQty.set(+$any($event.target).value)" />
+        </div>
+        <div class="field">
+          <label>Condición</label>
+          <select [value]="receiptCondition()" (change)="receiptCondition.set($any($event.target).value)">
+            <option value="ok">OK — entra a inventario</option>
+            <option value="damaged">Dañada — nota de crédito sugerida</option>
+            <option value="incomplete">Incompleta — nota de crédito sugerida</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nota (opcional)</label>
+          <input type="text" [value]="receiptNote()" (input)="receiptNote.set($any($event.target).value)"
+                 placeholder="Ej. rayón en la puerta izquierda" />
+        </div>
       </div>
       <div class="modal__foot">
-        <button type="button" class="btn btn--ghost" (click)="closeReceipt()">Cancelar</button>
-        <button type="button" class="btn btn--primary" [disabled]="savingReceipt() || receiptRows().length === 0"
-                (click)="submitReceipt()">
-          {{ savingReceipt() ? 'Guardando…' : 'Registrar recepción' }}
+        <button type="button" class="btn btn--ghost" (click)="closeWarehouseReceipt()">Cancelar</button>
+        <button type="button" class="btn btn--primary" [disabled]="savingReceipt()" (click)="submitWarehouseReceipt()">
+          {{ savingReceipt() ? 'Guardando…' : 'Confirmar recepción' }}
         </button>
       </div>
     </div>

@@ -18,6 +18,8 @@ export interface PublicTicketItem {
   requiresFabrication: boolean;
   /** Foto principal vigente del producto; null si no tiene ninguna cargada. */
   imageUrl: string | null;
+  /** Slug vigente del producto, para abrir su ficha pública (/producto/:slug). */
+  productSlug: string | null;
 }
 
 export interface PublicTicketPayment {

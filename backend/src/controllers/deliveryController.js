@@ -95,6 +95,11 @@ const deliveryController = {
     const delivery = await Delivery.findById(req.params.id);
     if (!delivery) throw ApiError.notFound('Entrega no encontrada');
     if (delivery.deliveryPersonId !== req.user.id) throw ApiError.forbidden('Entrega no asignada a ti');
+    // Entrega ya cerrada: la firma y la foto quedan congeladas, no se pueden
+    // reemplazar (el repartidor no puede rayar ni volver a firmar).
+    if (delivery.deliveryStatus === 'completed') {
+      throw ApiError.badRequest('La entrega ya está completada: la firma no se puede modificar');
+    }
     const updated = await Delivery.saveProof(req.params.id, req.body);
     res.json({ data: updated, message: 'Evidencia guardada' });
   }),

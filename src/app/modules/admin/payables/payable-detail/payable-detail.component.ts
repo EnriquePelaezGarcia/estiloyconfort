@@ -3,10 +3,15 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { CurrencyInputDirective } from '../../../../shared/directives/currency-input.directive';
+import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../../shared/components/image-lightbox/image-lightbox.component';
 import { PayablesService } from '../../../../core/services/payables.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { mediaUrl } from '../../../../core/utils/media-url';
 import {
+  AccountStatement,
   PayableDocument,
+  PayableItem,
   PayablePaymentMethod,
   PaymentBatch,
 } from '../../../../core/models/payable.model';
@@ -41,7 +46,15 @@ interface CutLine {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './payable-detail.component.html',
   styleUrl: './payable-detail.component.scss',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, CurrencyInputDirective],
+  imports: [
+    CurrencyPipe,
+    DatePipe,
+    ReactiveFormsModule,
+    RouterLink,
+    CurrencyInputDirective,
+    MediaUrlPipe,
+    ImageLightboxComponent,
+  ],
 })
 export class PayableDetailComponent implements OnInit {
   /** Viene de la ruta `cuentas-por-pagar/:manufacturerId`. */
@@ -59,11 +72,15 @@ export class PayableDetailComponent implements OnInit {
   protected readonly typeTone = SOURCE_TYPE_TONE;
   protected readonly methodLabels = PAYABLE_METHOD_LABELS;
   protected readonly methods: PayablePaymentMethod[] = ['transfer', 'cash', 'check'];
+  protected readonly mediaUrl = mediaUrl;
 
   protected documents = signal<PayableDocument[]>([]);
   protected batches = signal<PaymentBatch[]>([]);
+  protected statements = signal<AccountStatement[]>([]);
   protected loading = signal(true);
   protected saving = signal(false);
+  protected sendingReceiptId = signal<number | null>(null);
+  protected sendingStatementId = signal<number | null>(null);
 
   protected period = signal<Period>('all');
   protected sourceType = signal<string>('');
@@ -83,6 +100,109 @@ export class PayableDetailComponent implements OnInit {
       pieces: docs.reduce((s, d) => s + d.pieces, 0),
     };
   });
+
+  // ─── SELECCIÓN MANUAL DE DOCUMENTOS ─────────────────────────────────────────
+  // "Cerrar corte" preselecciona TODO lo que tiene saldo (el cierre semanal de
+  // siempre). Esto es lo complementario: elegir a mano cuáles OC/pedidos pagar
+  // —uno solo, varios, o todos— antes de abrir el mismo modal de pago. Sigue
+  // siendo por fabricante nada más, porque esta pantalla ya está fija a uno
+  // (ruta `cuentas-por-pagar/:manufacturerId`): nunca se mezclan entre sí.
+  protected selectedKeys = signal<Set<string>>(new Set());
+
+  protected docKey(d: PayableDocument): string {
+    return `${d.sourceType}:${d.sourceId}`;
+  }
+
+  protected isSelected(d: PayableDocument): boolean {
+    return this.selectedKeys().has(this.docKey(d));
+  }
+
+  protected toggleSelection(d: PayableDocument): void {
+    const key = this.docKey(d);
+    this.selectedKeys.update((keys) => {
+      const next = new Set(keys);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  protected selectedDocs = computed(() => {
+    const keys = this.selectedKeys();
+    return this.documents().filter((d) => keys.has(this.docKey(d)));
+  });
+
+  protected selectedTotal = computed(() =>
+    Math.round(this.selectedDocs().reduce((s, d) => s + d.balance, 0) * 100) / 100,
+  );
+
+  protected clearSelection(): void {
+    this.selectedKeys.set(new Set());
+  }
+
+  // ─── FILA EXPANDIBLE: PIEZAS DEL DOCUMENTO ──────────────────────────────────
+  // Se pide bajo demanda (no viene en `documents()`) para no cargar fotos de
+  // TODAS las OC/pedidos del período de una sola vez. Se cachea por clave de
+  // documento para no repetir la llamada si se pliega y se vuelve a abrir.
+  protected expandedKeys = signal<Set<string>>(new Set());
+  protected itemsCache = signal<Record<string, PayableItem[]>>({});
+  protected loadingItemsKeys = signal<Set<string>>(new Set());
+  /** Foto ampliada de una pieza (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
+
+  protected isExpanded(d: PayableDocument): boolean {
+    return this.expandedKeys().has(this.docKey(d));
+  }
+
+  protected isLoadingItems(d: PayableDocument): boolean {
+    return this.loadingItemsKeys().has(this.docKey(d));
+  }
+
+  protected itemsFor(d: PayableDocument): PayableItem[] {
+    return this.itemsCache()[this.docKey(d)] ?? [];
+  }
+
+  protected toggleExpand(d: PayableDocument): void {
+    const key = this.docKey(d);
+    const isOpen = this.expandedKeys().has(key);
+    this.expandedKeys.update((keys) => {
+      const next = new Set(keys);
+      if (isOpen) next.delete(key); else next.add(key);
+      return next;
+    });
+    if (!isOpen && !this.itemsCache()[key]) {
+      this.loadItems(d);
+    }
+  }
+
+  private loadItems(d: PayableDocument): void {
+    const key = this.docKey(d);
+    this.loadingItemsKeys.update((keys) => new Set(keys).add(key));
+    this.payablesService
+      .documentDetail(d.sourceType, d.sourceId, Number(this.manufacturerId()))
+      .subscribe({
+        next: (detail) => {
+          this.itemsCache.update((cache) => ({ ...cache, [key]: detail.items }));
+          this.loadingItemsKeys.update((keys) => {
+            const next = new Set(keys);
+            next.delete(key);
+            return next;
+          });
+        },
+        error: () => {
+          this.notification.error('No se pudieron cargar las piezas del documento');
+          this.loadingItemsKeys.update((keys) => {
+            const next = new Set(keys);
+            next.delete(key);
+            return next;
+          });
+        },
+      });
+  }
+
+  /** Abre el modal de pago con los documentos que el admin acaba de marcar. */
+  protected paySelected(): void {
+    this.payDocuments(this.selectedDocs());
+  }
 
   // ─── MODAL DE CORTE ────────────────────────────────────────────────────────
   protected cutOpen = signal(false);
@@ -111,7 +231,15 @@ export class PayableDetailComponent implements OnInit {
     chargeDate: ['', Validators.required],
     concept: ['', Validators.required],
     notes: [''],
+    approveNow: [true],
   });
+
+  // ─── ESTADO DE CUENTA ──────────────────────────────────────────────────────
+  protected statementForm = this.fb.nonNullable.group({
+    periodFrom: ['', Validators.required],
+    periodTo: ['', Validators.required],
+  });
+  protected generatingStatement = signal(false);
 
   ngOnInit(): void {
     this.load();
@@ -149,6 +277,10 @@ export class PayableDetailComponent implements OnInit {
         next: (res) => this.batches.set(res.data),
         error: () => {},
       });
+    this.payablesService.listStatements(Number(this.manufacturerId())).subscribe({
+      next: (data) => this.statements.set(data),
+      error: () => {},
+    });
   }
 
   protected selectPeriod(period: Period): void {
@@ -175,20 +307,12 @@ export class PayableDetailComponent implements OnInit {
       this.notification.info('No hay documentos con saldo pendiente');
       return;
     }
-    this.cutLines.set(
-      candidates.map((document) => ({
-        document,
-        selected: document.fabricationStatus !== 'pendiente',
-        amount: document.balance,
-      })),
+    this.payDocuments(
+      candidates,
+      // El cierre semanal premarca solo lo ya fabricado: pagar algo que aún no
+      // llega es un anticipo, y eso se hace a propósito, no por default.
+      (document) => document.fabricationStatus !== 'pendiente',
     );
-    this.cutForm.reset({
-      paymentDate: this.todayStr(),
-      paymentMethod: 'transfer',
-      reference: '',
-      notes: '',
-    });
-    this.cutOpen.set(true);
   }
 
   /** Anticipo: atajo desde una fila, con el documento ya fijado. */
@@ -199,6 +323,32 @@ export class PayableDetailComponent implements OnInit {
       paymentMethod: 'transfer',
       reference: '',
       notes: 'Anticipo',
+    });
+    this.cutOpen.set(true);
+  }
+
+  /**
+   * Abre el modal de pago con un conjunto de documentos dado —el cierre
+   * semanal (todo lo pendiente), la selección manual de la tabla, o un solo
+   * documento. `preselect` decide cuáles quedan marcados de entrada (todos,
+   * si no se pasa).
+   */
+  private payDocuments(
+    documents: PayableDocument[],
+    preselect: (d: PayableDocument) => boolean = () => true,
+  ): void {
+    this.cutLines.set(
+      documents.map((document) => ({
+        document,
+        selected: preselect(document),
+        amount: document.balance,
+      })),
+    );
+    this.cutForm.reset({
+      paymentDate: this.todayStr(),
+      paymentMethod: 'transfer',
+      reference: '',
+      notes: '',
     });
     this.cutOpen.set(true);
   }
@@ -250,6 +400,7 @@ export class PayableDetailComponent implements OnInit {
             `Pago de ${batch.totalAmount.toFixed(2)} registrado en ${batch.lines.length} documento(s)`,
           );
           this.closeCut();
+          this.clearSelection();
           this.saving.set(false);
           this.load();
         },
@@ -269,6 +420,7 @@ export class PayableDetailComponent implements OnInit {
       chargeDate: this.todayStr(),
       concept: '',
       notes: '',
+      approveNow: true,
     });
     this.chargeOpen.set(true);
   }
@@ -292,10 +444,11 @@ export class PayableDetailComponent implements OnInit {
         chargeDate: value.chargeDate,
         concept: value.concept,
         notes: value.notes || null,
+        approveNow: value.approveNow,
       })
       .subscribe({
-        next: () => {
-          this.notification.success('Cargo registrado');
+        next: (res) => {
+          this.notification.success(res?.message ?? 'Cargo registrado');
           this.closeCharge();
           this.saving.set(false);
           this.load();
@@ -317,6 +470,63 @@ export class PayableDetailComponent implements OnInit {
         this.load();
       },
       error: () => this.notification.error('No se pudo eliminar el pago'),
+    });
+  }
+
+  // ─── RECIBO DE PAGO ──────────────────────────────────────────────────────────
+
+  /** Botón manual: nunca se manda automático al cerrar el corte. */
+  protected sendReceipt(batch: PaymentBatch): void {
+    if (!confirm(`¿Enviar el recibo ${batch.receiptNumber} por correo al fabricante?`)) return;
+    this.sendingReceiptId.set(batch.id);
+    this.payablesService.sendReceiptEmail(batch.id).subscribe({
+      next: (res) => {
+        this.notification.success(res?.message ?? 'Recibo enviado');
+        this.sendingReceiptId.set(null);
+      },
+      error: (err) => {
+        this.notification.error(err?.error?.message ?? 'No se pudo enviar el recibo');
+        this.sendingReceiptId.set(null);
+      },
+    });
+  }
+
+  // ─── ESTADO DE CUENTA ────────────────────────────────────────────────────────
+
+  protected generateStatement(): void {
+    if (this.statementForm.invalid) return;
+    const { periodFrom, periodTo } = this.statementForm.getRawValue();
+    if (!confirm(`¿Generar y archivar el estado de cuenta del ${periodFrom} al ${periodTo}?`)) return;
+    this.generatingStatement.set(true);
+    this.payablesService
+      .createStatement(Number(this.manufacturerId()), periodFrom, periodTo)
+      .subscribe({
+        next: (statement) => {
+          this.notification.success(`Estado de cuenta ${statement.statementNumber} generado`);
+          this.statementForm.reset({ periodFrom: '', periodTo: '' });
+          this.generatingStatement.set(false);
+          this.load();
+        },
+        error: (err) => {
+          this.notification.error(err?.error?.message ?? 'No se pudo generar el estado de cuenta');
+          this.generatingStatement.set(false);
+        },
+      });
+  }
+
+  /** Botón manual. */
+  protected sendStatement(statement: AccountStatement): void {
+    if (!confirm(`¿Enviar el estado de cuenta ${statement.statementNumber} por correo al fabricante?`)) return;
+    this.sendingStatementId.set(statement.id);
+    this.payablesService.sendStatementEmail(statement.id).subscribe({
+      next: (res) => {
+        this.notification.success(res?.message ?? 'Estado de cuenta enviado');
+        this.sendingStatementId.set(null);
+      },
+      error: (err) => {
+        this.notification.error(err?.error?.message ?? 'No se pudo enviar el estado de cuenta');
+        this.sendingStatementId.set(null);
+      },
     });
   }
 }

@@ -1,0 +1,107 @@
+@use '../../../../styles/variables' as vars;
+
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$spacing-sm;
+
+  &__empty {
+    margin: 0;
+    font-size: 0.85rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__item {
+    padding: vars.$spacing-sm vars.$spacing-md;
+    border: 1px solid vars.$color-border;
+    border-radius: vars.$radius-md;
+    background: vars.$color-bg;
+  }
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: vars.$spacing-xs vars.$spacing-sm;
+  }
+
+  &__who {
+    font-weight: 700;
+    color: vars.$color-primary;
+  }
+
+  &__role {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0 vars.$spacing-xs;
+    border-radius: vars.$radius-sm;
+    background: rgba(vars.$color-primary, 0.12);
+    color: vars.$color-primary;
+  }
+
+  &__date {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: vars.$color-text-secondary;
+  }
+
+  &__summary {
+    margin: vars.$spacing-xs 0 0;
+    font-size: 0.9rem;
+  }
+
+  &__detail {
+    margin-top: vars.$spacing-sm;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$spacing-xs;
+    padding-top: vars.$spacing-sm;
+    border-top: 1px dashed vars.$color-border;
+  }
+
+  &__change {
+    font-size: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: vars.$spacing-xs;
+
+    &--add { color: vars.$color-success; }
+    &--remove { color: vars.$color-error; }
+  }
+
+  &__field {
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+
+    &::after { content: ':'; }
+  }
+
+  &__tag {
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  &__from { text-decoration: line-through; color: vars.$color-text-secondary; }
+  &__arrow { color: vars.$color-text-secondary; }
+  &__to { font-weight: 600; }
+
+  &__toggle {
+    margin-top: vars.$spacing-xs;
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: vars.$color-primary;
+    cursor: pointer;
+
+    &:hover { text-decoration: underline; }
+  }
+}

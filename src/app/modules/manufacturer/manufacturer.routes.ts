@@ -20,16 +20,13 @@ export const manufacturerRoutes: Routes = [
           import('./orders/manufacturer-orders.component').then(
             (m) => m.ManufacturerOrdersComponent,
           ),
-        title: 'Pedidos a fabricar - Fabricante',
+        title: 'Por fabricar - Fabricante',
       },
-      {
-        path: 'ordenes-compra',
-        loadComponent: () =>
-          import('./purchase-orders/manufacturer-purchase-orders.component').then(
-            (m) => m.ManufacturerPurchaseOrdersComponent,
-          ),
-        title: 'Órdenes de compra - Fabricante',
-      },
+      // El portal fusionó "Pedidos a fabricar" y "Órdenes de compra" en una sola
+      // vista ("Por fabricar"): al fabricante no le importa si detrás hay un
+      // pedido de venta o una OC. La ruta vieja se conserva como redirect para
+      // no romper enlaces (notificaciones, marcadores).
+      { path: 'ordenes-compra', redirectTo: 'pedidos', pathMatch: 'full' },
       {
         path: 'notificaciones',
         loadComponent: () =>

@@ -49,19 +49,57 @@
           <span class="material-symbols-outlined">handyman</span> Quitar armado
         </button>
       }
+      @if (canAssignDelivery()) {
+        <button type="button" class="btn btn--ghost" (click)="openAssignDelivery()">
+          <span class="material-symbols-outlined">assignment_ind</span> Asignar repartidor
+        </button>
+      }
       <!--
         Un pickup nace 'delivered', así que sin la excepción no habría forma de
         cancelarlo cuando el cliente regresa el mueble (D9). El backend siempre
         permitió cancelar un entregado; era el botón el que faltaba.
       -->
-      @if (o.orderStatus !== 'cancelled' && (o.orderStatus !== 'delivered' || o.pickupInStore)) {
-        <button type="button" class="btn btn--danger" (click)="cancelModalOpen.set(true)">
+      @if (canCancel() && o.orderStatus !== 'cancelled' && (o.orderStatus !== 'delivered' || o.pickupInStore)) {
+        <button type="button" class="btn btn--danger" (click)="openCancelModal()">
           <span class="material-symbols-outlined">cancel</span>
-          {{ o.pickupInStore && o.orderStatus === 'delivered' ? 'Cancelar / devolución' : 'Cancelar' }}
+          @if (o.pickupInStore && o.orderStatus === 'delivered') {
+            Cancelar / devolución
+          } @else if (isAdmin) {
+            Cancelar
+          } @else {
+            Solicitar cancelación
+          }
         </button>
       }
     </div>
   </header>
+
+  <!-- Solicitud de cancelación pendiente: el pedido está congelado. -->
+  @if (pendingCancellation(); as pc) {
+    <div class="banner banner--error no-print">
+      <span class="material-symbols-outlined">cancel</span>
+      <span>
+        <strong>Cancelación pendiente de aprobación.</strong>
+        Solicitada por {{ pc.requestedByName || 'un vendedor' }}
+        el {{ pc.createdAt | date:'dd/MM/yyyy HH:mm' }}. Motivo: {{ pc.reason }}
+        <br />
+        Mientras tanto el pedido no se puede editar ni asignar a reparto.
+        @if (canReviewCancellation()) {
+          <span class="banner__actions">
+            <button type="button" class="btn btn--danger btn--sm"
+                    [disabled]="reviewingCancellation()" (click)="approveCancellation()">
+              Aprobar y cancelar el pedido
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm"
+                    [disabled]="reviewingCancellation()"
+                    (click)="rejectCancellationNote.set(''); rejectCancellationOpen.set(true)">
+              Rechazar solicitud
+            </button>
+          </span>
+        }
+      </span>
+    </div>
+  }
 
   <!--
     D6 — el pickup se entregó al crearse, pero el cobro se registra por el flujo
@@ -472,27 +510,29 @@
              el fabricante son por mueble. -->
         @for (it of o.items; track it.id) {
           @if (it.isCustomModification) {
-            <div class="no-print">
+            <div class="no-print" [attr.id]="'item-' + it.id">
               <dt>Modificación · {{ it.productName }}</dt>
               <dd>
                 {{ it.fabricationNote || 'Sin nota' }}
                 @if (it.fabricationRefImages?.length) {
                   <ul class="ref-images">
-                    @for (img of it.fabricationRefImages; track img) {
+                    @for (img of it.fabricationRefImages; track img; let imgIndex = $index) {
                       <li>
                         <button
                           type="button"
                           class="ref-images__btn"
-                          title="Ver imagen de referencia"
+                          [title]="'Ver imagen de referencia ' + (imgIndex + 1)"
                           (click)="zoomedImage.set(img)"
                         >
-                          <img [src]="img | mediaUrl:'thumb'" alt="Referencia para el fabricante" />
+                          <span class="ref-images__num">{{ imgIndex + 1 }}</span>
+                          <img [src]="img | mediaUrl:'thumb'" [alt]="'Referencia ' + (imgIndex + 1) + ' para el fabricante'" />
                         </button>
                       </li>
                     }
                   </ul>
                 }
               </dd>
+              <app-item-messages [itemId]="it.id!" [autoOpen]="focusItemId() === it.id" />
             </div>
           }
         }
@@ -511,25 +551,7 @@
         </button>
       }
 
-      <!-- Bitácora de reprogramaciones (D7): sólo aparece si hubo cambios. -->
-      @if (deliveryHistory().length) {
-        <h3 class="info-subtitle no-print">Cambios de fecha de entrega</h3>
-        <ul class="schedule-log no-print">
-          @for (c of deliveryHistory(); track c.id) {
-            <li class="schedule-log__item">
-              <span class="schedule-log__meta">
-                {{ c.changedAt | date:'dd/MM/yyyy' }} — {{ c.changedByName || 'Sistema' }}
-              </span>
-              <span class="schedule-log__change">
-                {{ changeFrom(c) }} → {{ changeTo(c) }}
-              </span>
-              @if (c.reason) {
-                <span class="schedule-log__reason">Motivo: {{ c.reason }}</span>
-              }
-            </li>
-          }
-        </ul>
-      }
+      <!-- La bitácora de reprogramaciones se muestra en "Historial del pedido". -->
 
       @if (o.payments && o.payments.length) {
         <h3 class="info-subtitle">Pagos registrados</h3>
@@ -574,6 +596,134 @@
             }
           }
         </ul>
+      }
+    </div>
+  </div>
+
+  <!-- ===== Historial del pedido ===== -->
+  <div class="panel panel--full no-print">
+    <h2 class="panel__title">Historial del pedido</h2>
+
+    <div class="history-grid">
+      <!-- Línea de tiempo de estatus -->
+      <div class="history-block">
+        <h3 class="info-subtitle">Línea de tiempo</h3>
+        <ol class="timeline">
+          @for (e of statusHistory(); track $index) {
+            <li class="timeline__item">
+              <span class="timeline__dot" [class.timeline__dot--last]="$last"></span>
+              <span class="timeline__label">{{ rawStatusLabel(e.status) }}</span>
+              <span class="timeline__date">{{ e.changedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+            </li>
+          } @empty {
+            <li class="timeline__empty">Sin movimientos registrados.</li>
+          }
+        </ol>
+      </div>
+
+      <!-- Ediciones del pedido: quién lo tocó y qué cambió -->
+      @if (orderActivity().length) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Ediciones</h3>
+          <app-activity-log [entries]="orderActivity()" />
+        </div>
+      }
+
+      <!-- Fabricación: aceptación del/los fabricante(s) -->
+      @if (manufacturerAcceptance().length) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Fabricación</h3>
+          <ul class="history-list">
+            @for (a of manufacturerAcceptance(); track a.manufacturerId) {
+              <li>
+                <span>
+                  <strong>{{ a.manufacturerName }}</strong> — {{ acceptanceStatusLabel(a.status) }}
+                  @if (a.status === 'rejected' && a.rejectReason) {
+                    <span class="history-list__note">Motivo: {{ a.rejectReason }}</span>
+                  }
+                </span>
+                @if (a.reviewedAt) {
+                  <span class="history-list__date">{{ a.reviewedAt | date:'dd/MM/yyyy' }}</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Cambios de fecha de entrega (bitácora de reprogramaciones) -->
+      @if (deliveryHistory().length) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Cambios de fecha de entrega</h3>
+          <ul class="schedule-log">
+            @for (c of deliveryHistory(); track c.id) {
+              <li class="schedule-log__item">
+                <span class="schedule-log__meta">
+                  {{ c.changedAt | date:'dd/MM/yyyy' }} — {{ c.changedByName || 'Sistema' }}
+                </span>
+                <span class="schedule-log__change">{{ changeFrom(c) }} → {{ changeTo(c) }}</span>
+                @if (c.reason) {
+                  <span class="schedule-log__reason">Motivo: {{ c.reason }}</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Evidencia de entrega -->
+      @if (deliveryProof(); as d) {
+        <div class="history-block">
+          <h3 class="info-subtitle">Entrega</h3>
+          <dl class="info">
+            @if (d.deliveredAt) {
+              <div><dt>Entregado</dt><dd>{{ d.deliveredAt | date:'dd/MM/yyyy HH:mm' }}</dd></div>
+            }
+            @if (d.deliveryPersonName) {
+              <div><dt>Repartidor</dt><dd>{{ d.deliveryPersonName }}</dd></div>
+            }
+          </dl>
+
+          @if (d.photoUrl || d.signatureImageUrl) {
+            <div class="evidence">
+              @if (d.photoUrl) {
+                <figure class="evidence__item">
+                  <button
+                    type="button"
+                    class="evidence__btn"
+                    title="Ver foto de la entrega"
+                    (click)="zoomedImage.set(d.photoUrl!)"
+                  >
+                    <img [src]="d.photoUrl!" alt="Foto de la entrega" />
+                  </button>
+                  <figcaption>Foto de la entrega</figcaption>
+                </figure>
+              }
+              @if (d.signatureImageUrl) {
+                <figure class="evidence__item">
+                  <button
+                    type="button"
+                    class="evidence__btn"
+                    title="Ver firma del cliente"
+                    (click)="zoomedImage.set(d.signatureImageUrl!)"
+                  >
+                    <img [src]="d.signatureImageUrl!" alt="Firma del cliente" class="evidence__signature" />
+                  </button>
+                  <figcaption>Firma del cliente</figcaption>
+                </figure>
+              }
+            </div>
+          }
+
+          @if (deliveryAttempts().length) {
+            <h4 class="info-subtitle">Intentos de entrega</h4>
+            <ul class="history-list">
+              @for (attempt of deliveryAttempts(); track $index) {
+                <li><span>{{ attempt }}</span></li>
+              }
+            </ul>
+          }
+        </div>
       }
     </div>
   </div>
@@ -970,16 +1120,27 @@
   </div>
 }
 
-<!-- ===== Modal: cancelar pedido ===== -->
+<!-- ===== Modal: cancelar pedido / solicitar cancelación ===== -->
 @if (cancelModalOpen()) {
   <div class="modal-backdrop no-print">
     <div class="modal modal--sm">
       <div class="modal__body">
         <h2 class="panel__title">
-          {{ order()?.pickupInStore ? '¿Registrar la devolución?' : '¿Cancelar este pedido?' }}
+          @if (order()?.pickupInStore) {
+            ¿Registrar la devolución?
+          } @else if (isAdmin) {
+            ¿Cancelar este pedido?
+          } @else {
+            Solicitar cancelación del pedido
+          }
         </h2>
         <p class="muted">
-          Esta acción marcará el pedido como cancelado y devolverá los muebles al inventario.
+          @if (isAdmin) {
+            Se marcará el pedido como cancelado y se devolverán los muebles al inventario.
+          } @else {
+            Se enviará la solicitud al administrador. El pedido queda congelado (no se
+            puede editar ni asignar a reparto) hasta que él la apruebe o rechace.
+          }
         </p>
         @if ((order()?.paymentAmount ?? 0) > 0) {
           <!-- D9: el movimiento del dinero es manual; aquí solo queda el rastro. -->
@@ -988,9 +1149,88 @@
             {{ order()?.paymentAmount | currency:'MXN':'symbol-narrow':'1.2-2' }}.
           </p>
         }
+        <div class="field">
+          <label for="cancelReason">Razón de la cancelación *</label>
+          <textarea
+            id="cancelReason"
+            rows="3"
+            [value]="cancelReason()"
+            (input)="cancelReason.set($any($event.target).value)"
+            placeholder="¿Por qué se cancela este pedido?"
+          ></textarea>
+        </div>
         <div class="modal__foot">
           <button type="button" class="btn btn--ghost" (click)="cancelModalOpen.set(false)">No</button>
-          <button type="button" class="btn btn--danger" (click)="confirmCancel()">Sí, cancelar</button>
+          <button
+            type="button"
+            class="btn btn--danger"
+            [disabled]="!cancelReason().trim() || cancelling()"
+            (click)="confirmCancel()"
+          >
+            {{ isAdmin || order()?.pickupInStore ? 'Sí, cancelar' : 'Enviar solicitud' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: asignar repartidor (admin y vendedor) ===== -->
+@if (assignDeliveryOpen() && order(); as o) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Asignar repartidor</h2>
+        <p class="muted">Pedido <strong>{{ o.orderNumber }}</strong> — {{ o.customerName }}</p>
+        <div class="field">
+          <label for="assignDp">Repartidor</label>
+          <select id="assignDp"
+                  (change)="selectedDeliveryPerson.set($any($event.target).value ? +$any($event.target).value : null)">
+            <option [value]="''" [selected]="selectedDeliveryPerson() === null">Selecciona un repartidor</option>
+            @for (p of deliveryPeople(); track p.id) {
+              <option [value]="p.id" [selected]="selectedDeliveryPerson() === p.id">{{ p.fullName }}</option>
+            }
+          </select>
+        </div>
+        @if (deliveryPeople().length === 0) {
+          <p class="field__error">No hay repartidores activos registrados.</p>
+        }
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="assignDeliveryOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--primary"
+                  [disabled]="!selectedDeliveryPerson() || assigningDelivery()"
+                  (click)="confirmAssignDelivery()">
+            Asignar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: rechazar solicitud de cancelación (admin) ===== -->
+@if (rejectCancellationOpen()) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Rechazar la solicitud de cancelación</h2>
+        <p class="muted">El pedido seguirá su curso. Se avisará al vendedor.</p>
+        <div class="field">
+          <label for="rejectCancelNote">Motivo del rechazo (opcional)</label>
+          <textarea
+            id="rejectCancelNote"
+            rows="3"
+            [value]="rejectCancellationNote()"
+            (input)="rejectCancellationNote.set($any($event.target).value)"
+            placeholder="¿Por qué no se cancela?"
+          ></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="rejectCancellationOpen.set(false)">Volver</button>
+          <button type="button" class="btn btn--danger"
+                  [disabled]="reviewingCancellation()" (click)="confirmRejectCancellation()">
+            Rechazar solicitud
+          </button>
         </div>
       </div>
     </div>

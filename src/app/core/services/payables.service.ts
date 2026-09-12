@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import {
+  AccountStatement,
   CreateBatchRequest,
   CreateChargeRequest,
   PayableDocumentDetail,
@@ -84,11 +85,39 @@ export class PayablesService {
     return this.api.delete<{ message: string }>(`/payables/batches/${id}`);
   }
 
-  /** Cargo manual. Monto negativo = nota de crédito. */
-  addCharge(payload: CreateChargeRequest): Observable<{ id: number }> {
+  /** Envía por correo el recibo de un pago ya generado. Botón manual. */
+  sendReceiptEmail(batchId: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>(`/payables/batches/${batchId}/send-receipt`, {});
+  }
+
+  /** Genera y archiva el estado de cuenta de un fabricante para un periodo. */
+  createStatement(
+    manufacturerId: number,
+    periodFrom: string,
+    periodTo: string,
+  ): Observable<AccountStatement> {
     return this.api
-      .post<{ data: { id: number } }>('/payables/charges', payload)
+      .post<{ data: AccountStatement }>('/payables/statements', { manufacturerId, periodFrom, periodTo })
       .pipe(map((r) => r.data));
+  }
+
+  /** Historial de estados de cuenta ya archivados de un fabricante. */
+  listStatements(manufacturerId: number): Observable<AccountStatement[]> {
+    return this.api
+      .get<{ data: AccountStatement[] }>('/payables/statements', { manufacturerId: String(manufacturerId) })
+      .pipe(map((r) => r.data));
+  }
+
+  /** Envía por correo un estado de cuenta ya archivado. Botón manual. */
+  sendStatementEmail(id: number): Observable<{ message: string }> {
+    return this.api.post<{ message: string }>(`/payables/statements/${id}/send-email`, {});
+  }
+
+  /** Cargo manual. Monto negativo = nota de crédito. */
+  addCharge(payload: CreateChargeRequest): Observable<{ id: number; message: string }> {
+    return this.api
+      .post<{ data: { id: number }; message: string }>('/payables/charges', payload)
+      .pipe(map((r) => ({ ...r.data, message: r.message })));
   }
 
   removeCharge(id: number): Observable<{ message: string }> {

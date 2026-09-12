@@ -76,14 +76,14 @@
           <input
             id="customerPhone"
             type="tel"
-            inputmode="numeric"
-            maxlength="22"
+            inputmode="tel"
+            maxlength="24"
             formControlName="customerPhone"
             placeholder="222 123 4567"
             (input)="onPhoneInput($event)"
           />
           @if (form.controls.customerPhone.touched && form.controls.customerPhone.invalid) {
-            <p class="field__error">Ingresa un teléfono a 10 dígitos.</p>
+            <p class="field__error">Ingresa un teléfono a 10 dígitos, o con lada internacional (+1 646 275 7126).</p>
           } @else {
             <p class="field__hint">El botón de WhatsApp abre directo su chat con este número.</p>
           }
@@ -750,4 +750,14 @@
     </div>
 
   </form>
+
+  @if (isEditing()) {
+    <section class="panel history-panel">
+      <h2 class="panel__title">Historial de la cotización</h2>
+      @if (loadedSellerName(); as name) {
+        <p class="history-panel__owner">Creada por <strong>{{ name }}</strong></p>
+      }
+      <app-activity-log [entries]="quoteActivity()" />
+    </section>
+  }
 }

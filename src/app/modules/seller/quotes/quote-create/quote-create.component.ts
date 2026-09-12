@@ -13,17 +13,19 @@ import { DraftHandoffService } from '../../../../core/services/draft-handoff.ser
 import { PICKUP_PAYMENT_METHODS } from '../../../../core/utils/pickup';
 import { addBusinessDays } from '../../../../core/utils/business-days';
 import { availableOf, colorMismatch, reservationsTooltip } from '../../../../core/utils/stock-availability';
-import { PHONE_PATTERN, formatPhoneDigits } from '../../../../core/utils/phone';
+import { formatPhoneDigits, normalizePhone, phoneValidator, waPhone } from '../../../../core/utils/phone';
 import { AuthService } from '../../../../core/auth/auth.service';
 import {
   AssemblyRates, DiscountReasonCategory, InventoryItem, InventoryMaterialPrice, SaleScheme,
 } from '../../../../core/models/order.model';
 import { CreateQuoteRequest, Quote, QuoteDiscount, QuoteStatus } from '../../../../core/models/quote.model';
+import { ActivityEntry } from '../../../../core/models/activity.model';
 import { ShippingQuote } from '../../../../core/models/shipping.model';
 import { DEFAULT_PRICING_CONFIG, PricingConfigMap } from '../../../../core/models/pricing-config.model';
 import { HelpImagePopoverComponent } from '../../../../shared/components/help-image-popover/help-image-popover.component';
 import { DiscountReasonPickerComponent } from '../../../../shared/components/discount-reason-picker/discount-reason-picker.component';
 import { ExtraChargePickerComponent } from '../../../../shared/components/extra-charge-picker/extra-charge-picker.component';
+import { ActivityLogComponent } from '../../../../shared/components/activity-log/activity-log.component';
 import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 
 /** Docs/plan-aprobaciones-admin.md RN-EC1: tope de cargos extra activos por documento. */
@@ -86,6 +88,7 @@ interface QuoteDraftSnapshot {
   imports: [
     ReactiveFormsModule, CurrencyPipe, HelpImagePopoverComponent,
     DiscountReasonPickerComponent, ExtraChargePickerComponent, MediaUrlPipe,
+    ActivityLogComponent,
   ],
 })
 export class QuoteCreateComponent implements OnInit {
@@ -125,6 +128,9 @@ export class QuoteCreateComponent implements OnInit {
   protected loadedQuoteNumber = signal<string | null>(null);
   protected loadedQuoteStatus = signal<QuoteStatus | null>(null);
   protected loadedQuoteOrderId = signal<number | null>(null);
+  /** Bitácora de ediciones de la cotización cargada (`activity_log`). */
+  protected quoteActivity = signal<ActivityEntry[]>([]);
+  protected loadedSellerName = signal<string | null>(null);
   protected isConverted = computed(() => this.loadedQuoteStatus() === 'converted');
 
   /**
@@ -136,7 +142,7 @@ export class QuoteCreateComponent implements OnInit {
 
   protected form = this.fb.group({
     customerName: ['', [Validators.required, Validators.minLength(3)]],
-    customerPhone: ['', [Validators.required, Validators.pattern(PHONE_PATTERN)]],
+    customerPhone: ['', [Validators.required, phoneValidator]],
     paymentMethod: ['cash' as SaleScheme, Validators.required],
     /**
      * Recoge en tienda (Docs/plan-recoge-en-tienda.md D4): se cotiza sin envío
@@ -699,6 +705,8 @@ export class QuoteCreateComponent implements OnInit {
         this.loadedQuoteNumber.set(quote.quoteNumber);
         this.loadedQuoteStatus.set(quote.status);
         this.loadedQuoteOrderId.set(quote.orderId ?? null);
+        this.quoteActivity.set(quote.activity ?? []);
+        this.loadedSellerName.set(quote.sellerName ?? null);
         this.form.patchValue({
           customerName: quote.customerName,
           customerPhone: formatPhoneDigits(quote.customerPhone ?? ''),
@@ -1042,7 +1050,7 @@ export class QuoteCreateComponent implements OnInit {
     const raw = this.form.getRawValue();
     return {
       customerName: raw.customerName!.trim(),
-      customerPhone: raw.customerPhone!.replace(/\D/g, ''),
+      customerPhone: normalizePhone(raw.customerPhone!),
       // Precotización de origen: el backend la marca 'converted' al crear.
       quoteRequestToken: this.fromRequestToken(),
       paymentMethod: raw.paymentMethod!,
@@ -1185,11 +1193,11 @@ export class QuoteCreateComponent implements OnInit {
    * cotizó sin capturar el número.
    */
   protected whatsappUrl(quote: Quote): string {
-    const phone = (quote.customerPhone ?? '').replace(/\D/g, '');
+    const phone = waPhone(quote.customerPhone);
     const text = encodeURIComponent(
       `Hola ${quote.customerName}, aquí está tu cotización de Mueblería Estilo y Confort:\n${quote.shareUrl}`,
     );
-    return phone ? `https://wa.me/52${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   }
 
   /** Base del panel actual: el mismo componente sirve a admin y a vendedor. */

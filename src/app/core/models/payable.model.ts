@@ -18,7 +18,7 @@ export interface PayableDocument {
   sourceId: number;
   manufacturerId: number;
   manufacturerName: string | null;
-  /** `EC-2026-0002` o `OC-000012`. */
+  /** `EC-2026-0002` o `OC-2026-0012`. */
   folio: string;
   /** Cliente del pedido, o notas de la OC. */
   reference: string | null;
@@ -82,6 +82,7 @@ export interface PayableItem {
   id: number;
   productName: string;
   productSku: string | null;
+  imageUrl: string | null;
   materialLabel: string | null;
   color: string | null;
   quantity: number;
@@ -92,12 +93,22 @@ export interface PayableItem {
   deliveredAt: string | null;
 }
 
+export type PayableChargeStatus = 'pending' | 'approved' | 'rejected';
+
 export interface PayableCharge {
   id: number;
   amount: number;
+  /** Monto solicitado antes de que el admin lo ajustara al aprobar (null si no cambió). */
+  originalAmount: number | null;
   chargeDate: string;
   concept: string;
   notes: string | null;
+  /** Solo 'approved' suma al saldo. */
+  status: PayableChargeStatus;
+  reviewNote: string | null;
+  /** 'manufacturer' | 'admin' | 'system' | null (cargo viejo). */
+  requestedByRole: string | null;
+  requestedByName: string | null;
 }
 
 export interface PayablePaymentLine {
@@ -130,8 +141,29 @@ export interface PaymentBatch {
   periodFrom: string | null;
   periodTo: string | null;
   notes: string | null;
+  /** Recibo PDF generado al registrar el pago (null si aún no se generó). */
+  receiptNumber: string | null;
+  receiptPdfUrl: string | null;
+  receiptEmailedAt: string | null;
   lineCount: number;
   lines: { sourceType: PayableSourceType; sourceId: number; amount: number; folio: string }[];
+}
+
+/** Estado de cuenta archivado: historial acumulado de un fabricante por periodo. */
+export interface AccountStatement {
+  id: number;
+  manufacturerId: number;
+  manufacturerName: string | null;
+  /** `EDC-2026-0001`. */
+  statementNumber: string;
+  periodFrom: string;
+  periodTo: string;
+  openingBalance: number;
+  closingBalance: number;
+  pdfUrl: string;
+  createdByName: string | null;
+  createdAt: string;
+  emailedAt: string | null;
 }
 
 export interface CreateBatchRequest {
@@ -154,4 +186,6 @@ export interface CreateChargeRequest {
   chargeDate?: string;
   concept: string;
   notes?: string | null;
+  /** false = queda pendiente en Aprobaciones en vez de afectar el saldo ya. */
+  approveNow?: boolean;
 }
