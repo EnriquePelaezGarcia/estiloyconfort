@@ -249,6 +249,14 @@
 
   li { position: relative; }
 
+  &__btn {
+    display: block;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: zoom-in;
+  }
+
   // Discreta pero legible: para poder decir "ver foto 2" en la instrucción
   // sin ambigüedad cuando hay varias fotos de referencia.
   &__num {

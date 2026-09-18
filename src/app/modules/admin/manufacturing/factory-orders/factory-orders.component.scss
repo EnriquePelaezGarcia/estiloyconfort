@@ -175,6 +175,14 @@
 
   li { position: relative; }
 
+  &__btn {
+    display: block;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: zoom-in;
+  }
+
   &__num {
     position: absolute;
     left: 3px;
@@ -203,6 +211,19 @@
     border-radius: vars.$radius-sm;
     border: 1px solid vars.$color-border;
   }
+}
+
+// Miniatura del producto en la línea del item + fotos de referencia dentro
+// del modal de recepción: botones "reseteados" para verse igual que antes
+// (una imagen a secas) pero abrir el visor en grande al hacer clic.
+.item__thumb-btn,
+.ref-thumbs__btn {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  vertical-align: middle;
 }
 
 .due-date-input {

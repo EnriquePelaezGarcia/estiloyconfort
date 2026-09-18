@@ -11,8 +11,9 @@ import {
   ManufacturerPurchaseOrder,
 } from '../../../core/models/manufacturing.model';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
-import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { ImageLightboxComponent, LightboxImage } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { ItemMessagesComponent } from '../../../shared/components/item-messages/item-messages.component';
+import { mediaUrl } from '../../../core/utils/media-url';
 
 /**
  * "Por fabricar" — vista unificada del portal del fabricante.
@@ -87,6 +88,17 @@ export class ManufacturerOrdersComponent implements OnInit {
 
   /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
   protected zoomedImage = signal<string | null>(null);
+
+  /** Fotos de referencia abiertas a tamaño completo (carrusel, URL ya resuelta). */
+  protected zoomedRefImages = signal<{ images: LightboxImage[]; startIndex: number } | null>(null);
+
+  protected openRefImages(item: WorkItem, index: number): void {
+    const images = item.fabricationRefImages
+      .map((src, i) => ({ src: mediaUrl(src) ?? '', alt: `Referencia ${i + 1} del mueble a fabricar` }))
+      .filter((img) => img.src);
+    if (!images.length) return;
+    this.zoomedRefImages.set({ images, startIndex: index });
+  }
 
   /** Ids de item cuya foto no cargó: se oculta el recuadro en vez de dejarlo vacío. */
   protected brokenImages = signal<Set<number>>(new Set());

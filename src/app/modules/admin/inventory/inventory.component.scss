@@ -1,5 +1,36 @@
 @use '../../../../styles/variables' as vars;
 
+// ===== Miniatura en la columna "Foto" =====
+.photo-col { width: 60px; }
+
+.thumb-btn {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+
+  &:hover .thumb { opacity: 0.85; }
+}
+
+.thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: vars.$radius-sm;
+  border: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+
+  &--empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1.2rem; }
+  }
+}
+
 // M15.4: negativo = vendido y pendiente de fabricar, no es un error.
 .negative {
   color: vars.$color-error;

@@ -47,12 +47,17 @@ const deliveryController = {
     }
 
     // No se puede finalizar una entrega con saldo por cobrar: el repartidor
-    // debe registrar el cobro antes de marcarla como entregada. Excepción:
-    // Crédito Tienda (store_credit) — el saldo se financia y se paga a plazos
-    // DESPUÉS de la entrega, así que ahí sí es normal cerrar con saldo. El
-    // enganche mínimo del crédito ya se validó antes de que el pedido saliera
-    // a ruta (Order.paymentClearsForDelivery).
-    if (status === 'completed' && delivery.paymentMethod !== 'store_credit') {
+    // debe registrar el cobro antes de marcarla como entregada. Excepciones:
+    // - Crédito Tienda (store_credit): el saldo se financia y se paga a
+    //   plazos DESPUÉS de la entrega, así que ahí sí es normal cerrar con
+    //   saldo.
+    // - Apartado (layaway): el cliente puede seguir abonando dentro de los
+    //   3 meses (layaway_deadline) y el último pago suele darse hasta
+    //   recibir el mueble; el repartidor puede cobrar el saldo restante ahí
+    //   mismo (Registrar cobro) pero no es obligatorio para cerrar.
+    // En ambos casos el enganche mínimo ya se validó antes de que el pedido
+    // saliera a ruta (Order.paymentClearsForDelivery).
+    if (status === 'completed' && delivery.paymentMethod !== 'store_credit' && delivery.paymentMethod !== 'layaway') {
       const balance = Number(delivery.totalAmount ?? 0) - Number(delivery.paymentAmount ?? 0);
       if (balance > 0.01) {
         const pend = balance.toLocaleString('es-MX', {

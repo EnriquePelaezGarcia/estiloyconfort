@@ -65,7 +65,12 @@ const inventoryController = {
                 CASE WHEN mp.size_id = 0 THEN pm.stock_quantity
                      ELSE COALESCE(pmss.stock_quantity, 0) END AS stock_quantity,
                 mp.base_cost, mp.price_cash,
-                COALESCE(res.reserved_qty, 0) AS reserved_quantity
+                COALESCE(res.reserved_qty, 0) AS reserved_quantity,
+                (SELECT pi.image_url FROM product_images pi
+                  WHERE pi.product_id = mp.product_id
+                  ORDER BY (pi.material_id = mp.material_id) DESC, pi.is_primary DESC,
+                           pi.order_display, pi.id
+                  LIMIT 1) AS primary_image
            FROM product_material_prices mp
            JOIN products p ON p.id = mp.product_id
            JOIN materials mat ON mat.id = mp.material_id
@@ -114,6 +119,7 @@ const inventoryController = {
           materialLabel: r.material_label,
           sizeId,
           sizeLabel: r.size_label ?? null,
+          imageUrl: r.primary_image ?? null,
           stockQuantity: r.stock_quantity,
           // Reserva de piezas (Docs/plan-reserva-de-piezas.md §6.4): cuánto de
           // ese stock ya está apartado y cuánto queda libre para vender.
@@ -141,6 +147,7 @@ const inventoryController = {
           materialLabel: r.materialLabel,
           sizeId: r.sizeId,
           sizeLabel: r.sizeLabel,
+          imageUrl: r.imageUrl,
           stockQuantity: r.stockQuantity,
           reservedQuantity: r.reservedQuantity,
           availableQuantity: r.availableQuantity,

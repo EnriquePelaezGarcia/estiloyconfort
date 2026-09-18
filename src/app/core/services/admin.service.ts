@@ -47,6 +47,8 @@ export interface InventoryRow {
   /** D5: talla de la celda. `null` = el producto no se vende por talla. */
   sizeId: number | null;
   sizeLabel: string | null;
+  /** Ruta relativa (sin resolver); null = producto sin foto (resolver con mediaUrl). */
+  imageUrl: string | null;
   stockQuantity: number;
   /** Reserva de piezas (Docs/plan-reserva-de-piezas.md): cuánto de stockQuantity ya está apartado, y cuánto queda libre. */
   reservedQuantity: number;

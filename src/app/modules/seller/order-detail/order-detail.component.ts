@@ -112,6 +112,11 @@ export class OrderDetailComponent implements OnInit {
   protected selectedDeliveryPerson = signal<number | null>(null);
   protected assigningDelivery = signal(false);
 
+  // ===== Agregar/editar ubicación de Google Maps (admin y vendedor) =====
+  protected locationEditOpen = signal(false);
+  protected locationUrlInput = signal('');
+  protected savingLocation = signal(false);
+
   /** Foto de producto abierta a tamaño completo (clic en la miniatura); null = cerrada. */
   protected zoomedImage = signal<string | null>(null);
 
@@ -283,6 +288,13 @@ export class OrderDetailComponent implements OnInit {
     if (o.orderStatus !== 'ready') return false;
     return !(o.items ?? []).some((it) => it.requiresFabrication && !it.isReady);
   });
+
+  /**
+   * Agregar/editar la ubicación de Google Maps directo desde el detalle: no
+   * aplica a "recoge en tienda" (no hay a dónde llegar) y usa la misma
+   * ventana de edición que "Editar pedido" — es el mismo PATCH de fondo.
+   */
+  protected canEditLocation = computed(() => !!this.order() && !this.order()!.pickupInStore && this.canEdit());
 
   /** Aviso al editar un pedido que ya está en proceso (no 'pending'). */
   protected editWarnsManufacturer = computed(() => {
@@ -977,6 +989,34 @@ export class OrderDetailComponent implements OnInit {
       error: (err: { error?: { message?: string } }) => {
         this.assigningDelivery.set(false);
         this.notification.error(err?.error?.message ?? 'No se pudo asignar el repartidor');
+      },
+    });
+  }
+
+  protected openLocationEdit(): void {
+    this.locationUrlInput.set(this.order()?.googleMapsUrl ?? '');
+    this.locationEditOpen.set(true);
+  }
+
+  protected saveLocation(): void {
+    const order = this.order();
+    const url = this.locationUrlInput().trim();
+    if (!order || this.savingLocation()) return;
+    if (!url) {
+      this.notification.error('Pega la ubicación de Google Maps');
+      return;
+    }
+    this.savingLocation.set(true);
+    this.sellerService.updateOrder(order.id, { googleMapsUrl: url }).subscribe({
+      next: () => {
+        this.savingLocation.set(false);
+        this.locationEditOpen.set(false);
+        this.notification.success('Ubicación guardada');
+        this.load(order.id);
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.savingLocation.set(false);
+        this.notification.error(err?.error?.message ?? 'No se pudo guardar la ubicación');
       },
     });
   }

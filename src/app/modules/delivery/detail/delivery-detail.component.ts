@@ -126,15 +126,17 @@ export class DeliveryDetailComponent implements OnInit, AfterViewInit, OnDestroy
 
   /**
    * No se puede finalizar una entrega con saldo por cobrar: hay que registrar
-   * el cobro primero. Excepción: Crédito Tienda, donde el saldo se financia y
-   * se liquida a plazos después de la entrega. El backend aplica la misma regla
+   * el cobro primero. Excepciones: Crédito Tienda (el saldo se financia y se
+   * liquida a plazos después de la entrega) y Apartado (el cliente puede
+   * seguir abonando dentro de los 3 meses y el último pago suele darse hasta
+   * recibir el mueble). El backend aplica la misma regla
    * (deliveryController.updateStatus) — esto solo es para bloquear el botón y
    * avisar en pantalla antes de intentarlo.
    */
   protected balanceBlocksCompletion = computed(() => {
     const a = this.assignment();
     if (!a || a.deliveryStatus === 'completed') return false;
-    return a.paymentMethod !== 'store_credit' && this.balance() > 0.01;
+    return a.paymentMethod !== 'store_credit' && a.paymentMethod !== 'layaway' && this.balance() > 0.01;
   });
 
   // ===== Descuento (Docs/plan-descuentos.md, RN-D2: solo dinero) =====

@@ -749,7 +749,9 @@ const Order = {
    *
    *   - cash / msi / wholesale → SIEMPRE true (se cobra contra entrega).
    *   - store_credit → pagado >= enganche (`down_payment`).
-   *   - layaway → pagado >= total (liquidado).
+   *   - layaway → pagado >= enganche (`down_payment`); el saldo restante se
+   *     cobra contra entrega (el repartidor puede cerrarla con saldo
+   *     pendiente, ver excepción en deliveryController.updateStatus).
    *
    * El +1e-6 absorbe el error de redondeo de DECIMAL ↔ Number.
    *
@@ -759,11 +761,8 @@ const Order = {
    */
   paymentClearsForDelivery(order) {
     const paid = Number(order?.paymentAmount) || 0;
-    if (order?.paymentMethod === 'store_credit') {
+    if (order?.paymentMethod === 'store_credit' || order?.paymentMethod === 'layaway') {
       return paid + 1e-6 >= (Number(order.downPayment) || 0);
-    }
-    if (order?.paymentMethod === 'layaway') {
-      return paid + 1e-6 >= (Number(order.totalAmount) || 0);
     }
     // RN-ANT5 (Docs/plan-anticipo-fabricacion-por-modificacion.md): contado/MSI/
     // mayoreo con fabricación no libera la entrega ni el arranque de fábrica

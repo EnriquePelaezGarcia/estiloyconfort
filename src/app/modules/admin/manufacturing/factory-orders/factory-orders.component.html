@@ -47,7 +47,9 @@
             <div class="item" [attr.id]="'item-' + r.itemId">
               <div class="item__title">
                 @if (r.imageUrl) {
-                  <img class="item__thumb" [src]="r.imageUrl | mediaUrl:'thumb'" [alt]="r.productName" width="56" height="56" />
+                  <button type="button" class="item__thumb-btn" title="Ver imagen en grande" (click)="openZoom(r.imageUrl, r.productName)">
+                    <img class="item__thumb" [src]="r.imageUrl | mediaUrl:'thumb'" [alt]="r.productName" width="56" height="56" />
+                  </button>
                 }
                 <span class="item__name">{{ r.productName }}</span>
                 <span class="muted">{{ r.productSku }}</span>
@@ -71,10 +73,10 @@
                   <ul class="ref-images">
                     @for (img of r.fabricationRefImages; track img; let imgIndex = $index) {
                       <li>
-                        <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                        <button type="button" class="ref-images__btn" (click)="openRefImages(r.fabricationRefImages, imgIndex)" title="Ver imagen en grande">
                           <span class="ref-images__num">{{ imgIndex + 1 }}</span>
                           <img [src]="img | mediaUrl:'thumb'" [alt]="'Referencia ' + (imgIndex + 1) + ' del mueble'" />
-                        </a>
+                        </button>
                       </li>
                     }
                   </ul>
@@ -195,10 +197,10 @@
         @if (r.isCustomModification || r.fabricationNote) { <p class="specs">✏️ {{ r.fabricationNote || 'Ver fotos de referencia' }}</p> }
         @if (r.fabricationRefImages.length) {
           <p class="ref-thumbs">
-            @for (img of r.fabricationRefImages; track img) {
-              <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+            @for (img of r.fabricationRefImages; track img; let imgIndex = $index) {
+              <button type="button" class="ref-thumbs__btn" (click)="openRefImages(r.fabricationRefImages, imgIndex)" title="Ver imagen en grande">
                 <img [src]="img | mediaUrl:'thumb'" alt="Referencia del mueble" width="44" height="44" />
-              </a>
+              </button>
             }
           </p>
         }
@@ -230,4 +232,14 @@
       </div>
     </div>
   </div>
+}
+
+<!-- ===== Foto del producto a tamaño completo (clic en la miniatura) ===== -->
+@if (zoomedImage(); as z) {
+  <app-image-lightbox [src]="(z.src | mediaUrl) ?? ''" [alt]="z.alt" (closed)="zoomedImage.set(null)" />
+}
+
+<!-- ===== Fotos de referencia a tamaño completo (carrusel) ===== -->
+@if (zoomedRefImages(); as z) {
+  <app-image-lightbox [images]="z.images" [startIndex]="z.startIndex" (closed)="zoomedRefImages.set(null)" />
 }

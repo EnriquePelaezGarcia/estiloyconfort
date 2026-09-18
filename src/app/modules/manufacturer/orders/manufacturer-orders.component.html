@@ -137,10 +137,10 @@
                   <ul class="ref-images">
                     @for (img of it.fabricationRefImages; track img; let imgIndex = $index) {
                       <li>
-                        <a [href]="img | mediaUrl" target="_blank" rel="noopener">
+                        <button type="button" class="ref-images__btn" (click)="openRefImages(it, imgIndex)" title="Ver imagen en grande">
                           <span class="ref-images__num">{{ imgIndex + 1 }}</span>
                           <img [src]="img | mediaUrl:'thumb'" [alt]="'Referencia ' + (imgIndex + 1) + ' del mueble a fabricar'" />
-                        </a>
+                        </button>
                       </li>
                     }
                   </ul>
@@ -252,6 +252,15 @@
     [src]="(img | mediaUrl) ?? ''"
     [alt]="'Foto del producto'"
     (closed)="zoomedImage.set(null)"
+  />
+}
+
+<!-- ===== Fotos de referencia a tamaño completo (carrusel) ===== -->
+@if (zoomedRefImages(); as z) {
+  <app-image-lightbox
+    [images]="z.images"
+    [startIndex]="z.startIndex"
+    (closed)="zoomedRefImages.set(null)"
   />
 }
 

@@ -6,6 +6,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LabelPrintService } from '../../../core/services/label-print.service';
 import { MaterialsStore } from '../../../core/services/materials.store';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 
 type StockState = 'ok' | 'low' | 'out';
 type StockFilter = 'all' | 'low' | 'out';
@@ -24,7 +26,7 @@ type StockFilter = 'all' | 'low' | 'out';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './inventory.component.html',
   styleUrl: './inventory.component.scss',
-  imports: [ReactiveFormsModule, DatePipe],
+  imports: [ReactiveFormsModule, DatePipe, MediaUrlPipe, ImageLightboxComponent],
 })
 export class InventoryComponent implements OnInit {
   private adminService = inject(AdminService);
@@ -49,7 +51,7 @@ export class InventoryComponent implements OnInit {
 
   /** Columnas visibles de la tabla, para el colspan de la fila vacía.
    *  La columna de acciones va SIEMPRE: "Movimientos" lo ve cualquier vendedor. */
-  protected columnCount = computed(() => 8 + (this.showValue() ? 1 : 0));
+  protected columnCount = computed(() => 9 + (this.showValue() ? 1 : 0));
 
   protected rows = signal<InventoryRow[]>([]);
   protected loading = signal(true);
@@ -57,6 +59,9 @@ export class InventoryComponent implements OnInit {
   protected search = signal('');
   protected filter = signal<StockFilter>('all');
   protected materialFilter = signal<number | ''>('');
+
+  /** Foto del renglón abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
 
   /** Fila cuyo stock se está ajustando (null = modal cerrado). */
   protected adjusting = signal<InventoryRow | null>(null);
@@ -164,6 +169,10 @@ export class InventoryComponent implements OnInit {
     if (value === null || value === undefined) return '—';
     const num = Number(value);
     return isNaN(num) ? '—' : num.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  }
+
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
   }
 
   protected setFilter(filter: StockFilter): void {

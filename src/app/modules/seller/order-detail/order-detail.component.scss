@@ -94,6 +94,24 @@
   dd { font-size: 0.92rem; color: vars.$color-text; }
 }
 
+.info dd.info__location {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+}
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: vars.$color-primary;
+  font-weight: 600;
+  font-size: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .info-subtitle {
   margin: vars.$spacing-lg 0 vars.$spacing-sm;
   font-size: 0.9rem;

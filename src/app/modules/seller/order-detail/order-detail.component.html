@@ -480,6 +480,21 @@
         } @else {
           @if (o.deliveryAddress) { <div><dt>Dirección</dt><dd>{{ o.deliveryAddress }}</dd></div> }
           <div><dt>Envío</dt><dd>{{ deliveryLabel(o.deliveryType) }}</dd></div>
+          <div class="no-print">
+            <dt>Ubicación</dt>
+            <dd class="info__location">
+              @if (o.googleMapsUrl) {
+                <a [href]="o.googleMapsUrl" target="_blank" rel="noopener">Ver en Google Maps</a>
+                @if (canEditLocation()) {
+                  <button type="button" class="link-btn" (click)="openLocationEdit()">Editar</button>
+                }
+              } @else if (canEditLocation()) {
+                <button type="button" class="link-btn" (click)="openLocationEdit()">Agregar ubicación</button>
+              } @else {
+                Sin ubicación
+              }
+            </dd>
+          </div>
         }
         @if (o.assemblyService) {
           <div><dt>Armado</dt><dd>Piso {{ o.assemblyFloors ?? 0 }} · {{ assemblyCost() | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div>
@@ -1201,6 +1216,40 @@
                   [disabled]="!selectedDeliveryPerson() || assigningDelivery()"
                   (click)="confirmAssignDelivery()">
             Asignar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===== Modal: agregar/editar ubicación de Google Maps (admin y vendedor) ===== -->
+@if (locationEditOpen() && order(); as o) {
+  <div class="modal-backdrop no-print">
+    <div class="modal modal--sm">
+      <div class="modal__body">
+        <h2 class="panel__title">Ubicación (URL de Google Maps)</h2>
+        <p class="muted">Pedido <strong>{{ o.orderNumber }}</strong> — {{ o.customerName }}</p>
+        <div class="field">
+          <label for="locationUrl">Ubicación (URL de Google Maps)</label>
+          <input
+            id="locationUrl"
+            type="url"
+            placeholder="https://maps.google.com/?q=..."
+            [value]="locationUrlInput()"
+            (input)="locationUrlInput.set($any($event.target).value)"
+          />
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn btn--ghost" (click)="locationEditOpen.set(false)">Cancelar</button>
+          <button type="button" class="btn btn--primary"
+                  [disabled]="!locationUrlInput().trim() || savingLocation()"
+                  (click)="saveLocation()">
+            @if (savingLocation()) {
+              <span class="spinner spinner--sm"></span> Guardando…
+            } @else {
+              Guardar
+            }
           </button>
         </div>
       </div>

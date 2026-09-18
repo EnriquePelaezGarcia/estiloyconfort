@@ -7,6 +7,8 @@ import { NotificationService } from '../../../../core/services/notification.serv
 import { FactoryOrderItemRow, Manufacturer } from '../../../../core/models/manufacturing.model';
 import { MediaUrlPipe } from '../../../../shared/pipes/media-url.pipe';
 import { ItemMessagesComponent } from '../../../../shared/components/item-messages/item-messages.component';
+import { ImageLightboxComponent, LightboxImage } from '../../../../shared/components/image-lightbox/image-lightbox.component';
+import { mediaUrl } from '../../../../core/utils/media-url';
 
 /** Un pedido con todos sus items de fabricación agrupados. */
 export interface FactoryOrderGroup {
@@ -23,7 +25,7 @@ export interface FactoryOrderGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './factory-orders.component.html',
   styleUrl: './factory-orders.component.scss',
-  imports: [RouterLink, DatePipe, MediaUrlPipe, ItemMessagesComponent],
+  imports: [RouterLink, DatePipe, MediaUrlPipe, ItemMessagesComponent, ImageLightboxComponent],
 })
 export class FactoryOrdersComponent implements OnInit {
   private manufacturingService = inject(ManufacturingService);
@@ -44,6 +46,24 @@ export class FactoryOrdersComponent implements OnInit {
   protected markingReady = signal<Set<number>>(new Set());
   /** Ids de pedidos con la fecha de entrega del fabricante en proceso de guardado. */
   protected savingDueDate = signal<Set<number>>(new Set());
+
+  /** Foto del producto abierta a tamaño completo (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<{ src: string; alt: string } | null>(null);
+
+  protected openZoom(src: string, alt: string): void {
+    this.zoomedImage.set({ src, alt });
+  }
+
+  /** Fotos de referencia abiertas a tamaño completo (carrusel, URL ya resuelta). */
+  protected zoomedRefImages = signal<{ images: LightboxImage[]; startIndex: number } | null>(null);
+
+  protected openRefImages(refImages: string[], index: number): void {
+    const images = refImages
+      .map((src, i) => ({ src: mediaUrl(src) ?? '', alt: `Referencia ${i + 1} del mueble` }))
+      .filter((img) => img.src);
+    if (!images.length) return;
+    this.zoomedRefImages.set({ images, startIndex: index });
+  }
 
   /** Item cuyo modal de recepción en bodega está abierto. */
   protected receiving = signal<FactoryOrderItemRow | null>(null);

@@ -81,6 +81,7 @@
     <table class="table table--cards">
       <thead>
         <tr>
+          <th class="photo-col">Foto</th>
           <th>Producto</th>
           <th>SKU</th>
           <th>Material</th>
@@ -95,6 +96,22 @@
       <tbody>
         @for (row of filteredRows(); track row.productId + '-' + row.materialId + '-' + (row.sizeId ?? 0)) {
           <tr>
+            <td data-label="Foto">
+              @if (row.imageUrl) {
+                <button
+                  type="button"
+                  class="thumb-btn"
+                  (click)="openZoom(row.imageUrl, row.name)"
+                  title="Ver imagen en grande"
+                >
+                  <img class="thumb" [src]="row.imageUrl | mediaUrl: 'thumb'" [alt]="row.name" loading="lazy" />
+                </button>
+              } @else {
+                <span class="thumb thumb--empty">
+                  <span class="material-symbols-outlined">image</span>
+                </span>
+              }
+            </td>
             <td data-label="Producto" class="strong">{{ row.name }}</td>
             <td data-label="SKU" class="muted">{{ row.sku || '—' }}</td>
             <td data-label="Material">
@@ -357,4 +374,8 @@
       </form>
     </div>
   </div>
+}
+
+@if (zoomedImage(); as zoomed) {
+  <app-image-lightbox [src]="(zoomed.src | mediaUrl) ?? ''" [alt]="zoomed.alt" (closed)="zoomedImage.set(null)" />
 }
