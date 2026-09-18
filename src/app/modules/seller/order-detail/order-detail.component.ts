@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { CurrencyPipe, DatePipe, Location } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CurrencyInputDirective } from '../../../shared/directives/currency-input.directive';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -85,6 +85,7 @@ export class OrderDetailComponent implements OnInit {
   private approvalsService = inject(ApprovalsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
   private destroyRef = inject(DestroyRef);
@@ -1160,9 +1161,14 @@ export class OrderDetailComponent implements OnInit {
     }, 50);
   }
 
+  /**
+   * "Volver a mis pedidos" — usa el historial del navegador (no un navigate
+   * fijo a /pedidos) para que regrese a la pantalla de origen tal cual la
+   * dejó (agenda de entregas o el listado de pedidos, con su scroll), no
+   * siempre a /pedidos desde arriba.
+   */
   protected goBack(): void {
-    const base = this.router.url.startsWith('/admin') ? '/admin/pedidos' : '/vendedor/pedidos';
-    this.router.navigate([base]);
+    this.location.back();
   }
 
   /** Botón "Editar pedido": pide confirmación previa si el pedido ya no está pendiente. */

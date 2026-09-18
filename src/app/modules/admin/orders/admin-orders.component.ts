@@ -113,6 +113,14 @@ export class AdminOrdersComponent implements OnInit {
     }
   }
 
+  /** Por defecto la lista de productos de cada pedido viene desplegada. */
+  private expandAll(orders: Order[]): void {
+    this.expandedIds.set(new Set(orders.map((o) => o.id)));
+    for (const o of orders) {
+      if (!this.itemsCache()[o.id]) this.loadItems(o);
+    }
+  }
+
   private loadItems(o: Order): void {
     this.loadingItemsIds.update((ids) => new Set(ids).add(o.id));
     this.adminService.getOrder(o.id).subscribe({
@@ -161,6 +169,7 @@ export class AdminOrdersComponent implements OnInit {
       next: (res) => {
         this.orders.set(res.data);
         this.loading.set(false);
+        this.expandAll(res.data);
       },
       error: () => {
         this.loading.set(false);

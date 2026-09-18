@@ -51,15 +51,29 @@
   </div>
 } @else {
   <div class="table-wrap">
-    <table class="table table--cards">
+    <table class="table">
       <thead>
         <tr>
+          <th></th>
           <th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th>Pago</th><th class="num">Total</th><th>Fecha</th><th></th>
         </tr>
       </thead>
       <tbody>
         @for (o of visibleOrders(); track o.id) {
           <tr class="orders-row" [class.orders-row--selected]="selectedId() === o.id" (click)="selectRow(o.id)">
+            <td>
+              <button
+                type="button"
+                class="icon-btn expand-toggle"
+                (click)="$event.stopPropagation(); toggleExpand(o)"
+                [attr.aria-expanded]="isExpanded(o)"
+                [title]="isExpanded(o) ? 'Ocultar productos' : 'Ver productos'"
+              >
+                <span class="material-symbols-outlined">
+                  {{ isExpanded(o) ? 'expand_less' : 'expand_more' }}
+                </span>
+              </button>
+            </td>
             <td data-label="Pedido" class="strong">
               <a class="order-link" [routerLink]="[o.id]" (click)="$event.stopPropagation()">{{ o.orderNumber }}</a>
               @if (o.assemblyService) { <span class="badge badge--purple">Armado</span> }
@@ -84,10 +98,59 @@
               </button>
             </td>
           </tr>
+          @if (isExpanded(o)) {
+            <tr class="detail-row">
+              <td [attr.colspan]="9">
+                @if (isLoadingItems(o)) {
+                  <div class="state state--sm"><span class="spinner spinner--sm"></span> Cargando productos...</div>
+                } @else if (itemsFor(o).length) {
+                  <div class="items-grid">
+                    @for (it of itemsFor(o); track it.id) {
+                      <div class="item-row">
+                        @if (it.imageUrl) {
+                          <button
+                            type="button"
+                            class="item-row__photo"
+                            title="Ver foto en grande"
+                            (click)="$event.stopPropagation(); zoomedImage.set(it.imageUrl!)"
+                          >
+                            <img [src]="it.imageUrl | mediaUrl: 'thumb'" [alt]="it.productName ?? ''" loading="lazy" />
+                          </button>
+                        } @else {
+                          <span class="item-row__photo item-row__photo--empty">
+                            <span class="material-symbols-outlined">inventory_2</span>
+                          </span>
+                        }
+                        <div class="item-row__info">
+                          <strong class="item-row__name">{{ it.productName }}</strong>
+                          <span class="item-row__meta">
+                            @if (it.materialLabel) { <span>{{ it.materialLabel }}</span> }
+                            @if (it.color) { <span>{{ it.color }}</span> }
+                            @if (!it.materialLabel && !it.color) { <span class="table__hint">Sin color/material</span> }
+                          </span>
+                        </div>
+                        <div class="item-row__price">
+                          <span>{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u × {{ it.quantity }}</span>
+                          <strong>{{ (it.subtotal ?? it.unitPrice * it.quantity) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <p class="empty">Este pedido no tiene productos registrados.</p>
+                }
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
   </div>
+}
+
+<!-- ===== Foto ampliada de un producto ===== -->
+@if (zoomedImage(); as img) {
+  <app-image-lightbox [src]="(img | mediaUrl) ?? ''" (closed)="zoomedImage.set(null)" />
 }
 
 <!-- ===== Modal: asignar repartidor ===== -->

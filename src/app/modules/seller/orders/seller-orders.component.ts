@@ -4,7 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
-import { DeliveryPerson, Order, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import { DeliveryPerson, Order, OrderItem, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
 import {
   ORDER_STATUS_TONE,
   PAYMENT_STATUS_LABELS,
@@ -17,7 +19,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './seller-orders.component.html',
   styleUrl: './seller-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, RouterLink, FormsModule],
+  imports: [CurrencyPipe, DatePipe, RouterLink, FormsModule, MediaUrlPipe, ImageLightboxComponent],
 })
 export class SellerOrdersComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -34,6 +36,71 @@ export class SellerOrdersComponent implements OnInit {
 
   protected selectRow(id: number): void {
     this.selectedId.update((current) => (current === id ? null : id));
+  }
+
+  // ─── FILA EXPANDIBLE: PRODUCTOS DEL PEDIDO ──────────────────────────────────
+  // Mismo patrón que /admin/pedidos: los productos no vienen en el listado
+  // (solo lo agregado del pedido), así que se piden bajo demanda al desplegar
+  // la fila y se cachean por id para no repetir la llamada al plegar y volver
+  // a abrir.
+  protected expandedIds = signal<Set<number>>(new Set());
+  protected itemsCache = signal<Record<number, OrderItem[]>>({});
+  protected loadingItemsIds = signal<Set<number>>(new Set());
+  /** Foto ampliada de un producto (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
+
+  protected isExpanded(o: Order): boolean {
+    return this.expandedIds().has(o.id);
+  }
+
+  protected isLoadingItems(o: Order): boolean {
+    return this.loadingItemsIds().has(o.id);
+  }
+
+  protected itemsFor(o: Order): OrderItem[] {
+    return this.itemsCache()[o.id] ?? [];
+  }
+
+  protected toggleExpand(o: Order): void {
+    const isOpen = this.expandedIds().has(o.id);
+    this.expandedIds.update((ids) => {
+      const next = new Set(ids);
+      if (isOpen) next.delete(o.id); else next.add(o.id);
+      return next;
+    });
+    if (!isOpen && !this.itemsCache()[o.id]) {
+      this.loadItems(o);
+    }
+  }
+
+  /** Por defecto la lista de productos de cada pedido viene desplegada. */
+  private expandAll(orders: Order[]): void {
+    this.expandedIds.set(new Set(orders.map((o) => o.id)));
+    for (const o of orders) {
+      if (!this.itemsCache()[o.id]) this.loadItems(o);
+    }
+  }
+
+  private loadItems(o: Order): void {
+    this.loadingItemsIds.update((ids) => new Set(ids).add(o.id));
+    this.sellerService.getOrder(o.id).subscribe({
+      next: (res) => {
+        this.itemsCache.update((cache) => ({ ...cache, [o.id]: res.data.items ?? [] }));
+        this.loadingItemsIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(o.id);
+          return next;
+        });
+      },
+      error: () => {
+        this.notification.error('No se pudieron cargar los productos del pedido');
+        this.loadingItemsIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(o.id);
+          return next;
+        });
+      },
+    });
   }
 
   /** Pedido seleccionado para asignar repartidor. */
@@ -96,6 +163,7 @@ export class SellerOrdersComponent implements OnInit {
       next: (res) => {
         this.orders.set(res.data);
         this.loading.set(false);
+        this.expandAll(res.data);
       },
       error: () => {
         this.loading.set(false);

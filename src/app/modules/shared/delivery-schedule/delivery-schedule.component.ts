@@ -95,6 +95,14 @@ export class DeliveryScheduleComponent implements OnInit {
     }
   }
 
+  /** Por defecto la lista de productos de cada entrega viene desplegada. */
+  private expandAll(deliveries: ScheduledDelivery[]): void {
+    this.expandedIds.set(new Set(deliveries.map((d) => d.orderId)));
+    for (const d of deliveries) {
+      if (!this.itemsCache()[d.orderId]) this.loadItems(d);
+    }
+  }
+
   private loadItems(d: ScheduledDelivery): void {
     this.loadingItemsIds.update((ids) => new Set(ids).add(d.orderId));
     this.sellerService.getOrder(d.orderId).subscribe({
@@ -199,6 +207,7 @@ export class DeliveryScheduleComponent implements OnInit {
         this.deliveries.set(res.deliveries);
         this.counts.set(res.counts);
         this.loading.set(false);
+        this.expandAll(res.deliveries);
       },
       error: () => {
         this.loading.set(false);
