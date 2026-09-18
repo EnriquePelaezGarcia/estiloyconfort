@@ -13,7 +13,7 @@ router.get('/slots', deliveryScheduleController.slots);
 // entrega necesita ver el contador de saturación, no solo admin/vendedor.
 router.get('/schedule/slot-count', deliveryScheduleController.slotCount);
 
-// Agenda: admin ve todo, vendedor lo suyo, repartidor sus asignaciones (D2).
+// Agenda: admin y vendedor ven todo (de cualquier vendedor), repartidor solo sus asignaciones (D2).
 router.get('/schedule', authorize('admin', 'seller', 'delivery_person'), deliveryScheduleController.schedule);
 router.get('/schedule/counts', authorize('admin', 'seller', 'delivery_person'), deliveryScheduleController.counts);
 

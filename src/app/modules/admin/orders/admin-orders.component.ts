@@ -4,9 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import {
   DeliveryPerson,
   Order,
+  OrderItem,
   OrderStatus,
   PaymentStatus,
 } from '../../../core/models/order.model';
@@ -22,7 +25,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin-orders.component.html',
   styleUrl: './admin-orders.component.scss',
-  imports: [CurrencyPipe, FormsModule],
+  imports: [CurrencyPipe, FormsModule, MediaUrlPipe, ImageLightboxComponent],
 })
 export class AdminOrdersComponent implements OnInit {
   private adminService = inject(AdminService);
@@ -73,6 +76,63 @@ export class AdminOrdersComponent implements OnInit {
 
   protected selectRow(id: number): void {
     this.selectedId.update((current) => (current === id ? null : id));
+  }
+
+  // ─── FILA EXPANDIBLE: PRODUCTOS DEL PEDIDO ──────────────────────────────────
+  // Mismo patrón que /admin/cuentas-por-pagar/:id: los productos no vienen en
+  // el listado (solo lo agregado del pedido), así que se piden bajo demanda al
+  // desplegar la fila y se cachean por id para no repetir la llamada al plegar
+  // y volver a abrir.
+  protected expandedIds = signal<Set<number>>(new Set());
+  protected itemsCache = signal<Record<number, OrderItem[]>>({});
+  protected loadingItemsIds = signal<Set<number>>(new Set());
+  /** Foto ampliada de un producto (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
+
+  protected isExpanded(o: Order): boolean {
+    return this.expandedIds().has(o.id);
+  }
+
+  protected isLoadingItems(o: Order): boolean {
+    return this.loadingItemsIds().has(o.id);
+  }
+
+  protected itemsFor(o: Order): OrderItem[] {
+    return this.itemsCache()[o.id] ?? [];
+  }
+
+  protected toggleExpand(o: Order): void {
+    const isOpen = this.expandedIds().has(o.id);
+    this.expandedIds.update((ids) => {
+      const next = new Set(ids);
+      if (isOpen) next.delete(o.id); else next.add(o.id);
+      return next;
+    });
+    if (!isOpen && !this.itemsCache()[o.id]) {
+      this.loadItems(o);
+    }
+  }
+
+  private loadItems(o: Order): void {
+    this.loadingItemsIds.update((ids) => new Set(ids).add(o.id));
+    this.adminService.getOrder(o.id).subscribe({
+      next: (res) => {
+        this.itemsCache.update((cache) => ({ ...cache, [o.id]: res.data.items ?? [] }));
+        this.loadingItemsIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(o.id);
+          return next;
+        });
+      },
+      error: () => {
+        this.notification.error('No se pudieron cargar los productos del pedido');
+        this.loadingItemsIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(o.id);
+          return next;
+        });
+      },
+    });
   }
 
   /** Pedido seleccionado para asignar repartidor. */

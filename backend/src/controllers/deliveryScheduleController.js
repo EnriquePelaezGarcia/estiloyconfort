@@ -7,8 +7,9 @@ const ApiError = require('../utils/ApiError');
 /**
  * Agenda de entregas (Docs/plan-fecha-hora-entrega.md).
  *
- * El alcance SIEMPRE sale de `req.user` (D2), nunca de un parámetro: un
- * vendedor no puede pedir la agenda de otro cambiando el query string.
+ * El alcance SIEMPRE sale de `req.user` (D2), nunca de un parámetro. Admin y
+ * vendedor ven la agenda completa de todos los vendedores (igual que el
+ * listado de pedidos); el repartidor solo ve lo que trae asignado.
  */
 const deliveryScheduleController = {
   // GET /api/deliveries/schedule?from=&to=&commitment=
@@ -58,9 +59,6 @@ const deliveryScheduleController = {
   reschedule: asyncHandler(async (req, res) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
-    if (req.user.role === 'seller' && existing.sellerId !== req.user.id) {
-      throw ApiError.forbidden('Este pedido no te pertenece');
-    }
     if (['delivered', 'cancelled'].includes(existing.orderStatus)) {
       throw ApiError.badRequest('No se puede reprogramar un pedido entregado o cancelado');
     }
@@ -86,9 +84,6 @@ const deliveryScheduleController = {
   history: asyncHandler(async (req, res) => {
     const existing = await Order.findById(req.params.id);
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
-    if (req.user.role === 'seller' && existing.sellerId !== req.user.id) {
-      throw ApiError.forbidden('Este pedido no te pertenece');
-    }
     const data = await Order.findDeliveryHistory(req.params.id);
     res.json({ data });
   }),

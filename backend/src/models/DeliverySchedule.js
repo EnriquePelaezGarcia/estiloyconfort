@@ -13,12 +13,13 @@ const { pool } = require('../config/database');
 const OPEN_ORDERS = "o.order_status NOT IN ('delivered','cancelled')";
 
 /**
- * Filtro por rol (D2): el admin ve todo, el vendedor sólo sus pedidos y el
- * repartidor sólo lo que trae asignado. Se resuelve aquí y no en el
+ * Filtro por rol (D2): admin y vendedor ven la agenda completa de todos los
+ * vendedores —igual que el listado de pedidos (sellerController.list con
+ * scope=all) y su edición, que ya son compartidos entre vendedores— y el
+ * repartidor sólo ve lo que trae asignado. Se resuelve aquí y no en el
  * controller para que ninguna ruta futura pueda olvidarlo.
  */
 function scopeForRole(role, userId) {
-  if (role === 'seller') return { sql: ' AND o.seller_id = ?', params: [userId] };
   if (role === 'delivery_person') return { sql: ' AND o.delivery_person_id = ?', params: [userId] };
   return { sql: '', params: [] };
 }

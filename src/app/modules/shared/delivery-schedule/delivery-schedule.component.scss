@@ -199,6 +199,121 @@
     flex-wrap: wrap;
     margin-top: vars.$spacing-sm;
   }
+
+  &__products {
+    margin-top: vars.$spacing-xs;
+  }
+}
+
+// ── Desplegable de productos (mismo patrón que Por pagar / Todos los pedidos) ──
+.expand-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  width: auto;
+  padding: 0.2rem 0.4rem 0.2rem 0.2rem;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.15rem; }
+
+  &:hover { color: vars.$color-primary; }
+}
+
+.products-loading {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm 0;
+  font-size: 0.85rem;
+  color: vars.$color-text-secondary;
+}
+
+.hint {
+  color: vars.$color-text-secondary;
+}
+
+.items-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: vars.$spacing-xs;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: 0.4rem;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+
+  @media (max-width: vars.$bp-tablet) {
+    flex-wrap: wrap;
+  }
+}
+
+.item-row__photo {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  overflow: hidden;
+  background: vars.$color-surface;
+  cursor: zoom-in;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: vars.$color-text-secondary;
+    cursor: default;
+
+    .material-symbols-outlined { font-size: 0.9rem; }
+  }
+}
+
+.item-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.item-row__name {
+  font-size: 0.88rem;
+}
+
+.item-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: vars.$color-text-secondary;
+}
+
+.item-row__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  text-align: right;
+  font-size: 0.78rem;
+  color: vars.$color-text-secondary;
+  white-space: nowrap;
+
+  strong { font-size: 0.9rem; color: vars.$color-text; }
 }
 
 .tag {

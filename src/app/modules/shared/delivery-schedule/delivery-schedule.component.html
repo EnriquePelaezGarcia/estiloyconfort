@@ -120,8 +120,65 @@
               <p class="delivery__items">{{ d.itemsSummary }}</p>
             }
 
+            <div class="delivery__products">
+              <button
+                type="button"
+                class="icon-btn expand-toggle"
+                (click)="toggleExpand(d)"
+                [attr.aria-expanded]="isExpanded(d)"
+              >
+                <span class="material-symbols-outlined">
+                  {{ isExpanded(d) ? 'expand_less' : 'expand_more' }}
+                </span>
+                {{ isExpanded(d) ? 'Ocultar productos' : 'Ver productos' }}
+              </button>
+              @if (isExpanded(d)) {
+                @if (isLoadingItems(d)) {
+                  <div class="products-loading"><span class="spinner spinner--sm"></span> Cargando productos...</div>
+                } @else if (itemsFor(d).length) {
+                  <div class="items-grid">
+                    @for (it of itemsFor(d); track it.id) {
+                      <div class="item-row">
+                        @if (it.imageUrl) {
+                          <button
+                            type="button"
+                            class="item-row__photo"
+                            title="Ver foto en grande"
+                            (click)="zoomedImage.set(it.imageUrl!)"
+                          >
+                            <img [src]="it.imageUrl | mediaUrl: 'thumb'" [alt]="it.productName ?? ''" loading="lazy" />
+                          </button>
+                        } @else {
+                          <span class="item-row__photo item-row__photo--empty">
+                            <span class="material-symbols-outlined">inventory_2</span>
+                          </span>
+                        }
+                        <div class="item-row__info">
+                          <strong class="item-row__name">{{ it.productName }}</strong>
+                          <span class="item-row__meta">
+                            @if (it.materialLabel) { <span>{{ it.materialLabel }}</span> }
+                            @if (it.color) { <span>{{ it.color }}</span> }
+                            @if (!it.materialLabel && !it.color) { <span class="hint">Sin color/material</span> }
+                          </span>
+                        </div>
+                        <div class="item-row__price">
+                          <span>{{ it.unitPrice | currency:'MXN':'symbol-narrow':'1.2-2' }} c/u × {{ it.quantity }}</span>
+                          <strong>{{ (it.subtotal ?? it.unitPrice * it.quantity) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <p class="empty">Este pedido no tiene productos registrados.</p>
+                }
+              }
+            </div>
+
             <div class="delivery__meta">
               <span class="delivery__address">{{ d.deliveryAddress || 'Sin dirección capturada' }}</span>
+              @if (d.sellerName) {
+                <span class="delivery__seller">Vendedor: {{ d.sellerName }}</span>
+              }
               @if (d.deliveryPersonName) {
                 <span class="delivery__person">Repartidor: {{ d.deliveryPersonName }}</span>
               } @else {
@@ -165,6 +222,10 @@
     (closed)="closeReschedule()"
     (saved)="onRescheduled()"
   />
+}
+
+@if (zoomedImage(); as img) {
+  <app-image-lightbox [src]="(img | mediaUrl) ?? ''" (closed)="zoomedImage.set(null)" />
 }
 
 @if (assigning(); as d) {

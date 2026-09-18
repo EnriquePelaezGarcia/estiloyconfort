@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { CurrencyPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { DeliveryScheduleService, formatWindow } from '../../../core/services/delivery-schedule.service';
 import { SellerService } from '../../../core/services/seller.service';
@@ -6,8 +7,10 @@ import { NotificationService } from '../../../core/services/notification.service
 import {
   DeliveryBucket, DeliveryScheduleCounts, ScheduledDelivery,
 } from '../../../core/models/delivery-schedule.model';
-import { DeliveryPerson } from '../../../core/models/order.model';
+import { DeliveryPerson, OrderItem } from '../../../core/models/order.model';
 import { DeliveryRescheduleComponent } from '../delivery-reschedule/delivery-reschedule.component';
+import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
+import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { waPhone } from '../../../core/utils/phone';
 
 /** Filtro activo de las tarjetas resumen. 'all' = sin filtrar. */
@@ -23,8 +26,9 @@ interface ScheduleGroup {
 /**
  * Agenda de entregas (Docs/plan-fecha-hora-entrega.md §6.3) — compartida
  * entre admin, vendedor y repartidor. El ALCANCE lo decide el backend a
- * partir del rol (D2): el admin ve todo, el vendedor sólo sus pedidos y el
- * repartidor sólo lo que trae asignado.
+ * partir del rol (D2): admin y vendedor ven la agenda completa de todos los
+ * vendedores (igual que el listado de pedidos) y el repartidor sólo ve lo
+ * que trae asignado.
  *
  * Los contadores se calculan en vivo en el servidor contra la fecha de hoy.
  * No hay estado guardado que se desactualice si el servidor estuvo apagado.
@@ -34,7 +38,7 @@ interface ScheduleGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './delivery-schedule.component.html',
   styleUrl: './delivery-schedule.component.scss',
-  imports: [RouterLink, DeliveryRescheduleComponent],
+  imports: [RouterLink, DeliveryRescheduleComponent, MediaUrlPipe, ImageLightboxComponent, CurrencyPipe],
 })
 export class DeliveryScheduleComponent implements OnInit {
   private scheduleService = inject(DeliveryScheduleService);
@@ -56,6 +60,62 @@ export class DeliveryScheduleComponent implements OnInit {
   protected assigning = signal<ScheduledDelivery | null>(null);
   protected selectedDeliveryPerson = signal<number | null>(null);
   protected assigningBusy = signal(false);
+
+  // ===== Productos de la entrega: desplegable con foto (admin y vendedor) =====
+  // La agenda no trae los productos (solo `itemsSummary`, un texto), así que
+  // se piden bajo demanda al desplegar la tarjeta y se cachean por orderId
+  // para no repetir la llamada al plegar y volver a abrir.
+  protected expandedIds = signal<Set<number>>(new Set());
+  protected itemsCache = signal<Record<number, OrderItem[]>>({});
+  protected loadingItemsIds = signal<Set<number>>(new Set());
+  /** Foto ampliada de un producto (ruta relativa, sin resolver). */
+  protected zoomedImage = signal<string | null>(null);
+
+  protected isExpanded(d: ScheduledDelivery): boolean {
+    return this.expandedIds().has(d.orderId);
+  }
+
+  protected isLoadingItems(d: ScheduledDelivery): boolean {
+    return this.loadingItemsIds().has(d.orderId);
+  }
+
+  protected itemsFor(d: ScheduledDelivery): OrderItem[] {
+    return this.itemsCache()[d.orderId] ?? [];
+  }
+
+  protected toggleExpand(d: ScheduledDelivery): void {
+    const isOpen = this.expandedIds().has(d.orderId);
+    this.expandedIds.update((ids) => {
+      const next = new Set(ids);
+      if (isOpen) next.delete(d.orderId); else next.add(d.orderId);
+      return next;
+    });
+    if (!isOpen && !this.itemsCache()[d.orderId]) {
+      this.loadItems(d);
+    }
+  }
+
+  private loadItems(d: ScheduledDelivery): void {
+    this.loadingItemsIds.update((ids) => new Set(ids).add(d.orderId));
+    this.sellerService.getOrder(d.orderId).subscribe({
+      next: (res) => {
+        this.itemsCache.update((cache) => ({ ...cache, [d.orderId]: res.data.items ?? [] }));
+        this.loadingItemsIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(d.orderId);
+          return next;
+        });
+      },
+      error: () => {
+        this.notification.error('No se pudieron cargar los productos del pedido');
+        this.loadingItemsIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(d.orderId);
+          return next;
+        });
+      },
+    });
+  }
 
   /** Base del link al detalle: distinto path para admin y vendedor. */
   protected orderDetailBase = computed(() =>
