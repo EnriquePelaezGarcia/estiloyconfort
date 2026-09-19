@@ -1,0 +1,107 @@
+@use '../../../../styles/variables' as vars;
+
+// El detalle de pedido puede imprimir el ticket con este modal todavía
+// abierto (p. ej. el usuario dejó "Asignar repartidor" a medias): que no
+// salga en el papel térmico.
+@media print {
+  :host { display: none !important; }
+}
+
+// Aviso de que ya no se puede cambiar de repartidor (plan repartidor-acepta-entrega).
+.field__hint--locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: vars.$radius-md;
+  background: rgba(vars.$color-gold, 0.12);
+  border: 1px solid rgba(vars.$color-gold, 0.4);
+  color: vars.$color-text;
+
+  .material-symbols-outlined { flex-shrink: 0; color: vars.$color-gold; }
+}
+
+.assign-window {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+
+  &__value {
+    font-weight: 600;
+    color: vars.$color-text;
+  }
+}
+
+// ===== Orden de entrega: ruta del repartidor ese día =====
+.route-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.route-list__item {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  padding: 0.5rem vars.$spacing-sm;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface;
+
+  &--current {
+    border-color: vars.$color-primary;
+    background: rgba(vars.$color-primary, 0.06);
+  }
+}
+
+.route-list__num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: vars.$color-bg;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: vars.$color-text-secondary;
+}
+
+.route-list__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.route-list__name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.route-list__window {
+  font-size: 0.72rem;
+  color: vars.$color-text-secondary;
+}
+
+.route-list__arrows {
+  display: flex;
+  gap: 0.15rem;
+  flex-shrink: 0;
+
+  .icon-btn .material-symbols-outlined { font-size: 1.1rem; }
+}

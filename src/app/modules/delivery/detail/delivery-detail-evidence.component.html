@@ -1,0 +1,183 @@
+@if (loading()) {
+  <div class="state"><div class="spinner"></div><p>Cargando entrega…</p></div>
+} @else if (assignment(); as a) {
+  <button type="button" class="back-link" (click)="goToInfo()">
+    <span class="material-symbols-outlined">arrow_back</span> Volver a información
+  </button>
+
+  <header class="page-head">
+    <div>
+      <p class="page-head__overline">Entrega {{ a.orderNumber }}</p>
+      <h1 class="page-head__title">{{ a.customerName }}</h1>
+    </div>
+  </header>
+
+  @if (a.acceptanceStatus === 'pending') {
+    <div class="accept-banner accept-banner--pending">
+      <span class="material-symbols-outlined">help</span>
+      <div class="accept-banner__text">
+        <strong>¿Vas a hacer esta entrega?</strong>
+        <span>Acepta para poder registrar evidencia, o recházala si no puedes cubrirla.</span>
+      </div>
+      <div class="accept-banner__actions">
+        <button type="button" class="btn btn--ghost btn--sm" [disabled]="acceptRejectWorking()" (click)="openRejectModal()">
+          Rechazar
+        </button>
+        <button type="button" class="btn btn--primary btn--sm" [disabled]="acceptRejectWorking()" (click)="acceptDelivery()">
+          @if (acceptRejectWorking()) { <span class="spinner spinner--sm"></span> }
+          Aceptar
+        </button>
+      </div>
+    </div>
+  }
+
+  <div class="panel">
+    <h2 class="panel__title">Evidencia de entrega</h2>
+
+    @if (a.acceptanceStatus !== 'accepted') {
+      <p class="hint">Acepta la entrega arriba para registrar evidencia.</p>
+    } @else {
+
+    <div class="field">
+      <label>Foto del mueble entregado</label>
+      <app-photo-capture-field
+        [value]="photoData()"
+        (valueChange)="photoData.set($event)"
+        [readonly]="deliveryCompleted()"
+      />
+    </div>
+
+    <div class="field">
+      <label>Firma del cliente</label>
+      <div class="signature-wrap" [class.signature-wrap--fullscreen]="signatureExpanded()">
+        @if (signatureExpanded()) {
+          <div class="signature-fullscreen-bar">
+            <span class="signature-fullscreen-bar__hint">
+              <span class="material-symbols-outlined">edit</span> Pide al cliente que firme aquí
+            </span>
+            <div class="signature-fullscreen-bar__actions">
+              <button type="button" class="btn btn--ghost btn--sm" (click)="clearSignature()">
+                <span class="material-symbols-outlined">ink_eraser</span> Borrar
+              </button>
+              <button type="button" class="btn btn--success btn--sm" (click)="closeSignatureFullscreen()">
+                <span class="material-symbols-outlined">check</span> Listo
+              </button>
+            </div>
+          </div>
+        }
+        <canvas
+          #signature
+          class="signature"
+          [class.signature--locked]="signatureLocked()"
+          (pointerdown)="onCanvasPointerDown($event)"
+          (pointermove)="onPointerMove($event)"
+          (pointerup)="onPointerUp()"
+          (pointerleave)="onPointerUp()"
+        ></canvas>
+        @if (!signatureLocked() && !signatureExpanded()) {
+          <button type="button" class="signature-clear" (click)="clearSignature()">
+            <span class="material-symbols-outlined">ink_eraser</span> Borrar
+          </button>
+          <span class="signature-expand-hint">
+            <span class="material-symbols-outlined">open_in_full</span> Toca para firmar en pantalla completa
+          </span>
+        }
+      </div>
+    </div>
+
+    @if (deliveryCompleted()) {
+      <div class="completed-banner">
+        <span class="material-symbols-outlined">check_circle</span> Entrega completada
+      </div>
+      <!--
+        Reenvío manual: el envío automático al finalizar es "mejor esfuerzo"
+        (Docs plan-repartidor-dos-pantallas) — si falló (sin señal, etc.), la
+        entrega ya quedó cerrada de todos modos y esto es la forma de
+        recuperarse sin rehacer nada.
+      -->
+      <button
+        type="button"
+        class="btn btn--whatsapp btn--block"
+        [disabled]="sharing()"
+        (click)="sendTicketWhatsApp()"
+      >
+        @if (sharing()) {
+          <span class="spinner spinner--sm"></span> Generando link…
+        } @else {
+          <span class="material-symbols-outlined">send</span> Reenviar ticket por WhatsApp
+        }
+      </button>
+    } @else {
+      @if (balanceBlocksCompletion()) {
+        <div class="pay-block-alert" role="alert">
+          <span class="material-symbols-outlined">account_balance_wallet</span>
+          <div>
+            <strong>Falta registrar el cobro</strong>
+            <p>
+              Este pedido tiene {{ balance() | currency:'MXN':'symbol-narrow':'1.2-2' }}
+              por cobrar. Ve a
+              <a [routerLink]="['/repartidor/entregas', a.id]">Información de entrega</a>
+              y usa "Registrar cobro" antes de finalizar.
+            </p>
+          </div>
+        </div>
+      }
+      <div class="proof-actions">
+        <button type="button" class="btn btn--ghost" (click)="saveProof()" [disabled]="saving()">
+          <span class="material-symbols-outlined">save</span> Guardar evidencia
+        </button>
+        @if (evidenceSaved()) {
+          <button
+            type="button"
+            class="btn btn--success"
+            (click)="finalizeDelivery()"
+            [disabled]="saving() || balanceBlocksCompletion()"
+          >
+            @if (saving()) { <span class="spinner spinner--sm"></span> }
+            @else { <span class="material-symbols-outlined">task_alt</span> }
+            Finalizar entrega
+          </button>
+        }
+      </div>
+      @if (!(hasSignature() && photoData())) {
+        <p class="hint">Se requiere foto y firma para guardar la evidencia.</p>
+      } @else if (!evidenceSaved()) {
+        <p class="hint">Guarda la evidencia para poder finalizar la entrega.</p>
+      }
+    }
+    }
+  </div>
+}
+
+@if (rejectModalOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Rechazar esta entrega</h2>
+        <button type="button" class="icon-btn" (click)="rejectModalOpen.set(false)" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="field__hint">El admin y el vendedor recibirán un aviso para reasignarla.</p>
+        <div class="field">
+          <label for="deliveryEvidenceRejectReason">Motivo del rechazo *</label>
+          <textarea
+            id="deliveryEvidenceRejectReason"
+            rows="3"
+            [value]="rejectReasonText()"
+            (input)="rejectReasonText.set($any($event.target).value)"
+            placeholder="Ej. no tengo espacio en la ruta / muy lejos de mi zona"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="rejectModalOpen.set(false)">Cancelar</button>
+        <button type="button" class="btn btn--danger" [disabled]="acceptRejectWorking()" (click)="submitRejectDelivery()">
+          @if (acceptRejectWorking()) { <span class="spinner spinner--sm"></span> }
+          Rechazar
+        </button>
+      </div>
+    </div>
+  </div>
+}

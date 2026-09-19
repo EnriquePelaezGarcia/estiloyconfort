@@ -23,44 +23,57 @@ export class SellerLayoutComponent implements OnInit {
   private notifications = inject(NotificationCenterStore);
 
   protected readonly navItems: BusinessNavItem[] = [
+    // ── Suelto arriba ──
     { label: 'Resumen', icon: 'dashboard', route: 'resumen' },
+
+    // ── Ventas ──
+    { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo', section: 'Ventas' },
     {
       // Bandeja aparte de "Cotizaciones" (Docs/plan-precotizacion-carrito.md D10):
       // es trabajo entrante y efímero, no documentos emitidos.
       label: 'Solicitudes de cotización',
       icon: 'move_to_inbox',
       route: 'solicitudes-cotizacion',
+      section: 'Ventas',
       badge: () => this.quoteRequestsService.pendingCount() ?? 0,
     },
     {
       label: 'Cotizaciones',
       icon: 'request_quote',
       route: 'cotizaciones',
+      section: 'Ventas',
       // Descuentos MÍOS rechazados sin ver (Docs/plan-descuentos.md).
       badge: () => this.discountsService.myRejectedCount() ?? 0,
     },
-    { label: 'Nuevo pedido', icon: 'add_shopping_cart', route: 'nuevo' },
-    { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos' },
-    { label: 'Mis ganancias', icon: 'savings', route: 'ganancias' },
-    {
-      label: 'Notificaciones',
-      icon: 'notifications',
-      route: 'notificaciones',
-      // El fabricante avisa aquí al aceptar/rechazar un pedido del vendedor.
-      badge: () => this.notifications.unreadCount(),
-    },
-    { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo' },
-    { label: 'Inventario', icon: 'warehouse', route: 'inventario' },
+    { label: 'Todos los pedidos', icon: 'receipt_long', route: 'pedidos', section: 'Ventas' },
+
+    // ── Seguimiento ──
     {
       label: 'Agenda de entregas',
       icon: 'event_upcoming',
       route: 'agenda-entregas',
+      section: 'Seguimiento',
       // Exactas vencidas + hoy + mañana. El número lo calcula el servidor
       // en vivo en cada consulta (Docs/plan-fecha-hora-entrega.md §6.4).
       badge: () => this.scheduleService.counts()?.badge ?? 0,
     },
-    { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito' },
-    { label: 'Reservas', icon: 'bookmark', route: 'reservas' },
+    { label: 'Crédito y Apartado', icon: 'credit_card', route: 'clientes-credito', section: 'Seguimiento' },
+    {
+      label: 'Notificaciones',
+      icon: 'notifications',
+      route: 'notificaciones',
+      section: 'Seguimiento',
+      // El fabricante avisa aquí al aceptar/rechazar un pedido del vendedor.
+      badge: () => this.notifications.unreadCount(),
+    },
+
+    // ── Catálogo ──
+    { label: 'Catálogo', icon: 'inventory_2', route: 'catalogo', section: 'Catálogo' },
+    { label: 'Inventario', icon: 'warehouse', route: 'inventario', section: 'Catálogo' },
+    { label: 'Reservas', icon: 'bookmark', route: 'reservas', section: 'Catálogo' },
+
+    // ── Mi cuenta ──
+    { label: 'Mis ganancias', icon: 'savings', route: 'ganancias', section: 'Mi cuenta' },
   ];
 
   ngOnInit(): void {

@@ -391,22 +391,6 @@ $fp-num-lg:  18pt;
   }
 }
 
-// Compromiso de entrega "exacta": misma etiqueta que en el resto del sistema
-// (order-detail, delivery-detail).
-.tag-exact {
-  display: inline-block;
-  margin-left: 0.4rem;
-  padding: 1px 6px;
-  border-radius: vars.$radius-full;
-  background: vars.$color-error;
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: none;
-  vertical-align: middle;
-}
-
 // ===== Historial de abonos =====
 .history .label-overline { margin-bottom: 0.75rem; }
 

@@ -1,11 +1,14 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import {
+  AssignDeliveryModalComponent,
+  AssignDeliveryTarget,
+} from '../../../shared/components/assign-delivery-modal/assign-delivery-modal.component';
 import {
   DeliveryPerson,
   Order,
@@ -25,7 +28,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin-orders.component.html',
   styleUrl: './admin-orders.component.scss',
-  imports: [CurrencyPipe, FormsModule, MediaUrlPipe, ImageLightboxComponent],
+  imports: [CurrencyPipe, MediaUrlPipe, ImageLightboxComponent, AssignDeliveryModalComponent],
 })
 export class AdminOrdersComponent implements OnInit {
   private adminService = inject(AdminService);
@@ -144,8 +147,7 @@ export class AdminOrdersComponent implements OnInit {
   }
 
   /** Pedido seleccionado para asignar repartidor. */
-  protected assigning = signal<Order | null>(null);
-  protected selectedDeliveryPerson = signal<number | null>(null);
+  protected assigningTarget = signal<AssignDeliveryTarget | null>(null);
 
   protected readonly allStatuses: OrderStatus[] = [
     'pending', 'fabricating', 'in_warehouse', 'ready', 'in_delivery', 'delivered', 'cancelled',
@@ -199,27 +201,28 @@ export class AdminOrdersComponent implements OnInit {
   }
 
   protected openAssign(order: Order): void {
-    this.assigning.set(order);
-    this.selectedDeliveryPerson.set(order.deliveryPersonId ?? null);
+    this.assigningTarget.set({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      deliveryPersonId: order.deliveryPersonId ?? null,
+      deliveryAssignmentDate: order.deliveryAssignmentDate,
+      deliveryAcceptanceStatus: order.deliveryAcceptanceStatus ?? null,
+      expectedDeliveryDate: order.expectedDeliveryDate ?? null,
+      deliveryCommitment: order.deliveryCommitment,
+      deliveryWindowStart: order.deliveryWindowStart ?? null,
+      deliveryWindowEnd: order.deliveryWindowEnd ?? null,
+      deliverySlotId: order.deliverySlotId,
+    });
   }
 
-  protected confirmAssign(): void {
-    const order = this.assigning();
-    const personId = this.selectedDeliveryPerson();
-    if (!order || !personId) {
-      this.notification.error('Selecciona un repartidor');
-      return;
-    }
-    this.adminService.assignDelivery(order.id, personId).subscribe({
-      next: (res) => {
-        this.orders.update((list) => list.map((o) => (o.id === order.id ? res.data : o)));
-        this.notification.success('Repartidor asignado');
-        this.assigning.set(null);
-      },
-      error: (err: { error?: { message?: string } }) => {
-        this.notification.error(err?.error?.message ?? 'No se pudo asignar');
-      },
-    });
+  protected closeAssign(): void {
+    this.assigningTarget.set(null);
+  }
+
+  protected onAssignSaved(): void {
+    this.assigningTarget.set(null);
+    this.load();
   }
 
   protected viewDetail(id: number): void {

@@ -16,6 +16,7 @@ export class DeliveryLayoutComponent implements OnInit {
   private discountsService = inject(DiscountsService);
 
   protected readonly navItems: BusinessNavItem[] = [
+    // ── Suelto arriba: la ruta del día ──
     {
       label: 'Entregas de hoy',
       icon: 'local_shipping',
@@ -23,8 +24,10 @@ export class DeliveryLayoutComponent implements OnInit {
       // Docs/plan-descuentos.md: descuentos MÍOS que el admin rechazó y no he visto.
       badge: () => this.discountsService.myRejectedCount() ?? 0,
     },
-    { label: 'Historial', icon: 'history', route: 'historial' },
-    { label: 'Mis ganancias', icon: 'payments', route: 'ganancias' },
+
+    // ── Mi cuenta ──
+    { label: 'Historial', icon: 'history', route: 'historial', section: 'Mi cuenta' },
+    { label: 'Mis ganancias', icon: 'payments', route: 'ganancias', section: 'Mi cuenta' },
   ];
 
   ngOnInit(): void {

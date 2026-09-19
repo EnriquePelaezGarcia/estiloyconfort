@@ -1,4 +1,5 @@
 const DeliverySchedule = require('../models/DeliverySchedule');
+const Delivery = require('../models/Delivery');
 const Order = require('../models/Order');
 const PricingConfig = require('../models/PricingConfig');
 const asyncHandler = require('../utils/asyncHandler');
@@ -86,6 +87,35 @@ const deliveryScheduleController = {
     if (!existing) throw ApiError.notFound('Pedido no encontrado');
     const data = await Order.findDeliveryHistory(req.params.id);
     res.json({ data });
+  }),
+
+  /**
+   * GET /api/deliveries/route?deliveryPersonId=&date= — la ruta de un
+   * repartidor ese día (plan agenda-agregar-orden-de-entrega), para pintarla
+   * en el modal "Asignar repartidor" y elegir dónde cae la parada nueva.
+   */
+  route: asyncHandler(async (req, res) => {
+    const { deliveryPersonId, date } = req.query;
+    if (!deliveryPersonId || !date) {
+      throw ApiError.badRequest('deliveryPersonId y date son obligatorios');
+    }
+    const data = await Delivery.findByPerson(Number(deliveryPersonId), { date });
+    res.json({ data });
+  }),
+
+  /**
+   * PATCH /api/deliveries/route/reorder — fija el orden final de una ruta.
+   * `deliveryIds` son ids de ENTREGA (deliveries.id), no de pedido, en el
+   * orden final deseado. Sin restricción de unicidad: si dos quedan con el
+   * mismo número, el frontend solo avisa.
+   */
+  reorderRoute: asyncHandler(async (req, res) => {
+    const { deliveryIds } = req.body ?? {};
+    if (!Array.isArray(deliveryIds) || deliveryIds.length === 0) {
+      throw ApiError.badRequest('deliveryIds debe ser un arreglo con al menos un elemento');
+    }
+    await Delivery.reorderRoute(deliveryIds.map(Number));
+    res.json({ message: 'Ruta reordenada' });
   }),
 };
 

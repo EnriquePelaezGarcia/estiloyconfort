@@ -3,7 +3,30 @@
     <p class="page-head__overline">Repartidor</p>
     <h1 class="page-head__title">{{ showAll() ? 'Historial de entregas' : 'Entregas de hoy' }}</h1>
   </div>
+  @if (canReorderList()) {
+    @if (!editingOrder()) {
+      <button type="button" class="btn btn--ghost btn--sm" (click)="openEditConfirm()">
+        <span class="material-symbols-outlined">reorder</span> Editar orden
+      </button>
+    } @else {
+      <div class="page-head__edit-actions">
+        <button type="button" class="btn btn--ghost btn--sm" (click)="cancelEditing()">Cancelar</button>
+        <button type="button" class="btn btn--primary btn--sm" [disabled]="saving()" (click)="openSaveConfirm()">
+          <span class="material-symbols-outlined">check</span> Guardar orden
+        </button>
+      </div>
+    }
+  }
 </header>
+
+@if (editingOrder()) {
+  <p class="edit-hint">
+    <span class="material-symbols-outlined">drag_indicator</span>
+    Arrastra una tarjeta desde
+    <span class="material-symbols-outlined">drag_indicator</span>
+    para acomodar el orden de tu ruta.
+  </p>
+}
 
 @if (loading()) {
   <div class="state"><div class="spinner"></div><p>Cargando entregas…</p></div>
@@ -13,13 +36,39 @@
     <p>{{ showAll() ? 'No tienes entregas registradas.' : 'No tienes entregas asignadas para hoy.' }}</p>
   </div>
 } @else {
-  <div class="cards">
-    @for (a of assignments(); track a.id) {
-      <article class="dcard">
+  <div class="cards" [class.cards--editing]="editingOrder()" #cardsList>
+    @for (a of assignments(); track a.id; let i = $index) {
+      <article
+        class="dcard"
+        [class.dcard--dragging]="draggingIndex() === i"
+        [style.transform]="draggingIndex() === i ? 'translateY(' + dragTranslateY() + 'px)' : null"
+      >
         <div class="dcard__head">
-          <span class="dcard__order">{{ a.orderNumber }}</span>
+          @if (editingOrder() && canReorder(a)) {
+            <button
+              type="button"
+              class="icon-btn dcard__handle"
+              aria-label="Arrastrar para reordenar"
+              (pointerdown)="onHandlePointerDown($event, i)"
+              (pointermove)="onHandlePointerMove($event)"
+              (pointerup)="onHandlePointerUp($event)"
+              (pointercancel)="onHandlePointerUp($event)"
+            >
+              <span class="material-symbols-outlined">drag_indicator</span>
+            </button>
+          }
+          <span class="dcard__order">
+            {{ a.orderNumber }}
+            @if (a.routeSequence != null) {
+              <span class="badge badge--purple">Parada #{{ a.routeSequence }}</span>
+            }
+          </span>
           <span class="badge" [class]="statusTone(a.deliveryStatus)">{{ statusLabel(a.deliveryStatus) }}</span>
         </div>
+
+        @if (a.acceptanceStatus !== 'accepted') {
+          <span class="badge" [class]="acceptanceTone(a)">{{ acceptanceLabel(a) }}</span>
+        }
 
         <!--
           Ventana horaria (Docs/plan-fecha-hora-entrega.md §6.5). En 'exact'
@@ -34,6 +83,31 @@
           </p>
         } @else if (windowOf(a); as win) {
           <p class="dcard__window">Horario aproximado {{ win }}</p>
+        }
+
+        @if (!editingOrder() && canReorder(a)) {
+          @if (editingWindowId() === a.id) {
+            <div class="dcard__window-editor">
+              <label>
+                Desde
+                <input type="time" [value]="editWindowStart()" (change)="editWindowStart.set($any($event.target).value)" />
+              </label>
+              <label>
+                Hasta
+                <input type="time" [value]="editWindowEnd()" (change)="editWindowEnd.set($any($event.target).value)" />
+              </label>
+              <div class="dcard__window-editor-actions">
+                <button type="button" class="btn btn--ghost btn--sm" (click)="closeWindowEditor()">Cancelar</button>
+                <button type="button" class="btn btn--primary btn--sm" [disabled]="savingWindow()" (click)="saveWindow(a)">
+                  Guardar hora
+                </button>
+              </div>
+            </div>
+          } @else {
+            <button type="button" class="btn btn--ghost btn--sm dcard__window-toggle" (click)="openWindowEditor(a)">
+              <span class="material-symbols-outlined">schedule</span> Ajustar hora
+            </button>
+          }
         }
 
         <h2 class="dcard__customer">{{ a.customerName }}</h2>
@@ -55,15 +129,107 @@
           }
         </div>
 
-        <div class="dcard__actions">
-          <a class="btn btn--ghost" [href]="mapsUrl(a)" target="_blank" rel="noopener">
-            <span class="material-symbols-outlined">map</span> Ruta
-          </a>
-          <a class="btn btn--primary" [routerLink]="['../entregas', a.id]">
-            <span class="material-symbols-outlined">arrow_forward</span> Abrir
-          </a>
-        </div>
+        @if (!editingOrder() && a.acceptanceStatus === 'pending') {
+          <div class="dcard__accept">
+            <p class="dcard__accept-hint">¿Vas a hacer esta entrega?</p>
+            <div class="dcard__actions">
+              <button
+                type="button"
+                class="btn btn--ghost"
+                [disabled]="working() === a.id"
+                (click)="openReject(a)"
+              >
+                Rechazar
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary"
+                [disabled]="working() === a.id"
+                (click)="acceptOne(a)"
+              >
+                @if (working() === a.id) { <span class="spinner spinner--sm"></span> }
+                Aceptar
+              </button>
+            </div>
+          </div>
+        } @else if (!editingOrder()) {
+          <div class="dcard__actions">
+            <a class="btn btn--ghost" [href]="mapsUrl(a)" target="_blank" rel="noopener">
+              <span class="material-symbols-outlined">map</span> Ruta
+            </a>
+            <a class="btn btn--primary" [routerLink]="['../entregas', a.id]">
+              <span class="material-symbols-outlined">arrow_forward</span> Abrir
+            </a>
+          </div>
+        }
       </article>
     }
+  </div>
+}
+
+@if (confirmEditOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm modal--confirm">
+      <div class="modal__body">
+        <h2 class="panel__title">Editar orden de entrega</h2>
+        <p class="muted">
+          Vas a poder arrastrar las tarjetas para acomodar el orden en que visitas cada entrega hoy.
+        </p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="cancelEditConfirm()">Cancelar</button>
+        <button type="button" class="btn btn--primary" (click)="confirmStartEdit()">Editar orden</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (confirmSaveOpen()) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm modal--confirm">
+      <div class="modal__body">
+        <h2 class="panel__title">Guardar nuevo orden</h2>
+        <p class="muted">
+          Se actualizará el orden de tu ruta de hoy con el acomodo que dejaste.
+        </p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="cancelSaveConfirm()">Cancelar</button>
+        <button type="button" class="btn btn--primary" (click)="confirmSaveOrder()">Guardar orden</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (rejectingAssignment(); as a) {
+  <div class="modal-backdrop">
+    <div class="modal modal--sm">
+      <div class="modal__head">
+        <h2>Rechazar entrega {{ a.orderNumber }}</h2>
+        <button type="button" class="icon-btn" (click)="closeReject()" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p class="muted">El admin y el vendedor recibirán un aviso para reasignarla.</p>
+        <div class="field">
+          <label for="deliveryRejectReason">Motivo del rechazo *</label>
+          <textarea
+            id="deliveryRejectReason"
+            rows="3"
+            [value]="rejectReason()"
+            (input)="rejectReason.set($any($event.target).value)"
+            placeholder="Ej. no tengo espacio en la ruta / muy lejos de mi zona"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--ghost" (click)="closeReject()">Cancelar</button>
+        <button type="button" class="btn btn--danger" [disabled]="working() === a.id" (click)="submitReject()">
+          @if (working() === a.id) { <span class="spinner spinner--sm"></span> }
+          Rechazar
+        </button>
+      </div>
+    </div>
   </div>
 }

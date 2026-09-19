@@ -1,4 +1,4 @@
-import { DeliveryCommitment, OrderStatus, PaymentStatus } from './order.model';
+import { DeliveryAcceptanceStatus, DeliveryCommitment, OrderStatus, PaymentStatus } from './order.model';
 
 /**
  * Agenda de entregas (Docs/plan-fecha-hora-entrega.md).
@@ -27,6 +27,8 @@ export interface ScheduledDelivery {
   deliveryCommitment: DeliveryCommitment;
   deliveryWindowStart: string | null;
   deliveryWindowEnd: string | null;
+  /** Franja del catálogo de la que salió la ventana; null si fue horario libre. */
+  deliverySlotId: number | null;
   bucket: DeliveryBucket;
   /** Días entre hoy y la entrega (negativo = vencida). null si no tiene fecha. */
   daysUntil: number | null;
@@ -34,6 +36,13 @@ export interface ScheduledDelivery {
   instruccionesEntrega: string | null;
   /** Piezas agotadas/sobre pedido sin fabricar todavía (Order.hasPendingFabrication en backend). */
   hasPendingFabrication: boolean;
+  /** Posición en la ruta del repartidor ese día; null = ruta sin definir. */
+  routeSequence: number | null;
+  /** Día real en que sale a ruta (`deliveries.assignment_date`); puede no
+   *  coincidir con `expectedDeliveryDate`, la promesa al cliente. */
+  deliveryAssignmentDate: string | null;
+  /** Aceptación del repartidor asignado; null si nunca se asignó ninguno. */
+  deliveryAcceptanceStatus: DeliveryAcceptanceStatus | null;
 }
 
 /**

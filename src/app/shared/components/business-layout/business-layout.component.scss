@@ -147,6 +147,18 @@ $sidebar-width: 264px;
   }
 }
 
+.nav-section {
+  display: block;
+  flex-shrink: 0;
+  margin: vars.$spacing-sm 0 2px;
+  padding: 0 vars.$spacing-sm;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(#fff, 0.4);
+}
+
 .nav-link {
   display: flex;
   align-items: center;

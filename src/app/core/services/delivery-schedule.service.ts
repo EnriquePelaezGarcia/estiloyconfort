@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map, shareReplay, tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { DeliverySlot, Order } from '../models/order.model';
+import { DeliveryAssignment, DeliverySlot, Order } from '../models/order.model';
 import {
   DeliveryChangeLog,
   DeliveryScheduleCounts,
@@ -29,6 +29,14 @@ export class DeliveryScheduleService {
 
   /** El catálogo de franjas casi nunca cambia: una sola petición por sesión. */
   private slots$?: Observable<DeliverySlot[]>;
+
+  /**
+   * Filtro de fechas de la agenda ('YYYY-MM-DD', null = sin acotar). Vive
+   * aquí y no en el componente para que navegar a otra página y volver no lo
+   * resetee — la única forma de que cambie es que el usuario lo edite.
+   */
+  readonly dateFrom = signal<string | null>(null);
+  readonly dateTo = signal<string | null>(null);
 
   getSchedule(params: {
     from?: string;
@@ -76,6 +84,25 @@ export class DeliveryScheduleService {
     return this.api
       .get<{ data: DeliveryChangeLog[] }>(`/deliveries/orders/${orderId}/history`)
       .pipe(map((res) => res.data));
+  }
+
+  /**
+   * Ruta de un repartidor en un día (Docs plan agenda-agregar-orden-de-entrega):
+   * la usa el modal "Asignar repartidor" para mostrar dónde cae la parada
+   * nueva y reordenar las existentes.
+   */
+  getRoute(deliveryPersonId: number, date: string): Observable<DeliveryAssignment[]> {
+    return this.api
+      .get<{ data: DeliveryAssignment[] }>('/deliveries/route', {
+        deliveryPersonId: String(deliveryPersonId),
+        date,
+      })
+      .pipe(map((res) => res.data));
+  }
+
+  /** `deliveryIds` (deliveries.id) en el orden final deseado. */
+  reorderRoute(deliveryIds: number[]): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>('/deliveries/route/reorder', { deliveryIds });
   }
 
   /**

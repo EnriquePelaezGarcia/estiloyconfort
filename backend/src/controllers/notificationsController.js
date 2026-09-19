@@ -7,13 +7,15 @@ const { pool } = require('../config/database');
  * (Docs/plan-fabricante-notificaciones-y-aceptacion.md D4 + ampliación UAT).
  *
  * El destinatario sale del rol del token, nunca del cuerpo:
- *   - admin        → todas las de audiencia 'admin' (global).
- *   - seller       → las de audiencia 'seller' dirigidas a su usuario.
- *   - manufacturer → las de su fabricante (todas sus cuentas ven lo mismo).
+ *   - admin          → todas las de audiencia 'admin' (global).
+ *   - seller         → las de audiencia 'seller' dirigidas a su usuario.
+ *   - delivery_person → las de audiencia 'delivery_person' dirigidas a su usuario.
+ *   - manufacturer   → las de su fabricante (todas sus cuentas ven lo mismo).
  */
 async function filterFor(req) {
   if (req.user.role === 'admin') return { audience: 'admin' };
   if (req.user.role === 'seller') return { audience: 'seller', userId: req.user.id };
+  if (req.user.role === 'delivery_person') return { audience: 'delivery_person', userId: req.user.id };
   const [[row]] = await pool.execute(
     'SELECT manufacturer_id FROM users WHERE id = ?',
     [req.user.id],

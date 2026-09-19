@@ -117,7 +117,13 @@
                 }
               </td>
               <td><span class="badge" [class]="typeTone[d.sourceType]">{{ typeLabels[d.sourceType] }}</span></td>
-              <td><strong>{{ d.folio }}</strong></td>
+              <td>
+                @if (d.sourceType === 'order') {
+                  <a class="folio-link" [routerLink]="['/admin/pedidos', d.sourceId]"><strong>{{ d.folio }}</strong></a>
+                } @else {
+                  <a class="folio-link" [routerLink]="['/admin/fabricante/ordenes-compra']" [queryParams]="{ oc: d.sourceId }"><strong>{{ d.folio }}</strong></a>
+                }
+              </td>
               <td>{{ d.reference || '—' }}</td>
               <td>
                 @if (d.deliveredAt) {

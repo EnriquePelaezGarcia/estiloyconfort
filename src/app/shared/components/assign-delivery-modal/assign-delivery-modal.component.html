@@ -1,0 +1,118 @@
+<div class="modal-backdrop">
+  <div class="modal modal--sm">
+    <div class="modal__head">
+      <h2>Asignar repartidor</h2>
+      <button type="button" class="icon-btn" (click)="closed.emit()" aria-label="Cerrar">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="modal__body">
+      <p class="muted">Pedido <strong>{{ order().orderNumber }}</strong> — {{ order().customerName }}</p>
+
+      @if (isLocked()) {
+        <p class="field__hint field__hint--locked">
+          <span class="material-symbols-outlined">lock</span>
+          {{ lockedPersonName() }} ya aceptó esta entrega: no se puede cambiar de repartidor.
+          Si es un error, pide que la rechace desde su app antes de reasignarla.
+        </p>
+      } @else {
+        <div class="field">
+          <label for="assignDp">Repartidor</label>
+          <select id="assignDp" (change)="onDeliveryPersonChange($event)">
+            <option [value]="''" [selected]="selectedDeliveryPerson() === null">Selecciona un repartidor</option>
+            @for (p of deliveryPeople(); track p.id) {
+              <option [value]="p.id" [selected]="selectedDeliveryPerson() === p.id">{{ p.fullName }}</option>
+            }
+          </select>
+        </div>
+        @if (deliveryPeople().length === 0) {
+          <p class="field__error">No hay repartidores activos registrados.</p>
+        }
+      }
+
+      <!--
+        Colapsado por default (D-acordeon-repartidor): quien solo va a
+        asignar repartidor no necesita ver de entrada un formulario de
+        reprogramación que no pidió. La fecha de la ruta es la misma que se
+        ve aquí — si no se toca el acordeón, se usa tal cual está.
+      -->
+      <p class="assign-window">
+        <span class="assign-window__value">
+          Entrega programada para {{ assignmentDate() | date: 'dd/MM/yyyy' }} · {{ currentWindowLabel() }}
+        </span>
+      </p>
+      <app-accordion-item title="Cambiar fecha u horario" icon="event_repeat" [startOpen]="false">
+        <app-delivery-schedule-fields
+          [expectedDeliveryDate]="order().expectedDeliveryDate"
+          [currentCommitment]="order().deliveryCommitment"
+          [windowStart]="order().deliveryWindowStart"
+          [windowEnd]="order().deliveryWindowEnd"
+          [slotId]="order().deliverySlotId ?? null"
+          [hasPendingFabrication]="false"
+          (dateChange)="onScheduleDateChange($event)"
+        />
+      </app-accordion-item>
+
+      @if (selectedDeliveryPerson()) {
+        <div class="field">
+          <label>Orden de entrega</label>
+          <p class="field__hint">
+            Ruta de ese repartidor para la fecha elegida. Usa las flechas para acomodar esta parada.
+          </p>
+          @if (loadingRoute()) {
+            <p class="muted">Cargando ruta del día…</p>
+          } @else {
+            <ul class="route-list">
+              @for (stop of routeStops(); track stop.orderId; let i = $index) {
+                <li class="route-list__item" [class.route-list__item--current]="stop.isCurrent">
+                  <span class="route-list__num">{{ i + 1 }}</span>
+                  <span class="route-list__info">
+                    <span class="route-list__name">
+                      {{ stop.customerName }}
+                      @if (stop.isCurrent) { <span class="badge badge--purple">Este pedido</span> }
+                    </span>
+                    @if (stop.window) { <span class="route-list__window">{{ stop.window }}</span> }
+                  </span>
+                  <span class="route-list__arrows">
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      [disabled]="i === 0"
+                      (click)="moveUp(i)"
+                      aria-label="Subir en la ruta"
+                    >
+                      <span class="material-symbols-outlined">arrow_upward</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      [disabled]="i === routeStops().length - 1"
+                      (click)="moveDown(i)"
+                      aria-label="Bajar en la ruta"
+                    >
+                      <span class="material-symbols-outlined">arrow_downward</span>
+                    </button>
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="modal__foot">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()">Cancelar</button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        [disabled]="!selectedDeliveryPerson() || saving()"
+        (click)="save()"
+      >
+        @if (saving()) { <span class="spinner spinner--sm"></span> }
+        Guardar
+      </button>
+    </div>
+  </div>
+</div>

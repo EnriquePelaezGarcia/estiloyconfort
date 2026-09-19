@@ -105,10 +105,12 @@ export class SellerService {
     id: number,
     deliveryPersonId: number,
     assignmentDate?: string,
+    routeSequence?: number | null,
   ): Observable<{ data: Order }> {
     return this.api.patch<{ data: Order }>(`/seller/orders/${id}/assign`, {
       deliveryPersonId,
       assignmentDate,
+      routeSequence,
     });
   }
 

@@ -678,14 +678,17 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
 // PATCH /api/admin/orders/:id/assign — asigna repartidor
 const assignDelivery = asyncHandler(async (req, res) => {
-  const { deliveryPersonId, assignmentDate } = req.body;
+  const { deliveryPersonId, assignmentDate, routeSequence } = req.body;
   if (!deliveryPersonId) throw ApiError.badRequest('deliveryPersonId es obligatorio');
   if (await OrderCancellation.hasPending(req.params.id)) {
     throw ApiError.badRequest(
       'Este pedido tiene una solicitud de cancelación pendiente. Resuélvela antes de asignar reparto.',
     );
   }
-  const order = await Order.assignDeliveryPerson(req.params.id, deliveryPersonId, assignmentDate);
+  const order = await Order.assignDeliveryPerson(
+    req.params.id, deliveryPersonId, assignmentDate,
+    routeSequence != null ? Number(routeSequence) : null,
+  );
   res.json({ data: order, message: 'Repartidor asignado' });
 });
 

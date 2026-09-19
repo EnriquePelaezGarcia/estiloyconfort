@@ -4,6 +4,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: vars.$spacing-md;
+
+  // Con varias columnas el arrastre vertical no tendría sentido (los slots
+  // ya no están uno debajo del otro): mientras se edita el orden se fuerza
+  // una sola columna, en cualquier tamaño de pantalla.
+  &--editing {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+  }
 }
 
 .dcard {
@@ -16,7 +24,14 @@
   flex-direction: column;
   gap: 0.5rem;
 
-  &__head { display: flex; align-items: center; justify-content: space-between; }
+  &--dragging {
+    position: relative;
+    z-index: 5;
+    box-shadow: vars.$shadow-lg;
+    cursor: grabbing;
+  }
+
+  &__head { display: flex; align-items: center; gap: vars.$spacing-sm; justify-content: space-between; }
   &__order { font-weight: 700; color: vars.$color-primary; font-size: 0.9rem; }
   &__customer { font-size: 1.1rem; color: vars.$color-text; }
   &__address { font-size: 0.85rem; color: vars.$color-text-secondary; }
@@ -72,4 +87,113 @@
   font-size: 0.8125rem;
   font-weight: 600;
   color: vars.$color-text-secondary;
+}
+
+// Botón "Editar orden" / "Guardar orden" junto al título (plan
+// agenda-agregar-orden-de-entrega).
+.page-head__edit-actions {
+  display: flex;
+  gap: vars.$spacing-sm;
+}
+
+.edit-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: -0.5rem 0 vars.$spacing-md;
+  font-size: 0.8125rem;
+  color: vars.$color-text-secondary;
+
+  .material-symbols-outlined { font-size: 1.1rem; }
+}
+
+// Asa de arrastre: mismo look que .icon-btn (círculo con hover), más el
+// cursor de "agarrar" y touch-action:none para que el navegador no
+// interprete el gesto como scroll al arrastrar con el dedo. Pointer Events
+// con setPointerCapture, no Drag and Drop nativo (casi ningún celular lo
+// dispara con el dedo).
+.dcard__handle {
+  cursor: grab;
+  touch-action: none;
+
+  .material-symbols-outlined { font-size: 1.3rem; }
+
+  &:active { cursor: grabbing; }
+}
+
+.dcard__window-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  .material-symbols-outlined { font-size: 1rem; }
+}
+
+.dcard__window-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm;
+  border: 1px dashed vars.$color-border;
+  border-radius: vars.$radius-md;
+  background: vars.$color-bg;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+
+    input {
+      padding: 0.3rem 0.4rem;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-sm;
+      font-family: vars.$font-body;
+    }
+  }
+}
+
+.muted { color: vars.$color-text-secondary; font-size: 0.85rem; }
+
+// Modales de confirmación ("Editar orden" / "Guardar orden"), mismo patrón
+// que quote-list.component.scss.
+.modal--confirm {
+  .modal__body {
+    padding: vars.$spacing-lg;
+    gap: vars.$spacing-sm;
+  }
+
+  .panel__title {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .muted {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .modal__foot {
+    justify-content: space-between;
+    margin-top: 0;
+  }
+}
+
+.dcard__window-editor-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+// Banner "¿Vas a hacer esta entrega?" (plan repartidor-acepta-entrega).
+.dcard__accept-hint {
+  margin: vars.$spacing-xs 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: vars.$color-text;
 }

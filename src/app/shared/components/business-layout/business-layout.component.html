@@ -28,7 +28,10 @@
     </div>
 
     <nav class="sidebar__nav">
-      @for (item of navItems(); track item.label) {
+      @for (item of navItems(); track item.label; let i = $index) {
+        @if (item.section && item.section !== navItems()[i - 1]?.section) {
+          <span class="nav-section">{{ item.section }}</span>
+        }
         <a
           class="nav-link"
           [routerLink]="item.route"

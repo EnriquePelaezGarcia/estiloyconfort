@@ -16,6 +16,10 @@ import { DiscountsService } from '../../../core/services/discounts.service';
 import { ApprovalsService } from '../../../core/services/approvals.service';
 import { isPickupWithinGrace } from '../../../core/utils/pickup';
 import { DeliveryRescheduleComponent } from '../../shared/delivery-reschedule/delivery-reschedule.component';
+import {
+  AssignDeliveryModalComponent,
+  AssignDeliveryTarget,
+} from '../../../shared/components/assign-delivery-modal/assign-delivery-modal.component';
 import { ExtraChargePickerComponent } from '../../../shared/components/extra-charge-picker/extra-charge-picker.component';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
 import { ActivityLogComponent } from '../../../shared/components/activity-log/activity-log.component';
@@ -70,7 +74,7 @@ interface AbonoReceipt {
   styleUrl: './order-detail.component.scss',
   imports: [
     CurrencyPipe, DatePipe, ReactiveFormsModule, CurrencyInputDirective,
-    DeliveryRescheduleComponent, ExtraChargePickerComponent,
+    DeliveryRescheduleComponent, ExtraChargePickerComponent, AssignDeliveryModalComponent,
     ImageLightboxComponent, ActivityLogComponent, MediaUrlPipe, ItemMessagesComponent,
   ],
 })
@@ -109,9 +113,7 @@ export class OrderDetailComponent implements OnInit {
 
   // ===== Asignar repartidor (admin y vendedor) =====
   protected deliveryPeople = signal<DeliveryPerson[]>([]);
-  protected assignDeliveryOpen = signal(false);
-  protected selectedDeliveryPerson = signal<number | null>(null);
-  protected assigningDelivery = signal(false);
+  protected assigningTarget = signal<AssignDeliveryTarget | null>(null);
 
   // ===== Agregar/editar ubicación de Google Maps (admin y vendedor) =====
   protected locationEditOpen = signal(false);
@@ -968,30 +970,31 @@ export class OrderDetailComponent implements OnInit {
   }
 
   protected openAssignDelivery(): void {
-    this.selectedDeliveryPerson.set(this.order()?.deliveryPersonId ?? null);
-    this.assignDeliveryOpen.set(true);
+    const o = this.order();
+    if (!o) return;
+    this.assigningTarget.set({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      customerName: o.customerName,
+      deliveryPersonId: o.deliveryPersonId ?? null,
+      deliveryAssignmentDate: o.deliveryAssignmentDate,
+      deliveryAcceptanceStatus: o.deliveryAcceptanceStatus ?? null,
+      expectedDeliveryDate: o.expectedDeliveryDate ?? null,
+      deliveryCommitment: o.deliveryCommitment,
+      deliveryWindowStart: o.deliveryWindowStart ?? null,
+      deliveryWindowEnd: o.deliveryWindowEnd ?? null,
+      deliverySlotId: o.deliverySlotId,
+    });
   }
 
-  protected confirmAssignDelivery(): void {
-    const order = this.order();
-    const personId = this.selectedDeliveryPerson();
-    if (!order || !personId || this.assigningDelivery()) {
-      if (!personId) this.notification.error('Selecciona un repartidor');
-      return;
-    }
-    this.assigningDelivery.set(true);
-    this.sellerService.assignDelivery(order.id, personId).subscribe({
-      next: () => {
-        this.assigningDelivery.set(false);
-        this.assignDeliveryOpen.set(false);
-        this.notification.success('Repartidor asignado');
-        this.load(order.id);
-      },
-      error: (err: { error?: { message?: string } }) => {
-        this.assigningDelivery.set(false);
-        this.notification.error(err?.error?.message ?? 'No se pudo asignar el repartidor');
-      },
-    });
+  protected closeAssignDelivery(): void {
+    this.assigningTarget.set(null);
+  }
+
+  protected onAssignDeliverySaved(): void {
+    const o = this.order();
+    this.assigningTarget.set(null);
+    if (o) this.load(o.id);
   }
 
   protected openLocationEdit(): void {

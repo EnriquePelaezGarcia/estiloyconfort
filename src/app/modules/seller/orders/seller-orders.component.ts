@@ -1,11 +1,14 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { SellerService } from '../../../core/services/seller.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import {
+  AssignDeliveryModalComponent,
+  AssignDeliveryTarget,
+} from '../../../shared/components/assign-delivery-modal/assign-delivery-modal.component';
 import { DeliveryPerson, Order, OrderItem, OrderStatus, PaymentStatus } from '../../../core/models/order.model';
 import {
   ORDER_STATUS_TONE,
@@ -19,7 +22,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './seller-orders.component.html',
   styleUrl: './seller-orders.component.scss',
-  imports: [CurrencyPipe, DatePipe, RouterLink, FormsModule, MediaUrlPipe, ImageLightboxComponent],
+  imports: [CurrencyPipe, DatePipe, RouterLink, MediaUrlPipe, ImageLightboxComponent, AssignDeliveryModalComponent],
 })
 export class SellerOrdersComponent implements OnInit {
   private sellerService = inject(SellerService);
@@ -104,8 +107,7 @@ export class SellerOrdersComponent implements OnInit {
   }
 
   /** Pedido seleccionado para asignar repartidor. */
-  protected assigning = signal<Order | null>(null);
-  protected selectedDeliveryPerson = signal<number | null>(null);
+  protected assigningTarget = signal<AssignDeliveryTarget | null>(null);
 
   /** Pestaña activa: pedidos en curso vs. finalizados. */
   protected tab = signal<'activos' | 'historial'>('activos');
@@ -182,27 +184,28 @@ export class SellerOrdersComponent implements OnInit {
   }
 
   protected openAssign(order: Order): void {
-    this.assigning.set(order);
-    this.selectedDeliveryPerson.set(order.deliveryPersonId ?? null);
+    this.assigningTarget.set({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      deliveryPersonId: order.deliveryPersonId ?? null,
+      deliveryAssignmentDate: order.deliveryAssignmentDate,
+      deliveryAcceptanceStatus: order.deliveryAcceptanceStatus ?? null,
+      expectedDeliveryDate: order.expectedDeliveryDate ?? null,
+      deliveryCommitment: order.deliveryCommitment,
+      deliveryWindowStart: order.deliveryWindowStart ?? null,
+      deliveryWindowEnd: order.deliveryWindowEnd ?? null,
+      deliverySlotId: order.deliverySlotId,
+    });
   }
 
-  protected confirmAssign(): void {
-    const order = this.assigning();
-    const personId = this.selectedDeliveryPerson();
-    if (!order || !personId) {
-      this.notification.error('Selecciona un repartidor');
-      return;
-    }
-    this.sellerService.assignDelivery(order.id, personId).subscribe({
-      next: (res) => {
-        this.orders.update((list) => list.map((o) => (o.id === order.id ? res.data : o)));
-        this.notification.success('Repartidor asignado');
-        this.assigning.set(null);
-      },
-      error: (err: { error?: { message?: string } }) => {
-        this.notification.error(err?.error?.message ?? 'No se pudo asignar');
-      },
-    });
+  protected closeAssign(): void {
+    this.assigningTarget.set(null);
+  }
+
+  protected onAssignSaved(): void {
+    this.assigningTarget.set(null);
+    this.load();
   }
 
   /** Etiqueta con la regla derivada "Devuelto" (C-2). */

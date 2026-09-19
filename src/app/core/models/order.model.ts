@@ -37,6 +37,9 @@ export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type DeliveryType = 'standard' | 'with_installation';
 export type DeliveryStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
+/** Aceptación del repartidor sobre la entrega que se le asignó (plan repartidor-acepta-entrega). */
+export type DeliveryAcceptanceStatus = 'pending' | 'accepted' | 'rejected';
+
 /**
  * Nivel de compromiso de la fecha de entrega (Docs/plan-fecha-hora-entrega.md).
  *   - 'exact'     -> cumpleaños, XV años, eventos. No se entrega antes ni
@@ -306,6 +309,13 @@ export interface Order {
   pickupInStore?: boolean;
   deliveryPersonId?: number | null;
   deliveryPersonName?: string | null;
+  /** Posición en la ruta del repartidor ese día; null = ruta sin definir. */
+  routeSequence?: number | null;
+  /** Día real en que sale a ruta (`deliveries.assignment_date`); puede no
+   *  coincidir con `expectedDeliveryDate`, la promesa al cliente. */
+  deliveryAssignmentDate?: string | null;
+  /** Aceptación del repartidor actual; null/undefined si nunca se asignó ninguno. */
+  deliveryAcceptanceStatus?: DeliveryAcceptanceStatus | null;
   paymentMethod: SaleScheme;
   paymentStatus: PaymentStatus;
   paymentAmount: number;
@@ -683,7 +693,14 @@ export interface DeliveryAssignment {
   orderId: number;
   deliveryPersonId: number;
   assignmentDate: string;
+  /** Posición en la ruta del repartidor ese día; null = ruta sin definir. */
+  routeSequence?: number | null;
   deliveryStatus: DeliveryStatus;
+  /** Aceptación del repartidor (plan repartidor-acepta-entrega): mientras
+   *  esté 'pending' no puede tocar evidencia/cobro/estado. */
+  acceptanceStatus: DeliveryAcceptanceStatus;
+  acceptedAt?: string | null;
+  rejectReason?: string | null;
   signatureImageUrl?: string | null;
   photoUrl?: string | null;
   deliveredAt?: string | null;

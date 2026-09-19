@@ -1,0 +1,214 @@
+@use '../../../../styles/variables' as vars;
+
+// Aceptar/rechazar la entrega asignada (plan repartidor-acepta-entrega).
+.accept-banner {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0 0 vars.$spacing-md;
+  padding: 0.8rem 0.9rem;
+  border-radius: vars.$radius-md;
+  border: 1px solid transparent;
+
+  .material-symbols-outlined { flex-shrink: 0; }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    font-size: 0.88rem;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.4rem;
+    flex: 1 0 100%;
+  }
+
+  &--pending {
+    background: rgba(vars.$color-gold, 0.12);
+    border-color: rgba(vars.$color-gold, 0.4);
+    color: vars.$color-text;
+    .material-symbols-outlined { color: vars.$color-gold; }
+  }
+}
+
+.signature-wrap {
+  position: relative;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  background:
+    repeating-linear-gradient(transparent, transparent 28px, rgba(vars.$color-border, 0.5) 29px);
+  overflow: hidden;
+
+  // Al tocar la firma en celular (ver onCanvasPointerDown) se expande a
+  // pantalla completa para que el repartidor le pase el teléfono al cliente
+  // y firme cómodo. En escritorio/tablet no se activa (isMobileViewport()).
+  &--fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: vars.$z-modal + 2;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0;
+    background: vars.$color-surface;
+
+    .signature { flex: 1; height: auto; }
+  }
+}
+
+// Fuerza el horizontal en celulares: gira el recuadro 90° y lo agranda al
+// tamaño del viewport ya girado, sin depender de que el usuario voltee el
+// teléfono físicamente.
+@media (max-width: vars.$bp-tablet) and (orientation: portrait) {
+  .signature-wrap--fullscreen {
+    top: 0;
+    left: 100%;
+    // `vh`/`vw` en iOS Safari miden el viewport GRANDE (con las barras del
+    // navegador retraídas), así que el borde girado quedaba por debajo de la
+    // barra inferior y tapaba el botón "Listo". En pantalla completa no se
+    // puede hacer scroll para retraer esa barra, así que se usa `svh`/`svw`
+    // (viewport con la barra desplegada): siempre cabe. `vh`/`vw` queda de
+    // fallback para navegadores viejos.
+    width: 100vh;
+    width: 100svh;
+    height: 100vw;
+    height: 100svw;
+    transform-origin: 0 0;
+    transform: rotate(90deg);
+  }
+}
+
+.signature-fullscreen-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border-bottom: 1px solid vars.$color-border;
+  background: vars.$color-bg;
+
+  &__hint {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+
+    .material-symbols-outlined { font-size: 1.1rem; }
+  }
+
+  &__actions {
+    display: flex;
+    gap: vars.$spacing-sm;
+  }
+
+  // Girada 90°, el extremo derecho de la barra cae en el borde visual
+  // inferior del teléfono: se separa del indicador de inicio (safe area)
+  // para que "Listo" no quede a ras.
+  @media (max-width: vars.$bp-tablet) and (orientation: portrait) {
+    padding-right: calc(#{vars.$spacing-md} + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.signature {
+  display: block;
+  width: 100%;
+  height: 180px;
+  touch-action: none;
+  cursor: crosshair;
+
+  // Entrega cerrada: la firma queda congelada, no se puede trazar encima.
+  &--locked {
+    pointer-events: none;
+    cursor: default;
+  }
+}
+
+// Pista de que se puede tocar para firmar a pantalla completa; sólo aplica
+// en celular, es la única superficie donde tiene sentido pedirle el teléfono
+// al cliente.
+.signature-expand-hint {
+  display: none;
+  position: absolute;
+  top: vars.$spacing-sm;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  background: rgba(#fff, 0.9);
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  padding: 0.15rem 0.5rem;
+  pointer-events: none;
+
+  .material-symbols-outlined { font-size: 0.95rem; }
+
+  @media (max-width: vars.$bp-tablet) { display: inline-flex; }
+}
+
+.signature-clear {
+  position: absolute;
+  bottom: vars.$spacing-sm;
+  right: vars.$spacing-sm;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: vars.$color-text-secondary;
+  background: rgba(#fff, 0.9);
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+
+  .material-symbols-outlined { font-size: 1rem; }
+  &:hover { color: vars.$color-error; }
+}
+
+.proof-actions {
+  display: flex;
+  gap: vars.$spacing-sm;
+  margin-top: vars.$spacing-md;
+
+  .btn { flex: 1; }
+}
+
+.hint { margin-top: vars.$spacing-sm; font-size: 0.82rem; color: vars.$color-text-secondary; text-align: center; }
+
+.pay-block-alert {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: vars.$spacing-md;
+  padding: vars.$spacing-md;
+  border: 1px solid rgba(vars.$color-error, 0.35);
+  border-radius: vars.$radius-md;
+  background: rgba(vars.$color-error, 0.08);
+  color: vars.$color-error;
+
+  .material-symbols-outlined { flex-shrink: 0; }
+  strong { display: block; font-size: 0.9rem; }
+  p { margin: 0.25rem 0 0; font-size: 0.82rem; color: vars.$color-text; }
+  a { color: inherit; font-weight: 700; }
+}
+
+.completed-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: vars.$spacing-md 0;
+  padding: vars.$spacing-md;
+  border-radius: vars.$radius-md;
+  background: rgba(vars.$color-success, 0.1);
+  color: vars.$color-success;
+  font-weight: 600;
+}

@@ -33,6 +33,22 @@ export class DeliveryService {
     );
   }
 
+  /** El repartidor confirma que va a hacer esta entrega. */
+  acceptAssignment(id: number): Observable<{ data: DeliveryAssignment; message: string }> {
+    return this.api.patch<{ data: DeliveryAssignment; message: string }>(
+      `/delivery/assignments/${id}/accept`,
+      {},
+    );
+  }
+
+  /** El repartidor no puede/quiere hacer esta entrega; motivo obligatorio. */
+  rejectAssignment(id: number, reason: string): Observable<{ data: DeliveryAssignment; message: string }> {
+    return this.api.post<{ data: DeliveryAssignment; message: string }>(
+      `/delivery/assignments/${id}/reject`,
+      { reason },
+    );
+  }
+
   /**
    * "No se pudo entregar" (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 1):
    * marca la entrega 'failed', anexa el motivo a las notas y el pedido vuelve
@@ -96,5 +112,28 @@ export class DeliveryService {
     return this.api
       .post<{ data: { token: string } }>(`/delivery/assignments/${assignmentId}/share`, {})
       .pipe(map((res) => `${window.location.origin}/ticket/${res.data.token}`));
+  }
+
+  /**
+   * Reordena SU PROPIA ruta del día (Docs plan agenda-agregar-orden-de-entrega).
+   * `deliveryIds` (deliveries.id) en el orden final deseado; el backend
+   * verifica que todas sean del repartidor autenticado.
+   */
+  reorderRoute(deliveryIds: number[]): Observable<{ message: string }> {
+    return this.api.patch<{ message: string }>('/delivery/route/reorder', { deliveryIds });
+  }
+
+  /**
+   * Ajusta SOLO la hora de una parada (no fecha ni compromiso — eso lo maneja
+   * admin/vendedor vía "Reprogramar").
+   */
+  updateWindow(
+    id: number,
+    window: { deliveryWindowStart: string | null; deliveryWindowEnd: string | null },
+  ): Observable<{ data: DeliveryAssignment; message: string }> {
+    return this.api.patch<{ data: DeliveryAssignment; message: string }>(
+      `/delivery/assignments/${id}/window`,
+      window,
+    );
   }
 }

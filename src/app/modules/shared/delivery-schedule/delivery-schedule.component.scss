@@ -111,6 +111,40 @@
     background: vars.$color-primary;
     color: #fff;
   }
+
+  .material-symbols-outlined { font-size: 1rem; vertical-align: middle; }
+}
+
+// ===== Filtro de fechas =====
+.date-filter {
+  display: flex;
+  align-items: flex-end;
+  gap: vars.$spacing-sm;
+  margin-left: auto;
+  flex-wrap: wrap;
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: vars.$color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+
+    input {
+      padding: 0.35rem 0.5rem;
+      border: 1px solid vars.$color-border;
+      border-radius: vars.$radius-md;
+      background: vars.$color-surface;
+      font-family: vars.$font-body;
+      font-size: 0.8125rem;
+      font-weight: 400;
+      text-transform: none;
+      color: vars.$color-text;
+    }
+  }
 }
 
 .state {
@@ -139,16 +173,6 @@
   border-left: 3px solid vars.$color-border;
   border-radius: vars.$radius-md;
   background: vars.$color-surface;
-
-  // Una entrega exacta tiene que distinguirse sin leer: es la que no
-  // perdona un retraso.
-  &--exact {
-    border-left-color: vars.$color-error;
-  }
-
-  &--overdue {
-    background: color-mix(in srgb, vars.$color-error 5%, white);
-  }
 
   &__top {
     display: flex;

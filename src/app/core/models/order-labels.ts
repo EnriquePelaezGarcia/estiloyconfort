@@ -1,4 +1,5 @@
 import {
+  DeliveryAcceptanceStatus,
   DeliveryStatus,
   DeliveryType,
   OrderStatus,
@@ -105,4 +106,17 @@ export const DELIVERY_STATUS_TONE: Record<DeliveryStatus, string> = {
   in_progress: 'badge--purple',
   completed: 'badge--green',
   failed: 'badge--red',
+};
+
+/** Aceptación del repartidor sobre la entrega asignada (plan repartidor-acepta-entrega). */
+export const DELIVERY_ACCEPTANCE_LABELS: Record<DeliveryAcceptanceStatus, string> = {
+  pending: 'Pendiente de aceptar',
+  accepted: 'Aceptada',
+  rejected: 'Rechazada',
+};
+
+export const DELIVERY_ACCEPTANCE_TONE: Record<DeliveryAcceptanceStatus, string> = {
+  pending: 'badge--amber',
+  accepted: 'badge--green',
+  rejected: 'badge--red',
 };

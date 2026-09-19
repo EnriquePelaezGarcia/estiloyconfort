@@ -62,6 +62,13 @@
 }
 
 .po {
+  scroll-margin-top: vars.$spacing-lg;
+
+  &--focused {
+    outline: 2px solid vars.$color-primary;
+    outline-offset: 2px;
+  }
+
   &__head {
     display: flex;
     align-items: baseline;

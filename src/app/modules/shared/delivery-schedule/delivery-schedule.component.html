@@ -82,6 +82,22 @@
       [class.chip--active]="commitmentFilter() === 'tentative'"
       (click)="setCommitment('tentative')"
     >Tentativas</button>
+
+    <div class="date-filter">
+      <label class="date-filter__field">
+        <span>Desde</span>
+        <input type="date" [value]="dateFrom() ?? ''" (change)="onDateFromChange($event)" />
+      </label>
+      <label class="date-filter__field">
+        <span>Hasta</span>
+        <input type="date" [value]="dateTo() ?? ''" (change)="onDateToChange($event)" />
+      </label>
+      @if (dateFrom() || dateTo()) {
+        <button type="button" class="chip" (click)="clearDateFilter()">
+          <span class="material-symbols-outlined">close</span> Quitar fechas
+        </button>
+      }
+    </div>
   </div>
 
   @if (loading()) {
@@ -94,16 +110,15 @@
         <h2 class="day__title">{{ group.title }}</h2>
 
         @for (d of group.deliveries; track d.orderId) {
-          <article
-            class="delivery"
-            [class.delivery--exact]="d.deliveryCommitment === 'exact'"
-            [class.delivery--overdue]="d.bucket === 'overdue' && d.deliveryCommitment === 'exact'"
-          >
+          <article class="delivery">
             <div class="delivery__top">
               @if (d.deliveryCommitment === 'exact') {
                 <span class="tag tag--exact">EXACTA</span>
               } @else {
                 <span class="tag">Tentativa</span>
+              }
+              @if (d.routeSequence != null) {
+                <span class="badge badge--purple">Parada #{{ d.routeSequence }}</span>
               }
               @if (window(d)) {
                 <span class="delivery__window">
@@ -180,7 +195,12 @@
                 <span class="delivery__seller">Vendedor: {{ d.sellerName }}</span>
               }
               @if (d.deliveryPersonName) {
-                <span class="delivery__person">Repartidor: {{ d.deliveryPersonName }}</span>
+                <span class="delivery__person">
+                  Repartidor: {{ d.deliveryPersonName }}
+                  @if (d.deliveryAcceptanceStatus && d.deliveryAcceptanceStatus !== 'accepted') {
+                    <span class="badge" [class]="acceptanceTone(d)">{{ acceptanceLabel(d) }}</span>
+                  }
+                </span>
               } @else {
                 <span class="delivery__person delivery__person--none">Repartidor: sin asignar</span>
               }
@@ -228,34 +248,11 @@
   <app-image-lightbox [src]="(img | mediaUrl) ?? ''" (closed)="zoomedImage.set(null)" />
 }
 
-@if (assigning(); as d) {
-  <div class="modal-backdrop">
-    <div class="modal modal--sm">
-      <div class="modal__body">
-        <h2 class="panel__title">Asignar repartidor</h2>
-        <p class="muted">Pedido <strong>{{ d.orderNumber }}</strong> — {{ d.customerName }}</p>
-        <div class="field">
-          <label for="scheduleAssignDp">Repartidor</label>
-          <select id="scheduleAssignDp"
-                  (change)="selectedDeliveryPerson.set($any($event.target).value ? +$any($event.target).value : null)">
-            <option [value]="''" [selected]="selectedDeliveryPerson() === null">Selecciona un repartidor</option>
-            @for (p of deliveryPeople(); track p.id) {
-              <option [value]="p.id" [selected]="selectedDeliveryPerson() === p.id">{{ p.fullName }}</option>
-            }
-          </select>
-        </div>
-        @if (deliveryPeople().length === 0) {
-          <p class="field__error">No hay repartidores activos registrados.</p>
-        }
-        <div class="modal__foot">
-          <button type="button" class="btn btn--ghost" (click)="assigning.set(null)">Cancelar</button>
-          <button type="button" class="btn btn--primary"
-                  [disabled]="!selectedDeliveryPerson() || assigningBusy()"
-                  (click)="confirmAssign()">
-            Asignar
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+@if (assigningTarget(); as t) {
+  <app-assign-delivery-modal
+    [order]="t"
+    [deliveryPeople]="deliveryPeople()"
+    (closed)="closeAssign()"
+    (saved)="onAssignSaved()"
+  />
 }

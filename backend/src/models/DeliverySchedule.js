@@ -61,11 +61,18 @@ function mapRow(row) {
     deliveryCommitment: row.delivery_commitment ?? 'tentative',
     deliveryWindowStart: row.delivery_window_start ?? null,
     deliveryWindowEnd: row.delivery_window_end ?? null,
+    deliverySlotId: row.delivery_slot_id ?? null,
     bucket: bucketFor(daysUntil),
     daysUntil,
     itemsSummary: row.items_summary ?? '',
     instruccionesEntrega: row.instrucciones_entrega ?? null,
     hasPendingFabrication: hasPendingFabrication(row.fabrication_items_count, row.order_status),
+    // Orden de entrega (plan agenda-agregar-orden-de-entrega): posición en la
+    // ruta y el día real en que sale (puede no ser expectedDeliveryDate).
+    routeSequence: row.route_sequence ?? null,
+    deliveryAssignmentDate: row.delivery_assignment_date ?? null,
+    // Plan repartidor-acepta-entrega: null si nunca se asignó repartidor (dv no existe).
+    deliveryAcceptanceStatus: row.delivery_person_id ? (row.acceptance_status ?? 'pending') : null,
   };
 }
 
@@ -120,9 +127,11 @@ const DeliverySchedule = {
               o.delivery_address, o.seller_id, o.delivery_person_id,
               o.order_status, o.payment_status, o.expected_delivery_date,
               o.delivery_commitment, o.delivery_window_start, o.delivery_window_end,
-              o.instrucciones_entrega,
+              o.delivery_slot_id, o.instrucciones_entrega,
               DATEDIFF(o.expected_delivery_date, CURDATE()) AS days_until,
               s.full_name AS seller_name, d.full_name AS delivery_person_name,
+              dv.route_sequence, dv.assignment_date AS delivery_assignment_date,
+              dv.acceptance_status,
               (SELECT GROUP_CONCAT(CONCAT(oi.product_name, ' (', oi.quantity, ')') SEPARATOR ' · ')
                  FROM order_items oi WHERE oi.order_id = o.id) AS items_summary,
               (SELECT COUNT(*) FROM order_items oi2
@@ -130,6 +139,7 @@ const DeliverySchedule = {
        FROM orders o
        LEFT JOIN users s ON s.id = o.seller_id
        LEFT JOIN users d ON d.id = o.delivery_person_id
+       LEFT JOIN deliveries dv ON dv.order_id = o.id
        WHERE ${where.join(' AND ')}${scope.sql}
        ORDER BY o.expected_delivery_date IS NULL,
                 o.expected_delivery_date ASC,

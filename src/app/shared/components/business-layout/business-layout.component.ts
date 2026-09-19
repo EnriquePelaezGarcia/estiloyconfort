@@ -12,6 +12,8 @@ export interface BusinessNavItem {
    * nadie tiene que acordarse de refrescar el menú.
    */
   badge?: () => number;
+  /** Encabezado de grupo. Sin sección = va suelto arriba. */
+  section?: string;
 }
 
 /**

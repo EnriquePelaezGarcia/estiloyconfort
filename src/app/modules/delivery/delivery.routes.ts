@@ -36,8 +36,16 @@ export const deliveryRoutes: Routes = [
       {
         path: 'entregas/:id',
         loadComponent: () =>
-          import('./detail/delivery-detail.component').then((m) => m.DeliveryDetailComponent),
+          import('./detail/delivery-detail-info.component').then((m) => m.DeliveryDetailInfoComponent),
         title: 'Detalle de entrega - Repartidor',
+      },
+      {
+        path: 'entregas/:id/evidencia',
+        loadComponent: () =>
+          import('./detail/delivery-detail-evidence.component').then(
+            (m) => m.DeliveryDetailEvidenceComponent,
+          ),
+        title: 'Evidencia de entrega - Repartidor',
       },
       { path: '**', redirectTo: 'entregas' },
     ],

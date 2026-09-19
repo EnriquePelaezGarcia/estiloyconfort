@@ -17,16 +17,20 @@ export class ManufacturerLayoutComponent implements OnInit {
   private notifications = inject(NotificationCenterStore);
 
   protected readonly navItems: BusinessNavItem[] = [
-    { label: 'Lista semanal', icon: 'list_alt', route: 'lista-semanal' },
-    { label: 'Por fabricar', icon: 'precision_manufacturing', route: 'pedidos' },
+    // ── Operación ──
+    { label: 'Lista semanal', icon: 'list_alt', route: 'lista-semanal', section: 'Operación' },
+    { label: 'Por fabricar', icon: 'precision_manufacturing', route: 'pedidos', section: 'Operación' },
     {
       label: 'Notificaciones',
       icon: 'notifications',
       route: 'notificaciones',
+      section: 'Operación',
       badge: () => this.notifications.unreadCount(),
     },
-    { label: 'Historial y pagos', icon: 'history', route: 'historial' },
-    { label: 'Mis precios', icon: 'payments', route: 'mis-precios' },
+
+    // ── Mi cuenta ──
+    { label: 'Historial y pagos', icon: 'history', route: 'historial', section: 'Mi cuenta' },
+    { label: 'Mis precios', icon: 'payments', route: 'mis-precios', section: 'Mi cuenta' },
   ];
 
   ngOnInit(): void {

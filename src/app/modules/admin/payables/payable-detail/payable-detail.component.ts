@@ -265,6 +265,11 @@ export class PayableDetailComponent implements OnInit {
       next: (res) => {
         this.documents.set(res.data);
         this.loading.set(false);
+        // Abiertas por default: se ven las piezas sin tener que desplegar cada fila.
+        this.expandedKeys.set(new Set(res.data.map((d) => this.docKey(d))));
+        res.data
+          .filter((d) => !this.itemsCache()[this.docKey(d)])
+          .forEach((d) => this.loadItems(d));
       },
       error: () => {
         this.notification.error('No se pudieron cargar los documentos');

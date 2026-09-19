@@ -3,7 +3,7 @@ const { pool } = require('../config/database');
 /**
  * Notificaciones in-app (Docs/plan-fabricante-notificaciones-y-aceptacion.md).
  * Destinatario: un fabricante (todas sus cuentas la ven), el rol admin (global),
- * o un vendedor concreto (`user_id`).
+ * o un usuario concreto —vendedor o repartidor— vía `user_id`.
  * `read_at` es global por notificación.
  */
 function mapRow(r) {
@@ -28,7 +28,7 @@ const Notification = {
   /**
    * Crea una notificación. Acepta una conexión abierta para participar en la
    * transacción de quien llama (asignación / edición de pedido).
-   * @param {{audience:'manufacturer'|'admin'|'seller', manufacturerId?:number|null,
+   * @param {{audience:'manufacturer'|'admin'|'seller'|'delivery_person', manufacturerId?:number|null,
    *   userId?:number|null, type:string, title:string, body?:string|null,
    *   orderId?:number|null, orderItemId?:number|null}} n
    */
@@ -39,7 +39,7 @@ const Notification = {
       [
         n.audience,
         n.audience === 'manufacturer' ? (n.manufacturerId ?? null) : null,
-        n.audience === 'seller' ? (n.userId ?? null) : null,
+        n.audience === 'seller' || n.audience === 'delivery_person' ? (n.userId ?? null) : null,
         String(n.type).slice(0, 40),
         String(n.title).slice(0, 160),
         n.body != null ? String(n.body).slice(0, 500) : null,
@@ -58,8 +58,8 @@ const Notification = {
     if (filter.audience === 'manufacturer') {
       return { sql: 'n.audience = ? AND n.manufacturer_id = ?', params: ['manufacturer', filter.manufacturerId] };
     }
-    if (filter.audience === 'seller') {
-      return { sql: 'n.audience = ? AND n.user_id = ?', params: ['seller', filter.userId] };
+    if (filter.audience === 'seller' || filter.audience === 'delivery_person') {
+      return { sql: 'n.audience = ? AND n.user_id = ?', params: [filter.audience, filter.userId] };
     }
     return { sql: "n.audience = 'admin'", params: [] };
   },

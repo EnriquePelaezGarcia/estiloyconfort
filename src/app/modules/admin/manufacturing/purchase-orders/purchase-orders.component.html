@@ -37,7 +37,7 @@
 } @else {
   <div class="orders">
     @for (o of orders(); track o.id) {
-      <article class="panel po">
+      <article class="panel po" [id]="'po-' + o.id" [class.po--focused]="focusId() === o.id">
         <header class="po__head">
           <div class="po__head-main">
             <span class="po__ref">{{ o.poNumber }}</span>

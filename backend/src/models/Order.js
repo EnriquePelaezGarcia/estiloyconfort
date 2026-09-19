@@ -400,6 +400,14 @@ function mapOrder(row) {
     pickupInStore: !!row.pickup_in_store,
     deliveryPersonId: row.delivery_person_id,
     deliveryPersonName: row.delivery_person_name ?? null,
+    // Posición en la ruta del repartidor ese día (plan
+    // agenda-agregar-orden-de-entrega). null = repartidor sin ruta definida.
+    routeSequence: row.route_sequence ?? null,
+    /** Día real en que sale a ruta (`deliveries.assignment_date`) — puede no
+     *  coincidir con `expectedDeliveryDate`, la promesa al cliente. */
+    deliveryAssignmentDate: row.delivery_assignment_date ?? null,
+    /** Aceptación del repartidor actual (plan repartidor-acepta-entrega); null si nunca se asignó ninguno. */
+    deliveryAcceptanceStatus: row.delivery_person_id ? (row.delivery_acceptance_status ?? 'pending') : null,
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
     paymentAmount: Number(row.payment_amount),
@@ -459,11 +467,14 @@ function mapOrder(row) {
 
 const BASE_SELECT = `
   SELECT o.*, s.full_name AS seller_name, d.full_name AS delivery_person_name,
-         shr.full_name AS shipping_cost_reviewed_by_name
+         shr.full_name AS shipping_cost_reviewed_by_name,
+         dv.route_sequence, dv.assignment_date AS delivery_assignment_date,
+         dv.acceptance_status AS delivery_acceptance_status
   FROM orders o
   LEFT JOIN users s ON s.id = o.seller_id
   LEFT JOIN users d ON d.id = o.delivery_person_id
   LEFT JOIN users shr ON shr.id = o.shipping_cost_reviewed_by
+  LEFT JOIN deliveries dv ON dv.order_id = o.id
 `;
 
 /**
@@ -3009,7 +3020,12 @@ const Order = {
     return this.findById(id);
   },
 
-  async assignDeliveryPerson(id, deliveryPersonId, assignmentDate) {
+  /**
+   * @param {number|null} [routeSequence] posición en la ruta del repartidor
+   *   ese día (plan agenda-agregar-orden-de-entrega). Si se omite, se calcula
+   *   "al final" de lo que ese repartidor ya tenga asignado ese mismo día.
+   */
+  async assignDeliveryPerson(id, deliveryPersonId, assignmentDate, routeSequence) {
     const order = await this.findById(id);
     if (!order) throw new Error('Pedido no encontrado');
     // RN-P2: un pedido que el cliente recogió en tienda no tiene ruta.
@@ -3018,15 +3034,32 @@ const Order = {
       err.statusCode = 400;
       throw err;
     }
-    // Guard duro (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 2): sólo un
-    // pedido 'ready' —mueble en bodega Y pago mínimo cubierto— puede salir a
-    // reparto. 'in_warehouse' significa que falta el enganche/liquidación.
-    if (order.orderStatus !== 'ready') {
+    // Guard (Plan Docs/plan-rastreo-pedido-cliente.md, Hueco 2 + plan
+    // repartidor-acepta-entrega): 'ready' es la primera asignación —mueble en
+    // bodega Y pago mínimo cubierto—. 'in_delivery' es una REASIGNACIÓN, y
+    // sólo se permite mientras el repartidor actual no haya aceptado todavía
+    // (si ya aceptó, pudo haber subido evidencia real y no se puede pisar).
+    if (order.orderStatus !== 'ready' && order.orderStatus !== 'in_delivery') {
       const err = new Error(
         'El pedido debe estar "Listo para entrega" (mueble en almacén y pago mínimo cubierto) antes de asignar repartidor.',
       );
       err.statusCode = 400;
       throw err;
+    }
+    if (order.orderStatus === 'in_delivery') {
+      const current = await require('./Delivery').findByOrderId(id);
+      // Solo bloquea cambiar A OTRO repartidor. Mover la fecha/ruta del MISMO
+      // repartidor sigue permitido aunque ya haya aceptado (resetea su
+      // aceptación a pending más abajo) — no hay riesgo de evidencia cruzada
+      // porque la fila sigue siendo de la misma persona.
+      if (current?.acceptanceStatus === 'accepted' && current.deliveryPersonId !== deliveryPersonId) {
+        const err = new Error(
+          `Ya fue aceptada por ${current.deliveryPersonName ?? 'el repartidor asignado'}: no se puede reasignar a otro repartidor. `
+          + 'Pide que la rechace, o entrega el pedido y repórtalo por otro medio.',
+        );
+        err.statusCode = 400;
+        throw err;
+      }
     }
     // Si el pedido tiene muebles sobre pedido, no se puede asignar repartidor
     // hasta que el fabricante los marque listos (order_status pasa a 'ready').
@@ -3044,14 +3077,43 @@ const Order = {
         'UPDATE orders SET delivery_person_id = ?, order_status = ? WHERE id = ?',
         [deliveryPersonId, 'in_delivery', id],
       );
+      const finalAssignmentDate = assignmentDate ?? new Date().toISOString().slice(0, 10);
+
+      let finalSequence = routeSequence ?? null;
+      if (finalSequence == null) {
+        // Sin posición explícita: se agrega al final de lo que ese repartidor
+        // ya tenga para ese día (nunca a ciegas en medio de la ruta de otro).
+        const [[{ maxSeq }]] = await conn.execute(
+          `SELECT MAX(route_sequence) AS maxSeq FROM deliveries
+            WHERE delivery_person_id = ? AND assignment_date = ?`,
+          [deliveryPersonId, finalAssignmentDate],
+        );
+        finalSequence = (maxSeq ?? 0) + 1;
+      }
+
+      // Toda (re)asignación real —persona o fecha nuevas— reinicia la
+      // aceptación a 'pending': el repartidor final siempre confirma antes de
+      // que se pueda tocar evidencia (deliveryController.assertAccepted).
       await conn.execute(
-        `INSERT INTO deliveries (order_id, delivery_person_id, assignment_date, delivery_status)
-         VALUES (?,?,?, 'pending')
+        `INSERT INTO deliveries (order_id, delivery_person_id, assignment_date, route_sequence, delivery_status,
+                                  acceptance_status, accepted_at, reject_reason)
+         VALUES (?,?,?,?, 'pending', 'pending', NULL, NULL)
          ON DUPLICATE KEY UPDATE delivery_person_id = VALUES(delivery_person_id),
-           assignment_date = VALUES(assignment_date), delivery_status = 'pending'`,
-        [id, deliveryPersonId, assignmentDate ?? new Date().toISOString().slice(0, 10)],
+           assignment_date = VALUES(assignment_date), route_sequence = VALUES(route_sequence),
+           delivery_status = 'pending', acceptance_status = 'pending', accepted_at = NULL, reject_reason = NULL`,
+        [id, deliveryPersonId, finalAssignmentDate, finalSequence],
       );
       await conn.commit();
+
+      await Notification.create({
+        audience: 'delivery_person',
+        userId: deliveryPersonId,
+        type: 'delivery_assigned',
+        title: `Nueva entrega asignada: ${order.orderNumber}`,
+        body: `${order.customerName} — entrega ${finalAssignmentDate}. Acéptala desde "Entregas de hoy".`,
+        orderId: id,
+      });
+
       return this.findById(id);
     } catch (err) {
       await conn.rollback();
@@ -3059,6 +3121,22 @@ const Order = {
     } finally {
       conn.release();
     }
+  },
+
+  /**
+   * Ajuste de horario que puede hacer el propio repartidor (plan
+   * agenda-agregar-orden-de-entrega): SOLO la hora de inicio/fin, dentro del
+   * mismo día. A diferencia de `reschedule` (admin/vendedor), no toca fecha
+   * ni `delivery_commitment`, y no exige motivo — es un ajuste operativo, no
+   * una promesa distinta al cliente. El controller ya validó que la entrega
+   * sea del repartidor que llama.
+   */
+  async updateDeliveryWindow(id, { deliveryWindowStart, deliveryWindowEnd }) {
+    await pool.execute(
+      'UPDATE orders SET delivery_window_start = ?, delivery_window_end = ? WHERE id = ?',
+      [deliveryWindowStart || null, deliveryWindowEnd || null, id],
+    );
+    return this.findById(id);
   },
 
   async remove(id, userId = null) {

@@ -21,4 +21,10 @@ router.get('/schedule/counts', authorize('admin', 'seller', 'delivery_person'), 
 router.patch('/orders/:id/schedule', authorize('admin', 'seller'), deliveryScheduleController.reschedule);
 router.get('/orders/:id/history', authorize('admin', 'seller'), deliveryScheduleController.history);
 
+// Orden de entrega (plan agenda-agregar-orden-de-entrega): planear la ruta
+// de un repartidor es de quien la arma (admin/vendedor), no del repartidor
+// (él solo la reordena desde /api/delivery/route/reorder, ver deliveryRoutes.js).
+router.get('/route', authorize('admin', 'seller'), deliveryScheduleController.route);
+router.patch('/route/reorder', authorize('admin', 'seller'), deliveryScheduleController.reorderRoute);
+
 module.exports = router;

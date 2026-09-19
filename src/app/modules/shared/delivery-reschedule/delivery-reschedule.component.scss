@@ -54,29 +54,6 @@
     color: vars.$color-text-secondary;
   }
 
-  // El aviso sólo aparece cuando el pedido YA estaba comprometido (D7).
-  &__warning {
-    display: flex;
-    align-items: center;
-    gap: vars.$spacing-sm;
-    margin: 0 0 vars.$spacing-md;
-    padding: vars.$spacing-sm vars.$spacing-md;
-    border: 1px solid color-mix(in srgb, vars.$color-error 40%, vars.$color-border);
-    border-radius: vars.$radius-md;
-    background: color-mix(in srgb, vars.$color-error 6%, white);
-    font-size: 0.8125rem;
-    color: vars.$color-text;
-
-    .material-symbols-outlined { color: vars.$color-error; font-size: 1.125rem; }
-  }
-
-  &__label {
-    display: block;
-    font-weight: 600;
-    font-size: 0.875rem;
-    margin-bottom: vars.$spacing-sm;
-  }
-
   &__form { display: flex; flex-direction: column; gap: vars.$spacing-md; }
 
   &__actions {
@@ -86,33 +63,3 @@
     margin-top: vars.$spacing-sm;
   }
 }
-
-.options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: vars.$spacing-sm;
-
-  @media (max-width: vars.$bp-tablet) {
-    grid-template-columns: 1fr;
-  }
-
-  &__item {
-    display: flex;
-    align-items: center;
-    gap: vars.$spacing-sm;
-    padding: vars.$spacing-sm;
-    border: 1px solid vars.$color-border;
-    border-radius: vars.$radius-sm;
-    font-size: 0.875rem;
-    cursor: pointer;
-
-    input[type='radio'] { accent-color: vars.$color-primary; cursor: pointer; }
-
-    &:has(input:checked) {
-      border-color: vars.$color-primary;
-      box-shadow: 0 0 0 1px vars.$color-primary;
-    }
-  }
-}
-
-.req { color: vars.$color-error; }

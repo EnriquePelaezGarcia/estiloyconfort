@@ -1,0 +1,50 @@
+<!--
+  Respaldo para escritorio (o navegadores sin getUserMedia). Siempre en el
+  DOM: openCapture() lo dispara si no hay cámara disponible.
+-->
+<input
+  #fileInput
+  type="file"
+  accept="image/*,.heic,.heif"
+  [attr.capture]="isMobileViewport() ? 'environment' : null"
+  (change)="onFileSelected($event)"
+  hidden
+/>
+
+@if (processing()) {
+  <div class="photo-input photo-input--loading">
+    <span class="spinner spinner--sm"></span>
+    <span>Procesando foto…</span>
+  </div>
+} @else if (value(); as photo) {
+  <div class="photo-preview">
+    <img [src]="photo" alt="Foto capturada" (error)="onRenderError()" />
+    @if (!readonly()) {
+      <button type="button" class="icon-btn icon-btn--danger" (click)="removePhoto()" aria-label="Quitar foto">
+        <span class="material-symbols-outlined">delete</span>
+      </button>
+    }
+  </div>
+} @else if (!readonly()) {
+  <!--
+    En celular abre la cámara en vivo dentro de la app: sólo se puede tomar la
+    foto en directo, no elegir una de la galería.
+  -->
+  <button type="button" class="photo-input" (click)="openCapture()">
+    <span class="material-symbols-outlined">photo_camera</span>
+    <span>Tomar foto</span>
+  </button>
+}
+
+@if (cameraOpen()) {
+  <div class="camera-overlay">
+    <video #cameraVideo class="camera-overlay__video" playsinline autoplay muted></video>
+    <div class="camera-overlay__bar">
+      <button type="button" class="camera-overlay__close" (click)="closeCamera()" aria-label="Cancelar">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <button type="button" class="camera-overlay__shutter" (click)="capturePhoto()" aria-label="Tomar foto"></button>
+      <span class="camera-overlay__spacer" aria-hidden="true"></span>
+    </div>
+  </div>
+}

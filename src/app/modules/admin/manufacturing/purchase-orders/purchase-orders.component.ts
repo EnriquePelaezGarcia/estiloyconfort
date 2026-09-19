@@ -1,9 +1,9 @@
 import {
-  ChangeDetectionStrategy, Component, OnInit, computed, inject, signal,
+  ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ManufacturingService } from '../../../../core/services/manufacturing.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -55,6 +55,11 @@ export class PurchaseOrdersComponent implements OnInit {
   private notification = inject(NotificationService);
   private fb = inject(FormBuilder);
   private categoryService = inject(CategoryService);
+  private route = inject(ActivatedRoute);
+  private destroyRef = inject(DestroyRef);
+
+  /** OC a la que se llegó por deep-link (ej. desde Cuentas por pagar). */
+  protected focusId = signal<number | null>(null);
   protected materialsStore = inject(MaterialsStore);
   protected categories = signal<Category[]>([]);
 
@@ -121,6 +126,20 @@ export class PurchaseOrdersComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Igual que el deep-link de "Mensajes" en Pedidos a fábrica: suscribirse al
+    // observable (no solo leer el snapshot) para que un segundo click sobre el
+    // mismo folio, viniendo de Cuentas por pagar, también aterrice y resalte.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const raw = params.get('oc');
+      const id = raw ? Number(raw) : null;
+      this.focusId.set(id);
+      // La OC puede estar recibida/cancelada y quedar fuera del filtro
+      // "Activas" por default: con destino puntual, se ve contra todas.
+      if (id && this.filter() !== 'all') {
+        this.filter.set('all');
+      }
+      if (!this.loading()) this.scrollToFocused();
+    });
     this.load();
     this.loadPayments();
     this.manufacturingService.getManufacturers().subscribe({
@@ -131,6 +150,15 @@ export class PurchaseOrdersComponent implements OnInit {
       next: (cats) => this.categories.set(cats),
       error: () => {},
     });
+  }
+
+  /** Aterriza sobre la OC del folio en el que se dio clic en Cuentas por pagar. */
+  private scrollToFocused(): void {
+    const id = this.focusId();
+    if (!id) return;
+    setTimeout(() => {
+      document.getElementById(`po-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   }
 
   /** Recarga el catálogo del buscador acotado al fabricante elegido en el
@@ -191,6 +219,7 @@ export class PurchaseOrdersComponent implements OnInit {
       next: (res) => {
         this.orders.set(res.data);
         this.loading.set(false);
+        this.scrollToFocused();
       },
       error: () => {
         this.loading.set(false);

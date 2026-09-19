@@ -8,7 +8,19 @@ function mapDelivery(row) {
     orderId: row.order_id,
     deliveryPersonId: row.delivery_person_id,
     assignmentDate: row.assignment_date,
+    // Posición dentro de la ruta del repartidor ese día (plan
+    // agenda-agregar-orden-de-entrega). null = sin definir todavía.
+    routeSequence: row.route_sequence ?? null,
     deliveryStatus: row.delivery_status,
+    /**
+     * Aceptación del repartidor (plan repartidor-acepta-entrega): mientras
+     * esté 'pending' no puede tocar evidencia/cobro/estado (deliveryController
+     * lo bloquea) y admin/vendedor pueden reasignar libre. En 'accepted' ya no
+     * se puede reasignar — ver Order.assignDeliveryPerson.
+     */
+    acceptanceStatus: row.acceptance_status ?? 'pending',
+    acceptedAt: row.accepted_at ?? null,
+    rejectReason: row.reject_reason ?? null,
     signatureImageUrl: row.signature_image_url,
     photoUrl: row.photo_url,
     deliveredAt: row.delivered_at,
@@ -64,11 +76,14 @@ const Delivery = {
     const params = [deliveryPersonId];
     if (date) { conditions.push('dv.assignment_date = ?'); params.push(date); }
     const [rows] = await pool.execute(
-      // Dentro de un mismo día manda la hora comprometida, no el folio: el
-      // repartidor lee esta lista como su ruta. Las de hora exacta primero,
-      // y las que no tienen ventana al final.
+      // Dentro de un mismo día manda la ruta que armó admin/vendedor
+      // (route_sequence): en cuanto está definida, el repartidor la sigue tal
+      // cual. Sin ruta definida, se cae al criterio de antes (hora
+      // comprometida primero, sin ventana al final).
       `${BASE_SELECT} WHERE ${conditions.join(' AND ')}
        ORDER BY dv.assignment_date DESC,
+                dv.route_sequence IS NULL,
+                dv.route_sequence ASC,
                 o.delivery_commitment = 'exact' DESC,
                 o.delivery_window_start IS NULL,
                 o.delivery_window_start ASC,
@@ -76,6 +91,85 @@ const Delivery = {
       params,
     );
     return rows.map(mapDelivery);
+  },
+
+  /**
+   * Reordena la ruta de un repartidor en un día: fija `route_sequence` como
+   * 1..N según el orden del arreglo recibido. Lo usan tanto admin/vendedor
+   * (cualquier repartidor) como el propio repartidor (acotado a sus ids en el
+   * controller). Sin restricción UNIQUE: si dos entregas quedan con el mismo
+   * número por una carrera entre dos usuarios, se avisa en el frontend, no se
+   * bloquea aquí.
+   *
+   * @param {number[]} deliveryIds  ids de ENTREGA (deliveries.id) en el orden final deseado
+   */
+  async reorderRoute(deliveryIds) {
+    if (!Array.isArray(deliveryIds) || deliveryIds.length === 0) return;
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      for (let i = 0; i < deliveryIds.length; i++) {
+        await conn.execute(
+          'UPDATE deliveries SET route_sequence = ? WHERE id = ?',
+          [i + 1, deliveryIds[i]],
+        );
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  },
+
+  /**
+   * `deliveryPersonId` de cada entrega, para que el controller verifique
+   * ownership antes de dejar al repartidor reordenar (nunca confiar en lo que
+   * mande el body).
+   */
+  async findOwnersByIds(deliveryIds) {
+    if (!Array.isArray(deliveryIds) || deliveryIds.length === 0) return [];
+    const [rows] = await pool.query(
+      'SELECT id, delivery_person_id FROM deliveries WHERE id IN (?)',
+      [deliveryIds],
+    );
+    return rows.map((r) => ({ id: r.id, deliveryPersonId: r.delivery_person_id }));
+  },
+
+  /** Fila de entrega asociada a un pedido, o null si nunca se asignó repartidor. Usado por Order.assignDeliveryPerson para saber si ya fue aceptada antes de dejar reasignar. */
+  async findByOrderId(orderId) {
+    const [[row]] = await pool.execute(
+      `SELECT dv.*, d.full_name AS delivery_person_full_name
+         FROM deliveries dv
+         LEFT JOIN users d ON d.id = dv.delivery_person_id
+        WHERE dv.order_id = ?`,
+      [orderId],
+    );
+    if (!row) return null;
+    return {
+      deliveryPersonId: row.delivery_person_id,
+      acceptanceStatus: row.acceptance_status ?? 'pending',
+      deliveryPersonName: row.delivery_person_full_name ?? null,
+    };
+  },
+
+  /** El repartidor acepta la entrega que se le asignó. */
+  async accept(id) {
+    await pool.execute(
+      "UPDATE deliveries SET acceptance_status = 'accepted', accepted_at = NOW(), reject_reason = NULL WHERE id = ?",
+      [id],
+    );
+    return this.findById(id);
+  },
+
+  /** El repartidor rechaza la entrega; queda asignada hasta que admin/vendedor la reasignen. */
+  async reject(id, reason) {
+    await pool.execute(
+      "UPDATE deliveries SET acceptance_status = 'rejected', accepted_at = NULL, reject_reason = ? WHERE id = ?",
+      [String(reason ?? '').trim().slice(0, 255), id],
+    );
+    return this.findById(id);
   },
 
   async findById(id) {

@@ -1,0 +1,212 @@
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { DeliveryScheduleService } from '../../../core/services/delivery-schedule.service';
+import { NotificationService } from '../../../core/services/notification.service';
+import { DeliveryCommitment, DeliverySlot } from '../../../core/models/order.model';
+import { addBusinessDays, toDateInputValue } from '../../../core/utils/business-days';
+
+/** Espejo de FABRICATION_ESTIMATE_BUSINESS_DAYS en order-draft.store.ts. */
+const FABRICATION_ESTIMATE_BUSINESS_DAYS = 15;
+
+export interface DeliverySchedulePayload {
+  expectedDeliveryDate: string | null;
+  deliveryCommitment: DeliveryCommitment;
+  deliverySlotId: number | null;
+  deliveryWindowStart: string | null;
+  deliveryWindowEnd: string | null;
+  rescheduleReason: string | null;
+}
+
+/**
+ * Campos de "cuándo se entrega" (tipo, fecha, horario, motivo) — sin
+ * backdrop/header/footer propios, para poder vivir tanto en su propio modal
+ * (`delivery-reschedule`) como incrustados dentro de otro (el acordeón de
+ * "Asignar repartidor"). Misma regla D7 de siempre: motivo obligatorio solo
+ * si se pisa fecha/hora ya fija de una entrega comprometida.
+ */
+@Component({
+  selector: 'app-delivery-schedule-fields',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './delivery-schedule-fields.component.html',
+  styleUrl: './delivery-schedule-fields.component.scss',
+  imports: [ReactiveFormsModule],
+})
+export class DeliveryScheduleFieldsComponent implements OnInit {
+  private fb = inject(FormBuilder);
+  private scheduleService = inject(DeliveryScheduleService);
+  private notification = inject(NotificationService);
+
+  readonly expectedDeliveryDate = input<string | null>(null);
+  /** Compromiso ACTUAL del pedido: es el que decide si se exige motivo (D7). */
+  readonly currentCommitment = input<DeliveryCommitment>('tentative');
+  readonly windowStart = input<string | null>(null);
+  readonly windowEnd = input<string | null>(null);
+  readonly slotId = input<number | null>(null);
+  readonly hasPendingFabrication = input<boolean>(false);
+
+  /** Avisa cada vez que cambia la fecha, para quien la use como fecha de ruta. */
+  readonly dateChange = output<string>();
+
+  protected slots = signal<DeliverySlot[]>([]);
+
+  protected form = this.fb.group({
+    expectedDeliveryDate: [''],
+    deliveryCommitment: ['tentative' as DeliveryCommitment],
+    deliverySlotChoice: [''],
+    deliveryWindowStart: [''],
+    deliveryWindowEnd: [''],
+    rescheduleReason: [''],
+  });
+
+  private commitmentSig = toSignal(this.form.controls.deliveryCommitment.valueChanges, {
+    initialValue: this.form.controls.deliveryCommitment.value,
+  });
+  private slotChoiceSig = toSignal(this.form.controls.deliverySlotChoice.valueChanges, {
+    initialValue: this.form.controls.deliverySlotChoice.value,
+  });
+  private dateSig = toSignal(this.form.controls.expectedDeliveryDate.valueChanges, {
+    initialValue: this.form.controls.expectedDeliveryDate.value,
+  });
+  private windowStartSig = toSignal(this.form.controls.deliveryWindowStart.valueChanges, {
+    initialValue: this.form.controls.deliveryWindowStart.value,
+  });
+  private windowEndSig = toSignal(this.form.controls.deliveryWindowEnd.valueChanges, {
+    initialValue: this.form.controls.deliveryWindowEnd.value,
+  });
+
+  protected isExact = computed(() => this.commitmentSig() === 'exact');
+  protected isCustomWindow = computed(() => this.slotChoiceSig() === 'custom');
+  /** El pedido nació comprometido: se ofrece el campo de motivo (aunque no siempre obligatorio). */
+  protected wasExact = computed(() => this.currentCommitment() === 'exact');
+
+  /**
+   * El motivo sólo se EXIGE cuando se pisa una fecha u hora que ya estaba fija
+   * en una entrega comprometida. Rellenar un horario que faltaba (regalo con el
+   * día cerrado y la hora por confirmar) no lo necesita. El backend aplica la
+   * misma regla.
+   */
+  protected requiresReason = computed(() => {
+    if (this.currentCommitment() !== 'exact') return false;
+    const origDate = this.expectedDeliveryDate() ? String(this.expectedDeliveryDate()).slice(0, 10) : '';
+    const origStart = this.windowStart() ? String(this.windowStart()).slice(0, 5) : '';
+    const origEnd = this.windowEnd() ? String(this.windowEnd()).slice(0, 5) : '';
+    const origSlot = this.slotId() != null ? String(this.slotId()) : (this.windowStart() ? 'custom' : '');
+    const isCustom = this.isCustomWindow();
+    const curDate = (this.dateSig() ?? '').slice(0, 10);
+    const curStart = isCustom ? (this.windowStartSig() ?? '').slice(0, 5) : '';
+    const curEnd = isCustom ? (this.windowEndSig() ?? '').slice(0, 5) : '';
+    const curSlot = String(this.slotChoiceSig() ?? '');
+    return (
+      (!!origDate && !!curDate && origDate !== curDate)
+      || (!!origStart && origStart !== curStart)
+      || (!!origEnd && origEnd !== curEnd)
+      || (!!origSlot && origSlot !== curSlot)
+    );
+  });
+
+  constructor() {
+    // Mismas reglas que el POS: 'exact' exige fecha y horario; "Otro horario…"
+    // exige las dos horas. El backend valida lo mismo (§5.1).
+    effect(() => {
+      const isExact = this.isExact();
+      const isCustom = this.isCustomWindow();
+      const { expectedDeliveryDate, deliverySlotChoice, deliveryWindowStart, deliveryWindowEnd } =
+        this.form.controls;
+
+      // 'exact' exige la fecha; el horario es opcional (se puede capturar
+      // después). Sólo "Otro horario…" necesita sus dos horas completas.
+      expectedDeliveryDate.setValidators(isExact ? [Validators.required] : []);
+      deliverySlotChoice.setValidators([]);
+      deliveryWindowStart.setValidators(isCustom ? [Validators.required] : []);
+      deliveryWindowEnd.setValidators(isCustom ? [Validators.required] : []);
+
+      for (const c of [expectedDeliveryDate, deliverySlotChoice, deliveryWindowStart, deliveryWindowEnd]) {
+        c.updateValueAndValidity({ emitEvent: false });
+      }
+    });
+
+    effect(() => {
+      if (this.requiresReason()) {
+        this.form.controls.rescheduleReason.setValidators([Validators.required]);
+      } else {
+        this.form.controls.rescheduleReason.clearValidators();
+      }
+      this.form.controls.rescheduleReason.updateValueAndValidity({ emitEvent: false });
+    });
+
+    effect(() => {
+      const date = this.dateSig();
+      if (date) this.dateChange.emit(date);
+    });
+  }
+
+  ngOnInit(): void {
+    this.scheduleService.getSlots().subscribe({
+      next: (slots) => this.slots.set(slots),
+      error: () => {},
+    });
+
+    if (this.hasPendingFabrication() && this.currentCommitment() === 'exact') {
+      // El pedido tenía Exacta capturada pero ahora incluye una pieza
+      // agotada/sobre pedido: ya no se puede sostener ese compromiso. Se
+      // reemplaza por el mismo estimado que usa el POS al levantar el pedido.
+      const estimate = addBusinessDays(new Date(), FABRICATION_ESTIMATE_BUSINESS_DAYS);
+      this.form.patchValue({
+        expectedDeliveryDate: toDateInputValue(estimate),
+        deliveryCommitment: 'tentative',
+        deliverySlotChoice: '',
+        deliveryWindowStart: '',
+        deliveryWindowEnd: '',
+      });
+      this.notification.info(
+        'Este pedido tiene piezas agotadas o sobre pedido: se sugirió fecha de entrega a 15 días hábiles. Puedes ajustarla.',
+      );
+      return;
+    }
+
+    this.form.patchValue({
+      expectedDeliveryDate: this.expectedDeliveryDate()
+        ? String(this.expectedDeliveryDate()).slice(0, 10)
+        : '',
+      deliveryCommitment: this.currentCommitment(),
+      deliverySlotChoice: this.slotId() != null
+        ? String(this.slotId())
+        : this.windowStart() ? 'custom' : '',
+      deliveryWindowStart: this.windowStart() ? String(this.windowStart()).slice(0, 5) : '',
+      deliveryWindowEnd: this.windowEnd() ? String(this.windowEnd()).slice(0, 5) : '',
+    });
+  }
+
+  /** true si el usuario tocó algo — decide si hace falta guardar reprogramación. */
+  isDirty(): boolean {
+    return this.form.dirty;
+  }
+
+  /** Valida y arma el payload para `DeliveryScheduleService.reschedule`; null si inválido (y marca touched). */
+  getPayload(): DeliverySchedulePayload | null {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return null;
+    }
+
+    const raw = this.form.getRawValue();
+    const isCustom = raw.deliverySlotChoice === 'custom';
+
+    if (isCustom && raw.deliveryWindowStart && raw.deliveryWindowEnd
+      && raw.deliveryWindowEnd <= raw.deliveryWindowStart) {
+      this.notification.error('La hora final debe ser posterior a la hora inicial');
+      return null;
+    }
+
+    return {
+      expectedDeliveryDate: raw.expectedDeliveryDate || null,
+      deliveryCommitment: raw.deliveryCommitment ?? 'tentative',
+      // Con franja del catálogo no se mandan horas: las pone el servidor (§5.1).
+      deliverySlotId: !isCustom && raw.deliverySlotChoice ? Number(raw.deliverySlotChoice) : null,
+      deliveryWindowStart: isCustom ? raw.deliveryWindowStart || null : null,
+      deliveryWindowEnd: isCustom ? raw.deliveryWindowEnd || null : null,
+      rescheduleReason: raw.rescheduleReason?.trim() || null,
+    };
+  }
+}

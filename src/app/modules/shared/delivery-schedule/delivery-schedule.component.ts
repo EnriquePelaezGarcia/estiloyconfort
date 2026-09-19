@@ -11,7 +11,12 @@ import { DeliveryPerson, OrderItem } from '../../../core/models/order.model';
 import { DeliveryRescheduleComponent } from '../delivery-reschedule/delivery-reschedule.component';
 import { MediaUrlPipe } from '../../../shared/pipes/media-url.pipe';
 import { ImageLightboxComponent } from '../../../shared/components/image-lightbox/image-lightbox.component';
+import {
+  AssignDeliveryModalComponent,
+  AssignDeliveryTarget,
+} from '../../../shared/components/assign-delivery-modal/assign-delivery-modal.component';
 import { waPhone } from '../../../core/utils/phone';
+import { DELIVERY_ACCEPTANCE_LABELS, DELIVERY_ACCEPTANCE_TONE } from '../../../core/models/order-labels';
 
 /** Filtro activo de las tarjetas resumen. 'all' = sin filtrar. */
 type BucketFilter = DeliveryBucket | 'all' | 'overdue_exact';
@@ -38,7 +43,10 @@ interface ScheduleGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './delivery-schedule.component.html',
   styleUrl: './delivery-schedule.component.scss',
-  imports: [RouterLink, DeliveryRescheduleComponent, MediaUrlPipe, ImageLightboxComponent, CurrencyPipe],
+  imports: [
+    RouterLink, DeliveryRescheduleComponent, MediaUrlPipe, ImageLightboxComponent, CurrencyPipe,
+    AssignDeliveryModalComponent,
+  ],
 })
 export class DeliveryScheduleComponent implements OnInit {
   private scheduleService = inject(DeliveryScheduleService);
@@ -51,15 +59,17 @@ export class DeliveryScheduleComponent implements OnInit {
   protected loading = signal(true);
   protected bucketFilter = signal<BucketFilter>('all');
   protected commitmentFilter = signal<'all' | 'exact' | 'tentative'>('all');
+  // Filtro de fechas: vive en el servicio (no aquí) para que navegar a otra
+  // página y volver no lo resetee — solo cambia si el usuario lo edita.
+  protected dateFrom = this.scheduleService.dateFrom;
+  protected dateTo = this.scheduleService.dateTo;
   /** Entrega abierta en el modal de reprogramación; null = cerrado. */
   protected rescheduling = signal<ScheduledDelivery | null>(null);
 
   // ===== Asignar repartidor (admin y vendedor) =====
   protected deliveryPeople = signal<DeliveryPerson[]>([]);
   /** Entrega abierta en el modal de asignación; null = cerrado. */
-  protected assigning = signal<ScheduledDelivery | null>(null);
-  protected selectedDeliveryPerson = signal<number | null>(null);
-  protected assigningBusy = signal(false);
+  protected assigningTarget = signal<AssignDeliveryTarget | null>(null);
 
   // ===== Productos de la entrega: desplegable con foto (admin y vendedor) =====
   // La agenda no trae los productos (solo `itemsSummary`, un texto), así que
@@ -168,52 +178,84 @@ export class DeliveryScheduleComponent implements OnInit {
     });
   }
 
-  /** Se puede asignar repartidor cuando el pedido está listo y sin fabricación pendiente. */
+  /**
+   * Se puede asignar repartidor cuando el pedido está listo y sin fabricación
+   * pendiente (primera asignación), o cuando ya está en reparto pero el
+   * repartidor asignado todavía no acepta la entrega (plan
+   * repartidor-acepta-entrega: una vez aceptada, ya no se puede reasignar —
+   * pudo haber evidencia real de por medio).
+   */
   protected canAssign(d: ScheduledDelivery): boolean {
-    return d.orderStatus === 'ready' && !d.hasPendingFabrication;
+    if (d.orderStatus === 'ready') return !d.hasPendingFabrication;
+    if (d.orderStatus === 'in_delivery') return d.deliveryAcceptanceStatus !== 'accepted';
+    return false;
+  }
+
+  protected acceptanceLabel(d: ScheduledDelivery): string {
+    return d.deliveryAcceptanceStatus ? DELIVERY_ACCEPTANCE_LABELS[d.deliveryAcceptanceStatus] : '';
+  }
+
+  protected acceptanceTone(d: ScheduledDelivery): string {
+    return d.deliveryAcceptanceStatus ? DELIVERY_ACCEPTANCE_TONE[d.deliveryAcceptanceStatus] : '';
   }
 
   protected openAssign(d: ScheduledDelivery): void {
-    this.selectedDeliveryPerson.set(d.deliveryPersonId ?? null);
-    this.assigning.set(d);
+    this.assigningTarget.set({
+      id: d.orderId,
+      orderNumber: d.orderNumber,
+      customerName: d.customerName,
+      deliveryPersonId: d.deliveryPersonId,
+      deliveryAssignmentDate: d.deliveryAssignmentDate,
+      deliveryAcceptanceStatus: d.deliveryAcceptanceStatus,
+      expectedDeliveryDate: d.expectedDeliveryDate,
+      deliveryCommitment: d.deliveryCommitment,
+      deliveryWindowStart: d.deliveryWindowStart,
+      deliveryWindowEnd: d.deliveryWindowEnd,
+      deliverySlotId: d.deliverySlotId,
+    });
   }
 
-  protected confirmAssign(): void {
-    const d = this.assigning();
-    const personId = this.selectedDeliveryPerson();
-    if (!d || !personId || this.assigningBusy()) {
-      if (!personId) this.notification.error('Selecciona un repartidor');
-      return;
-    }
-    this.assigningBusy.set(true);
-    this.sellerService.assignDelivery(d.orderId, personId).subscribe({
-      next: () => {
-        this.assigningBusy.set(false);
-        this.assigning.set(null);
-        this.notification.success('Repartidor asignado');
-        this.load();
-      },
-      error: (err: { error?: { message?: string } }) => {
-        this.assigningBusy.set(false);
-        this.notification.error(err?.error?.message ?? 'No se pudo asignar el repartidor');
-      },
-    });
+  protected closeAssign(): void {
+    this.assigningTarget.set(null);
+  }
+
+  protected onAssignSaved(): void {
+    this.assigningTarget.set(null);
+    this.load();
   }
 
   protected load(): void {
     this.loading.set(true);
-    this.scheduleService.getSchedule().subscribe({
-      next: (res) => {
-        this.deliveries.set(res.deliveries);
-        this.counts.set(res.counts);
-        this.loading.set(false);
-        this.expandAll(res.deliveries);
-      },
-      error: () => {
-        this.loading.set(false);
-        this.notification.error('No se pudo cargar la agenda de entregas');
-      },
-    });
+    this.scheduleService
+      .getSchedule({ from: this.dateFrom() ?? undefined, to: this.dateTo() ?? undefined })
+      .subscribe({
+        next: (res) => {
+          this.deliveries.set(res.deliveries);
+          this.counts.set(res.counts);
+          this.loading.set(false);
+          this.expandAll(res.deliveries);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.notification.error('No se pudo cargar la agenda de entregas');
+        },
+      });
+  }
+
+  protected onDateFromChange(event: Event): void {
+    this.scheduleService.dateFrom.set((event.target as HTMLInputElement).value || null);
+    this.load();
+  }
+
+  protected onDateToChange(event: Event): void {
+    this.scheduleService.dateTo.set((event.target as HTMLInputElement).value || null);
+    this.load();
+  }
+
+  protected clearDateFilter(): void {
+    this.scheduleService.dateFrom.set(null);
+    this.scheduleService.dateTo.set(null);
+    this.load();
   }
 
   protected setBucket(bucket: BucketFilter): void {

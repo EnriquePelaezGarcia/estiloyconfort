@@ -1191,36 +1191,13 @@
 }
 
 <!-- ===== Modal: asignar repartidor (admin y vendedor) ===== -->
-@if (assignDeliveryOpen() && order(); as o) {
-  <div class="modal-backdrop no-print">
-    <div class="modal modal--sm">
-      <div class="modal__body">
-        <h2 class="panel__title">Asignar repartidor</h2>
-        <p class="muted">Pedido <strong>{{ o.orderNumber }}</strong> — {{ o.customerName }}</p>
-        <div class="field">
-          <label for="assignDp">Repartidor</label>
-          <select id="assignDp"
-                  (change)="selectedDeliveryPerson.set($any($event.target).value ? +$any($event.target).value : null)">
-            <option [value]="''" [selected]="selectedDeliveryPerson() === null">Selecciona un repartidor</option>
-            @for (p of deliveryPeople(); track p.id) {
-              <option [value]="p.id" [selected]="selectedDeliveryPerson() === p.id">{{ p.fullName }}</option>
-            }
-          </select>
-        </div>
-        @if (deliveryPeople().length === 0) {
-          <p class="field__error">No hay repartidores activos registrados.</p>
-        }
-        <div class="modal__foot">
-          <button type="button" class="btn btn--ghost" (click)="assignDeliveryOpen.set(false)">Cancelar</button>
-          <button type="button" class="btn btn--primary"
-                  [disabled]="!selectedDeliveryPerson() || assigningDelivery()"
-                  (click)="confirmAssignDelivery()">
-            Asignar
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+@if (assigningTarget(); as t) {
+  <app-assign-delivery-modal
+    [order]="t"
+    [deliveryPeople]="deliveryPeople()"
+    (closed)="closeAssignDelivery()"
+    (saved)="onAssignDeliverySaved()"
+  />
 }
 
 <!-- ===== Modal: agregar/editar ubicación de Google Maps (admin y vendedor) ===== -->
