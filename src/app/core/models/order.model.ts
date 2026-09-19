@@ -475,7 +475,7 @@ export interface ManufacturerAcceptanceRow {
 /** Notificación in-app (portal fabricante / admin / vendedor). */
 export interface AppNotification {
   id: number;
-  audience: 'manufacturer' | 'admin' | 'seller';
+  audience: 'manufacturer' | 'admin' | 'seller' | 'delivery_person';
   type: string;
   title: string;
   body: string | null;

@@ -43,6 +43,15 @@ const ROLE_CONFIG: Record<string, RoleConfig> = {
       queryParams: (itemId ? { item: itemId } : { pedido: id }) as Record<string, string | number>,
     }),
   },
+  // El repartidor no tiene página propia de notificaciones ni un detalle por
+  // orderId (su ruta es por id de ENTREGA, no de pedido) — el aviso de
+  // "nueva entrega asignada" manda a la bandeja donde ya aparece el banner
+  // de aceptar/rechazar (plan repartidor-acepta-entrega).
+  delivery_person: {
+    base: '/delivery/notifications',
+    page: '/repartidor/entregas',
+    orderLink: () => ({ commands: ['/repartidor/entregas'] }),
+  },
 };
 
 /**

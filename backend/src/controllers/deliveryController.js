@@ -19,11 +19,10 @@ function assertAccepted(delivery) {
  * Solo accede a las entregas asignadas a sí mismo.
  */
 const deliveryController = {
-  // GET /api/delivery/assignments?date=YYYY-MM-DD (default: hoy)
+  // GET /api/delivery/assignments?date=YYYY-MM-DD (default: hoy, CURDATE() en SQL)
   assignments: asyncHandler(async (req, res) => {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
     const all = req.query.all === 'true';
-    const deliveries = await Delivery.findByPerson(req.user.id, all ? {} : { date });
+    const deliveries = await Delivery.findByPerson(req.user.id, all ? {} : { date: req.query.date });
     res.json({ data: deliveries });
   }),
 

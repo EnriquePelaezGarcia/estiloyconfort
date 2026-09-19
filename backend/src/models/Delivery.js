@@ -71,10 +71,22 @@ const BASE_SELECT = `
 `;
 
 const Delivery = {
+  /**
+   * `date` se compara contra `CURDATE()` en SQL (no un "hoy" calculado en
+   * JS) para no desalinearse con el resto de la agenda (DeliverySchedule usa
+   * CURDATE() en todas sus consultas). `new Date().toISOString()` es UTC: en
+   * México (UTC-6) ya marca el día siguiente entre las 18:00 y las 00:00
+   * hora local, así que "Entregas de hoy" se quedaba vacío en ese tramo.
+   */
   async findByPerson(deliveryPersonId, { date } = {}) {
     const conditions = ['dv.delivery_person_id = ?'];
     const params = [deliveryPersonId];
-    if (date) { conditions.push('dv.assignment_date = ?'); params.push(date); }
+    if (date) {
+      conditions.push('dv.assignment_date = ?');
+      params.push(date);
+    } else {
+      conditions.push('dv.assignment_date = CURDATE()');
+    }
     const [rows] = await pool.execute(
       // Dentro de un mismo día manda la ruta que armó admin/vendedor
       // (route_sequence): en cuanto está definida, el repartidor la sigue tal

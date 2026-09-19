@@ -3,17 +3,20 @@ import {
   BusinessLayoutComponent,
   BusinessNavItem,
 } from '../../../shared/components/business-layout/business-layout.component';
+import { NotificationBellComponent } from '../../../shared/components/notification-bell/notification-bell.component';
 import { DiscountsService } from '../../../core/services/discounts.service';
+import { NotificationCenterStore } from '../../../core/services/notification-center.store';
 
 @Component({
   selector: 'app-delivery-layout',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './delivery-layout.component.html',
   styleUrl: './delivery-layout.component.scss',
-  imports: [BusinessLayoutComponent],
+  imports: [BusinessLayoutComponent, NotificationBellComponent],
 })
 export class DeliveryLayoutComponent implements OnInit {
   private discountsService = inject(DiscountsService);
+  private notifications = inject(NotificationCenterStore);
 
   protected readonly navItems: BusinessNavItem[] = [
     // ── Suelto arriba: la ruta del día ──
@@ -32,5 +35,6 @@ export class DeliveryLayoutComponent implements OnInit {
 
   ngOnInit(): void {
     this.discountsService.refreshMyRejectedCount().subscribe({ error: () => {} });
+    this.notifications.startPolling();
   }
 }
